@@ -31,14 +31,25 @@ void FUnLuaTestBase::TearDown()
 {
     FAITestBase::TearDown();
 
-    AddLatent([&]()
+    if (InstantTest())
     {
         if (L)
         {
             UnLua::Shutdown();
             L = nullptr;
         }
-    });
+    }
+    else
+    {
+        AddLatent([&]()
+        {
+            if (L)
+            {
+                UnLua::Shutdown();
+                L = nullptr;
+            }
+        });
+    }
 }
 
 void FUnLuaTestBase::AddLatent(TFunction<void()>&& Func, float Delay) const
