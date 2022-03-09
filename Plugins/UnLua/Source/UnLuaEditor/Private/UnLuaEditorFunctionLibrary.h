@@ -24,12 +24,6 @@ class UNLUAEDITOR_API UUnLuaEditorFunctionLibrary : public UBlueprintFunctionLib
 {
 	GENERATED_BODY()
 
-	UFUNCTION(BlueprintCallable)
-	static FString GetScriptRootPath();
-
-	UFUNCTION(BlueprintCallable)
-	static int64 GetFileLastModifiedTimestamp(FString Path);
-
 public:
 	static void WatchScriptDirectory();
 
