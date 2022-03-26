@@ -15,78 +15,19 @@
 #pragma once
 
 #include "LuaEnv.h"
-#include "UObject/UObjectArray.h"
-#include "Engine/World.h"
-#include "GenericPlatform/GenericApplication.h"
-#include "Runtime/Launch/Resources/Version.h"
 #include "UnLuaBase.h"
-#include "UnLuaManager.h"
-#include "HAL/Platform.h"
+#include "UnLuaModule.h"
 
-class FLuaContext : public FUObjectArray::FUObjectCreateListener, public FUObjectArray::FUObjectDeleteListener
+class FLuaContext
 {
 public:
     UNLUA_API static FLuaContext* Create();
 
-    void RegisterDelegates();
-
-    void CreateState();
-    void SetEnable(bool InEnable);
-    bool IsEnable() const;
-
-    TSharedPtr<UnLua::ITypeInterface> FindTypeInterface(FName Name);
-
-    bool TryToBindLua(UObject *Object);
-
-#if ENGINE_MAJOR_VERSION > 4 || (ENGINE_MAJOR_VERSION == 4 && ENGINE_MINOR_VERSION > 23)
-    void OnWorldTickStart(UWorld *World, ELevelTick TickType, float DeltaTime);
-#else
-    void OnWorldTickStart(ELevelTick TickType, float DeltaTime);
-#endif
-    void OnWorldCleanup(UWorld *World, bool bSessionEnded, bool bCleanupResources);
-    void OnPostEngineInit();
-    void OnPreExit();
-    void OnCrash();
-    void PostLoadMapWithWorld(UWorld *World);
-    void OnPostGarbageCollect();
-
-#if WITH_EDITOR
-    void PreBeginPIE(bool bIsSimulating);
-    void PostPIEStarted(bool bIsSimulating);
-    void PrePIEEnded(bool bIsSimulating);
-#endif
-
-    FORCEINLINE operator lua_State*() const { return Env != nullptr ? Env->GetMainState() : nullptr; }
-
-    // interfaces of FUObjectArray::FUObjectCreateListener and FUObjectArray::FUObjectDeleteListener
-    virtual void NotifyUObjectCreated(const class UObjectBase *InObject, int32 Index) override;
-    virtual void NotifyUObjectDeleted(const class UObjectBase *InObject, int32 Index) override;
-#if ENGINE_MAJOR_VERSION > 4 || (ENGINE_MAJOR_VERSION == 4 && ENGINE_MINOR_VERSION > 22)
-	virtual void OnUObjectArrayShutdown() override;
-#endif
-
-    UUnLuaManager* GetUnLuaManager();
-
-private:
-    FLuaContext();
-    ~FLuaContext();
-
-    void Initialize();
-    void Cleanup(bool bFullCleanup = false, UWorld *World = nullptr);
-
-    bool OnGameViewportInputKey(FKey InKey, FModifierKeysState ModifierKeyState, EInputEvent EventType);
-
-    TSharedPtr<UnLua::FLuaEnv> Env;
-
-    FDelegateHandle OnActorSpawnedHandle;
-    FDelegateHandle OnWorldTickStartHandle;
-
-    TMap<UObjectBase*, FString> UObjPtr2Name;                           // UObject pointer -> Name for debug purpose
-    FCriticalSection Async2MainCS;                                      // async loading thread and main thread sync lock
-
-    TArray<class UInputComponent*> CandidateInputComponents;
-
-    bool bEnable;
+    FORCEINLINE operator lua_State*() const
+    {
+        const auto Env = IUnLuaModule::Get().GetEnv();
+        return Env ? Env->GetMainState() : nullptr;
+    }
 };
 
 extern class FLuaContext *GLuaCxt;
