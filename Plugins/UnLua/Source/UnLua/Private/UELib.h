@@ -20,5 +20,7 @@ namespace UnLua
     namespace UELib
     {
         int Open(lua_State* L);
+
+        void SetTableForClass(lua_State* L, const char* Name);
     }
 }
