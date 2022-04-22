@@ -21,7 +21,7 @@ FString UnLua::LowLevel::GetMetatableName(const UObject* Object)
 
     if (UNLIKELY(Object->IsA<UEnum>()))
     {
-        return Object->IsNative() ? ((UEnum*)Object)->CppType : Object->GetPathName();
+        return Object->IsNative() ? Object->GetName() : Object->GetPathName();
     }
 
     const UStruct* Struct = Cast<UStruct>(Object);
