@@ -15,22 +15,8 @@
 #pragma once
 
 #include "UnLuaInterface.h"
+#include "Issue595TestInterface.h"
 #include "Issue595Test.generated.h"
-
-UINTERFACE(Blueprintable, MinimalAPI)
-class UIssue595Interface : public UInterface
-{
-    GENERATED_BODY()
-};
-
-class IIssue595Interface
-{
-    GENERATED_BODY()
-
-public:
-    UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-    int32 Test() const;
-};
 
 UCLASS()
 class UIssue595Object
