@@ -111,11 +111,12 @@ namespace UnLua
             Ret += FString::Printf(TEXT("local %s = {}\r\n"), *EscapeSymbolName(TypeName));
 
             // exported functions
-            if (GetExportedReflectedClasses().Find(TypeName))
+            const auto& ExportedReflectedClasses = GetExportedReflectedClasses();
+            const auto Exported = ExportedReflectedClasses.Find(TypeName);
+            if (Exported)
             {
-                const auto Exported = GetExportedReflectedClasses()[TypeName];
                 TArray<IExportedFunction*> ExportedFunctions;
-                Exported->GetFunctions(ExportedFunctions);
+                (*Exported)->GetFunctions(ExportedFunctions);
                 for (const auto Function : ExportedFunctions)
                     Function->GenerateIntelliSense(Ret);
             }
@@ -174,17 +175,15 @@ namespace UnLua
             }
 
             // exported functions
-            if (GetExportedReflectedClasses().Find(TypeName))
+            const auto& ExportedReflectedClasses = GetExportedReflectedClasses();
+            const auto Exported = ExportedReflectedClasses.Find(TypeName);
+            if (Exported)
             {
-                if (const auto Exported = GetExportedReflectedClasses()[TypeName])
-                {
-                    TArray<IExportedFunction*> ExportedFunctions;
-                    Exported->GetFunctions(ExportedFunctions);
-                    for (const auto Function : ExportedFunctions)
-                        Function->GenerateIntelliSense(Ret);
-                }
+                TArray<IExportedFunction*> ExportedFunctions;
+                (*Exported)->GetFunctions(ExportedFunctions);
+                for (const auto Function : ExportedFunctions)
+                    Function->GenerateIntelliSense(Ret);
             }
-            
             return Ret;
         }
 
