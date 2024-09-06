@@ -15,9 +15,22 @@
 using UnrealBuildTool;
 using System.Collections.Generic;
 
-public class TPSProjectEditorTarget : TargetRules{    public TPSProjectEditorTarget(TargetInfo Target) : base(Target)    {        Type = TargetType.Editor;
+public class TPSProjectEditorTarget : TargetRules
+{
+    public TPSProjectEditorTarget(TargetInfo Target) : base(Target)
+    {
+        Type = TargetType.Editor;
+#if UE_5_4_OR_LATER
+        DefaultBuildSettings = BuildSettingsVersion.V4;
+        IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
+#else
         DefaultBuildSettings = BuildSettingsVersion.V2;
-        ExtraModuleNames.AddRange(            new string[]            {
+#endif
+        ExtraModuleNames.AddRange(
+            new string[]
+            {
                 "TPSProject"
-            }            );
-    }}
+            }
+        );
+    }
+}
