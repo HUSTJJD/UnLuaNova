@@ -133,7 +133,7 @@ void FUnLuaLibFColorSpec::Define()
         It(TEXT("转为字符串"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             UnLua::RunChunk(L, "return tostring(UE.FColor(1,2,3,4))");
-            TEST_EQUAL(FString(lua_tostring(L, -1)), "(R=1,G=2,B=3,A=4)");
+            TEST_EQUAL(lua_tostring(L, -1), FString("(R=1,G=2,B=3,A=4)"));
         });
     });
 

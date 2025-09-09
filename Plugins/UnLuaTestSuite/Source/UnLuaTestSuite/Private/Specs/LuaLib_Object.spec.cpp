@@ -90,7 +90,7 @@ void FUnLuaLibObjectSpec::Define()
             return Actor:GetName()
             )";
             UnLua::RunChunk(L, Chunk);
-            TEST_EQUAL(FString(lua_tostring(L, -1)), "Test");
+            TEST_EQUAL(lua_tostring(L, -1), FString("Test"));
         });
     });
 

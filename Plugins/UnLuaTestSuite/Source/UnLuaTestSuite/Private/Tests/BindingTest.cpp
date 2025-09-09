@@ -68,7 +68,7 @@ bool FUnLuaTest_StaticBinding::RunTest(const FString& Parameters)
         UnLua::RunChunk(L, Chunk2);
 
         const auto Error = lua_tostring(L, -1);
-        TEST_EQUAL(FString(Error), "");
+        TEST_EQUAL(Error, FString(""));
     });
 
     return true;
@@ -96,7 +96,7 @@ bool FUnLuaTest_DynamicBinding::RunTest(const FString& Parameters)
         UnLua::RunChunk(L, Chunk2);
 
         const auto Error = lua_tostring(L, -1);
-        TEST_EQUAL(FString(Error), "");
+        TEST_EQUAL(Error, FString(""));
     });
     return true;
 }
@@ -124,7 +124,7 @@ bool FUnLuaTest_ConflictedBinding::RunTest(const FString& Parameters)
         UnLua::RunChunk(L, Chunk2);
 
         const auto Error = lua_tostring(L, -1);
-        TEST_EQUAL(FString(Error), "");
+        TEST_EQUAL(Error, FString(""));
     });
     return true;
 }
@@ -149,7 +149,7 @@ bool FUnLuaTest_MultipleBinding::RunTest(const FString& Parameters)
         UnLua::RunChunk(L, Chunk2);
 
         const auto Error = lua_tostring(L, -1);
-        TEST_EQUAL(FString(Error), "");
+        TEST_EQUAL(Error, FString(""));
     });
 
     return true;
@@ -171,7 +171,7 @@ bool FUnLuaTest_Overridden::RunTest(const FString& Parameters)
         World->Tick(LEVELTICK_All, SMALL_NUMBER);
 
         const auto Actual = lua_tostring(L, -1);
-        TEST_EQUAL(FString(Actual), "BP ABC Lua");
+        TEST_EQUAL(Actual, FString("BP ABC Lua"));
     });
 
     return true;

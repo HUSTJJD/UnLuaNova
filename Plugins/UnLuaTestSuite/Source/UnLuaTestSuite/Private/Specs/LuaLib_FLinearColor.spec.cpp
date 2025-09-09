@@ -171,7 +171,7 @@ void FUnLuaLibFLinearColorSpec::Define()
         It(TEXT("转为字符串"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             UnLua::RunChunk(L, "return tostring(UE.FLinearColor(1,2,3,4))");
-            TEST_EQUAL(FString(lua_tostring(L, -1)), "(R=1.000000,G=2.000000,B=3.000000,A=4.000000)");
+            TEST_EQUAL(lua_tostring(L, -1), FString("(R=1.000000,G=2.000000,B=3.000000,A=4.000000)"));
         });
     });
 
