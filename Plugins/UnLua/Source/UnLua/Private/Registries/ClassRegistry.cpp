@@ -203,9 +203,9 @@ namespace UnLua
                 lua_pushcfunction(L, UObject_Identical);
                 lua_rawset(L, -3);
 
-                lua_pushstring(L, "__gc");
-                lua_pushcfunction(L, UObject_Delete);
-                lua_rawset(L, -3);
+                // lua_pushstring(L, "__gc");
+                // lua_pushcfunction(L, UObject_Delete);
+                // lua_rawset(L, -3);
             }
         }
 
