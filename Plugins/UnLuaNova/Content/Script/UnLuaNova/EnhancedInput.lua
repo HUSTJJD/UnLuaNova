@@ -1,4 +1,4 @@
-local Input = UnLua.Input
+local Input = Lua.Input
 
 local M = {}
 

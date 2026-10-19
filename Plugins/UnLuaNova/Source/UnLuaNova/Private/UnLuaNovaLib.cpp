@@ -242,13 +242,14 @@ namespace UnLuaNova
         int Open(lua_State* L)
         {
             lua_register(L, "print", LogInfo);
-            luaL_requiref(L, "UnLua", LuaOpen, 1);
+            luaL_requiref(L, "Lua", LuaOpen, 1);
             luaL_dostring(L, R"(
-                setmetatable(UnLua, {
+                setmetatable(Lua, {
                     __index = function(t, k)
-                        -- the require prefix must match the directory name exactly
-                        -- (Content/Script/UnLuaNova); case-sensitive filesystems will not
-                        -- resolve some other spelling to it.
+                        -- IMPORTANT: this is the *require path*, i.e. the on-disk directory
+                        -- name (Content/Script/UnLuaNova). It is deliberately NOT the global
+                        -- table name above - case-sensitive filesystems will not resolve any
+                        -- other spelling. Do not "simplify" one to match the other.
                         local ok, result = pcall(require, "UnLuaNova." .. tostring(k))
                         if ok then
                             rawset(t, k, result)
@@ -258,15 +259,16 @@ namespace UnLuaNova
                         end
                     end
                 })
-                -- Short global is the primary name; keep the full one as an alias so either
-                -- spelling works, and so scripts written against upstream UnLua keep running.
-                UnLuaNova = UnLua
+                -- 'Lua' is the global; the longer spellings remain as aliases so scripts
+                -- written against either of them keep working.
+                UnLua = Lua
+                UnLuaNova = Lua
             )");
 
 #if UNLUANOVA_ENABLE_FTEXT
-            luaL_dostring(L, "UnLua.FTextEnabled = true");
+            luaL_dostring(L, "Lua.FTextEnabled = true");
 #else
-            luaL_dostring(L, "UnLua.FTextEnabled = false");
+            luaL_dostring(L, "Lua.FTextEnabled = false");
 #endif
 
 #if UNLUANOVA_WITH_HOT_RELOAD
@@ -289,7 +291,7 @@ namespace UnLuaNova
 
         FString GetPackagePath(lua_State* L)
         {
-            lua_getglobal(L, "UnLua");
+            lua_getglobal(L, "Lua");
             checkf(lua_istable(L, -1), TEXT("UnLuaNovaLib not registered"));
             lua_getfield(L, -1, PACKAGE_PATH_KEY);
             const auto PackagePath = lua_tostring(L, -1);
@@ -300,7 +302,7 @@ namespace UnLuaNova
 
         void SetPackagePath(lua_State* L, const FString& PackagePath)
         {
-            lua_getglobal(L, "UnLua");
+            lua_getglobal(L, "Lua");
             checkf(lua_istable(L, -1), TEXT("UnLuaNovaLib not registered"));
             lua_pushstring(L, TCHAR_TO_UTF8(*PackagePath));
             lua_setfield(L, -2, PACKAGE_PATH_KEY);

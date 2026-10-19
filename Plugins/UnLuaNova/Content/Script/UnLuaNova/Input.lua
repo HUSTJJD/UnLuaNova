@@ -144,7 +144,7 @@ function M.PerformBindings(Module, Manager, Class)
 
     for _, Binding in ipairs(Bindings) do
         xpcall(Binding, function(Error)
-            UnLua.LogError(Error .. "\n" .. debug.traceback())
+            Lua.LogError(Error .. "\n" .. debug.traceback())
         end, Manager, Class)
     end
 end

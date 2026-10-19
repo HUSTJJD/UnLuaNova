@@ -446,7 +446,7 @@ namespace UnLuaNova
 
     void FLuaEnv::HotReload()
     {
-        DoString("UnLua.HotReload()");
+        DoString("Lua.HotReload()");
     }
 
     int32 FLuaEnv::FindThread(const lua_State* Thread)
