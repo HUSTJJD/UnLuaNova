@@ -12,21 +12,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-using UnrealBuildTool;
-using System.Collections.Generic;
+#include "UnLuaNovaDemo.h"
+#include "Modules/ModuleManager.h"
 
-public class TPSProjectEditorTarget : TargetRules
-{
-    public TPSProjectEditorTarget(TargetInfo Target) : base(Target)
-    {
-        Type = TargetType.Editor;
-        DefaultBuildSettings = BuildSettingsVersion.V6;
-        IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
-        ExtraModuleNames.AddRange(
-            new string[]
-            {
-                "TPSProject"
-            }
-            );
-    }
-}
+IMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, UnLuaNovaDemo, "UnLuaNovaDemo")

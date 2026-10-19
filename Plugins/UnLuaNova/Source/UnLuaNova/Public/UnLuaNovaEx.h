@@ -487,7 +487,12 @@ UnLuaNova::AddType(#Name, UnLuaNova::GetTypeInterface<Type>()); \
         UnLuaNova::TExportedClass<bIsReflected, Type, ##__VA_ARGS__> *ExportedClass; \
         ~FExported##Name##Suffix##Helper() \
         { \
-            delete ExportedClass; \
+            if (ExportedClass) \
+            { \
+                UnLuaNova::UnExportClass(ExportedClass); \
+                delete ExportedClass; \
+                ExportedClass = nullptr; \
+            } \
         } \
         FExported##Name##Suffix##Helper() \
             : ExportedClass(nullptr) \

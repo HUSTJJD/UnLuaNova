@@ -1,7 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Misc/ScopeRWLock.h"
 #include "StaticBinding/StaticBindingTypes.h"
+
+#include <atomic>
 
 /**
  * Registry of pre-resolved (static) bindings.
@@ -58,5 +61,11 @@ private:
 	TMap<FName, FEntry> Types;
 	TMap<const UStruct*, const FStaticTypeBinding*> StructToType;
 	TArray<const FStaticTypeBinding*> Pending;
-	mutable FCriticalSection CriticalSection;
+
+	// Large projects register thousands of types and then hit the read path from Lua on
+	// every property and function access. An exclusive lock serialised all of that, so
+	// readers now take a shared lock instead. PendingCount lets a reader skip the resolve
+	// step outright when nothing is queued - the steady state after startup.
+	mutable FRWLock RwLock;
+	std::atomic<int32> PendingCount{0};
 };

@@ -187,11 +187,15 @@ Luau 子模块增删文件后，重新运行 `python LuauLib/GenerateWrappers.py
 
 ### P2 · Feature（按 `PORT_EXTERNAL_PLAN.md`）
 
-- [ ] **F1 Lua CPU Profiler** —— 替换 `LuaEnv.cpp` 里那个 30 行玩具 Hook（每次 call/ret 都 Printf 拼串、无尾调用修正、编译期才能开）。Luau 走 `lua_Callbacks.interrupt` 采样 + `lua_Debug::protoid`；Lua 5.5 走 `lua_sethook`。**收益最大，建议优先**
-- [ ] **F6 Luau 类型声明生成** —— 扩展 `UnLuaNovaIntelliSense`，输出 Luau `.d.lua`，与 Type Manifest 主线闭环
-- [ ] **F3 死循环检测改用 interrupt** —— 建议**等 Luau 能编译后**再做，否则改完无法验证
-- [ ] F8 vector/buffer 编组 —— 需先定 `LUA_VECTOR_SIZE`（3 或 4，编译期全局），建议 M5 之后
-- [ ] F4 headless 调试服务 —— 排最后
+- [x] **F1 Lua CPU Profiler** —— `LuaProfiler.{h,cpp}`，Insights SpecId 缓存；Luau 走 `lua_Callbacks.interrupt` + `protoid`，Lua 5.5 走 `lua_sethook`。运行时开关 `lua.profiler`
+- [x] **F6 Luau 类型声明生成** —— `UnLuaNovaLuauDecls.{h,cpp}`，输出 `UnLuaNova.d.lua` 供 `luau-analyze`
+- [x] **F3 死循环检测** —— 新增 `LuaVmHooks.h` 分发器：VM 只有一个 hook 槽，Profiler 与看门狗原先互相覆盖（看门狗还会因 `lua_gethook()` 检查静默失效）。现两者注册到分发器共存；Luau 侧改走 `interrupt`，在循环回边触发，比原 `MASKLINE` 逐行回调更高效
+- [x] **F5 沙盒** —— `luaL_sandbox` 经 `LuaBackend.h` 抽象，CVar `lua.sandbox` 默认关闭；卡在 `UELib::Open()` 之后调用（否则锁住 UnLua 自己正要写的全局表）。Lua 5.5 无对应能力，明确降级
+- [x] **F4 headless 调试服务** —— `LuaDebugService.{h,cpp}` + `lua.dbg` 命令。Luau 的 `lua_callhook` 是独立于 `interrupt` 的通道，故不与 F3 冲突
+- [x] **静态导出反注册** —— `UnExportClass()`；原析构只 `delete` 不从注册表摘除，热重载后 `FindExportedClass` 返回悬垂指针
+- [x] **静态绑定优化（规模相关）** —— ① 读路径去锁：`FCriticalSection`→`FRWLock`，加 `PendingCount` 原子快判（原 `FindProp`/`FindFunc` 每次都跑 `ResolvePending`）；② 类型选择改 opt-out，删除 `-Types=` 命令行，项目只需给不想要的类加 `meta=(UnLuaNovaNoExport)`
+- [x] ~~F8 vector/buffer 编组~~ —— **已取消**（2026-10-19 决策）。Luau 的 `vector` / `buffer` 是为 Roblox 设计的类型，不接入；UE 类型继续用 `MathLib/` 自封装，跨后端行为一致
+- [x] ~~SkipObjectReferencer~~ —— **调研后丢弃**。源项目那个 UMG ListView EntryWidget 泄漏源于 2.1 老架构的强引用容器；2.3.6 的 `ObjectRegistry` 用弱表（`__mode="v"`），`AutoObjectReference` 只持有 `ULuaDelegateHandler` 且有清理路径，问题结构上不存在
 
 ### P3 · 清理与决策
 

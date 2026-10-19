@@ -2,7 +2,7 @@
     说明：
 
     本示例C++源码：
-    \Source\TPSProject\TutorialObject.cpp
+    \Source\UnLuaNovaDemo\TutorialObject.cpp
 ]]--
 
 local Screen = require "Tutorials.Screen"

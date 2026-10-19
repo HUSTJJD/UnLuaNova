@@ -16,7 +16,7 @@
 | HEAD | `3f112e8 更新LICENSE的公司主体` |
 | 远端 | `origin = HUSTJJD/UnLua`（你的 fork），`upstream = Tencent/UnLua`（已配好，可直接 fetch） |
 | 插件版本 | UnLua **v2.3.6**（`UnLua.uplugin`） |
-| 引擎 | `TPSProject.uproject` 标 `4.26`，但代码含 `UE_5_0_OR_LATER` / `UE_5_2_OR_LATER` 分支 |
+| 引擎 | `UnLuaNovaDemo.uproject` 标 `4.26`，但代码含 `UE_5_0_OR_LATER` / `UE_5_2_OR_LATER` 分支 |
 | Lua VM | **lua-5.4.3**（vendored 源码，另有一份 5.4.4 未启用）→ **已决策升级为 Lua 5.5 子模块**，见 §11 |
 | 已有 | Luau 子模块（`luau-lang/luau` @ 0.743），尚未接线 |
 | 无 | VM 抽象层（阶段 1 待做）；LuaJIT 已排除 |
@@ -91,7 +91,7 @@
 | `Docs/Images/UnLua.png` | 换新 LOGO（可用 AI 生成，注意别沿用腾讯视觉） |
 | `Docs/CN/**`、`Docs/EN/**`（18 个 md） | 全局替换项目名 + 更新失效链接；`Docs/CN/FAQ.md` 里"腾讯内部四十款项目"等表述需改为引用上游原文并注明出处 |
 | `.github/` | 新增 `FUNDING.yml`、`ISSUE_TEMPLATE/`、`PULL_REQUEST_TEMPLATE.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、CI workflow |
-| `TPSProject*` | 示例工程可改名为 `LuaNovaSandbox`（可选，建议改，能减少"这是个 demo 工程"的误解） |
+| `UnLuaNovaDemo*` | 示例工程可改名为 `LuaNovaSandbox`（可选，建议改，能减少"这是个 demo 工程"的误解） |
 | README 中的 QQ 群 / Lua Booster 推荐 | 换成你自己的交流渠道（Discord/QQ）+ VSCode 插件建议（`Lua Booster` 或 `sumneko.lua` + EmmyLua） |
 
 ### 1.5 新 README 建议结构
@@ -109,9 +109,12 @@
 
 ## 特性（相对 UnLua v2.3.6 的增量）
   - [x] UE 5.4 / 5.6 / 5.7 支持
-  - [x] 类型导出白名单（Type Manifest）
-  - [ ] Luau 实验后端
-  - [ ] 静态绑定代码生成
+  - [x] 双 Lua 后端：Lua 5.5（默认）/ Luau（opt-in），**均以子模块引入**
+  - [x] 静态绑定代码生成：opt-out 类型选择 + 读路径无锁（`FRWLock`）
+  - [x] Lua CPU Profiler（写入 Unreal Insights，运行时开关 `lua.profiler`）
+  - [x] headless 调试服务（`lua.dbg`）+ Lua 沙盒（`lua.sandbox`）
+  - [x] 死循环看门狗：VM hook 分发器，与 Profiler 共存
+  - [x] Luau `.d.lua` 类型声明生成（供 `luau-analyze`）
 
 ## 从 UnLua 迁移（一节，明确"Lua 侧 API 100% 兼容"）
 ## 快速开始 / 文档 / 路线图 Roadmap / 贡献指南 / 致谢与许可
@@ -170,6 +173,15 @@ git merge upstream/develop        # 或 git rebase，建议先 merge 再整理
 ---
 
 ## 3. 类型导出克制化（Type Manifest）
+
+> ⚠️ **本节状态（2026-10-19）**：本节是**早期规划**，与后续实际决策冲突。以实际实现为准：
+>
+> | 机制 | 本节设想 | 实际落地 |
+> |---|---|---|
+> | IntelliSense / `.d.lua` | 只生成白名单内类型 | **黑名单**：默认全收，仅排除 `SKEL_` / `PLACEHOLDER-CLASS` 等前缀（`UnLuaNovaIntelliSenseGenerator.cpp:212`）。元数据量大无所谓 |
+> | 静态绑定 | 输入 = Type Manifest 白名单 | **opt-out**：默认全导出，项目只需给不想要的类型加 `meta=(UnLuaNovaNoExport)`；`-Types=` 已删除。详见 §8.5 |
+>
+> **两条路都不再使用"逐类打导出标记"的白名单**——在大型项目里那正是要消除的摩擦。Type Manifest 作为统一数据源的设想暂未实施。
 
 ### 3.1 先精确定义"膨胀"在哪
 
@@ -409,7 +421,7 @@ TSubclassOf<UUnLuaTypeFilter> TypeFilterClass;
 | 原生断点 / 单步 | ❌ | ✅ `lua_breakpoint` / `lua_singlestep` |
 | userdata tag | ❌（用 user value 存 desc） | ✅ `LUA_UTAG_LIMIT=128` |
 | 原生沙盒 | 部分（5.5 新增全局变量声明） | ✅ `luaL_sandbox` / `luaL_sandboxthread` |
-| vector / buffer 类型 | ❌ | ✅ `LUA_VECTOR_SIZE` / `luaopen_buffer` |
+| vector / buffer 类型 | ❌ | ⛔ **不启用**（Roblox 专用类型）。UE 类型用 `MathLib/` 自封装，两后端一致 |
 | 外部字符串（零拷贝） | ✅ 5.5 新增 | ❌ |
 | 静态类型检查 | ❌ | ✅ `luau-analyze` + `.d.lua` |
 
@@ -621,7 +633,7 @@ git checkout -b port/ann-fixes
 
 引擎确认在 `<本地引擎源码目录>`（**源码版 5.8.3，已编译**）。已改：
 
-- `TPSProject.uproject` → `EngineAssociation = {12D1A55F-4B0B-6F15-0801-49AF79F4FD77}`
+- `UnLuaNovaDemo.uproject` → `EngineAssociation = {12D1A55F-4B0B-6F15-0801-49AF79F4FD77}`
 - 三个 `*.Target.cs` → `BuildSettingsVersion.V6` + `IncludeOrderVersion = EngineIncludeOrderVersion.Latest`
 - `LuaOverridesClass.cpp` → 采用 PR #771 的守卫 `UE_VERSION_NEWER_THAN(5,2,1) && UE_VERSION_OLDER_THAN(5,7,0)`。
   已核实 5.8 中 `UClass::Children` 与 **`UField::Next` 都是 `TObjectPtr<UField>`**，因此 5.7+ 原地遍历
@@ -664,11 +676,26 @@ git checkout -b port/ann-fixes
 
 ```powershell
 & "<本地引擎源码目录>\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" `
-   "d:\learning\UnLua\TPSProject.uproject" `
-   -run=UnLuaStaticBindingGenerator -Types=Actor,Pawn,Character
+   "d:\learning\UnLua\UnLuaNovaDemo.uproject" `
+   -run=UnLuaNovaStaticBindingGenerator
 ```
-- 省略 `-Types` 时，自动收集所有带 `UCLASS(meta=(UnLuaExport))` / `USTRUCT(meta=(UnLuaExport))` 的类型 —— 与 §3 的 Type Manifest 是同一套声明。
+- **没有 `-Types=` 参数**（2026-10-19 删除）。类型选择已改为 opt-out，见下表。
 - 默认输出 `Source/<ProjectModule>/Generated/UnLuaStaticBinding_Generated.cpp`（落在模块目录内才会被 UBT 编译）。
+
+#### 类型选择规则（opt-out）
+
+大型项目会声明成千上万个类型，逐个打导出标记本身正是要消除的摩擦。所以默认全导出，项目只需声明**不要什么**：
+
+| 顺序 | 规则 | 说明 |
+|---|---|---|
+| 1 | `meta=(UnLuaNovaExport)` 在本类或任一祖先 | **强制拉回**，覆盖以下全部过滤。基类打一个标记即覆盖整个类族 |
+| 2 | 排除 `SKEL_` / `REINST_` / `TRASHCLASS_` / `HOTRELOADED_` / `PLACEHOLDER-CLASS` | 引擎簿记名 |
+| 3 | 排除 `CLASS_Deprecated` / `CLASS_Transient` | |
+| 4 | 排除 `meta=(UnLuaNovaNoExport)` | **项目唯一需要写的东西** |
+
+**与 IntelliSense 的区别（容易混淆，务必分清）**：两者策略不同，但都成立。IntelliSense / `.d.lua` 产出的是**元数据**，量大无所谓，那边一直是黑名单（默认全收）。静态绑定产出的是**参与编译的 C++**，必须控制规模。
+
+首次运行请留意日志 `selected N types`。若 N 大到编译扛不住，最有效的减压阀是**模块级过滤**（只绑 `/Script/Engine`、`/Script/UMG` 等核心模块）——项目类永远在自己的模块里，不会被误伤。
 
 ### 8.6 已知限制 / 待你验证
 
@@ -916,4 +943,4 @@ Lua 5.5 的「**更紧凑的数组**（大型数组内存占用减少约 60%）�
 
 1. **项目名**：LuaNova / UnLuaX / PrismLua / Vega / 其他？
 2. **引擎基线**：跟 5.7（PR #771）还是守 5.4/5.6？这决定 #693/#696/#697/#771 怎么处理。
-3. **示例工程**：保留 `TPSProject` 还是改名 `LuaNovaSandbox`？（改名会让所有 patch 路径冲突，建议在 M1 之后再改）
+3. **示例工程**：保留 `UnLuaNovaDemo` 还是改名 `LuaNovaSandbox`？（改名会让所有 patch 路径冲突，建议在 M1 之后再改）

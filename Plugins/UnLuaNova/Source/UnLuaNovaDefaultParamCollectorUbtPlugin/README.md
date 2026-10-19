@@ -34,7 +34,7 @@ DEPRECATED: C++ UHT being used because 'UnLua' does not have a C# version. C++ U
 
 ## 注意事项
 
-UnLuaTestSuite 也是一个可以被引擎 UHT 调用的插件（在 UnLuaTestSuite\.uplugin 中，`CanBeUsedWithUnrealHeaderTool` 是 true），而且也没有提供 C\# 版本的模块。因此如果一个项目，例如 TPSProject，还包含 UnLuaTestSuite 插件的话，在编译时就会出现另一个警告。
+UnLuaTestSuite 也是一个可以被引擎 UHT 调用的插件（在 UnLuaTestSuite\.uplugin 中，`CanBeUsedWithUnrealHeaderTool` 是 true），而且也没有提供 C\# 版本的模块。因此如果一个项目，例如 UnLuaNovaDemo，还包含 UnLuaTestSuite 插件的话，在编译时就会出现另一个警告。
 
 ```
 DEPRECATED: C++ UHT being used because 'UnLuaTestSuite' does not have a C# version. C++ UHT has been deprecated and will be removed in 5.2

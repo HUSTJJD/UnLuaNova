@@ -39,6 +39,19 @@ namespace UnLuaNova
             GetExported()->NonReflectedClasses.Add(Class->GetName(), Class);
     }
 
+    void UnExportClass(IExportedClass* Class)
+    {
+        TMap<FString, IExportedClass*>& Map = Class->IsReflected()
+                                                  ? GetExported()->ReflectedClasses
+                                                  : GetExported()->NonReflectedClasses;
+
+        // Only drop the entry while it still points at this object. A hot reload can
+        // register a replacement before the old static helper is torn down, and removing
+        // by name alone would evict the live one instead of the dead one.
+        if (Map.FindRef(Class->GetName()) == Class)
+            Map.Remove(Class->GetName());
+    }
+
     void ExportEnum(IExportedEnum* Enum)
     {
         GetExported()->Enums.Add(Enum);

@@ -87,6 +87,42 @@ UUnLuaNovaStaticBindingGeneratorCommandlet::UUnLuaNovaStaticBindingGeneratorComm
 	LogToConsole = true;
 }
 
+namespace
+{
+	// Names the engine generates for its own bookkeeping. Never worth binding.
+	bool IsInternalName(const FString& Name)
+	{
+		return Name.StartsWith(TEXT("SKEL_"))
+			|| Name.StartsWith(TEXT("REINST_"))
+			|| Name.StartsWith(TEXT("TRASHCLASS_"))
+			|| Name.StartsWith(TEXT("HOTRELOADED_"))
+			|| Name.StartsWith(TEXT("PLACEHOLDER-CLASS"));
+	}
+
+	bool IsExcludedByFlags(const UStruct* Struct)
+	{
+		const UClass* AsClass = Cast<UClass>(Struct);
+		if (!AsClass)
+			return false;
+
+		return AsClass->HasAnyClassFlags(CLASS_Deprecated | CLASS_Transient);
+	}
+
+	// An opt-in anywhere on the super chain pulls the type in. Marking a single base class
+	// therefore covers its entire hierarchy, which is what keeps this usable on a project
+	// with thousands of types. It also acts as the escape hatch: a type dropped by the
+	// filters above can be recovered by tagging it (or any ancestor) explicitly.
+	bool HasOptedInAncestor(const UStruct* Struct)
+	{
+		for (const UStruct* Current = Struct; Current; Current = Current->GetInheritanceSuper())
+		{
+			if (Current->HasMetaData(TEXT("UnLuaNovaExport")))
+				return true;
+		}
+		return false;
+	}
+}
+
 int32 UUnLuaNovaStaticBindingGeneratorCommandlet::Main(const FString& Params)
 {
 	FString OutputDir;
@@ -96,35 +132,52 @@ int32 UUnLuaNovaStaticBindingGeneratorCommandlet::Main(const FString& Params)
 		OutputDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("Source"), FApp::GetProjectName(), TEXT("Generated"));
 	}
 
-	FString TypesArg;
-	FParse::Value(*Params, TEXT("-Types="), TypesArg);
-
+	// Opt-out, not opt-in. A large project declares thousands of types; making every one
+	// of them carry an export tag is exactly the friction this is meant to remove.
+	//
+	//   default       -> exported
+	//   minus         -> engine bookkeeping names, deprecated / transient types
+	//   minus         -> meta=(UnLuaNovaNoExport)      <-- the only thing a project writes
+	//   plus (escape) -> meta=(UnLuaNovaExport) on the type or any ancestor; wins over
+	//                    every filter above
 	TArray<FString> TypeNames;
-	if (!TypesArg.IsEmpty())
-	{
-		TypesArg.ParseIntoArray(TypeNames, TEXT(","), true);
-		for (FString& Name : TypeNames)
-			Name.TrimStartAndEndInline();
-	}
 
-	// Fall back to everything tagged with UnLuaNovaExport metadata.
-	if (TypeNames.Num() == 0)
+	auto Consider = [&TypeNames](const UStruct* Struct)
 	{
-		for (TObjectIterator<UClass> It; It; ++It)
-			if (It->HasMetaData(TEXT("UnLuaNovaExport")))
-				TypeNames.Add(It->GetName());
+		if (!Struct)
+			return;
 
-		for (TObjectIterator<UScriptStruct> It; It; ++It)
-			if (It->HasMetaData(TEXT("UnLuaNovaExport")))
-				TypeNames.Add(It->GetName());
-	}
+		if (HasOptedInAncestor(Struct))
+		{
+			TypeNames.Add(Struct->GetName());
+			return;
+		}
+
+		if (IsInternalName(Struct->GetName()))
+			return;
+
+		if (IsExcludedByFlags(Struct))
+			return;
+
+		if (Struct->HasMetaData(TEXT("UnLuaNovaNoExport")))
+			return;
+
+		TypeNames.Add(Struct->GetName());
+	};
+
+	for (TObjectIterator<UClass> It; It; ++It)
+		Consider(*It);
+	for (TObjectIterator<UScriptStruct> It; It; ++It)
+		Consider(*It);
 
 	if (TypeNames.Num() == 0)
 	{
 		UE_LOG(LogTemp, Warning,
-			TEXT("[StaticBindingGen] no types given; pass -Types=A,B or tag types with meta=(UnLuaNovaExport)."));
+			TEXT("[StaticBindingGen] every type was filtered out; nothing to generate."));
 		return 1;
 	}
+
+	UE_LOG(LogTemp, Display, TEXT("[StaticBindingGen] selected %d types."), TypeNames.Num());
 
 	FString Out;
 

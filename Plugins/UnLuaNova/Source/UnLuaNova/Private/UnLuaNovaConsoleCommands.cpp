@@ -1,4 +1,6 @@
 #include "UnLuaNovaConsoleCommands.h"
+#include "LuaDebugService.h"
+#include "LuaEnv.h"
 #include "LuaMemoryStats.h"
 #include "LuaProfiler.h"
 
@@ -32,6 +34,11 @@ namespace UnLuaNova
               *LOCTEXT("CommandText_Profiler", "Lua CPU profiling into Unreal Insights. Args: on | off, or none for status.").ToString(),
               FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::Profiler)
           ),
+          DebugCommand(
+              TEXT("lua.dbg"),
+              *LOCTEXT("CommandText_Debug", "Headless lua debugger. Args: bp <src> <line> | step | continue | stack | locals | clear | detach, or none for status.").ToString(),
+              FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::Debug)
+          ),
           Module(InModule)
     {
     }
@@ -53,6 +60,86 @@ namespace UnLuaNova
 
         const auto Chunk = FString::Join(Args, TEXT(" "));
         Env->DoString(Chunk);
+    }
+
+    void FUnLuaNovaConsoleCommands::Debug(const TArray<FString>& Args) const
+    {
+        auto Env = Module->GetEnv();
+        if (!Env)
+        {
+            UE_LOG(LogUnLuaNova, Warning, TEXT("no available lua env found to debug."));
+            return;
+        }
+
+        // Attaching is idempotent, so every invocation makes sure the hook is installed
+        // before doing anything else - the service only costs anything once armed.
+        auto& DebugService = FLuaDebugService::Get();
+        DebugService.Attach(Env->GetMainState());
+
+        if (Args.Num() == 0)
+        {
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.dbg: attached=%d paused=%d hits=%d breakpoints=%d"),
+                DebugService.IsAttached() ? 1 : 0,
+                DebugService.IsPaused() ? 1 : 0,
+                DebugService.GetHitCount(),
+                DebugService.GetBreakpoints().Num());
+            return;
+        }
+
+        const FString& Sub = Args[0];
+
+        if (Sub == TEXT("bp") && Args.Num() >= 3)
+        {
+            const int32 Line = FCString::Atoi(*Args[2]);
+            // Toggle: a second invocation on the same site removes it.
+            if (!DebugService.RemoveBreakpoint(Args[1], Line))
+                DebugService.AddBreakpoint(Args[1], Line);
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.dbg: breakpoint toggled at %s:%d"), *Args[1], Line);
+            return;
+        }
+
+        if (Sub == TEXT("step"))
+        {
+            DebugService.SetSingleStep(true);
+            return;
+        }
+
+        if (Sub == TEXT("continue"))
+        {
+            DebugService.SetSingleStep(false);
+            DebugService.Continue();
+            return;
+        }
+
+        if (Sub == TEXT("stack"))
+        {
+            for (const FLuaDebugFrame& Frame : DebugService.GetStackTrace())
+                UE_LOG(LogUnLuaNova, Log, TEXT("#%d %s:%d %s"),
+                    Frame.Depth, *Frame.Source, Frame.Line, *Frame.Function);
+            return;
+        }
+
+        if (Sub == TEXT("locals"))
+        {
+            for (const FLuaDebugVariable& Var : DebugService.GetLocals())
+                UE_LOG(LogUnLuaNova, Log, TEXT("%s (%s) = %s"),
+                    *Var.Name, *Var.Type, *Var.Value);
+            return;
+        }
+
+        if (Sub == TEXT("clear"))
+        {
+            DebugService.ClearBreakpoints();
+            return;
+        }
+
+        if (Sub == TEXT("detach"))
+        {
+            DebugService.Detach();
+            return;
+        }
+
+        UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.dbg [bp <src> <line> | step | continue | stack | locals | clear | detach]"));
     }
 
     void FUnLuaNovaConsoleCommands::DoFile(const TArray<FString>& Args) const

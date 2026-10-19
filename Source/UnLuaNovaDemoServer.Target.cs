@@ -14,13 +14,13 @@
 
 using UnrealBuildTool;
 
-public class TPSProjectServerTarget : TargetRules
+public class UnLuaNovaDemoServerTarget : TargetRules
 {
-    public TPSProjectServerTarget(TargetInfo Target) : base(Target)
+    public UnLuaNovaDemoServerTarget(TargetInfo Target) : base(Target)
     {
         Type = TargetType.Server;
         DefaultBuildSettings = BuildSettingsVersion.V6;
         IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
-        ExtraModuleNames.Add("TPSProject");
+        ExtraModuleNames.Add("UnLuaNovaDemo");
     }
 }

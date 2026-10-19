@@ -10,6 +10,7 @@
 #include "LuaProfiler.h"
 
 #include "LuaBackend.h"
+#include "LuaVmHooks.h"
 
 #if CPUPROFILERTRACE_ENABLED
 #include "ProfilingDebugging/CpuProfilerTrace.h"
@@ -58,15 +59,24 @@ namespace UnLuaNova
             return;
         }
 
+        // Claim the slot through FLuaVmHooks instead of calling lua_sethook directly:
+        // the dead-loop watchdog needs the same one, and whichever feature claimed it
+        // second used to silently disable the other.
+        if (bInEnabled)
+        {
 #if UNLUANOVA_HAS_HOOK_EVENT
-        lua_sethook(Attached,
-                    bInEnabled ? &Hook : nullptr,
-                    bInEnabled ? (LUA_MASKCALL | LUA_MASKRET) : 0,
-                    0);
+            FLuaVmHooks::Get().Add(Attached, LUA_MASKCALL | LUA_MASKRET, this,
+                [](lua_State* L, lua_Debug* Ar) { FLuaProfiler::Hook(L, Ar); });
 #else
-        // Luau routes safe points through lua_Callbacks rather than lua_sethook.
-        lua_callbacks(Attached)->interrupt = bInEnabled ? &Interrupt : nullptr;
+            // Luau routes safe points through lua_Callbacks rather than lua_sethook.
+            FLuaVmHooks::Get().Add(Attached, 0, this,
+                [](lua_State* L, lua_Debug*) { FLuaProfiler::Interrupt(L, 0); });
 #endif
+        }
+        else
+        {
+            FLuaVmHooks::Get().RemoveOwner(Attached, this);
+        }
     }
 
     uint32 FLuaProfiler::ResolveSpecId(lua_State* L, lua_Debug* Ar)

@@ -110,7 +110,11 @@ public class UnLuaNova : ModuleRules
         if (!config.GetString(section, "LuaBackend", out backend))
             backend = "Luau";
 
-        if (string.Equals(backend, "Lua", StringComparison.OrdinalIgnoreCase))
+        // Accept both "Lua55" and the shorter "Lua". Anything else selects Luau, which is
+        // the default. "Lua55" used to fall through to Luau, which was a nasty trap given
+        // the module is literally named Lua55.
+        if (string.Equals(backend, "Lua55", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(backend, "Lua", StringComparison.OrdinalIgnoreCase))
         {
             PublicDependencyModuleNames.Add("Lua");
             PublicDefinitions.Add("UNLUANOVA_LUA_BACKEND=0");

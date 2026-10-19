@@ -13,20 +13,26 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 using UnrealBuildTool;
-using System.Collections.Generic;
 
-public class TPSProjectTarget : TargetRules
+public class UnLuaNovaDemo : ModuleRules
 {
-    public TPSProjectTarget(TargetInfo Target) : base(Target)
+    public UnLuaNovaDemo(ReadOnlyTargetRules Target) : base(Target)
     {
-        Type = TargetType.Game;
-        DefaultBuildSettings = BuildSettingsVersion.V6;
-        IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
-        ExtraModuleNames.AddRange(
+        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+
+        PublicDependencyModuleNames.AddRange(
             new string[]
             {
-                "TPSProject"
-            }
-            );
+                "Core",
+                "CoreUObject",
+                "Engine",
+                "InputCore",
+            });
+
+        PrivateDependencyModuleNames.AddRange(new string[]
+        {
+            "UnLuaNova",
+            "Lua",
+        });
     }
 }

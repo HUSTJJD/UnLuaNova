@@ -38,7 +38,6 @@ namespace UnLuaNova
             void SetTimeout();
 
         private:
-            static void OnLuaLineEvent(lua_State* L, lua_Debug* ar);
 
             FDeadLoopCheck* Owner;
         };

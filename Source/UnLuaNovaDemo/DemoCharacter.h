@@ -4,16 +4,16 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
-#include "TPSCharacter.generated.h"
+#include "DemoCharacter.generated.h"
 
 UCLASS()
-class TPSPROJECT_API ATPSCharacter : public ACharacter
+class UnLuaNovaDemo_API ADemoCharacter : public ACharacter
 {
 	GENERATED_BODY()
 
 public:
 	// Sets default values for this character's properties
-	ATPSCharacter();
+	ADemoCharacter();
 
 protected:
 	// Called when the game starts or when spawned

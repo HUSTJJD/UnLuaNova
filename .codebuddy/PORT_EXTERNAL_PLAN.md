@@ -169,6 +169,11 @@ ILuaBackend::NewExternalString(...)  → Luau: 不支持（用 buffer）        
 
 ### F8 · vector / buffer 编组（新增，Luau 独有红利）
 
+> ❌ **已取消（2026-10-19 决策）**：Luau 的 `vector` / `buffer` 是为 Roblox 设计的类型，**不接入**。
+> UE 的 `FVector` / `FQuat` / `FRotator` / `FTransform` 等一律走 `MathLib/` 自己封装，与
+> 原生 Lua 后端保持完全一致 —— 换来的是跨后端行为统一，代价是拿不到 Luau 原生 vector 的性能。
+> 下方内容是历史记录，只说明当初为何考虑过、以及卡在哪。
+
 **需求**：源项目没有 —— 但这是 Luau 能给的最大性能红利，值得单列。
 
 **设计**：
@@ -251,8 +256,8 @@ ILuaBackend::NewExternalString(...)  → Luau: 不支持（用 buffer）        
 
 ## 6. 待确认
 
-1. **`LUA_VECTOR_SIZE` 定 3 还是 4**？这决定 F8 的覆盖面，且是编译期全局、不可运行时切换。建议先不定，F8 排到 M5 之后。
-2. **`LUA_VECTOR_DOUBLE` 要不要开**？开了能原生映射 UE5 LWC 的 double FVector，但所有 vector 体积翻倍。
+1. ~~**`LUA_VECTOR_SIZE` 定 3 还是 4**？~~ —— **已定：不需要定**。F8 取消，不接 Luau vector，保持 Luau 默认值即可，此项不再阻塞任何工作。
+2. ~~**`LUA_VECTOR_DOUBLE` 要不要开**？~~ —— **已定：不开**。同上。
 3. **F4 调试器要不要做**？Luau 让协议层免费，但 headless 服务 + VSCode 插件仍是 1~2 周量级。若不做，至少要把 `ILuaBackend::SetBreakpoint` 留出来。
 4. **`.codebuddy/` 是否随仓库分发**？若否，加一行 `.gitignore`。
 

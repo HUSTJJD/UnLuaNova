@@ -31,6 +31,8 @@ namespace UnLuaNova
 
         FAutoConsoleCommand ProfilerCommand;
 
+        FAutoConsoleCommand DebugCommand;
+
         explicit FUnLuaNovaConsoleCommands(IUnLuaNovaModule* InModule);
 
         void Do(const TArray<FString>& Args) const;
@@ -42,6 +44,8 @@ namespace UnLuaNova
         void MemStats(const TArray<FString>& Args) const;
 
         void Profiler(const TArray<FString>& Args) const;
+
+        void Debug(const TArray<FString>& Args) const;
 
     private:
         IUnLuaNovaModule* Module;

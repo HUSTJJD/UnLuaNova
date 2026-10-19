@@ -11,7 +11,7 @@
     });
 
     本示例C++源码：
-    Source\TPSProject\TutorialBlueprintFunctionLibrary.cpp
+    Source\UnLuaNovaDemo\TutorialBlueprintFunctionLibrary.cpp
 ]]--
 
 local Screen = require "Tutorials.Screen"

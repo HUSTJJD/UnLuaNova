@@ -12,7 +12,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "TPSProject.h"
-#include "Modules/ModuleManager.h"
+#pragma once
 
-IMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, TPSProject, "TPSProject")
+#include "CoreMinimal.h"
+#include "UnLuaInterface.h"
+#include "UObject/Object.h"
+#include "DemoGameInstance.generated.h"
+
+UCLASS()
+class UnLuaNovaDemo_API UDemoGameInstance
+    : public UGameInstance,
+      public IUnLuaInterface
+{
+    GENERATED_BODY()
+
+    virtual FString GetModuleName_Implementation() const override
+    {
+        return TEXT("DemoGameInstance");
+    }
+};

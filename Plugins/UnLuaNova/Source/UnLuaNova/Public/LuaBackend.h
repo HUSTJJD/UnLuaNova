@@ -120,6 +120,50 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #define UNLUANOVA_HAS_HOOK_EVENT 1
 #endif
 
+// --- sandboxing ---------------------------------------------------------------
+// Luau hardens the global table in a single call: after luaL_sandbox the globals are
+// read-only and the env is flagged safe, so a hotfixed / downloaded script can no
+// longer clobber engine bindings by accident. Plain Lua 5.5 has no equivalent (5.5
+// adds global *declarations*, not a sandbox), so that backend opts out entirely —
+// callers must test UNLUANOVA_HAS_SANDBOX instead of assuming it took effect.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_HAS_SANDBOX 1
+#define UNLUANOVA_SANDBOX(L) luaL_sandbox(L)
+#define UNLUANOVA_SANDBOXTHREAD(L) luaL_sandboxthread(L)
+#else
+#define UNLUANOVA_HAS_SANDBOX 0
+#define UNLUANOVA_SANDBOX(L) ((void)0)
+#define UNLUANOVA_SANDBOXTHREAD(L) ((void)0)
+#endif
+
+// --- debug channel ------------------------------------------------------------
+// Luau keeps the debug hook on a channel of its own (lua_callhook), completely
+// separate from the lua_Callbacks::interrupt slot the profiler and the dead-loop
+// watchdog share - so installing a debugger disturbs neither of them.
+//
+// Plain Lua has no second channel: lua_sethook is the only hook and FLuaVmHooks
+// already owns it, so a debugger must register there as a listener rather than
+// call lua_sethook itself.
+//
+// The breakpoint primitives - ask the VM to stop on a given line of a given
+// function - have no equivalent in plain Lua. lua_sethook can *report* every
+// line, but cannot make the VM stop on one. Those are Luau-only.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_HAS_BREAKPOINT 1
+#define UNLUANOVA_SET_DEBUG_HOOK(L, Hook, UserData) lua_callhook(L, Hook, UserData)
+#define UNLUANOVA_BREAKPOINT(L, FuncIndex, Line, Enabled) lua_breakpoint(L, FuncIndex, Line, Enabled)
+#define UNLUANOVA_SINGLESTEP(L, Enabled) lua_singlestep(L, Enabled)
+#define UNLUANOVA_ATBREAKPOINT(L) lua_atbreakpoint(L)
+#define UNLUANOVA_STACKDEPTH(L) lua_stackdepth(L)
+#else
+#define UNLUANOVA_HAS_BREAKPOINT 0
+#define UNLUANOVA_SET_DEBUG_HOOK(L, Hook, UserData) ((void)0) // register via FLuaVmHooks
+#define UNLUANOVA_BREAKPOINT(L, FuncIndex, Line, Enabled) 0
+#define UNLUANOVA_SINGLESTEP(L, Enabled) ((void)0)
+#define UNLUANOVA_ATBREAKPOINT(L) 0
+#define UNLUANOVA_STACKDEPTH(L) 0
+#endif
+
 // --- per-function id, for profiler keys ----------------------------------------
 // Luau exposes a VM-wide unique proto id on lua_Debug, which makes an ideal cache key.
 // Plain Lua has no such field, so key on (source pointer, line the function was defined

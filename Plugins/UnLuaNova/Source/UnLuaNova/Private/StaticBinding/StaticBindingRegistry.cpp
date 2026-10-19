@@ -183,6 +183,13 @@ void FStaticBindingRegistry::Resolve(const FStaticTypeBinding* Type, FEntry& Ent
  */
 void FStaticBindingRegistry::ResolvePending()
 {
+	// Cheap gate: readers consult this before taking any lock at all.
+	if (PendingCount.load(std::memory_order_acquire) == 0)
+		return;
+
+	FRWScopeLock Write(RwLock, SLT_Write);
+
+	// Re-check under the lock - another thread may have drained the queue meanwhile.
 	if (Pending.Num() == 0)
 		return;
 
@@ -195,6 +202,7 @@ void FStaticBindingRegistry::ResolvePending()
 	}
 
 	Pending.Empty();
+	PendingCount.store(0, std::memory_order_release);
 }
 
 void FStaticBindingRegistry::Register(const FStaticTypeBinding* Type)
@@ -202,12 +210,13 @@ void FStaticBindingRegistry::Register(const FStaticTypeBinding* Type)
 	if (!Type || !Type->TypeName)
 		return;
 
-	FScopeLock Lock(&CriticalSection);
+	FRWScopeLock Write(RwLock, SLT_Write);
 
 	if (Types.Contains(Type->TypeName) || Pending.Contains(Type))
 		return;
 
 	Pending.Add(Type);
+	PendingCount.store(Pending.Num(), std::memory_order_release);
 }
 
 void FStaticBindingRegistry::Unregister(const FStaticTypeBinding* Type)
@@ -215,8 +224,11 @@ void FStaticBindingRegistry::Unregister(const FStaticTypeBinding* Type)
 	if (!Type || !Type->TypeName)
 		return;
 
-	FScopeLock Lock(&CriticalSection);
+	// ResolvePending takes the write lock itself, so let it run before we acquire ours -
+	// FRWLock is not recursive.
 	ResolvePending();
+
+	FRWScopeLock Write(RwLock, SLT_Write);
 
 	const FName Key = Type->TypeName;
 
@@ -235,7 +247,7 @@ void FStaticBindingRegistry::Unregister(const FStaticTypeBinding* Type)
 
 const FStaticTypeBinding* FStaticBindingRegistry::Find(const FName TypeName) const
 {
-	FScopeLock Lock(&CriticalSection);
+	FRWScopeLock Read(RwLock, SLT_ReadOnly);
 	if (const FEntry* Entry = Types.Find(TypeName))
 		return Entry->Type;
 	return nullptr;
@@ -243,8 +255,12 @@ const FStaticTypeBinding* FStaticBindingRegistry::Find(const FName TypeName) con
 
 const FStaticTypeBinding* FStaticBindingRegistry::Find(const UStruct* Type) const
 {
-	FScopeLock Lock(&CriticalSection);
-	const_cast<FStaticBindingRegistry*>(this)->ResolvePending();
+	// Only pay for a resolve when something is actually queued. After startup PendingCount
+	// is 0, so this is a no-op and the lookup stays entirely on the shared read path.
+	if (PendingCount.load(std::memory_order_acquire) != 0)
+		const_cast<FStaticBindingRegistry*>(this)->ResolvePending();
+
+	FRWScopeLock Read(RwLock, SLT_ReadOnly);
 
 	for (const UStruct* Current = Type; Current; Current = Current->GetInheritanceSuper())
 	{
@@ -260,8 +276,12 @@ const FStaticPropBinding* FStaticBindingRegistry::FindProp(const FStaticTypeBind
 	if (!Type || !Type->TypeName)
 		return nullptr;
 
-	FScopeLock Lock(&CriticalSection);
-	const_cast<FStaticBindingRegistry*>(this)->ResolvePending();
+	// Only pay for a resolve when something is actually queued. After startup PendingCount
+	// is 0, so this is a no-op and the lookup stays entirely on the shared read path.
+	if (PendingCount.load(std::memory_order_acquire) != 0)
+		const_cast<FStaticBindingRegistry*>(this)->ResolvePending();
+
+	FRWScopeLock Read(RwLock, SLT_ReadOnly);
 
 	if (const FEntry* Entry = Types.Find(Type->TypeName))
 		if (const FStaticPropBinding* const* Found = Entry->Props.Find(Name))
@@ -275,8 +295,12 @@ const FStaticFuncBinding* FStaticBindingRegistry::FindFunc(const FStaticTypeBind
 	if (!Type || !Type->TypeName)
 		return nullptr;
 
-	FScopeLock Lock(&CriticalSection);
-	const_cast<FStaticBindingRegistry*>(this)->ResolvePending();
+	// Only pay for a resolve when something is actually queued. After startup PendingCount
+	// is 0, so this is a no-op and the lookup stays entirely on the shared read path.
+	if (PendingCount.load(std::memory_order_acquire) != 0)
+		const_cast<FStaticBindingRegistry*>(this)->ResolvePending();
+
+	FRWScopeLock Read(RwLock, SLT_ReadOnly);
 
 	if (const FEntry* Entry = Types.Find(Type->TypeName))
 		if (const FStaticFuncBinding* const* Found = Entry->Funcs.Find(Name))
@@ -287,8 +311,9 @@ const FStaticFuncBinding* FStaticBindingRegistry::FindFunc(const FStaticTypeBind
 
 void FStaticBindingRegistry::Clear()
 {
-	FScopeLock Lock(&CriticalSection);
+	FRWScopeLock Write(RwLock, SLT_Write);
 	Types.Empty();
 	StructToType.Empty();
+	PendingCount.store(0, std::memory_order_release);
 	Pending.Empty();
 }

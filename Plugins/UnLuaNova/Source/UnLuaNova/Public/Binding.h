@@ -20,6 +20,11 @@ namespace UnLuaNova
 {
     UNLUANOVA_API void ExportClass(IExportedClass* Class);
 
+    // Withdraw a static export. Static export helpers own their IExportedClass and
+    // delete it when the module is torn down (hot reload / PIE end); calling this first
+    // keeps the registry from holding a pointer to freed memory.
+    UNLUANOVA_API void UnExportClass(IExportedClass* Class);
+
     UNLUANOVA_API void ExportEnum(IExportedEnum* Enum);
 
     UNLUANOVA_API void ExportFunction(IExportedFunction* Function);

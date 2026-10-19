@@ -79,6 +79,21 @@ namespace UnLuaNova
 
         UELib::Open(L);
 
+#if UNLUANOVA_HAS_SANDBOX
+        // Sandbox only after UnLua has published its own globals - otherwise we would be
+        // locking the very table we are about to write to. Off by default: hardening the
+        // globals is a behaviour change for existing scripts, so it has to be opted into.
+        {
+            static auto SandboxCVar = IConsoleManager::Get().RegisterConsoleVariable(
+                TEXT("lua.sandbox"),
+                0,
+                TEXT("Harden the Lua global table once startup finishes (Luau backend only). 0=off, 1=on."),
+                ECVF_Default);
+            if (SandboxCVar->GetInt() != 0)
+                UNLUANOVA_SANDBOX(L);
+        }
+#endif
+
         ObjectRegistry = new FObjectRegistry(this);
         ClassRegistry = new FClassRegistry(this);
         ClassRegistry->Initialize();

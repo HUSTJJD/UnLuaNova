@@ -108,11 +108,37 @@
 
 *注：重启编译后生效*
 
-### 自定义Lua版本
+### Lua后端
 
-默认为`lua-5.4.3`，可以自行修改为`lua-5.4.4`或其他自定义版本。会在编译工程时使用`Plugins/UnLuaNova/Source/ThirdParty/Lua`下对应名称目录的源码。
+在 `Config/DefaultUnLuaNovaEditor.ini` 中设置：
 
-*注：重启编译后生效*
+```ini
+[/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]
+LuaBackend=Luau
+```
+
+| 值 | 说明 |
+|---|---|
+| `Lua55` | Lua 5.5（`github.com/lua/lua`），与上游 UnLua 行为一致 |
+| `Luau` | Luau（`github.com/luau-lang/luau`）**默认**；提供渐进类型、原生沙盒、原生断点调试等能力 |
+
+两个后端**都以 git 子模块引入**，位于 `Plugins/UnLuaNova/Source/ThirdParty/`：
+
+```
+ThirdParty/
+├── Lua55/      子模块：github.com/lua/lua
+├── Lua55Lib/   本项目：Lua55.Build.cs
+├── Luau/       子模块：github.com/luau-lang/luau
+└── LuauLib/    本项目：Luau.Build.cs
+```
+
+克隆仓库后需要初始化子模块：
+
+```bash
+git submodule update --init --recursive
+```
+
+*注：切换后端后需重新编译。旧版本通过「自定义Lua版本」指定 `lua-5.4.x` 源码目录的方式已移除。*
 
 ### UE4命名空间
 

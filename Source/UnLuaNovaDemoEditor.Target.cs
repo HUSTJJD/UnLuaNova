@@ -1,4 +1,4 @@
-﻿// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLua available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,22 +12,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#pragma once
+using UnrealBuildTool;
+using System.Collections.Generic;
 
-#include "CoreMinimal.h"
-#include "UnLuaInterface.h"
-#include "UObject/Object.h"
-#include "TPSGameInstance.generated.h"
-
-UCLASS()
-class TPSPROJECT_API UTPSGameInstance
-    : public UGameInstance,
-      public IUnLuaInterface
+public class UnLuaNovaDemoEditorTarget : TargetRules
 {
-    GENERATED_BODY()
-
-    virtual FString GetModuleName_Implementation() const override
+    public UnLuaNovaDemoEditorTarget(TargetInfo Target) : base(Target)
     {
-        return TEXT("TPSGameInstance");
+        Type = TargetType.Editor;
+        DefaultBuildSettings = BuildSettingsVersion.V6;
+        IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
+        ExtraModuleNames.AddRange(
+            new string[]
+            {
+                "UnLuaNovaDemo"
+            }
+            );
     }
-};
+}

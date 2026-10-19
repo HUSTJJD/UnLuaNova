@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "LuaDeadLoopCheck.h"
+#include "LuaVmHooks.h"
 #include "HAL/RunnableThread.h"
 #include "UnLuaNovaModule.h"
 
@@ -102,14 +103,22 @@ namespace UnLuaNova
     void FDeadLoopCheck::FGuard::SetTimeout()
     {
         const auto L = Owner->Env->GetMainState();
-        const auto Hook = lua_gethook(L);
-        if (Hook == nullptr)
-            lua_sethook(L, OnLuaLineEvent, LUA_MASKLINE, 0);
-    }
 
-    void FDeadLoopCheck::FGuard::OnLuaLineEvent(lua_State* L, lua_Debug* ar)
-    {
-        lua_sethook(L, nullptr, 0, 0);
-        luaL_error(L, "lua script exec timeout");
+        // Register with FLuaVmHooks rather than calling lua_sethook ourselves. The old
+        // lua_gethook() check made the watchdog a silent no-op whenever the profiler had
+        // already taken the slot, and on Luau safe points run through
+        // lua_Callbacks::interrupt rather than lua_sethook at all.
+        FLuaVmHooks::Get().Add(L,
+#if UNLUANOVA_HAS_HOOK_EVENT
+                               LUA_MASKLINE,
+#else
+                               0, // Luau: an interrupt is already a safe point, no mask
+#endif
+                               this,
+            [this](lua_State* InL, lua_Debug*)
+            {
+                FLuaVmHooks::Get().RemoveOwner(InL, this);
+                luaL_error(InL, "lua script exec timeout");
+            });
     }
 }

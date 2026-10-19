@@ -1,10 +1,10 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "TPSCharacter.h"
+#include "DemoCharacter.h"
 
 // Sets default values
-ATPSCharacter::ATPSCharacter()
+ADemoCharacter::ADemoCharacter()
 {
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
@@ -12,21 +12,21 @@ ATPSCharacter::ATPSCharacter()
 }
 
 // Called when the game starts or when spawned
-void ATPSCharacter::BeginPlay()
+void ADemoCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	
 }
 
 // Called every frame
-void ATPSCharacter::Tick(float DeltaTime)
+void ADemoCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
 }
 
 // Called to bind functionality to input
-void ATPSCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+void ADemoCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
