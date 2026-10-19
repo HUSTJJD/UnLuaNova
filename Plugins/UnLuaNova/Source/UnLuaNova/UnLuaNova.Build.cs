@@ -21,9 +21,9 @@ using Tools.DotNETCommon;
 #endif
 using UnrealBuildTool;
 
-public class UNLUANOVA : ModuleRules
+public class UnLuaNova : ModuleRules
 {
-    public UNLUANOVA(ReadOnlyTargetRules Target) : base(Target)
+    public UnLuaNova(ReadOnlyTargetRules Target) : base(Target)
     {
 #if UE_5_2_OR_LATER
         IWYUSupport = IWYUSupport.None;
@@ -41,7 +41,7 @@ public class UNLUANOVA : ModuleRules
         PrivateIncludePaths.AddRange(
             new[]
             {
-                "UNLUANOVA/Private",
+                "UnLuaNova/Private",
             }
         );
 
@@ -52,8 +52,7 @@ public class UNLUANOVA : ModuleRules
                 "CoreUObject",
                 "Engine",
                 "Slate",
-                "InputCore",
-                "Lua"
+                "InputCore"
             }
         );
 
@@ -66,11 +65,11 @@ public class UNLUANOVA : ModuleRules
         }
 
         var projectDir = Target.ProjectFile.Directory;
-        var configFilePath = projectDir + "/Config/DefaultUnLuaEditor.ini";
+        var configFilePath = projectDir + "/Config/DefaultUnLuaNovaEditor.ini";
         var configFileReference = new FileReference(configFilePath); 
         var configFile = FileReference.Exists(configFileReference) ? new ConfigFile(configFileReference) : new ConfigFile();
         var config = new ConfigHierarchy(new[] { configFile });
-        const string section = "/Script/UNLUANOVAEditor.UNLUANOVAEditorSettings";
+        const string section = "/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings";
 
         Action<string, string, bool> loadBoolConfig = (key, macro, defaultValue) =>
         {
@@ -80,14 +79,6 @@ public class UNLUANOVA : ModuleRules
             PublicDefinitions.Add(string.Format("{0}={1}", macro, (flag ? "1" : "0")));
         };
         
-        Action<string, string, string > loadStringConfig = (key, macro, defaultValue) =>
-        {
-            string value;
-            if (!config.GetString(section, key, out value))
-                value = defaultValue;
-            PublicDefinitions.Add(string.Format("{0}={1}", macro, value));
-        };
-
         loadBoolConfig("bAutoStartup", "AUTO_UNLUA_STARTUP", true);
         loadBoolConfig("bEnableDebug", "UNLUANOVA_ENABLE_DEBUG", false);
         loadBoolConfig("bEnablePersistentParamBuffer", "ENABLE_PERSISTENT_PARAM_BUFFER", true);
@@ -101,7 +92,28 @@ public class UNLUANOVA : ModuleRules
         loadBoolConfig("bLegacyBlueprintPath", "UNLUANOVA_LEGACY_BLUEPRINT_PATH", false);
         loadBoolConfig("bLegacyAllowUTF8WithBOM", "UNLUANOVA_LEGACY_ALLOW_BOM", false);
         loadBoolConfig("bLegacyArgsPassing", "UNLUANOVA_LEGACY_ARGS_PASSING", true);
-        loadStringConfig("LuaVersion", "UNLUANOVA_LUA_VERSION", "lua-5.4.3");
+
+        // --- Lua backend -------------------------------------------------------------
+        // Two officially supported backends, both vendored as submodules:
+        //   Lua55 -> Source/ThirdParty/Lua55  (github.com/lua/lua)
+        //   Luau  -> Source/ThirdParty/Luau   (github.com/luau-lang/luau)  <-- default
+        // The choice is compile-time because LuaBackend.h resolves VM entry points
+        // (userdata alloc, udata len, chunk load, GC setup) through macros. LuaBackend.h
+        // defaults to Luau when the macro is absent, so a stray TU still builds.
+        string backend;
+        if (!config.GetString(section, "LuaBackend", out backend))
+            backend = "Luau";
+
+        if (string.Equals(backend, "Lua55", StringComparison.OrdinalIgnoreCase))
+        {
+            PublicDependencyModuleNames.Add("Lua55");
+            PublicDefinitions.Add("UNLUANOVA_LUA_BACKEND=0");
+        }
+        else
+        {
+            PublicDependencyModuleNames.Add("Luau");
+            PublicDefinitions.Add("UNLUANOVA_LUA_BACKEND=1");
+        }
 
         string hotReloadMode;
         if (!config.GetString(section, "HotReloadMode", out hotReloadMode))
@@ -109,24 +121,5 @@ public class UNLUANOVA : ModuleRules
 
         var withHotReload = hotReloadMode != "Never";
         PublicDefinitions.Add("UNLUANOVA_WITH_HOT_RELOAD=" + (withHotReload ? "1" : "0"));
-
-        if (IsPluginEnabled("LuaCompat"))
-            PublicIncludePaths.Add(Path.Combine(PluginDirectory, "Source/ThirdParty/Lua/lua-compat-5.3/c-api"));
-    }
-
-    private bool IsPluginEnabled(string name)
-    {
-        var engineDir = DirectoryReference.FromString(EngineDirectory);
-        var projectDir = Target.ProjectFile.Directory;
-        var projectDesc = ProjectDescriptor.FromFile(Target.ProjectFile);
-        
-        foreach (var plugin in Plugins.ReadAvailablePlugins(engineDir, projectDir, null))
-        {
-            if (plugin.Name != name)
-                continue;
-            return Plugins.IsPluginEnabledForTarget(plugin, projectDesc, Target.Platform, Target.Configuration, Target.Type);
-        }
-
-        return false;
     }
 }

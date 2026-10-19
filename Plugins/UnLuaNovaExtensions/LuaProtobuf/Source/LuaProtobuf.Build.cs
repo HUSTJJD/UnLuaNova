@@ -47,8 +47,7 @@ public class LuaProtobuf : ModuleRules
 
         PrivateDependencyModuleNames.AddRange(new[]
         {
-            "UnLuaNova",
-            "Lua"
+            "UnLuaNova"
         });
 
         PrivateDefinitions.AddRange(

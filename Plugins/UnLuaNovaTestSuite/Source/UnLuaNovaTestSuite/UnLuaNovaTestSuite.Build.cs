@@ -43,7 +43,6 @@ public class UnLuaNovaTestSuite : ModuleRules
 		PrivateDependencyModuleNames.AddRange(
 			new[]
 			{
-				"Lua",
 				"UnLuaNova",
 				"UMG"
 			}
