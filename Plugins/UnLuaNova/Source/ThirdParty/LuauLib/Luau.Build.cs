@@ -1,18 +1,20 @@
-// Luau (https://github.com/luau-lang/luau) as an External module.
+// Luau (https://github.com/luau-lang/luau) compiled by UBT, like any other module
+// source.
 //
-// This file deliberately lives OUTSIDE the Luau submodule (../Luau): anything written inside
-// the submodule belongs to luau-lang/luau's own git repository and would never be committed
-// to this project. So this is a wrapper module whose source lives in a sibling directory.
+// This mirrors how Unreal integrates self-contained third-party code - see
+// Engine/Source/ThirdParty/nanosvg for the same shape: no ModuleType.External, no
+// prebuilt archives, no one has to run CMake/make before the editor will build.
+// Every platform is compiled by UBT from identical sources.
 //
-// Mirrors the existing Lua.Build.cs pattern: CMake builds the static libraries, UBT links them.
+// This file deliberately lives OUTSIDE the Luau submodule (../Luau): anything written
+// inside the submodule belongs to luau-lang/luau's own git repository and would never
+// be committed to this project.
 //
-// Integration notes, verified against the Luau checkout:
-//   * Luau defaults to LUA_USE_LONGJMP=0, i.e. C++ exceptions (class lua_exception : std::exception).
-//     Unreal builds with exceptions disabled, so we define LUA_USE_LONGJMP=1 to make Luau use
-//     setjmp/longjmp instead. That is also what plain Lua does, so pcall/error semantics match.
-//   * Only Luau.VM / Luau.Compiler / Luau.Ast / Luau.Common are linked;
-//     Analysis, CodeGen, CLI and tests are switched off.
-//   * Luau is C++17+; UE 5.8 is on C++20, so no standard override is needed.
+// What actually gets compiled are the thin wrappers under ./Generated - one per Luau
+// source, produced by GenerateWrappers.py. They are needed because UBT only compiles
+// sources inside the module directory, and because Luau cannot be unity-built (three
+// file-scope `static` names collide). See that script for details, and re-run it if
+// the Luau submodule changes.
 
 using UnrealBuildTool;
 using System.IO;
@@ -21,49 +23,36 @@ public class Luau : ModuleRules
 {
 	public Luau(ReadOnlyTargetRules Target) : base(Target)
 	{
-		Type = ModuleType.External;
+#if UE_5_2_OR_LATER
+		IWYUSupport = IWYUSupport.None;
+#else
+		bEnforceIWYU = false;
+#endif
+		PCHUsage = PCHUsageMode.NoPCHs;
+
+		// Critical: each wrapper must stay its own translation unit. If UBT merges them
+		// into a unity blob we are back to the colliding `static` names documented in
+		// GenerateWrappers.py.
+		bUseUnity = false;
 
 		var LuauRoot = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "Luau"));
 
-		PublicIncludePaths.Add(Path.Combine(LuauRoot, "VM", "include"));
-		PublicIncludePaths.Add(Path.Combine(LuauRoot, "Compiler", "include"));
-		PublicIncludePaths.Add(Path.Combine(LuauRoot, "Ast", "include"));
-		PublicIncludePaths.Add(Path.Combine(LuauRoot, "Common", "include"));
+		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "VM", "include"));
+		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "Compiler", "include"));
+		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "Ast", "include"));
+		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "Common", "include"));
 
-		// Use setjmp/longjmp instead of C++ exceptions (see header comment).
+		// Luau defaults to LUA_USE_LONGJMP=0, i.e. C++ exceptions (class lua_exception).
+		// Unreal builds with exceptions disabled, so force setjmp/longjmp instead - that
+		// is also what plain Lua does, so pcall/error semantics match.
 		PublicDefinitions.Add("LUA_USE_LONGJMP=1");
 
-		// Tell UBT to rebuild when the submodule contents change.
+		// Third-party C++: do not let Unreal's strict settings fail the build.
+		bEnableUndefinedIdentifierWarnings = false;
+		bEnableNonInlinedGenCppWarnings = false;
+		bEnableShadowVariableWarnings = false;
+
+		// Rebuild when the submodule contents change.
 		ExternalDependencies.Add(LuauRoot);
-
-		// Luau is an External module: UBT links prebuilt archives rather than compiling the
-		// sources. Without the CMake step the failure surfaces as a bare linker error, so
-		// spell out exactly what is missing.
-		if (!Directory.Exists(Path.Combine(LuauRoot, "build")))
-		{
-			throw new BuildException(
-				"Luau backend selected, but the prebuilt libraries are missing under '" +
-				Path.Combine(LuauRoot, "build") + "'. Build them first, e.g.\n" +
-				"    cmake -S \"" + LuauRoot + "\" -B \"" + Path.Combine(LuauRoot, "build") + "\" -DCMAKE_BUILD_TYPE=Release\n" +
-				"    cmake --build \"" + Path.Combine(LuauRoot, "build") + "\" --config Release\n" +
-				"Or switch to the official Lua backend, which compiles through UBT and needs no\n" +
-				"extra step: Config/DefaultUnLuaNovaEditor.ini -> LuaBackend=Lua\n" +
-				"(or change the default in UnLuaNova.Build.cs).");
-		}
-
-		if (Target.Platform == UnrealTargetPlatform.Win64)
-		{
-			PublicAdditionalLibraries.Add(Path.Combine(LuauRoot, "build", "Release", "Luau.VM.lib"));
-			PublicAdditionalLibraries.Add(Path.Combine(LuauRoot, "build", "Release", "Luau.Compiler.lib"));
-			PublicAdditionalLibraries.Add(Path.Combine(LuauRoot, "build", "Release", "Luau.Ast.lib"));
-			PublicAdditionalLibraries.Add(Path.Combine(LuauRoot, "build", "Release", "Luau.Common.lib"));
-		}
-		else
-		{
-			PublicAdditionalLibraries.Add(Path.Combine(LuauRoot, "build", "libLuau.VM.a"));
-			PublicAdditionalLibraries.Add(Path.Combine(LuauRoot, "build", "libLuau.Compiler.a"));
-			PublicAdditionalLibraries.Add(Path.Combine(LuauRoot, "build", "libLuau.Ast.a"));
-			PublicAdditionalLibraries.Add(Path.Combine(LuauRoot, "build", "libLuau.Common.a"));
-		}
 	}
 }

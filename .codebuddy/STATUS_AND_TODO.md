@@ -30,6 +30,21 @@ Source/ThirdParty/
 
 ---
 
+## 0.5 命名约定（**这两件事不是一个东西，别再改混**）
+
+| 概念 | 当前值 | 决定因素 | 出现在哪 |
+|---|---|---|---|
+| **Lua 全局表名** | `Lua` | 纯 API 选择，只影响脚本书写长短 | `Lua.Log(...)`、`Lua.Class(...)`、`Lua.HotReload()` |
+| **require 路径前缀** | `UnLuaNova.` | **必须是磁盘目录名** `Content/Script/UnLuaNova/` | `require("UnLuaNova.HotReload")` |
+
+两者**故意不同**：改全局表名只是改一个 Lua 变量；改 require 前缀会让 Linux/Mac 直接找不到文件（大小写敏感）。
+
+`UnLua` 和 `UnLuaNova` 作为**别名**同时注册，都指向 `Lua` 这张表，所以三种写法都能用。
+
+> ⚠️ 重命名时千万别对 `UnLua` 做朴素字符串替换——`UnLuaNova` 含子串 `UnLua`，会把它变成 `LuaNova` 而悄悄破坏 require 路径。必须用单词边界 `\bUnLua\b`（`UnLuaNova` 里 `UnLua` 后面紧跟字母，边界不成立，天然安全）。
+
+---
+
 ## 1. 已完成（按提交倒序）
 
 | 提交 | 内容 |
