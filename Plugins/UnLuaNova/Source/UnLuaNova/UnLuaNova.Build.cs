@@ -102,7 +102,7 @@ public class UnLuaNova : ModuleRules
         // defaults to Luau when the macro is absent, so a stray TU still builds.
         string backend;
         if (!config.GetString(section, "LuaBackend", out backend))
-            backend = "Luau";
+            backend = "Lua55";
 
         if (string.Equals(backend, "Lua55", StringComparison.OrdinalIgnoreCase))
         {

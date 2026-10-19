@@ -30,6 +30,7 @@
 #include "UnLuaNovaLib.h"
 #include "UNLUANOVASettings.h"
 #include "LuaBackend.h"
+#include "LuaMemoryStats.h"
 
 namespace UNLUANOVA
 {
@@ -730,8 +731,11 @@ namespace UNLUANOVA
 
     void* FLuaEnv::DefaultLuaAllocator(void* ud, void* ptr, size_t osize, size_t nsize)
     {
+        FLuaMemoryStats& Stats = FLuaMemoryStats::Get();
+
         if (nsize == 0)
         {
+            Stats.TrackFree(osize);
             UNLUANOVA_STAT_MEMORY_FREE(ptr, Lua);
             FMemory::Free(ptr);
             return nullptr;
@@ -748,6 +752,10 @@ namespace UNLUANOVA
             UNLUANOVA_STAT_MEMORY_REALLOC(ptr, Buffer, Lua);
             Buffer = FMemory::Realloc(ptr, nsize);
         }
+
+        // osize is 0 for a fresh allocation, non-zero for a reallocation - TrackAlloc
+        // uses that to split the two counters.
+        Stats.TrackAlloc(osize, nsize);
         return Buffer;
     }
 }

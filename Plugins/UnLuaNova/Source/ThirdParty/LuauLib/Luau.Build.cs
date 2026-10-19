@@ -36,6 +36,20 @@ public class Luau : ModuleRules
 		// Tell UBT to rebuild when the submodule contents change.
 		ExternalDependencies.Add(LuauRoot);
 
+		// Luau is an External module: UBT links prebuilt archives rather than compiling the
+		// sources. Without the CMake step the failure surfaces as a bare linker error, so
+		// spell out exactly what is missing.
+		if (!Directory.Exists(Path.Combine(LuauRoot, "build")))
+		{
+			throw new BuildException(
+				"Luau backend selected, but the prebuilt libraries are missing under '" +
+				Path.Combine(LuauRoot, "build") + "'. Build them first, e.g.\n" +
+				"    cmake -S \"" + LuauRoot + "\" -B \"" + Path.Combine(LuauRoot, "build") + "\" -DCMAKE_BUILD_TYPE=Release\n" +
+				"    cmake --build \"" + Path.Combine(LuauRoot, "build") + "\" --config Release\n" +
+				"Or switch to the Lua 5.5 backend (Config/DefaultUnLuaNovaEditor.ini -> LuaBackend=Lua55), " +
+				"which compiles through UBT and needs no extra step.");
+		}
+
 		if (Target.Platform == UnrealTargetPlatform.Win64)
 		{
 			PublicAdditionalLibraries.Add(Path.Combine(LuauRoot, "build", "Release", "Luau.VM.lib"));

@@ -17,7 +17,10 @@
 #define UNLUANOVA_BACKEND_LUAU 1
 
 #ifndef UNLUANOVA_LUA_BACKEND
-#define UNLUANOVA_LUA_BACKEND UNLUANOVA_BACKEND_LUAU
+// Default is Lua 5.5: it compiles straight through UBT (see ThirdParty/Lua55Lib), so
+// the tree always builds. Luau is opt-in and additionally needs its CMake step - see
+// ThirdParty/LuauLib/Luau.Build.cs.
+#define UNLUANOVA_LUA_BACKEND UNLUANOVA_BACKEND_LUA55
 #endif
 
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
