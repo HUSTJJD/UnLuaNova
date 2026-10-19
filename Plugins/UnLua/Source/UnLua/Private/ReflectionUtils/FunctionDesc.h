@@ -21,6 +21,7 @@
 #include "ReflectionUtils/PropertyDesc.h"
 
 struct FParameterCollection;
+struct FStaticFuncBinding;
 
 /**
  * Function descriptor
@@ -115,6 +116,20 @@ private:
 
     FORCEINLINE bool CheckObject(UObject* Object, FString& Error) const;
 
+    /**
+     * Static-binding fast path for CallUE.
+     *
+     * Skips the work that a pre-resolved FStaticFuncBinding makes unnecessary:
+     *   - GetFunctionCallspace(): UObject::ProcessEvent already queries it for
+     *     FUNC_Native functions, and never needs it otherwise. UnLua calls it for
+     *     every call, including pure Blueprint functions.
+     *   - ULuaFunction::Get(): the override redirect can only hit overridable functions.
+     *   - FindFunctionByName(): only needed for interface functions.
+     * Everything else (buffer, PreCall/PostCall) is shared with the reflective path,
+     * so behaviour is identical.
+     */
+    int32 CallUEFast(lua_State* L, int32 NumParams, int32 FirstParamIndex, UObject* Object, void* Userdata);
+
     TWeakObjectPtr<UFunction> Function;
     FString FuncName;
     TSharedPtr<FParamBufferAllocator> Buffer;
@@ -127,4 +142,7 @@ private:
     uint8 bInterfaceFunc : 1;
     int32 ParmsSize;
     TUniquePtr<FTCHARToUTF8> LuaFunctionName;
+
+    /** Non-null when this function belongs to a type with a static binding. */
+    const FStaticFuncBinding* StaticBinding = nullptr;
 };

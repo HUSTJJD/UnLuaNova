@@ -24,6 +24,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "LuaDeadLoopCheck.h"
 #include "Containers/StaticBitArray.h"
+#include "StaticBinding/StaticBindingRegistry.h"
 
 /**
  * Function descriptor constructor
@@ -49,6 +50,13 @@ FFunctionDesc::FFunctionDesc(UFunction *InFunction, FParameterCollection *InDefa
     bInterfaceFunc = OuterClass && OuterClass->HasAnyClassFlags(CLASS_Interface) && OuterClass != UInterface::StaticClass();
 
     Buffer = FParamBufferFactory::Get(*InFunction);
+
+    // If this function's owner type has a static binding, grab its pre-resolved descriptor.
+    if (const UStruct* Owner = InFunction->GetOwnerClass())
+    {
+        if (const FStaticTypeBinding* TypeBinding = FStaticBindingRegistry::Get().Find(Owner))
+            StaticBinding = FStaticBindingRegistry::Get().FindFunc(TypeBinding, InFunction->GetFName());
+    }
 
     static const FName NAME_LatentInfo = TEXT("LatentInfo");
     Properties.Reserve(InFunction->NumParms);
@@ -199,6 +207,14 @@ int32 FFunctionDesc::CallUE(lua_State *L, int32 NumParams, void *Userdata)
     if (UNLIKELY(!CheckObject(Object, Error)))
         return luaL_error(L, TCHAR_TO_UTF8(*Error));
 
+    // Pre-resolved descriptor available: take the fast path.
+    // Excluded cases keep the reflective path because they genuinely need the extra work:
+    //   - net functions  -> must route through GetFunctionCallspace / CallRemoteFunction
+    //   - latent functions -> coroutine bookkeeping
+    //   - interface functions -> per-object FindFunctionByName
+    if (StaticBinding && !StaticBinding->Flags.bIsNet && !StaticBinding->Flags.bLatent && !bInterfaceFunc)
+        return CallUEFast(L, NumParams, FirstParamIndex, Object, Userdata);
+
     int32 Callspace = Object->GetFunctionCallspace(Function.Get(), nullptr);
     bool bRemote = Callspace & FunctionCallspace::Remote;
     bool bLocal = Callspace & FunctionCallspace::Local;
@@ -232,6 +248,46 @@ int32 FFunctionDesc::CallUE(lua_State *L, int32 NumParams, void *Userdata)
     }
 
     int32 NumReturnValues = PostCall(L, NumParams, FirstParamIndex, Params, CleanupFlags);      // push 'out' properties to Lua stack
+    Buffer->Pop(Params);
+    return NumReturnValues;
+}
+
+/**
+ * Call the UFunction through its static binding.
+ *
+ * Only the parts that the pre-resolved descriptor renders unnecessary are skipped:
+ * parameter marshalling (PreCall/PostCall) and the buffer are shared with the reflective
+ * path, so the observable behaviour is identical.
+ */
+int32 FFunctionDesc::CallUEFast(lua_State* L, int32 NumParams, int32 FirstParamIndex, UObject* Object, void* Userdata)
+{
+#if ENABLE_UNREAL_INSIGHTS && CPUPROFILERTRACE_ENABLED
+    TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(*FuncName);
+#endif
+
+    check(Function.IsValid());
+    check(Object);
+
+    FFlagArray CleanupFlags;
+    const auto Params = Buffer->Get();
+    PreCall(L, NumParams, FirstParamIndex, CleanupFlags, Params, Userdata);
+
+    UFunction* FinalFunction = Function.Get();
+
+#if ENABLE_CALL_OVERRIDDEN_FUNCTION
+    if (StaticBinding->Flags.bOverridable)
+    {
+        const auto LuaFunction = ULuaFunction::Get(FinalFunction);
+        if (LuaFunction && LuaFunction->GetOverridden())
+            FinalFunction = LuaFunction->GetOverridden();
+    }
+#endif
+
+    // Non-net: ProcessEvent queries the call space itself for FUNC_Native, and never
+    // needs it otherwise. Remote routing is unreachable here by construction.
+    Object->UObject::ProcessEvent(FinalFunction, Params);
+
+    const int32 NumReturnValues = PostCall(L, NumParams, FirstParamIndex, Params, CleanupFlags);
     Buffer->Pop(Params);
     return NumReturnValues;
 }
