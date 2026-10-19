@@ -27,30 +27,30 @@ void FUnLuaLibFVectorSpec::Define()
 {
     BeforeEach([this]
     {
-        UnLua::Startup();
-        L = UnLua::GetState();
+        UnLuauNova::Startup();
+        L = UnLuauNova::GetState();
     });
 
     Describe(TEXT("构造FVector"), [this]()
     {
         It(TEXT("默认参数"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FVector()");
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            UnLuauNova::RunChunk(L, "return UE.FVector()");
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             TEST_EQUAL(Vector, FVector(EForceInit::ForceInitToZero));
         });
 
         It(TEXT("分别指定X/Y/Z"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FVector(1.1,2.2,3.3)");
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            UnLuauNova::RunChunk(L, "return UE.FVector(1.1,2.2,3.3)");
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             TEST_EQUAL(Vector, FVector(1.1f,2.2f,3.3f));
         });
 
         It(TEXT("同时指定X/Y/Z"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FVector(1.1)");
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            UnLuauNova::RunChunk(L, "return UE.FVector(1.1)");
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             TEST_EQUAL(Vector, FVector(1.1f));
         });
     });
@@ -64,8 +64,8 @@ void FUnLuaLibFVectorSpec::Define()
             Vector:Set(1.1)\
             return Vector\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             TEST_EQUAL(Vector, FVector(1.1f,0,0));
         });
 
@@ -76,8 +76,8 @@ void FUnLuaLibFVectorSpec::Define()
             Vector:Set(1.1,2.2)\
             return Vector\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             TEST_EQUAL(Vector, FVector(1.1f,2.2f,0));
         });
 
@@ -88,8 +88,8 @@ void FUnLuaLibFVectorSpec::Define()
             Vector:Set(1.1,2.2,3.3)\
             return Vector\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             TEST_EQUAL(Vector, FVector(1.1f,2.2f,3.3f));
         });
     });
@@ -103,9 +103,9 @@ void FUnLuaLibFVectorSpec::Define()
             local Result = Vector:Normalize()\
             return Result, Vector\
             ";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_TRUE(lua_toboolean(L, -2));
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             auto Expected = FVector(3.3f, 3.3f, 3.3f);
             Expected.Normalize();
             TEST_EQUAL(Vector, Expected);
@@ -117,9 +117,9 @@ void FUnLuaLibFVectorSpec::Define()
             local Result = Vector:Normalize(100)\
             return Result, Vector\
             ";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_FALSE(lua_toboolean(L, -2));
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             auto Expected = FVector(3.3f, 3.3f, 3.3f);
             Expected.Normalize(100);
             TEST_EQUAL(Vector, Expected);
@@ -135,8 +135,8 @@ void FUnLuaLibFVectorSpec::Define()
             local Vector2 = UE.FVector(4.4,5.5,6.6)\
             return Vector1 + Vector2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             TEST_EQUAL(Vector, FVector(1.1f,2.2f,3.3f) + FVector(4.4f,5.5f,6.6f));
         });
     });
@@ -150,8 +150,8 @@ void FUnLuaLibFVectorSpec::Define()
             local Vector2 = UE.FVector(4.4,5.5,6.6)\
             return Vector1 - Vector2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             TEST_EQUAL(Vector, FVector(1.1f,2.2f,3.3f) - FVector(4.4f,5.5f,6.6f));
         });
     });
@@ -164,8 +164,8 @@ void FUnLuaLibFVectorSpec::Define()
             local Vector = UE.FVector(1.1,2.2,3.3)\
             return Vector * 2.1\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             TEST_EQUAL(Vector, FVector(1.1f,2.2f,3.3f) * 2.1f);
         });
     });
@@ -178,8 +178,8 @@ void FUnLuaLibFVectorSpec::Define()
             local Vector = UE.FVector(2.2,4.4,8.8)\
             return Vector / 2.2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             TEST_EQUAL(Vector, FVector(2.2f,4.4f,8.8f) / 2.2f);
         });
     });
@@ -192,8 +192,8 @@ void FUnLuaLibFVectorSpec::Define()
             local Vector = UE.FVector(1.1,2.2,3.3)\
             return -Vector\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector>(L, -1, UnLua::TType<FVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector>(L, -1, UnLuauNova::TType<FVector>());
             TEST_EQUAL(Vector, FVector(-1.1f,-2.2f,-3.3f));
         });
     });
@@ -202,7 +202,7 @@ void FUnLuaLibFVectorSpec::Define()
     {
         It(TEXT("转为字符串"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return tostring(UE.FVector(1,2,3))");
+            UnLuauNova::RunChunk(L, "return tostring(UE.FVector(1,2,3))");
             const auto& Actual = lua_tostring(L, -1);
             const auto& Expected = FVector(1, 2, 3).ToString();
             TEST_EQUAL(Actual, Expected);
@@ -211,7 +211,7 @@ void FUnLuaLibFVectorSpec::Define()
 
     AfterEach([this]
     {
-        UnLua::Shutdown();
+        UnLuauNova::Shutdown();
     });
 }
 

@@ -19,15 +19,15 @@ extern "C" int luaopen_rapidjson(lua_State* L);
 
 void FLuaRapidjsonModule::StartupModule()
 {
-    UnLua::FLuaEnv::OnCreated.AddStatic(&FLuaRapidjsonModule::OnLuaEnvCreated);
+    UnLuauNova::FLuaEnv::OnCreated.AddStatic(&FLuaRapidjsonModule::OnLuaEnvCreated);
 }
 
 void FLuaRapidjsonModule::ShutdownModule()
 {
-    UnLua::FLuaEnv::OnCreated.RemoveAll(this);
+    UnLuauNova::FLuaEnv::OnCreated.RemoveAll(this);
 }
 
-void FLuaRapidjsonModule::OnLuaEnvCreated(UnLua::FLuaEnv& Env)
+void FLuaRapidjsonModule::OnLuaEnvCreated(UnLuauNova::FLuaEnv& Env)
 {
     Env.AddBuiltInLoader(TEXT("rapidjson"), luaopen_rapidjson);
 }

@@ -20,7 +20,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 BEGIN_DEFINE_SPEC(FUnLuaLibArraySpec, "UnLua.API.TArray", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
-    TSharedPtr<UnLua::FLuaEnv> Env;
+    TSharedPtr<UnLuauNova::FLuaEnv> Env;
     lua_State* L;
 END_DEFINE_SPEC(FUnLuaLibArraySpec)
 
@@ -28,7 +28,7 @@ void FUnLuaLibArraySpec::Define()
 {
     BeforeEach([this]
     {
-        Env = MakeShared<UnLua::FLuaEnv>();
+        Env = MakeShared<UnLuauNova::FLuaEnv>();
         L = Env->GetMainState();
     });
 
@@ -49,7 +49,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const auto ScriptArray = UnLua::GetArray(L, -1);
+            const auto ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
@@ -67,7 +67,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<FString>*)ScriptArray;
@@ -85,7 +85,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<bool>*)ScriptArray;
@@ -103,7 +103,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<FVector>*)ScriptArray;
@@ -127,7 +127,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<FVector>*)ScriptArray;
@@ -173,7 +173,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
@@ -194,7 +194,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
@@ -242,7 +242,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
@@ -264,7 +264,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
@@ -285,7 +285,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
@@ -306,7 +306,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
@@ -326,7 +326,7 @@ void FUnLuaLibArraySpec::Define()
             Env->DoString(Chunk);
             TEST_TRUE(lua_toboolean(L, -2));
 
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
@@ -358,7 +358,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
@@ -378,7 +378,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
@@ -396,7 +396,7 @@ void FUnLuaLibArraySpec::Define()
             return Array, Array:GetData()
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -2);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -2);
             TEST_TRUE(ScriptArray!=nullptr);
             TEST_EQUAL(lua_topointer(L, -1), ScriptArray->GetData());
         });
@@ -414,7 +414,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<FVector>*)ScriptArray;
@@ -431,7 +431,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<FVector>*)ScriptArray;
@@ -451,7 +451,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<FVector>*)ScriptArray;
@@ -471,7 +471,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
@@ -488,7 +488,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
@@ -509,7 +509,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
             const auto& Array = *(TArray<int32>*)ScriptArray;
             TEST_EQUAL(Array[0], 3);
@@ -531,7 +531,7 @@ void FUnLuaLibArraySpec::Define()
             return Array
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
             const auto& Array = *(TArray<int32>*)ScriptArray;
             TEST_EQUAL(Array[0], 1);
@@ -618,7 +618,7 @@ void FUnLuaLibArraySpec::Define()
             return Array1
             )";
             Env->DoString(Chunk);
-            const FScriptArray* ScriptArray = UnLua::GetArray(L, -1);
+            const FScriptArray* ScriptArray = UnLuauNova::GetArray(L, -1);
             TEST_TRUE(ScriptArray!=nullptr);
             const auto& Array = *(TArray<int32>*)ScriptArray;
             TEST_EQUAL(Array[0], 1);
@@ -663,7 +663,7 @@ void FUnLuaLibArraySpec::Define()
             )";
             TEST_TRUE(Env->DoString(Chunk));
 
-            const auto Ret = UnLua::FLuaTable(Env.Get(), -1);
+            const auto Ret = UnLuauNova::FLuaTable(Env.Get(), -1);
             TEST_EQUAL(Ret.Length(), 4);
             TEST_EQUAL(Ret[1].Value<int>(), 1);
             TEST_EQUAL(Ret[2].Value<int>(), 100);

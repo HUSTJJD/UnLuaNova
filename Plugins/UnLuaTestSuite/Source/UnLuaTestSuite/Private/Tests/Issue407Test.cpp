@@ -34,7 +34,7 @@ struct FUnLuaTest_Issue407 : FUnLuaTestBase
             local Values = Stub.MapForIssue407:Values()
             Result = Stub:TestForIssue407(Values)
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         lua_getglobal(L, "Result");
         const auto Result = static_cast<int32>(lua_tonumber(L, -1));

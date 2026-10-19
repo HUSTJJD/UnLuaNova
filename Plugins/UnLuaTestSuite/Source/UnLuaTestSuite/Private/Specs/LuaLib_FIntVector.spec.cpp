@@ -27,30 +27,30 @@ void FUnLuaLibFIntVectorSpec::Define()
 {
     BeforeEach([this]
     {
-        UnLua::Startup();
-        L = UnLua::GetState();
+        UnLuauNova::Startup();
+        L = UnLuauNova::GetState();
     });
 
     Describe(TEXT("构造FIntVector"), [this]()
     {
         It(TEXT("默认参数"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FIntVector()");
-            const auto& Vector = UnLua::Get<FIntVector>(L, -1, UnLua::TType<FIntVector>());
+            UnLuauNova::RunChunk(L, "return UE.FIntVector()");
+            const auto& Vector = UnLuauNova::Get<FIntVector>(L, -1, UnLuauNova::TType<FIntVector>());
             TEST_EQUAL(Vector, FIntVector(EForceInit::ForceInitToZero));
         });
 
         It(TEXT("分别指定X/Y/Z"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FIntVector(1,2,3)");
-            const auto& Vector = UnLua::Get<FIntVector>(L, -1, UnLua::TType<FIntVector>());
+            UnLuauNova::RunChunk(L, "return UE.FIntVector(1,2,3)");
+            const auto& Vector = UnLuauNova::Get<FIntVector>(L, -1, UnLuauNova::TType<FIntVector>());
             TEST_EQUAL(Vector, FIntVector(1,2,3));
         });
 
         It(TEXT("同时指定X/Y/Z"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FIntVector(1)");
-            const auto& Vector = UnLua::Get<FIntVector>(L, -1, UnLua::TType<FIntVector>());
+            UnLuauNova::RunChunk(L, "return UE.FIntVector(1)");
+            const auto& Vector = UnLuauNova::Get<FIntVector>(L, -1, UnLuauNova::TType<FIntVector>());
             TEST_EQUAL(Vector, FIntVector(1));
         });
     });
@@ -64,8 +64,8 @@ void FUnLuaLibFIntVectorSpec::Define()
             Vector:Set(1)\
             return Vector\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FIntVector>(L, -1, UnLua::TType<FIntVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FIntVector>(L, -1, UnLuauNova::TType<FIntVector>());
             TEST_EQUAL(Vector, FIntVector(1,0,0));
         });
 
@@ -76,8 +76,8 @@ void FUnLuaLibFIntVectorSpec::Define()
             Vector:Set(1,2)\
             return Vector\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FIntVector>(L, -1, UnLua::TType<FIntVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FIntVector>(L, -1, UnLuauNova::TType<FIntVector>());
             TEST_EQUAL(Vector, FIntVector(1,2,0));
         });
     });
@@ -90,7 +90,7 @@ void FUnLuaLibFIntVectorSpec::Define()
             local Vector = UE.FIntVector(3,4,0)\
             return Vector:SizeSquared()\
             ";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             const auto& SizeSquared = (int32)lua_tointeger(L, -1);
             const auto& Size = FIntVector(3, 4, 0).Size();
             TEST_EQUAL(SizeSquared, Size * Size);
@@ -106,8 +106,8 @@ void FUnLuaLibFIntVectorSpec::Define()
             local Vector2 = UE.FIntVector(4,5,6)\
             return Vector1 + Vector2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FIntVector>(L, -1, UnLua::TType<FIntVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FIntVector>(L, -1, UnLuauNova::TType<FIntVector>());
             TEST_EQUAL(Vector, FIntVector(1,2,3) + FIntVector(4,5,6));
         });
     });
@@ -121,8 +121,8 @@ void FUnLuaLibFIntVectorSpec::Define()
             local Vector2 = UE.FIntVector(4,5,6)\
             return Vector1 - Vector2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FIntVector>(L, -1, UnLua::TType<FIntVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FIntVector>(L, -1, UnLuauNova::TType<FIntVector>());
             TEST_EQUAL(Vector, FIntVector(1,2,3) - FIntVector(4,5,6));
         });
     });
@@ -135,8 +135,8 @@ void FUnLuaLibFIntVectorSpec::Define()
             local Vector = UE.FIntVector(1,2,3)\
             return Vector * 2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FIntVector>(L, -1, UnLua::TType<FIntVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FIntVector>(L, -1, UnLuauNova::TType<FIntVector>());
             TEST_EQUAL(Vector, FIntVector(1,2,3) * 2);
         });
     });
@@ -149,8 +149,8 @@ void FUnLuaLibFIntVectorSpec::Define()
             local Vector = UE.FIntVector(2,4,8)\
             return Vector / 2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FIntVector>(L, -1, UnLua::TType<FIntVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FIntVector>(L, -1, UnLuauNova::TType<FIntVector>());
             TEST_EQUAL(Vector, FIntVector(2,4,8) / 2);
         });
     });
@@ -163,8 +163,8 @@ void FUnLuaLibFIntVectorSpec::Define()
             local Vector = UE.FIntVector(1,2,3)\
             return -Vector\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FIntVector>(L, -1, UnLua::TType<FIntVector>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FIntVector>(L, -1, UnLuauNova::TType<FIntVector>());
             TEST_EQUAL(Vector, FIntVector(-1,-2,-3));
         });
     });
@@ -173,7 +173,7 @@ void FUnLuaLibFIntVectorSpec::Define()
     {
         It(TEXT("转为字符串"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return tostring(UE.FIntVector(1,2,3))");
+            UnLuauNova::RunChunk(L, "return tostring(UE.FIntVector(1,2,3))");
             const auto& Actual =lua_tostring(L, -1);
             const auto& Expected =  FIntVector(1,2,3).ToString();
             TEST_EQUAL(Actual, Expected);
@@ -182,7 +182,7 @@ void FUnLuaLibFIntVectorSpec::Define()
 
     AfterEach([this]
     {
-        UnLua::Shutdown();
+        UnLuauNova::Shutdown();
     });
 }
 

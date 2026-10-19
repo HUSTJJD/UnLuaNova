@@ -33,7 +33,7 @@ struct FUnLuaTest_Issue376 : FUnLuaTestBase
         UE.UUnLuaTestFunctionLibrary.TestForIssue376(Struct)
         return Struct.Level
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
         const auto Actual = (int32)lua_tonumber(L, -1);
         RUNNER_TEST_EQUAL(Actual, 100);
         return true;

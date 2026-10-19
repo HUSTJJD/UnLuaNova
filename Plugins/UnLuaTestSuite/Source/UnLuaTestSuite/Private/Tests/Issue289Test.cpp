@@ -33,7 +33,7 @@ struct FUnLuaTest_Issue289 : FUnLuaTestBase
         const auto ActorClass = LoadClass<AActor>(nullptr, TEXT("/UnLuaTestSuite/Tests/Regression/Issue289/BP_UnLuaTestActor_Issue289.BP_UnLuaTestActor_Issue289_C"));
         const auto Actor = World->SpawnActor(ActorClass);
 
-        auto& Env = UnLua::FLuaEnv::FindEnvChecked(L);
+        auto& Env = UnLuauNova::FLuaEnv::FindEnvChecked(L);
         const auto RefBefore = Env.GetManager()->GetBoundRef(ActorClass);
         RUNNER_TEST_TRUE(RefBefore != LUA_NOREF);
 

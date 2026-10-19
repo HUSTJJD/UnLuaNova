@@ -27,7 +27,7 @@ BEGIN_TESTSUITE(FIssue471Test, TEXT("UnLua.Regression.Issue471 FScriptDelegateè§
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FEngineWaitLatentCommand(1.0));
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
+            const auto L = UnLuauNova::GetState();
             lua_getglobal(L, "Result");
             const auto Result = (int)lua_tointeger(L, -1);
             TestEqual(TEXT("Result"), Result, 1);

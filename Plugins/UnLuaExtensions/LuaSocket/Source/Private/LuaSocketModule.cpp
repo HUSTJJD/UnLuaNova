@@ -19,15 +19,15 @@
 
 void FLuaSocketModule::StartupModule()
 {
-    UnLua::FLuaEnv::OnCreated.AddStatic(&FLuaSocketModule::OnLuaEnvCreated);
+    UnLuauNova::FLuaEnv::OnCreated.AddStatic(&FLuaSocketModule::OnLuaEnvCreated);
 }
 
 void FLuaSocketModule::ShutdownModule()
 {
-    UnLua::FLuaEnv::OnCreated.RemoveAll(this);
+    UnLuauNova::FLuaEnv::OnCreated.RemoveAll(this);
 }
 
-void FLuaSocketModule::OnLuaEnvCreated(UnLua::FLuaEnv& Env)
+void FLuaSocketModule::OnLuaEnvCreated(UnLuauNova::FLuaEnv& Env)
 {
     using namespace UnLuaExtensions::LuaSocket;
     Env.AddBuiltInLoader(TEXT("socket"), luaopen_socket_core);

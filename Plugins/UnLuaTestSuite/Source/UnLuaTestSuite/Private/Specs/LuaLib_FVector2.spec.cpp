@@ -20,7 +20,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 BEGIN_DEFINE_SPEC(FUnLuaLibFVector2DSpec, "UnLua.API.FVector2D", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
-    TSharedPtr<UnLua::FLuaEnv> Env;
+    TSharedPtr<UnLuauNova::FLuaEnv> Env;
     lua_State* L;
 END_DEFINE_SPEC(FUnLuaLibFVector2DSpec)
 
@@ -28,7 +28,7 @@ void FUnLuaLibFVector2DSpec::Define()
 {
     BeforeEach([this]
     {
-        Env = MakeShared<UnLua::FLuaEnv>();
+        Env = MakeShared<UnLuauNova::FLuaEnv>();
         L = Env->GetMainState();
     });
 
@@ -42,22 +42,22 @@ void FUnLuaLibFVector2DSpec::Define()
     {
         It(TEXT("默认参数"), EAsyncExecution::TaskGraphMainThread, [this]
         {
-            UnLua::RunChunk(L, "return UE.FVector2D()");
-            const auto& Vector = UnLua::Get<FVector2D>(L, -1, UnLua::TType<FVector2D>());
+            UnLuauNova::RunChunk(L, "return UE.FVector2D()");
+            const auto& Vector = UnLuauNova::Get<FVector2D>(L, -1, UnLuauNova::TType<FVector2D>());
             TEST_EQUAL(Vector, FVector2D(EForceInit::ForceInitToZero));
         });
 
         It(TEXT("分别指定X/Y"), EAsyncExecution::TaskGraphMainThread, [this]
         {
-            UnLua::RunChunk(L, "return UE.FVector2D(1,2)");
-            const auto& Vector = UnLua::Get<FVector2D>(L, -1, UnLua::TType<FVector2D>());
+            UnLuauNova::RunChunk(L, "return UE.FVector2D(1,2)");
+            const auto& Vector = UnLuauNova::Get<FVector2D>(L, -1, UnLuauNova::TType<FVector2D>());
             TEST_EQUAL(Vector, FVector2D(1,2));
         });
 
         It(TEXT("同时指定X/Y"), EAsyncExecution::TaskGraphMainThread, [this]
         {
-            UnLua::RunChunk(L, "return UE.FVector2D(1)");
-            const auto& Vector = UnLua::Get<FVector2D>(L, -1, UnLua::TType<FVector2D>());
+            UnLuauNova::RunChunk(L, "return UE.FVector2D(1)");
+            const auto& Vector = UnLuauNova::Get<FVector2D>(L, -1, UnLuauNova::TType<FVector2D>());
             TEST_EQUAL(Vector, FVector2D(1));
         });
     });
@@ -71,8 +71,8 @@ void FUnLuaLibFVector2DSpec::Define()
             Vector:Set(1)
             return Vector
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector2D>(L, -1, UnLua::TType<FVector2D>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector2D>(L, -1, UnLuauNova::TType<FVector2D>());
             TEST_EQUAL(Vector, FVector2D(1,0));
         });
 
@@ -83,8 +83,8 @@ void FUnLuaLibFVector2DSpec::Define()
             Vector:Set(1,2)
             return Vector
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector2D>(L, -1, UnLua::TType<FVector2D>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector2D>(L, -1, UnLuauNova::TType<FVector2D>());
             TEST_EQUAL(Vector, FVector2D(1,2));
         });
     });
@@ -98,8 +98,8 @@ void FUnLuaLibFVector2DSpec::Define()
             Vector:Normalize()
             return Vector
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector2D>(L, -1, UnLua::TType<FVector2D>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector2D>(L, -1, UnLuauNova::TType<FVector2D>());
             auto Expected = FVector2D(3, 3);
             Expected.Normalize();
             TEST_EQUAL(Vector, Expected);
@@ -111,8 +111,8 @@ void FUnLuaLibFVector2DSpec::Define()
             Vector:Normalize(100)
             return Vector
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector2D>(L, -1, UnLua::TType<FVector2D>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector2D>(L, -1, UnLuauNova::TType<FVector2D>());
             auto Expected = FVector2D(3, 3);
             Expected.Normalize(100);
             TEST_EQUAL(Vector, Expected);
@@ -128,8 +128,8 @@ void FUnLuaLibFVector2DSpec::Define()
             local Vector2 = UE.FVector2D(4,5)
             return Vector1 + Vector2
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector2D>(L, -1, UnLua::TType<FVector2D>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector2D>(L, -1, UnLuauNova::TType<FVector2D>());
             TEST_EQUAL(Vector, FVector2D(1,2) + FVector2D(4,5));
         });
     });
@@ -143,8 +143,8 @@ void FUnLuaLibFVector2DSpec::Define()
             local Vector2 = UE.FVector2D(4,5)
             return Vector1 - Vector2
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector2D>(L, -1, UnLua::TType<FVector2D>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector2D>(L, -1, UnLuauNova::TType<FVector2D>());
             TEST_EQUAL(Vector, FVector2D(1,2) - FVector2D(4,5));
         });
     });
@@ -157,8 +157,8 @@ void FUnLuaLibFVector2DSpec::Define()
             local Vector = UE.FVector2D(1,2)
             return Vector * 3
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector2D>(L, -1, UnLua::TType<FVector2D>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector2D>(L, -1, UnLuauNova::TType<FVector2D>());
             TEST_EQUAL(Vector, FVector2D(1,2) * 3);
         });
     });
@@ -171,8 +171,8 @@ void FUnLuaLibFVector2DSpec::Define()
             local Vector = UE.FVector2D(2,4)
             return Vector / 2
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector2D>(L, -1, UnLua::TType<FVector2D>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector2D>(L, -1, UnLuauNova::TType<FVector2D>());
             TEST_EQUAL(Vector, FVector2D(2,4) / 2);
         });
     });
@@ -185,8 +185,8 @@ void FUnLuaLibFVector2DSpec::Define()
             local Vector = UE.FVector2D(1,2)
             return -Vector
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector2D>(L, -1, UnLua::TType<FVector2D>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector2D>(L, -1, UnLuauNova::TType<FVector2D>());
             TEST_EQUAL(Vector, FVector2D(-1,-2));
         });
     });
@@ -195,7 +195,7 @@ void FUnLuaLibFVector2DSpec::Define()
     {
         It(TEXT("转为字符串"), EAsyncExecution::TaskGraphMainThread, [this]
         {
-            UnLua::RunChunk(L, "return tostring(UE.FVector2D(1,2))");
+            UnLuauNova::RunChunk(L, "return tostring(UE.FVector2D(1,2))");
             const auto& Actual = lua_tostring(L, -1);
             const auto& Expected = FVector2D(1, 2).ToString();
             TEST_EQUAL(Actual, Expected);

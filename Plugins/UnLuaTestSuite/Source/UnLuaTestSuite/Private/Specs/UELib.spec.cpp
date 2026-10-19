@@ -20,7 +20,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 BEGIN_DEFINE_SPEC(FUELibSpec, "UnLua.API.UE", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
-    TSharedPtr<UnLua::FLuaEnv> Env;
+    TSharedPtr<UnLuauNova::FLuaEnv> Env;
     lua_State* L;
 END_DEFINE_SPEC(FUELibSpec)
 
@@ -28,7 +28,7 @@ void FUELibSpec::Define()
 {
     BeforeEach([this]
     {
-        Env = MakeShared<UnLua::FLuaEnv>();
+        Env = MakeShared<UnLuauNova::FLuaEnv>();
         L = Env->GetMainState();
     });
 

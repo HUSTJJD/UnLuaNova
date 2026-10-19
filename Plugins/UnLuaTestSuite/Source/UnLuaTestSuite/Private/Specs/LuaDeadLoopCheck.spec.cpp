@@ -44,12 +44,12 @@ void FLuaDeadLoopCheckSpec::Define()
             // a preceding PIE-based test deactivates UnLua on a deferred tick, so the module
             // may still be active here; Startup() would then early-return without applying
             // DeadLoopCheck to FDeadLoopCheck::Timeout and the chunk below never times out
-            UnLua::Shutdown();
+            UnLuauNova::Shutdown();
 
             auto& Settings = *GetMutableDefault<UUnLuaSettings>();
             Settings.DeadLoopCheck = 1;
 
-            UnLua::Startup();
+            UnLuauNova::Startup();
 
             const auto Env = IUnLuaModule::Get().GetEnv();
             AddExpectedError(TEXT("timeout"), EAutomationExpectedErrorFlags::Contains);
@@ -61,7 +61,7 @@ void FLuaDeadLoopCheckSpec::Define()
             )";
             Env->DoString(Chunk);
 
-            UnLua::Shutdown();
+            UnLuauNova::Shutdown();
         });
     });
 }

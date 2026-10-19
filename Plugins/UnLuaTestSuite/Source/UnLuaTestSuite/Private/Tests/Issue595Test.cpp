@@ -35,7 +35,7 @@ struct FUnLuaTest_Issue595 : FUnLuaTestBase
             UE.UIssue595Interface.Test(Obj)
             return Obj:Test()
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         const auto Actual = (int32)lua_tointeger(L, -1);
         RUNNER_TEST_EQUAL(1, Actual); 

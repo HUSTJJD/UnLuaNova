@@ -46,7 +46,7 @@ public class LuaSocket : ModuleRules
 
         PrivateDependencyModuleNames.AddRange(new[]
         {
-            "UnLua",
+            "UnLuauNova",
             "Lua"
         });
 

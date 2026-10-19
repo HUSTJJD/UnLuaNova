@@ -25,7 +25,7 @@ BEGIN_TESTSUITE(FIssue455Test, TEXT("UnLua.Regression.Issue455 CacheScriptContai
         const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/Issue455/Issue455");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
+            const auto L = UnLuauNova::GetState();
             lua_getglobal(L, "Result");
             const auto Result = lua_tostring(L, -1);
             const auto Result1 = strcmp(Result, "1A") == 0;

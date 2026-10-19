@@ -26,7 +26,7 @@ BEGIN_TESTSUITE(FIssue443Test, TEXT("UnLua.Regression.Issue443 在某些代码�
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f));
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
+            const auto L = UnLuauNova::GetState();
             lua_getglobal(L, "Result");
             const auto Result = (int32)lua_tointeger(L, -1);
             TestTrue(TEXT("Result"), Result > 0);

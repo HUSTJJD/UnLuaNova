@@ -59,8 +59,8 @@ bool FUnLuaTestCommand_TearDownTest::Update()
 
 bool FUnLuaTestBase::SetUp()
 {
-    UnLua::Startup();
-    L = UnLua::GetState();
+    UnLuauNova::Startup();
+    L = UnLuauNova::GetState();
 
     GameInstance = NewObject<UGameInstance>(GEngine);
     GameInstance->InitializeStandalone();
@@ -105,13 +105,13 @@ void FUnLuaTestBase::TearDown()
         const auto World = GetWorld();
         GEngine->DestroyWorldContext(World);
         World->DestroyWorld(false);
-        UnLua::Shutdown();
+        UnLuauNova::Shutdown();
     }
     else
     {
         AddLatent([this]
         {
-            UnLua::Shutdown();
+            UnLuauNova::Shutdown();
         });
     }
 }

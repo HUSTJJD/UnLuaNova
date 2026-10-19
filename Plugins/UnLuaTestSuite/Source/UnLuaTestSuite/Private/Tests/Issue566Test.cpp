@@ -47,14 +47,14 @@ struct FUnLuaTest_Issue566 : FUnLuaTestBase
             UE.UIssue566FunctionLibrary.AddCallback({ B, _G.Callback })
             UE.UIssue566FunctionLibrary.AddCallback({ A, _G.Callback })
         )";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
 
         CollectGarbage(RF_NoFlags, true);
 
         const auto Chunk2 = R"(
             UE.UIssue566FunctionLibrary.Invoke()
         )";
-        UnLua::RunChunk(L, Chunk2);
+        UnLuauNova::RunChunk(L, Chunk2);
 
         lua_getglobal(L, "Result");
         const auto Result = lua_toboolean(L, -1);

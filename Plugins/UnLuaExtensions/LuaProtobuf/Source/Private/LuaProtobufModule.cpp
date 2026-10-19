@@ -21,15 +21,15 @@ extern "C" int luaopen_pb_unsafe(lua_State *L);
 
 void FLuaProtobufModule::StartupModule()
 {
-    UnLua::FLuaEnv::OnCreated.AddStatic(&FLuaProtobufModule::OnLuaEnvCreated);
+    UnLuauNova::FLuaEnv::OnCreated.AddStatic(&FLuaProtobufModule::OnLuaEnvCreated);
 }
 
 void FLuaProtobufModule::ShutdownModule()
 {
-    UnLua::FLuaEnv::OnCreated.RemoveAll(this);
+    UnLuauNova::FLuaEnv::OnCreated.RemoveAll(this);
 }
 
-void FLuaProtobufModule::OnLuaEnvCreated(UnLua::FLuaEnv& Env)
+void FLuaProtobufModule::OnLuaEnvCreated(UnLuauNova::FLuaEnv& Env)
 {
     Env.AddBuiltInLoader(TEXT("pb"), luaopen_pb);
     Env.AddBuiltInLoader(TEXT("pb.unsafe"), luaopen_pb_unsafe);

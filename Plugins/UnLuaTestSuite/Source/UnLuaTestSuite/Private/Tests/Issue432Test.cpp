@@ -29,14 +29,14 @@ struct FUnLuaTest_Issue432 : FUnLuaTestBase
         FUnLuaTestBase::SetUp();
 
         const auto World = GetWorld();
-        UnLua::PushUObject(L, World);
+        UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "G_World");
         const auto Chunk = R"(
             local ActorClass = UE.UClass.Load("/UnLuaTestSuite/Tests/Regression/Issue432/BP_UnLuaTestActor_Issue432.BP_UnLuaTestActor_Issue432_C")
             local Actor = G_World:SpawnActor(ActorClass)
             Actor:Test()
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
         return true;
     }
 };

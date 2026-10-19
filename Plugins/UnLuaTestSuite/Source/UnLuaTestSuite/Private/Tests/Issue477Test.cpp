@@ -44,7 +44,7 @@ struct FUnLuaTest_Issue477 : FUnLuaTestBase
             end
             return Sum
             )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
         const auto Result = (int)lua_tointeger(L, -1);
         RUNNER_TEST_EQUAL(Result, 6);
         return true;

@@ -21,22 +21,22 @@
 
 
 BEGIN_DEFINE_SPEC(FLuaEnvSpec, "UnLua.API.FLuaEnv", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
-    TSharedPtr<UnLua::FLuaEnv> Env;
+    TSharedPtr<UnLuauNova::FLuaEnv> Env;
 END_DEFINE_SPEC(FLuaEnvSpec)
 
 void FLuaEnvSpec::Define()
 {
     BeforeEach([this]
     {
-        Env = MakeShared<UnLua::FLuaEnv>();
+        Env = MakeShared<UnLuauNova::FLuaEnv>();
     });
 
     Describe(TEXT("创建Lua环境"), [this]()
     {
         It(TEXT("支持多个Lua环境"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::FLuaEnv Env1;
-            UnLua::FLuaEnv Env2;
+            UnLuauNova::FLuaEnv Env1;
+            UnLuauNova::FLuaEnv Env2;
 
             Env1.DoString("return 1");
             Env2.DoString("return 2");
@@ -50,13 +50,13 @@ void FLuaEnvSpec::Define()
 
         It(TEXT("支持启动脚本和参数"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::FLuaEnv Env1;
+            UnLuauNova::FLuaEnv Env1;
             const auto L = Env1.GetMainState();
             TMap<FString, UObject*> Args;
             Args.Add("GWorld", GWorld);
             Env1.Start(TEXT("Tests.Specs.LuaEnv.支持启动脚本和参数"), Args);
             lua_getglobal(L, "GWorld");
-            const auto Actual = (UWorld*)UnLua::GetUObject(L, -1);
+            const auto Actual = (UWorld*)UnLuauNova::GetUObject(L, -1);
             const auto Expected = (UWorld*)GWorld;
             TEST_EQUAL(Actual, Expected);
         });

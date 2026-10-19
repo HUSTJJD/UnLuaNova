@@ -30,7 +30,7 @@ struct FUnLuaTest_Issue321 : FUnLuaTestBase
         FUnLuaTestBase::SetUp();
 
         const auto World = GetWorld();
-        UnLua::PushUObject(L, World);
+        UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "G_World");
         
         const char* Chunk = "\
@@ -38,7 +38,7 @@ struct FUnLuaTest_Issue321 : FUnLuaTestBase
             local ClassB = UE.UClass.Load('/UnLuaTestSuite/Tests/Regression/Issue321/B/BP_UnLuaTestActor_Issue321.BP_UnLuaTestActor_Issue321_C')\
             return ClassA ~= ClassB\
             ";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
         const auto Result = (bool)lua_toboolean(L, -1);
         RUNNER_TEST_TRUE(Result);
 

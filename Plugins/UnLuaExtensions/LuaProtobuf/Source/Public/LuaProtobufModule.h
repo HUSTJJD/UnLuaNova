@@ -24,5 +24,5 @@ class LUAPROTOBUF_API FLuaProtobufModule : public IModuleInterface
 
     virtual void ShutdownModule() override;
 
-    static void OnLuaEnvCreated(UnLua::FLuaEnv& Env);
+    static void OnLuaEnvCreated(UnLuauNova::FLuaEnv& Env);
 };

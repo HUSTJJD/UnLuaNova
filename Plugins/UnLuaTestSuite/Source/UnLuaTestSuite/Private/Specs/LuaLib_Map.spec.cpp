@@ -20,7 +20,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 BEGIN_DEFINE_SPEC(FUnLuaLibMapSpec, "UnLua.API.TMap", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
-    TSharedPtr<UnLua::FLuaEnv> Env;
+    TSharedPtr<UnLuauNova::FLuaEnv> Env;
     lua_State* L;
 END_DEFINE_SPEC(FUnLuaLibMapSpec)
 
@@ -28,7 +28,7 @@ void FUnLuaLibMapSpec::Define()
 {
     BeforeEach([this]
     {
-        Env = MakeShared<UnLua::FLuaEnv>();
+        Env = MakeShared<UnLuauNova::FLuaEnv>();
         L = Env->GetMainState();
     });
 
@@ -49,7 +49,7 @@ void FUnLuaLibMapSpec::Define()
             return Map
             )";
             Env->DoString(Chunk);
-            const auto Map = (TMap<int32, int32>*)UnLua::GetMap(L, -1);
+            const auto Map = (TMap<int32, int32>*)UnLuauNova::GetMap(L, -1);
             TEST_EQUAL(Map->Num(), 2);
             TEST_EQUAL(Map->operator[](1), 1);
             TEST_EQUAL(Map->operator[](2), 2);
@@ -64,7 +64,7 @@ void FUnLuaLibMapSpec::Define()
             return Map
             )";
             Env->DoString(Chunk);
-            const auto Map = (TMap<FString, FString>*)UnLua::GetMap(L, -1);
+            const auto Map = (TMap<FString, FString>*)UnLuauNova::GetMap(L, -1);
             TEST_EQUAL(Map->Num(), 2);
             TEST_EQUAL(Map->operator[]("A"), "Apple");
             TEST_EQUAL(Map->operator[]("B"), "Banana");
@@ -79,7 +79,7 @@ void FUnLuaLibMapSpec::Define()
             return Map
             )";
             Env->DoString(Chunk);
-            const auto Map = (TMap<FVector, bool>*)UnLua::GetMap(L, -1);
+            const auto Map = (TMap<FVector, bool>*)UnLuauNova::GetMap(L, -1);
             TEST_EQUAL(Map->Num(), 2);
             TEST_EQUAL(Map->operator[](FVector(1,1,1)), true);
             TEST_EQUAL(Map->operator[](FVector(2,2,2)), false);
@@ -101,7 +101,7 @@ void FUnLuaLibMapSpec::Define()
             return Map
             )";
             Env->DoString(Chunk);
-            const auto& Map = *UnLua::GetMap(L, -1);
+            const auto& Map = *UnLuauNova::GetMap(L, -1);
             TEST_EQUAL(Map.Num(), 2);
         });
     });
@@ -132,7 +132,7 @@ void FUnLuaLibMapSpec::Define()
             return Map
             )";
             Env->DoString(Chunk);
-            const auto Map = (TMap<int32, int32>*)UnLua::GetMap(L, -1);
+            const auto Map = (TMap<int32, int32>*)UnLuauNova::GetMap(L, -1);
             TEST_EQUAL(Map->Num(), 2);
             TEST_EQUAL(Map->operator[](1), 1);
             TEST_EQUAL(Map->operator[](2), 2);
@@ -147,7 +147,7 @@ void FUnLuaLibMapSpec::Define()
             return Map
             )";
             Env->DoString(Chunk);
-            const auto Map = (TMap<int32, int32>*)UnLua::GetMap(L, -1);
+            const auto Map = (TMap<int32, int32>*)UnLuauNova::GetMap(L, -1);
             TEST_EQUAL(Map->Num(), 1);
             TEST_EQUAL(Map->operator[](1), 2);
         });
@@ -174,7 +174,7 @@ void FUnLuaLibMapSpec::Define()
             return Map:Remove(1), Map
             )";
             Env->DoString(Chunk);
-            const auto Map = (TMap<int32, int32>*)UnLua::GetMap(L, -1);
+            const auto Map = (TMap<int32, int32>*)UnLuauNova::GetMap(L, -1);
             TEST_EQUAL(Map->Num(), 0);
             TEST_TRUE(lua_toboolean(L, -2));
         });
@@ -228,7 +228,7 @@ void FUnLuaLibMapSpec::Define()
             return Map
             )";
             Env->DoString(Chunk);
-            const auto Map = (TMap<int32, FVector>*)UnLua::GetMap(L, -1);
+            const auto Map = (TMap<int32, FVector>*)UnLuauNova::GetMap(L, -1);
             TEST_EQUAL(Map->operator[](1), FVector(2,2,2));
         });
     });
@@ -262,7 +262,7 @@ void FUnLuaLibMapSpec::Define()
             return Ret
             )";
             Env->DoString(Chunk);
-            const auto Array = (TArray<int32>*)UnLua::GetArray(L, -1);
+            const auto Array = (TArray<int32>*)UnLuauNova::GetArray(L, -1);
             TEST_EQUAL(Array->Num(), 2);
             TEST_TRUE(Array->Contains(1));
             TEST_TRUE(Array->Contains(2));
@@ -282,7 +282,7 @@ void FUnLuaLibMapSpec::Define()
             return Ret
             )";
             Env->DoString(Chunk);
-            const auto Array = (TArray<int32>*)UnLua::GetArray(L, -1);
+            const auto Array = (TArray<int32>*)UnLuauNova::GetArray(L, -1);
             TEST_EQUAL(Array->Num(), 2);
             TEST_TRUE(Array->Contains(3));
             TEST_TRUE(Array->Contains(4));
@@ -324,7 +324,7 @@ void FUnLuaLibMapSpec::Define()
             )";
             TEST_TRUE(Env->DoString(Chunk));
 
-            const auto Ret = UnLua::FLuaTable(Env.Get(), -1);
+            const auto Ret = UnLuauNova::FLuaTable(Env.Get(), -1);
             TEST_EQUAL(Ret.Length(), 4);
             TEST_EQUAL(Ret[1].Value<int>(), 1)
             TEST_EQUAL(Ret[2].Value<int>(), 100)

@@ -36,7 +36,7 @@ struct FUnLuaTest_Issue585 : FUnLuaTestBase
             G_Enum = UE.UObject.Load("/UnLuaTestSuite/Tests/Misc/Enum_UserDefined.Enum_UserDefined")
             print("G_Enum.A=", G_Enum.A)
         )";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
 
         // 无引用被GC回收
         CollectGarbage(RF_NoFlags, true);
@@ -46,7 +46,7 @@ struct FUnLuaTest_Issue585 : FUnLuaTestBase
         const auto Chunk2 = R"(
             print("G_Enum.A=", G_Enum.A)
         )";
-        UnLua::RunChunk(L, Chunk2);
+        UnLuauNova::RunChunk(L, Chunk2);
         
         // 无引用被GC回收
         CollectGarbage(RF_NoFlags, true);
@@ -57,7 +57,7 @@ struct FUnLuaTest_Issue585 : FUnLuaTestBase
             G_Enum = UE.UObject.Load("/UnLuaTestSuite/Tests/Misc/Enum_UserDefined.Enum_UserDefined")
             UnLua.Ref(G_Enum)
         )";
-        UnLua::RunChunk(L, Chunk3);
+        UnLuauNova::RunChunk(L, Chunk3);
         
         return true;
     }

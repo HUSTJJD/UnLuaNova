@@ -29,8 +29,8 @@ void FUnLuaLibObjectSpec::Define()
 {
     BeforeEach([this]
     {
-        UnLua::Startup();
-        L = UnLua::GetState();
+        UnLuauNova::Startup();
+        L = UnLuauNova::GetState();
 
         World = UWorld::CreateWorld(EWorldType::Game, false, "UnLuaTest");
         FWorldContext& WorldContext = GEngine->CreateNewWorldContext(EWorldType::Game);
@@ -40,7 +40,7 @@ void FUnLuaLibObjectSpec::Define()
         World->InitializeActorsForPlay(URL);
         World->BeginPlay();
 
-        UnLua::PushUObject(L, World);
+        UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "World");
     });
 
@@ -53,8 +53,8 @@ void FUnLuaLibObjectSpec::Define()
             local ActorClass = UE.UObject.Load('/UnLuaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C')
             return ActorClass
             )";
-            UnLua::RunChunk(L, Chunk);
-            UClass* Actual = (UClass*)UnLua::GetUObject(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            UClass* Actual = (UClass*)UnLuauNova::GetUObject(L, -1);
             TEST_EQUAL(Actual, Expected);
         });
     });
@@ -64,7 +64,7 @@ void FUnLuaLibObjectSpec::Define()
         It(TEXT("获取对象的有效状态"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             AActor* Actor = World->SpawnActor(AActor::StaticClass());
-            UnLua::PushUObject(L, Actor);
+            UnLuauNova::PushUObject(L, Actor);
             lua_setglobal(L, "G_Actor");
             Actor->K2_DestroyActor();
 
@@ -74,7 +74,7 @@ void FUnLuaLibObjectSpec::Define()
             const char* Chunk = R"(
             return G_Actor:IsValid()
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
 
             TEST_FALSE(lua_toboolean(L, -1));
         });
@@ -89,7 +89,7 @@ void FUnLuaLibObjectSpec::Define()
             local Actor = NewObject(UE.AActor, Outer, 'Test')
             return Actor:GetName()
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_EQUAL(lua_tostring(L, -1), FString("Test"));
         });
     });
@@ -103,9 +103,9 @@ void FUnLuaLibObjectSpec::Define()
             local ChildActor = NewObject(UE.AActor, ParentActor)
             return ChildActor:GetOuter(), ParentActor
             )";
-            UnLua::RunChunk(L, Chunk);
-            AActor* Actual = (AActor*)UnLua::GetUObject(L, -2);
-            AActor* Expected = (AActor*)UnLua::GetUObject(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            AActor* Actual = (AActor*)UnLuauNova::GetUObject(L, -2);
+            AActor* Expected = (AActor*)UnLuauNova::GetUObject(L, -1);
             TEST_EQUAL(Expected, Actual);
         });
     });
@@ -118,8 +118,8 @@ void FUnLuaLibObjectSpec::Define()
             local Actor = NewObject(UE.AActor)
             return Actor:GetClass()
             )";
-            UnLua::RunChunk(L, Chunk);
-            UClass* Class = (UClass*)UnLua::GetUObject(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            UClass* Class = (UClass*)UnLuauNova::GetUObject(L, -1);
             TEST_EQUAL(Class, AActor::StaticClass());
         });
     });
@@ -132,8 +132,8 @@ void FUnLuaLibObjectSpec::Define()
             local Actor = World:SpawnActor(UE.AActor)
             return Actor:GetWorld()
             )";
-            UnLua::RunChunk(L, Chunk);
-            UWorld* Actual = (UWorld*)UnLua::GetUObject(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            UWorld* Actual = (UWorld*)UnLuauNova::GetUObject(L, -1);
             TEST_EQUAL(Actual, World);
         });
     });
@@ -146,7 +146,7 @@ void FUnLuaLibObjectSpec::Define()
             local Actor = NewObject(UE.AActor)
             return Actor:IsA(UE.AActor), Actor:IsA(UE.UGameInstance), Actor:IsA(UE.UClass), UE.AActor:IsA(UE.UClass)
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_TRUE(lua_toboolean(L, -4));
             TEST_FALSE(lua_toboolean(L, -3));
             TEST_FALSE(lua_toboolean(L, -2));
@@ -166,7 +166,7 @@ void FUnLuaLibObjectSpec::Define()
     {
         GEngine->DestroyWorldContext(World);
         World->DestroyWorld(false);
-        UnLua::Shutdown();
+        UnLuauNova::Shutdown();
     });
 }
 

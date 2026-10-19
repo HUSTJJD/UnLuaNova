@@ -36,7 +36,7 @@ struct FUnLuaTest_Issue473 : FUnLuaTestBase
             print("Stub.Name=", Stub.Name)
             return Stub:TestForIssue473(Stub.Name)
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         const auto Actual = lua_tostring(L, -1);
         RUNNER_TEST_EQUAL(UTF8_TO_TCHAR(Actual), TEXT("虚幻引擎"));

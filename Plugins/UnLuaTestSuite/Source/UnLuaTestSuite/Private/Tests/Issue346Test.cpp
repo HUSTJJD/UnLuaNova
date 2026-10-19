@@ -44,7 +44,7 @@ struct FUnLuaTest_Issue346 : FUnLuaTestBase
             local Result = FunctionLibrary.Test("lua")
             return Result
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
         const auto Result = lua_tostring(L, -1);
         RUNNER_TEST_EQUAL(Result, FString("blueprint and lua"));
         return true;

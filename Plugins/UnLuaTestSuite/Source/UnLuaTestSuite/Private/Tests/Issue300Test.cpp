@@ -25,8 +25,8 @@ BEGIN_TESTSUITE(FIssue300Test, TEXT("UnLua.Regression.Issue300 LUA覆写的函�
         const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/Issue300/Issue300");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
-            UnLua::PushUObject(L, GWorld);
+            const auto L = UnLuauNova::GetState();
+            UnLuauNova::PushUObject(L, GWorld);
             lua_getglobal(L, "Result1");
             const auto Result1 = static_cast<int32>(lua_tonumber(L, -1));
 

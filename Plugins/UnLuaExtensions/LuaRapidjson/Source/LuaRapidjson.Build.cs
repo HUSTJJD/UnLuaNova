@@ -47,7 +47,7 @@ public class LuaRapidjson : ModuleRules
 
         PrivateDependencyModuleNames.AddRange(new[]
         {
-            "UnLua",
+            "UnLuauNova",
             "Lua"
         });
 

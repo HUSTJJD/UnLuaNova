@@ -43,7 +43,7 @@ struct FUnLuaTest_Issue583 : FUnLuaTestBase
                 print(Record.Description)
             end
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
         return true;
     }
 };

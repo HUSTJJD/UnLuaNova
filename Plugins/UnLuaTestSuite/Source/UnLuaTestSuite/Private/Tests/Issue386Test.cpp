@@ -58,7 +58,7 @@ struct FUnLuaTest_Issue386 : FUnLuaTestBase
 		FUnLuaTestBase::SetUp();
 
 		GetTestRunner().AddExpectedError("foo");
-		UnLua::RunChunk(L, "TestLuaError()");
+		UnLuauNova::RunChunk(L, "TestLuaError()");
 		RUNNER_TEST_TRUE(bTestClassDestructorCalled);
 		return true;
 	}

@@ -27,8 +27,8 @@ void FUnLuaLibSetSpec::Define()
 {
     BeforeEach([this]
     {
-        UnLua::Startup();
-        L = UnLua::GetState();
+        UnLuauNova::Startup();
+        L = UnLuauNova::GetState();
     });
 
     Describe(TEXT("构造TSet"), [this]()
@@ -41,8 +41,8 @@ void FUnLuaLibSetSpec::Define()
             Set:Add(2)\
             return Set\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto Set = (TSet<int32>*)UnLua::GetSet(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Set = (TSet<int32>*)UnLuauNova::GetSet(L, -1);
             TEST_EQUAL(Set->Num(), 2);
             TEST_TRUE(Set->Contains(1));
             TEST_TRUE(Set->Contains(2));
@@ -56,8 +56,8 @@ void FUnLuaLibSetSpec::Define()
             Set:Add('B')\
             return Set\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto Set = (TSet<FString>*)UnLua::GetSet(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Set = (TSet<FString>*)UnLuauNova::GetSet(L, -1);
             TEST_EQUAL(Set->Num(), 2);
             TEST_TRUE(Set->Contains("A"));
             TEST_TRUE(Set->Contains("B"));
@@ -71,8 +71,8 @@ void FUnLuaLibSetSpec::Define()
             Set:Add(UE.FVector(2,2,2))\
             return Set\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto Set = (TSet<FVector>*)UnLua::GetSet(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Set = (TSet<FVector>*)UnLuauNova::GetSet(L, -1);
             TEST_EQUAL(Set->Num(), 2);
             TEST_TRUE(Set->Contains(FVector(1,1,1)));
             TEST_TRUE(Set->Contains(FVector(2,2,2)));
@@ -94,8 +94,8 @@ void FUnLuaLibSetSpec::Define()
 
             return Set
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto Set = UnLua::GetSet(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Set = UnLuauNova::GetSet(L, -1);
             TEST_EQUAL(Set->Num(), 2);
         });
     });
@@ -110,7 +110,7 @@ void FUnLuaLibSetSpec::Define()
             Set:Add(2)\
             return Set:Length()\
             ";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_EQUAL(lua_tointeger(L, -1), 2LL);
         });
     });
@@ -125,8 +125,8 @@ void FUnLuaLibSetSpec::Define()
             Set:Add(2)\
             return Set\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto Set = (TSet<int32>*)UnLua::GetSet(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Set = (TSet<int32>*)UnLuauNova::GetSet(L, -1);
             TEST_EQUAL(Set->Num(), 2);
             TEST_TRUE(Set->Contains(1));
             TEST_TRUE(Set->Contains(2));
@@ -140,8 +140,8 @@ void FUnLuaLibSetSpec::Define()
             Set:Add(1)\
             return Set\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto Set = (TSet<int32>*)UnLua::GetSet(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Set = (TSet<int32>*)UnLuauNova::GetSet(L, -1);
             TEST_EQUAL(Set->Num(), 1);
             TEST_TRUE(Set->Contains(1));
         });
@@ -156,7 +156,7 @@ void FUnLuaLibSetSpec::Define()
             Set:Add(1)\
             return Set:Remove(2)\
             ";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_FALSE(lua_toboolean(L, -1));
         });
 
@@ -167,8 +167,8 @@ void FUnLuaLibSetSpec::Define()
             Set:Add(1)\
             return Set:Remove(1), Set\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto Set = (TSet<int32>*)UnLua::GetSet(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Set = (TSet<int32>*)UnLuauNova::GetSet(L, -1);
             TEST_EQUAL(Set->Num(), 0);
             TEST_TRUE(lua_toboolean(L, -2));
         });
@@ -183,7 +183,7 @@ void FUnLuaLibSetSpec::Define()
             Set:Add(1)\
             return Set:Contains(1)\
             ";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_TRUE(lua_toboolean(L, -1));
         });
 
@@ -194,7 +194,7 @@ void FUnLuaLibSetSpec::Define()
             Set:Add(1)\
             return Set:Contains(2)\
             ";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_FALSE(lua_toboolean(L, -1));
         });
     });
@@ -210,7 +210,7 @@ void FUnLuaLibSetSpec::Define()
             Set:Clear()\
             return Set:Length()\
             ";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_EQUAL(lua_tointeger(L, -1), 0LL);
         });
     });
@@ -227,8 +227,8 @@ void FUnLuaLibSetSpec::Define()
             Ret:Append(Set:ToArray())\
             return Ret\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto Array = (TArray<int32>*)UnLua::GetArray(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Array = (TArray<int32>*)UnLuauNova::GetArray(L, -1);
             TEST_EQUAL(Array->Num(), 2);
             TEST_TRUE(Array->Contains(1));
             TEST_TRUE(Array->Contains(2));
@@ -246,7 +246,7 @@ void FUnLuaLibSetSpec::Define()
             local Table = Set:ToTable()\
             return Table[1], Table[2]\
             ";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_EQUAL(lua_tointeger(L, -1), 2LL);
             TEST_EQUAL(lua_tointeger(L, -2), 1LL);
         });
@@ -254,7 +254,7 @@ void FUnLuaLibSetSpec::Define()
 
     AfterEach([this]
     {
-        UnLua::Shutdown();
+        UnLuauNova::Shutdown();
     });
 }
 

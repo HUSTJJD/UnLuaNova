@@ -47,7 +47,7 @@ struct FUnLuaTest_Issue400 : FUnLuaTestBase
 
             Result = Counter
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         lua_getglobal(L, "Result");
         const auto Result = static_cast<int32>(lua_tonumber(L, -1));

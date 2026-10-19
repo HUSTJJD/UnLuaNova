@@ -24,5 +24,5 @@ class LUARAPIDJSON_API FLuaRapidjsonModule : public IModuleInterface
 
     virtual void ShutdownModule() override;
 
-    static void OnLuaEnvCreated(UnLua::FLuaEnv& Env);
+    static void OnLuaEnvCreated(UnLuauNova::FLuaEnv& Env);
 };

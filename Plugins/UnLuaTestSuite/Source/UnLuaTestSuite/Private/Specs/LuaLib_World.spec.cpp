@@ -30,8 +30,8 @@ void FUnLuaLibWorldSpec::Define()
 {
     BeforeEach([this]
     {
-        UnLua::Startup();
-        L = UnLua::GetState();
+        UnLuauNova::Startup();
+        L = UnLuauNova::GetState();
 
         World = UWorld::CreateWorld(EWorldType::Game, false, "UnLuaTest");
         FWorldContext& WorldContext = GEngine->CreateNewWorldContext(EWorldType::Game);
@@ -41,7 +41,7 @@ void FUnLuaLibWorldSpec::Define()
         World->InitializeActorsForPlay(URL);
         World->BeginPlay();
 
-        UnLua::PushUObject(L, World);
+        UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "World");
     });
 
@@ -53,8 +53,8 @@ void FUnLuaLibWorldSpec::Define()
             local Actor = World:SpawnActor(UE.AActor)
             return Actor
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto Actor = (AActor*)UnLua::GetUObject(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Actor = (AActor*)UnLuauNova::GetUObject(L, -1);
             TEST_EQUAL(Actor->GetClass(), AActor::StaticClass());
         });
 
@@ -68,8 +68,8 @@ void FUnLuaLibWorldSpec::Define()
             local Actor = World:SpawnActor(UE.ACharacter, Transform)
             return Actor
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto Actor = (AActor*)UnLua::GetUObject(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Actor = (AActor*)UnLuauNova::GetUObject(L, -1);
             const auto& Transform = Actor->GetActorTransform();
             TEST_QUAT_EQUAL(Transform.GetRotation(), FQuat(4,3,2,1));
             TEST_EQUAL(Transform.GetTranslation(), FVector(1,1,1));
@@ -86,8 +86,8 @@ void FUnLuaLibWorldSpec::Define()
             local Actor = World:SpawnActor(UE.ACharacter, Transform, UE.ESpawnActorCollisionHandlingMethod.AlwaysSpawn)
             return Actor
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto Actor = (AActor*)UnLua::GetUObject(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Actor = (AActor*)UnLuauNova::GetUObject(L, -1);
             const auto& Transform = Actor->GetActorTransform();
             TEST_QUAT_EQUAL(Transform.GetRotation(), FQuat(4,3,2,1));
             TEST_EQUAL(Transform.GetTranslation(), FVector(1,1,1));
@@ -97,7 +97,7 @@ void FUnLuaLibWorldSpec::Define()
         It(TEXT("创建Actor，指定初始Transform/CollisionHanding/Owner"), EAsyncExecution::TaskGraphMainThread, [this]
         {
             const auto OwnerActor = World->SpawnActor(AActor::StaticClass());
-            UnLua::PushUObject(L, OwnerActor);
+            UnLuauNova::PushUObject(L, OwnerActor);
             lua_setglobal(L, "G_OwnerActor");
 
             const auto Chunk = R"(
@@ -108,8 +108,8 @@ void FUnLuaLibWorldSpec::Define()
             local Actor = World:SpawnActor(UE.ACharacter, Transform, UE.ESpawnActorCollisionHandlingMethod.AlwaysSpawn, G_OwnerActor)
             return Actor
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto Actor = (AActor*)UnLua::GetUObject(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Actor = (AActor*)UnLuauNova::GetUObject(L, -1);
             const auto& Transform = Actor->GetActorTransform();
             TEST_QUAT_EQUAL(Transform.GetRotation(), FQuat(4,3,2,1));
             TEST_EQUAL(Transform.GetTranslation(), FVector(1,1,1));
@@ -120,11 +120,11 @@ void FUnLuaLibWorldSpec::Define()
         It(TEXT("创建Actor，指定初始Transform/CollisionHanding/Owner/Instigator"), EAsyncExecution::TaskGraphMainThread, [this]
         {
             const auto OwnerActor = World->SpawnActor(AActor::StaticClass());
-            UnLua::PushUObject(L, OwnerActor);
+            UnLuauNova::PushUObject(L, OwnerActor);
             lua_setglobal(L, "G_OwnerActor");
 
             const auto InstigatorPawn = (APawn*)World->SpawnActor(ADefaultPawn::StaticClass());
-            UnLua::PushUObject(L, InstigatorPawn);
+            UnLuauNova::PushUObject(L, InstigatorPawn);
             lua_setglobal(L, "G_InstigatorPawn");
 
             const auto Chunk = R"(
@@ -135,8 +135,8 @@ void FUnLuaLibWorldSpec::Define()
             local Actor = World:SpawnActor(UE.ACharacter, Transform, UE.ESpawnActorCollisionHandlingMethod.AlwaysSpawn, G_OwnerActor, G_InstigatorPawn)
             return Actor
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto Actor = (AActor*)UnLua::GetUObject(L, -1);
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Actor = (AActor*)UnLuauNova::GetUObject(L, -1);
             const auto& Transform = Actor->GetActorTransform();
             TEST_QUAT_EQUAL(Transform.GetRotation(), FQuat(4,3,2,1));
             TEST_EQUAL(Transform.GetTranslation(), FVector(1,1,1));
@@ -161,7 +161,7 @@ void FUnLuaLibWorldSpec::Define()
     {
         GEngine->DestroyWorldContext(World);
         World->DestroyWorld(false);
-        UnLua::Shutdown();
+        UnLuauNova::Shutdown();
     });
 }
 

@@ -28,10 +28,10 @@ void FUnLuaLibMulticastDelegateSpec::Define()
 {
     BeforeEach([this]
     {
-        UnLua::Startup();
-        L = UnLua::GetState();
+        UnLuauNova::Startup();
+        L = UnLuauNova::GetState();
         Stub = NewObject<UUnLuaTestStub>();
-        UnLua::PushUObject(L, Stub);
+        UnLuauNova::PushUObject(L, Stub);
         lua_setglobal(L, "Stub");
     });
 
@@ -43,7 +43,7 @@ void FUnLuaLibMulticastDelegateSpec::Define()
             Flag = false
             Stub.SimpleEvent:Add(Stub, function() Flag = true end)
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_TRUE(Stub->SimpleEvent.IsBound());
             Stub->SimpleEvent.Broadcast();
             lua_getglobal(L, "Flag");
@@ -56,7 +56,7 @@ void FUnLuaLibMulticastDelegateSpec::Define()
             Flag = false
             Stub.SimpleEvent = { Stub, function() Flag = true end }
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_TRUE(Stub->SimpleEvent.IsBound());
             Stub->SimpleEvent.Broadcast();
             lua_getglobal(L, "Flag");
@@ -68,7 +68,7 @@ void FUnLuaLibMulticastDelegateSpec::Define()
             const char* Chunk = R"(
             Stub.SimpleEvent:Add(Stub, Stub.AddCount)
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_TRUE(Stub->SimpleEvent.IsBound());
             Stub->SimpleEvent.Broadcast();
             TEST_EQUAL(Stub->Counter, 1);
@@ -84,7 +84,7 @@ void FUnLuaLibMulticastDelegateSpec::Define()
             Stub.SimpleEvent:Add(Stub, Callback)
             Stub.SimpleEvent:Remove(Stub, Callback)
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_FALSE(Stub->SimpleEvent.IsBound());
         });
 
@@ -94,7 +94,7 @@ void FUnLuaLibMulticastDelegateSpec::Define()
             Stub.SimpleEvent:Add(Stub, Stub.AddCount)
             Stub.SimpleEvent:Remove(Stub, Stub.AddCount)
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_FALSE(Stub->SimpleEvent.IsBound());
         });
     });
@@ -107,7 +107,7 @@ void FUnLuaLibMulticastDelegateSpec::Define()
             Stub.SimpleEvent:Add(Stub, function() end)
             Stub.SimpleEvent:Clear()
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_FALSE(Stub->SimpleEvent.IsBound());
         });
     });
@@ -124,7 +124,7 @@ void FUnLuaLibMulticastDelegateSpec::Define()
             Stub.SimpleEvent:Broadcast()
             return Counter1, Counter2
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_EQUAL(lua_tointeger(L, -1), 1LL);
             TEST_EQUAL(lua_tointeger(L, -2), 1LL);
         });
@@ -132,7 +132,7 @@ void FUnLuaLibMulticastDelegateSpec::Define()
 
     AfterEach([this]
     {
-        UnLua::Shutdown();
+        UnLuauNova::Shutdown();
     });
 }
 

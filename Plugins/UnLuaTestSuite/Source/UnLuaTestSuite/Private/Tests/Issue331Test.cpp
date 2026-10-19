@@ -32,7 +32,7 @@ struct FUnLuaTest_Issue331 : FUnLuaTestBase
         const char* Chunk = "\
             return UE.UUnLuaTestFunctionLibrary.TestForIssue331()\
             ";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
         const auto Result = (bool)lua_toboolean(L, -1);
         RUNNER_TEST_TRUE(Result);
 

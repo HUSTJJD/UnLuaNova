@@ -29,7 +29,7 @@ struct FUnLuaTest_Issue367 : FUnLuaTestBase
         FUnLuaTestBase::SetUp();
 
         const auto World = GetWorld();
-        UnLua::PushUObject(L, World);
+        UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "World");
         
         const auto Chunk1 = R"(
@@ -38,7 +38,7 @@ struct FUnLuaTest_Issue367 : FUnLuaTestBase
                 local Actor = World:SpawnActor(ActorClass)
                 Actor:K2_DestroyActor()
             )";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
         lua_gc(L, LUA_GCCOLLECT, 0); // Object_Delete -> DeleteUObjectRefs(ActorClass) 释放了C++侧的引用，导致ActorClass可以被UEGC
         CollectGarbage(RF_NoFlags, true); // UEGC了ActorClass，此时lua里ActorClass的元表还没有被luagc，但元表里对应的FClassDesc已经在FReflectionRegistry::NotifyUObjectDeleted中析构了
 
@@ -47,14 +47,14 @@ struct FUnLuaTest_Issue367 : FUnLuaTestBase
                 _G.Actor = World:SpawnActor(ActorClass)
                 _G.MT = nil
             )";
-        UnLua::RunChunk(L, Chunk2);
+        UnLuauNova::RunChunk(L, Chunk2);
         lua_gc(L, LUA_GCCOLLECT, 0);
         lua_gc(L, LUA_GCCOLLECT, 0); // 元表被luagc -> Object_Delete -> UnRegisterClass导致FClassDesc再次被析构
 
         const auto Chunk3 = R"(
                 Result = Actor.K2_DetachFromActor ~= nil
             )";
-        UnLua::RunChunk(L, Chunk3);
+        UnLuauNova::RunChunk(L, Chunk3);
         lua_getglobal(L, "Result");
         RUNNER_TEST_TRUE(lua_toboolean(L, -1));
 

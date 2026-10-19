@@ -27,7 +27,7 @@ BEGIN_TESTSUITE(FIssue276Test, TEXT("UnLua.Regression.Issue276 游戏世界暂�
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FEngineWaitLatentCommand(1.0));
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
+            const auto L = UnLuauNova::GetState();
             lua_getglobal(L, "Flag");
             const auto Flag = !!lua_toboolean(L, -1);
             TestTrue(TEXT("Flag"), Flag);

@@ -27,30 +27,30 @@ void FUnLuaLibFIntPointSpec::Define()
 {
     BeforeEach([this]
     {
-        UnLua::Startup();
-        L = UnLua::GetState();
+        UnLuauNova::Startup();
+        L = UnLuauNova::GetState();
     });
 
     Describe(TEXT("构造FIntPoint"), [this]()
     {
         It(TEXT("默认参数"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FIntPoint()");
-            const auto& Point = UnLua::Get<FIntPoint>(L, -1, UnLua::TType<FIntPoint>());
+            UnLuauNova::RunChunk(L, "return UE.FIntPoint()");
+            const auto& Point = UnLuauNova::Get<FIntPoint>(L, -1, UnLuauNova::TType<FIntPoint>());
             TEST_EQUAL(Point, FIntPoint(EForceInit::ForceInit));
         });
 
         It(TEXT("分别指定X和Y"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FIntPoint(1,2)");
-            const auto& Point = UnLua::Get<FIntPoint>(L, -1, UnLua::TType<FIntPoint>());
+            UnLuauNova::RunChunk(L, "return UE.FIntPoint(1,2)");
+            const auto& Point = UnLuauNova::Get<FIntPoint>(L, -1, UnLuauNova::TType<FIntPoint>());
             TEST_EQUAL(Point, FIntPoint(1,2));
         });
 
         It(TEXT("同时指定X和Y"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FIntPoint(1)");
-            const auto& Point = UnLua::Get<FIntPoint>(L, -1, UnLua::TType<FIntPoint>());
+            UnLuauNova::RunChunk(L, "return UE.FIntPoint(1)");
+            const auto& Point = UnLuauNova::Get<FIntPoint>(L, -1, UnLuauNova::TType<FIntPoint>());
             TEST_EQUAL(Point, FIntPoint(1));
         });
     });
@@ -64,8 +64,8 @@ void FUnLuaLibFIntPointSpec::Define()
             Point:Set(1)\
             return Point\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Point = UnLua::Get<FIntPoint>(L, -1, UnLua::TType<FIntPoint>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Point = UnLuauNova::Get<FIntPoint>(L, -1, UnLuauNova::TType<FIntPoint>());
             TEST_EQUAL(Point, FIntPoint(1,0));
         });
 
@@ -76,8 +76,8 @@ void FUnLuaLibFIntPointSpec::Define()
             Point:Set(1,2)\
             return Point\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Point = UnLua::Get<FIntPoint>(L, -1, UnLua::TType<FIntPoint>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Point = UnLuauNova::Get<FIntPoint>(L, -1, UnLuauNova::TType<FIntPoint>());
             TEST_EQUAL(Point, FIntPoint(1,2));
         });
     });
@@ -91,8 +91,8 @@ void FUnLuaLibFIntPointSpec::Define()
             local Point2 = UE.FIntPoint(1,2)\
             return Point1 + Point2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Point = UnLua::Get<FIntPoint>(L, -1, UnLua::TType<FIntPoint>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Point = UnLuauNova::Get<FIntPoint>(L, -1, UnLuauNova::TType<FIntPoint>());
             TEST_EQUAL(Point, FIntPoint(2,4) + FIntPoint(1,2));
         });
     });
@@ -106,8 +106,8 @@ void FUnLuaLibFIntPointSpec::Define()
             local Point2 = UE.FIntPoint(1,2)\
             return Point1 - Point2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Point = UnLua::Get<FIntPoint>(L, -1, UnLua::TType<FIntPoint>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Point = UnLuauNova::Get<FIntPoint>(L, -1, UnLuauNova::TType<FIntPoint>());
             TEST_EQUAL(Point, FIntPoint(2,4) - FIntPoint(1,2));
         });
     });
@@ -121,8 +121,8 @@ void FUnLuaLibFIntPointSpec::Define()
             local Point2 = UE.FIntPoint(3,4)\
             return Point1 * Point2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Point = UnLua::Get<FIntPoint>(L, -1, UnLua::TType<FIntPoint>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Point = UnLuauNova::Get<FIntPoint>(L, -1, UnLuauNova::TType<FIntPoint>());
             TEST_EQUAL(Point, FIntPoint(1,2) * FIntPoint(3,4));
         });
     });
@@ -136,8 +136,8 @@ void FUnLuaLibFIntPointSpec::Define()
             local Point2 = UE.FIntPoint(1,2)\
             return Point1 / Point2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Point = UnLua::Get<FIntPoint>(L, -1, UnLua::TType<FIntPoint>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Point = UnLuauNova::Get<FIntPoint>(L, -1, UnLuauNova::TType<FIntPoint>());
             TEST_EQUAL(Point, FIntPoint(2,4) / FIntPoint(1,2));
         });
     });
@@ -150,8 +150,8 @@ void FUnLuaLibFIntPointSpec::Define()
             local Point = UE.FIntPoint(1,2)\
             return -Point\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Point = UnLua::Get<FIntPoint>(L, -1, UnLua::TType<FIntPoint>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Point = UnLuauNova::Get<FIntPoint>(L, -1, UnLuauNova::TType<FIntPoint>());
             TEST_EQUAL(Point, FIntPoint(-1,-2));
         });
     });
@@ -160,7 +160,7 @@ void FUnLuaLibFIntPointSpec::Define()
     {
         It(TEXT("转为字符串"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return tostring(UE.FIntPoint(1,2))");
+            UnLuauNova::RunChunk(L, "return tostring(UE.FIntPoint(1,2))");
             const auto& Actual = lua_tostring(L, -1);
             const auto& Expected = FIntPoint(1, 2).ToString();
             TEST_EQUAL(Actual, Expected);
@@ -169,7 +169,7 @@ void FUnLuaLibFIntPointSpec::Define()
 
     AfterEach([this]
     {
-        UnLua::Shutdown();
+        UnLuauNova::Shutdown();
     });
 }
 

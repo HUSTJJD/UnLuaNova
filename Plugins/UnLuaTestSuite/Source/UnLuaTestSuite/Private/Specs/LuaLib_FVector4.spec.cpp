@@ -20,7 +20,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 BEGIN_DEFINE_SPEC(FUnLuaLibFVector4Spec, "UnLua.API.FVector4", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
-    TSharedPtr<UnLua::FLuaEnv> Env;
+    TSharedPtr<UnLuauNova::FLuaEnv> Env;
     lua_State* L;
 END_DEFINE_SPEC(FUnLuaLibFVector4Spec)
 
@@ -28,7 +28,7 @@ void FUnLuaLibFVector4Spec::Define()
 {
     BeforeEach([this]
     {
-        Env = MakeShared<UnLua::FLuaEnv>();
+        Env = MakeShared<UnLuauNova::FLuaEnv>();
         L = Env->GetMainState();
     });
 
@@ -42,36 +42,36 @@ void FUnLuaLibFVector4Spec::Define()
     {
         It(TEXT("默认参数"), EAsyncExecution::TaskGraphMainThread, [this]
         {
-            UnLua::RunChunk(L, "return UE.FVector4()");
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, "return UE.FVector4()");
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             TEST_EQUAL(Vector, FVector4(EForceInit::ForceInitToZero));
         });
 
         It(TEXT("指定X"), EAsyncExecution::TaskGraphMainThread, [this]
         {
-            UnLua::RunChunk(L, "return UE.FVector4(1)");
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, "return UE.FVector4(1)");
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             TEST_EQUAL(Vector, FVector4(1));
         });
 
         It(TEXT("指定X/Y"), EAsyncExecution::TaskGraphMainThread, [this]
         {
-            UnLua::RunChunk(L, "return UE.FVector4(1,2)");
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, "return UE.FVector4(1,2)");
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             TEST_EQUAL(Vector, FVector4(1,2));
         });
 
         It(TEXT("指定X/Y/Z"), EAsyncExecution::TaskGraphMainThread, [this]
         {
-            UnLua::RunChunk(L, "return UE.FVector4(1,2,3)");
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, "return UE.FVector4(1,2,3)");
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             TEST_EQUAL(Vector, FVector4(1,2,3));
         });
 
         It(TEXT("指定X/Y/Z/W"), EAsyncExecution::TaskGraphMainThread, [this]
         {
-            UnLua::RunChunk(L, "return UE.FVector4(1,2,3,4)");
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, "return UE.FVector4(1,2,3,4)");
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             TEST_EQUAL(Vector, FVector4(1,2,3,4));
         });
     });
@@ -85,8 +85,8 @@ void FUnLuaLibFVector4Spec::Define()
             Vector:Set(1)
             return Vector
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             TEST_EQUAL(Vector, FVector4(1,0,0,0));
         });
 
@@ -97,8 +97,8 @@ void FUnLuaLibFVector4Spec::Define()
             Vector:Set(1,2)
             return Vector
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             TEST_EQUAL(Vector, FVector4(1,2,0,0));
         });
 
@@ -109,8 +109,8 @@ void FUnLuaLibFVector4Spec::Define()
             Vector:Set(1,2,3)
             return Vector
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             TEST_EQUAL(Vector, FVector4(1,2,3,0));
         });
 
@@ -121,8 +121,8 @@ void FUnLuaLibFVector4Spec::Define()
             Vector:Set(1,2,3,4)
             return Vector
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             TEST_EQUAL(Vector, FVector4(1,2,3,4));
         });
     });
@@ -136,8 +136,8 @@ void FUnLuaLibFVector4Spec::Define()
             local Vector2 = UE.FVector4(5,6,7,8)
             return Vector1 + Vector2
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             TEST_EQUAL(Vector, FVector4(1,2,3,4) + FVector4(5,6,7,8));
         });
     });
@@ -151,8 +151,8 @@ void FUnLuaLibFVector4Spec::Define()
             local Vector2 = UE.FVector4(5,6,7,8)
             return Vector1 - Vector2
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             TEST_EQUAL(Vector, FVector4(1,2,3,4) - FVector4(5,6,7,8));
         });
     });
@@ -165,8 +165,8 @@ void FUnLuaLibFVector4Spec::Define()
             local Vector = UE.FVector4(1,2,3,4)
             return Vector * 2
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             TEST_EQUAL(Vector, FVector4(1,2,3,4) * 2);
         });
     });
@@ -179,8 +179,8 @@ void FUnLuaLibFVector4Spec::Define()
             local Vector = UE.FVector4(2,2,4,8)
             return Vector / 2
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Actual = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Actual = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             const auto& Expected = FVector4(2, 2, 4, 8) / 2;
             TEST_EQUAL(Actual, Expected);
         });
@@ -194,8 +194,8 @@ void FUnLuaLibFVector4Spec::Define()
             local Vector = UE.FVector4(1,2,3,4)
             return -Vector
             )";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Vector = UnLua::Get<FVector4>(L, -1, UnLua::TType<FVector4>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Vector = UnLuauNova::Get<FVector4>(L, -1, UnLuauNova::TType<FVector4>());
             const auto Expected = -FVector4(1, 2, 3, 4);
             TEST_EQUAL(Vector, Expected);
         });
@@ -205,7 +205,7 @@ void FUnLuaLibFVector4Spec::Define()
     {
         It(TEXT("转为字符串"), EAsyncExecution::TaskGraphMainThread, [this]
         {
-            UnLua::RunChunk(L, "return tostring(UE.FVector4(1,2,3,4))");
+            UnLuauNova::RunChunk(L, "return tostring(UE.FVector4(1,2,3,4))");
             const auto& Actual = lua_tostring(L, -1);
             const auto& Expected = FVector4(1, 2, 3, 4).ToString();
             TEST_EQUAL(Actual, Expected);

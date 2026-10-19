@@ -30,7 +30,7 @@ struct FUnLuaTest_Issue291 : FUnLuaTestBase
         FUnLuaTestBase::SetUp();
 
         const auto World = GetWorld();
-        UnLua::PushUObject(L, World);
+        UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "G_World");
 
         const char* Chunk = "\
@@ -48,7 +48,7 @@ struct FUnLuaTest_Issue291 : FUnLuaTestBase
             return Flag\
         ";
 
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         const auto Result = !!lua_toboolean(L, -1);
         RUNNER_TEST_TRUE(Result);

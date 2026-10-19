@@ -30,7 +30,7 @@ struct FUnLuaTest_Issue398 : FUnLuaTestBase
         FUnLuaTestBase::SetUp();
 
         const auto World = GetWorld();
-        UnLua::PushUObject(L, World);
+        UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "G_World");
         const auto Chunk = R"(
             local CharacterClass = UE.UClass.Load("/UnLuaTestSuite/Tests/Regression/Issue398/BP_Character.BP_Character_C")
@@ -52,7 +52,7 @@ struct FUnLuaTest_Issue398 : FUnLuaTestBase
                 end
             end 
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
         lua_getglobal(L, "Result");
         const auto Result = (int)lua_tointeger(L, -1);
         RUNNER_TEST_EQUAL(Result, 4);

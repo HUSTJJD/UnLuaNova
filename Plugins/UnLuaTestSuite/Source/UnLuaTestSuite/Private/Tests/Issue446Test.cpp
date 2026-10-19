@@ -33,7 +33,7 @@ BEGIN_TESTSUITE(FIssue446Test, TEXT("UnLua.Regression.Issue446 实现了FTickabl
             }));
         ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.5f));
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
+            const auto L = UnLuauNova::GetState();
             lua_getglobal(L, "Issue446_Result");
             const auto Result = (bool)lua_toboolean(L, -1);
             TestTrue("Issue446_Result", Result);

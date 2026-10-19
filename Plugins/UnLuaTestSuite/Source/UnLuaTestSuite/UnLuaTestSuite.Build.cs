@@ -44,7 +44,7 @@ public class UnLuaTestSuite : ModuleRules
 			new[]
 			{
 				"Lua",
-				"UnLua",
+				"UnLuauNova",
 				"UMG"
 			}
 		);

@@ -38,7 +38,7 @@ struct FUnLuaTest_Issue517 : FUnLuaTestBase
         FUnLuaTestBase::SetUp();
 
         const auto World = GetWorld();
-        UnLua::PushUObject(L, World);
+        UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "World");
 
         const auto Chunk1 = R"(
@@ -53,7 +53,7 @@ struct FUnLuaTest_Issue517 : FUnLuaTestBase
             ArrayFromStruct = Actor.Struct.ArrayFromStruct
             Actor:K2_DestroyActor()
         )";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
 
         CollectGarbage(RF_Standalone, true);
 
@@ -61,17 +61,17 @@ struct FUnLuaTest_Issue517 : FUnLuaTestBase
         const auto Chunk2 = R"(
             print(StructRef.X, StructRef.Name)
         )";
-        UnLua::RunChunk(L, Chunk2);
+        UnLuauNova::RunChunk(L, Chunk2);
 
         GetTestRunner().AddExpectedError(TEXT("invalid TArray"), EAutomationExpectedErrorFlags::Contains, 2);
         const auto Chunk3 = R"(
             print(ArrayFromActor:Num())
         )";
-        UnLua::RunChunk(L, Chunk3);
+        UnLuauNova::RunChunk(L, Chunk3);
         const auto Chunk4 = R"(
             print(ArrayFromStruct:Num())
         )";
-        UnLua::RunChunk(L, Chunk4);
+        UnLuauNova::RunChunk(L, Chunk4);
 
         return true;
     }

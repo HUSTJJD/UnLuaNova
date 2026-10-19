@@ -39,7 +39,7 @@ struct FUnLuaTest_Issue562 : FUnLuaTestBase
             local InterfaceClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Regression/Issue562/BPI_Issue562.BPI_Issue562_C')
             local Array = UE.TArray(InterfaceClass)
         )";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
 
         const auto Before = FindFirstObject<UClass>(TEXT("BPI_Issue562_C"));
         RUNNER_TEST_NOT_NULL(Before);

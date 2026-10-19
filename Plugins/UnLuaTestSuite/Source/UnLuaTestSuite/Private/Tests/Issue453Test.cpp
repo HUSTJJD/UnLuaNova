@@ -25,7 +25,7 @@ BEGIN_TESTSUITE(FIssue453Test, TEXT("UnLua.Regression.Issue453 从Lua按引用�
         const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/Issue453/Issue453");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
+            const auto L = UnLuauNova::GetState();
             lua_getglobal(L, "Result1_BP");
             const auto Result1_BP = static_cast<int32>(lua_tonumber(L, -1));
             TestEqual(TEXT("Result1_BP"), Result1_BP, 3);

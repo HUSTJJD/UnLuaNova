@@ -32,7 +32,7 @@ struct FUnLuaTest_Issue288 : FUnLuaTestBase
         local UMGClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Regression/Issue288/UnLuaTestUMG_Issue288.UnLuaTestUMG_Issue288_C')
         G_UMG = NewObject(UMGClass)
         )";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
 
         auto Texture2D = FindObject<UTexture2D>(nullptr, TEXT("/Game/FPWeapon/Textures/UE4_LOGO_CARD.UE4_LOGO_CARD"));
         RUNNER_TEST_NOT_NULL(Texture2D);
@@ -41,7 +41,7 @@ struct FUnLuaTest_Issue288 : FUnLuaTestBase
         G_UMG:Release()
         G_UMG = nil
         )";
-        UnLua::RunChunk(L, Chunk2);
+        UnLuauNova::RunChunk(L, Chunk2);
 
         lua_gc(L, LUA_GCCOLLECT, 0);
         CollectGarbage(RF_NoFlags, true);

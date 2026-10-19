@@ -27,30 +27,30 @@ void FUnLuaLibFLinearColorSpec::Define()
 {
     BeforeEach([this]
     {
-        UnLua::Startup();
-        L = UnLua::GetState();
+        UnLuauNova::Startup();
+        L = UnLuauNova::GetState();
     });
 
     Describe(TEXT("构造FLinearColor"), [this]()
     {
         It(TEXT("默认参数"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FLinearColor()");
-            const auto& Color = UnLua::Get<FLinearColor>(L, -1, UnLua::TType<FLinearColor>());
+            UnLuauNova::RunChunk(L, "return UE.FLinearColor()");
+            const auto& Color = UnLuauNova::Get<FLinearColor>(L, -1, UnLuauNova::TType<FLinearColor>());
             TEST_EQUAL(Color, FLinearColor(EForceInit::ForceInit));
         });
 
         It(TEXT("指定RGB"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FLinearColor(0.1,0.2,0.3)");
-            const auto& Color = UnLua::Get<FLinearColor>(L, -1, UnLua::TType<FLinearColor>());
+            UnLuauNova::RunChunk(L, "return UE.FLinearColor(0.1,0.2,0.3)");
+            const auto& Color = UnLuauNova::Get<FLinearColor>(L, -1, UnLuauNova::TType<FLinearColor>());
             TEST_EQUAL(Color, FLinearColor(0.1f,0.2f,0.3f));
         });
 
         It(TEXT("指定RGBA"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FLinearColor(0.1,0.2,0.3,0.4)");
-            const auto& Color = UnLua::Get<FLinearColor>(L, -1, UnLua::TType<FLinearColor>());
+            UnLuauNova::RunChunk(L, "return UE.FLinearColor(0.1,0.2,0.3,0.4)");
+            const auto& Color = UnLuauNova::Get<FLinearColor>(L, -1, UnLuauNova::TType<FLinearColor>());
             TEST_EQUAL(Color, FLinearColor(0.1f,0.2f,0.3f,0.4f));
         });
     });
@@ -64,8 +64,8 @@ void FUnLuaLibFLinearColorSpec::Define()
             Color:Set(0.1)\
             return Color\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Color = UnLua::Get<FLinearColor>(L, -1, UnLua::TType<FLinearColor>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Color = UnLuauNova::Get<FLinearColor>(L, -1, UnLuauNova::TType<FLinearColor>());
             TEST_EQUAL(Color, FLinearColor(0.1f,0,0,0));
         });
 
@@ -76,8 +76,8 @@ void FUnLuaLibFLinearColorSpec::Define()
             Color:Set(0.1,0.2)\
             return Color\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Color = UnLua::Get<FLinearColor>(L, -1, UnLua::TType<FLinearColor>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Color = UnLuauNova::Get<FLinearColor>(L, -1, UnLuauNova::TType<FLinearColor>());
             TEST_EQUAL(Color, FLinearColor(0.1f,0.2f,0,0));
         });
 
@@ -88,8 +88,8 @@ void FUnLuaLibFLinearColorSpec::Define()
             Color:Set(0.1,0.2,0.3)\
             return Color\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Color = UnLua::Get<FLinearColor>(L, -1, UnLua::TType<FLinearColor>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Color = UnLuauNova::Get<FLinearColor>(L, -1, UnLuauNova::TType<FLinearColor>());
             TEST_EQUAL(Color, FLinearColor(0.1f,0.2f,0.3f,0));
         });
 
@@ -100,8 +100,8 @@ void FUnLuaLibFLinearColorSpec::Define()
             Color:Set(0.1,0.2,0.3,0.4)\
             return Color\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Color = UnLua::Get<FLinearColor>(L, -1, UnLua::TType<FLinearColor>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Color = UnLuauNova::Get<FLinearColor>(L, -1, UnLuauNova::TType<FLinearColor>());
             TEST_EQUAL(Color, FLinearColor(0.1f,0.2f,0.3f,0.4f));
         });
     });
@@ -115,8 +115,8 @@ void FUnLuaLibFLinearColorSpec::Define()
             local Color2 = UE.FLinearColor(0.4,0.5,0.6)\
             return Color1 + Color2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Color = UnLua::Get<FLinearColor>(L, -1, UnLua::TType<FLinearColor>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Color = UnLuauNova::Get<FLinearColor>(L, -1, UnLuauNova::TType<FLinearColor>());
             TEST_EQUAL(Color, FLinearColor(0.1f,0.2f,0.3f)+FLinearColor(0.4f,0.5f,0.6f));
         });
     });
@@ -130,8 +130,8 @@ void FUnLuaLibFLinearColorSpec::Define()
             local Color2 = UE.FLinearColor(0.1,0.2,0.3)\
             return Color1 - Color2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto Color = UnLua::Get<FLinearColor>(L, -1, UnLua::TType<FLinearColor>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Color = UnLuauNova::Get<FLinearColor>(L, -1, UnLuauNova::TType<FLinearColor>());
             TEST_EQUAL(Color, FLinearColor(0.4f,0.5f,0.6f) - FLinearColor(0.1f,0.2f,0.3f));
         });
     });
@@ -145,8 +145,8 @@ void FUnLuaLibFLinearColorSpec::Define()
             local Color2 = UE.FLinearColor(0.4,0.5,0.6)\
             return Color1 * Color2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto Color = UnLua::Get<FLinearColor>(L, -1, UnLua::TType<FLinearColor>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Color = UnLuauNova::Get<FLinearColor>(L, -1, UnLuauNova::TType<FLinearColor>());
             TEST_EQUAL(Color, FLinearColor(0.1f,0.2f,0.3f) * FLinearColor(0.4f,0.5f,0.6f));
         });
     });
@@ -160,8 +160,8 @@ void FUnLuaLibFLinearColorSpec::Define()
             local Color2 = UE.FLinearColor(0.4,0.5,0.6)\
             return Color1 / Color2\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto Color = UnLua::Get<FLinearColor>(L, -1, UnLua::TType<FLinearColor>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto Color = UnLuauNova::Get<FLinearColor>(L, -1, UnLuauNova::TType<FLinearColor>());
             TEST_EQUAL(Color, FLinearColor(0.1f,0.2f,0.3f) / FLinearColor(0.4f,0.5f,0.6f));
         });
     });
@@ -170,14 +170,14 @@ void FUnLuaLibFLinearColorSpec::Define()
     {
         It(TEXT("转为字符串"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return tostring(UE.FLinearColor(1,2,3,4))");
+            UnLuauNova::RunChunk(L, "return tostring(UE.FLinearColor(1,2,3,4))");
             TEST_EQUAL(lua_tostring(L, -1), FString("(R=1.000000,G=2.000000,B=3.000000,A=4.000000)"));
         });
     });
 
     AfterEach([this]
     {
-        UnLua::Shutdown();
+        UnLuauNova::Shutdown();
     });
 }
 

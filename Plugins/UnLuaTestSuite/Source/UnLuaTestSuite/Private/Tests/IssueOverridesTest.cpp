@@ -30,7 +30,7 @@ BEGIN_TESTSUITE(FIssueOverridesTest, TEXT("UnLua.Regression.IssueOverrides è¦†å†
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FEngineWaitLatentCommand(0.5));
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
+            const auto L = UnLuauNova::GetState();
             lua_getglobal(L, "Counter");
             const auto Result = (int)lua_tointeger(L, -1);
             TestEqual(TEXT("Counter"), Result, 4);
@@ -38,14 +38,14 @@ BEGIN_TESTSUITE(FIssueOverridesTest, TEXT("UnLua.Regression.IssueOverrides è¦†å†
             const auto Obj = NewObject<UIssueOverridesObject>();
             Obj->AddToRoot();
 
-            UnLua::PushUObject(L, Obj);
+            UnLuauNova::PushUObject(L, Obj);
             lua_setglobal(L, "G_IssueObject");
             
-            UnLua::RunChunk(L, "return G_IssueObject:CollectInfo()");
+            UnLuauNova::RunChunk(L, "return G_IssueObject:CollectInfo()");
             const auto Result1 = (int32)lua_tointeger(L, -1);
             TestEqual(TEXT("Result1"), Result1, 2);
             
-            UnLua::RunChunk(L, "return G_IssueObject:GetConfig()");
+            UnLuauNova::RunChunk(L, "return G_IssueObject:GetConfig()");
             const auto Result2 = (int32)lua_tointeger(L, -1);
             TestEqual(TEXT("Result2"), Result2, 1);
 

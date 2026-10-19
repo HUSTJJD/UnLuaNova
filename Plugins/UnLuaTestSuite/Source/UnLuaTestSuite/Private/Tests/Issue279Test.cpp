@@ -30,7 +30,7 @@ struct FUnLuaTest_Issue279 : FUnLuaTestBase
         FUnLuaTestBase::SetUp();
 
         const auto World = GetWorld();
-        UnLua::PushUObject(L, World);
+        UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "World");
 
         const auto Chunk1 = R"(
@@ -38,12 +38,12 @@ struct FUnLuaTest_Issue279 : FUnLuaTestBase
             Actor = World:SpawnActor(ActorClass)
             Actor:Run()
         )";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
 
         const auto Chunk2 = R"(
             return Actor.V == UE.FVector(1, 2, 3)
         )";
-        UnLua::RunChunk(L, Chunk2);
+        UnLuauNova::RunChunk(L, Chunk2);
 
         const auto Result = (bool)lua_toboolean(L, -1);
         RUNNER_TEST_TRUE(Result);

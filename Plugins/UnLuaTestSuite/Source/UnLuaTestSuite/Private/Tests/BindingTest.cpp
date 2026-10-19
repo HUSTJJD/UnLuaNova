@@ -21,8 +21,8 @@
 static void Run(TFunction<void(lua_State*, UWorld*)> Test)
 {
     // SetUp
-    UnLua::Startup();
-    const auto L = UnLua::GetState();
+    UnLuauNova::Startup();
+    const auto L = UnLuauNova::GetState();
 
     const auto World = UWorld::CreateWorld(EWorldType::Game, false, "UnLuaTest");
     FWorldContext& WorldContext = GEngine->CreateNewWorldContext(EWorldType::Game);
@@ -33,7 +33,7 @@ static void Run(TFunction<void(lua_State*, UWorld*)> Test)
     World->BeginPlay();
     World->SetBegunPlay(true);
 
-    UnLua::PushUObject(L, World);
+    UnLuauNova::PushUObject(L, World);
     lua_setglobal(L, "World");
 
     // Perform Test
@@ -43,7 +43,7 @@ static void Run(TFunction<void(lua_State*, UWorld*)> Test)
     World->EndPlay(EEndPlayReason::Destroyed);
     GEngine->DestroyWorldContext(World);
     World->DestroyWorld(false);
-    UnLua::Shutdown();
+    UnLuauNova::Shutdown();
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuaTest_StaticBinding, TEXT("UnLua.API.Binding.Static 静态绑定，继承UnLuaInterface::GetModuleName指定脚本路径"),
@@ -57,7 +57,7 @@ bool FUnLuaTest_StaticBinding::RunTest(const FString& Parameters)
                     local ActorClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBinding.BP_UnLuaTestActor_StaticBinding_C')
                     G_Actor = World:SpawnActor(ActorClass)
                 )";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
 
 
         World->Tick(LEVELTICK_All, SMALL_NUMBER);
@@ -65,7 +65,7 @@ bool FUnLuaTest_StaticBinding::RunTest(const FString& Parameters)
         const char* Chunk2 = R"(
                 return G_Actor:RunTest()
                 )";
-        UnLua::RunChunk(L, Chunk2);
+        UnLuauNova::RunChunk(L, Chunk2);
 
         const auto Error = lua_tostring(L, -1);
         TEST_EQUAL(Error, FString(""));
@@ -85,7 +85,7 @@ bool FUnLuaTest_DynamicBinding::RunTest(const FString& Parameters)
                     local Transform = UE.FTransform()
                     G_Actor = World:SpawnActor(ActorClass, Transform, UE.ESpawnActorCollisionHandlingMethod.AlwaysSpawn, nil, nil, 'Tests.Binding.BP_UnLuaTestActor')
                 )";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
 
 
         World->Tick(LEVELTICK_All, SMALL_NUMBER);
@@ -93,7 +93,7 @@ bool FUnLuaTest_DynamicBinding::RunTest(const FString& Parameters)
         const char* Chunk2 = R"(
                 return G_Actor:RunTest()
                 )";
-        UnLua::RunChunk(L, Chunk2);
+        UnLuauNova::RunChunk(L, Chunk2);
 
         const auto Error = lua_tostring(L, -1);
         TEST_EQUAL(Error, FString(""));
@@ -114,14 +114,14 @@ bool FUnLuaTest_ConflictedBinding::RunTest(const FString& Parameters)
                     local Transform = UE.FTransform()
                     G_Actor = World:SpawnActor(ActorClass, Transform, UE.ESpawnActorCollisionHandlingMethod.AlwaysSpawn, nil, nil, 'Tests.Binding.Foo')
                 )";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
 
         World->Tick(LEVELTICK_All, SMALL_NUMBER);
 
         const char* Chunk2 = R"(
                 return G_Actor:RunTest()
                 )";
-        UnLua::RunChunk(L, Chunk2);
+        UnLuauNova::RunChunk(L, Chunk2);
 
         const auto Error = lua_tostring(L, -1);
         TEST_EQUAL(Error, FString(""));
@@ -139,14 +139,14 @@ bool FUnLuaTest_MultipleBinding::RunTest(const FString& Parameters)
                     local ActorClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBindingChild.BP_UnLuaTestActor_StaticBindingChild_C')
                     G_Actor = World:SpawnActor(ActorClass)
                 )";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
 
         World->Tick(LEVELTICK_All, SMALL_NUMBER);
 
         const char* Chunk2 = R"(
                 return G_Actor:RunTest()
                 )";
-        UnLua::RunChunk(L, Chunk2);
+        UnLuauNova::RunChunk(L, Chunk2);
 
         const auto Error = lua_tostring(L, -1);
         TEST_EQUAL(Error, FString(""));
@@ -166,7 +166,7 @@ bool FUnLuaTest_Overridden::RunTest(const FString& Parameters)
                     G_Actor = World:SpawnActor(ActorClass)
                     return G_Actor:Greeting('ABC')
                 )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         World->Tick(LEVELTICK_All, SMALL_NUMBER);
 

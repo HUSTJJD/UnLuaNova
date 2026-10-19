@@ -29,7 +29,7 @@ struct FUnLuaTest_Issue375 : FUnLuaTestBase
         FUnLuaTestBase::SetUp();
 
         const auto World = GetWorld();
-        UnLua::PushUObject(L, World);
+        UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "World");
 
         const auto Chunk = R"(
@@ -41,8 +41,8 @@ struct FUnLuaTest_Issue375 : FUnLuaTestBase
         ChildActor:K2_DestroyActor()
         return ParentActor
         )";
-        UnLua::RunChunk(L, Chunk);
-        const auto ParentActor = (AActor*)UnLua::GetUObject(L, -1);
+        UnLuauNova::RunChunk(L, Chunk);
+        const auto ParentActor = (AActor*)UnLuauNova::GetUObject(L, -1);
 
         lua_gc(L, LUA_GCCOLLECT, 0);
         lua_gc(L, LUA_GCCOLLECT, 0);

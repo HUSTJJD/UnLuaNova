@@ -17,7 +17,7 @@
     "EnabledByDefault": false,
     "Plugins": [
         {
-            "Name": "UnLua",
+            "Name": "UnLuauNova",
             "Enabled": true
         }
     ],

@@ -32,14 +32,14 @@ struct FUnLuaTest_Issue303 : FUnLuaTestBase
         Array.Add("a");
         Array.Add("b");
         Array.Add("c");
-        UnLua::Push(L, Array, true);
+        UnLuauNova::Push(L, Array, true);
 
         lua_setglobal(L, "G_Array");
 
         const auto Chunk = "\
         Result = G_Array:Get(1) .. G_Array:Get(2) .. G_Array:Get(3)\
         ";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         lua_getglobal(L, "Result");
         const auto Result = lua_tostring(L, -1);

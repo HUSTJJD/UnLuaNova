@@ -27,15 +27,15 @@ void FUnLuaLibEKeySpec::Define()
 {
     BeforeEach([this]
     {
-        UnLua::Startup();
-        L = UnLua::GetState();
+        UnLuauNova::Startup();
+        L = UnLuauNova::GetState();
     });
 
     Describe(TEXT("访问EKeys"), [this]()
     {
         It(TEXT("F1"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.EKeys.F1.KeyName");
+            UnLuauNova::RunChunk(L, "return UE.EKeys.F1.KeyName");
             TEST_EQUAL(lua_tostring(L, -1), FString("F1"));
         });
     });
@@ -44,14 +44,14 @@ void FUnLuaLibEKeySpec::Define()
     {
         It(TEXT("相等"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.EKeys.A == UE.EKeys.A");
+            UnLuauNova::RunChunk(L, "return UE.EKeys.A == UE.EKeys.A");
             const auto Actual = !!lua_toboolean(L, -1);
             TEST_TRUE(Actual);
         });
 
         It(TEXT("不相等"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.EKeys.A == UE.EKeys.Invalid");
+            UnLuauNova::RunChunk(L, "return UE.EKeys.A == UE.EKeys.Invalid");
             const auto Actual = !!lua_toboolean(L, -1);
             TEST_FALSE(Actual);
         });
@@ -59,7 +59,7 @@ void FUnLuaLibEKeySpec::Define()
 
     AfterEach([this]
     {
-        UnLua::Shutdown();
+        UnLuauNova::Shutdown();
     });
 }
 

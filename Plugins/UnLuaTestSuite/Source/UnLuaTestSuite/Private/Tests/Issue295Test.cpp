@@ -27,8 +27,8 @@ BEGIN_TESTSUITE(FIssue295Test, TEXT("UnLua.Regression.Issue295 动态绑定的UM
 
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName1))
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
-            UnLua::PushUObject(L, GWorld);
+            const auto L = UnLuauNova::GetState();
+            UnLuauNova::PushUObject(L, GWorld);
             lua_setglobal(L, "GWorld");
 
             const char* Chunk = R"(
@@ -41,7 +41,7 @@ BEGIN_TESTSUITE(FIssue295Test, TEXT("UnLua.Regression.Issue295 动态绑定的UM
             local UMG2 = NewObject(UMGClass, Outer, 'UMG2', 'Tests.Regression.Issue295.TestUMG')
             UMG2:AddToViewport()
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
 
             lua_gc(L, LUA_GCCOLLECT, 0);
             CollectGarbage(RF_NoFlags, true);
@@ -49,8 +49,8 @@ BEGIN_TESTSUITE(FIssue295Test, TEXT("UnLua.Regression.Issue295 动态绑定的UM
             }));
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName2))
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
-            UnLua::PushUObject(L, GWorld);
+            const auto L = UnLuauNova::GetState();
+            UnLuauNova::PushUObject(L, GWorld);
             lua_setglobal(L, "GWorld");
 
             const char* Chunk = R"(
@@ -63,7 +63,7 @@ BEGIN_TESTSUITE(FIssue295Test, TEXT("UnLua.Regression.Issue295 动态绑定的UM
             local UMG2 = NewObject(UMGClass, Outer, 'UMG2', 'Tests.Regression.Issue295.TestUMG')
             UMG2:AddToViewport()
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             return true;
             }));
         ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());

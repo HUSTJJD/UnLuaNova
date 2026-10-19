@@ -27,32 +27,32 @@ void FUnLuaLibFRotatorSpec::Define()
 {
     BeforeEach([this]
     {
-        UnLua::Startup();
-        L = UnLua::GetState();
+        UnLuauNova::Startup();
+        L = UnLuauNova::GetState();
     });
 
     Describe(TEXT("构造FRotator"), [this]()
     {
         It(TEXT("默认参数"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FRotator()");
-            const auto& Actual = UnLua::Get<FRotator>(L, -1, UnLua::TType<FRotator>());
+            UnLuauNova::RunChunk(L, "return UE.FRotator()");
+            const auto& Actual = UnLuauNova::Get<FRotator>(L, -1, UnLuauNova::TType<FRotator>());
             const auto& Expected = FRotator(ForceInitToZero);
             TEST_EQUAL(Actual, Expected);
         });
 
         It(TEXT("同时指定Pitch/Yaw/Roll"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FRotator(1)");
-            const auto& Actual = UnLua::Get<FRotator>(L, -1, UnLua::TType<FRotator>());
+            UnLuauNova::RunChunk(L, "return UE.FRotator(1)");
+            const auto& Actual = UnLuauNova::Get<FRotator>(L, -1, UnLuauNova::TType<FRotator>());
             const auto& Expected = FRotator(1);
             TEST_EQUAL(Actual, Expected);
         });
 
         It(TEXT("分别指定Pitch/Yaw/Roll"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return UE.FRotator(1,2,3)");
-            const auto& Actual = UnLua::Get<FRotator>(L, -1, UnLua::TType<FRotator>());
+            UnLuauNova::RunChunk(L, "return UE.FRotator(1,2,3)");
+            const auto& Actual = UnLuauNova::Get<FRotator>(L, -1, UnLuauNova::TType<FRotator>());
             const auto& Expected = FRotator(1, 2, 3);
             TEST_EQUAL(Actual, Expected);
         });
@@ -67,8 +67,8 @@ void FUnLuaLibFRotatorSpec::Define()
             Rotator:Set(1)\
             return Rotator\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Actual = UnLua::Get<FRotator>(L, -1, UnLua::TType<FRotator>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Actual = UnLuauNova::Get<FRotator>(L, -1, UnLuauNova::TType<FRotator>());
             const auto& Expected = FRotator(1, 0, 0);
             TEST_EQUAL(Actual, Expected);
         });
@@ -80,8 +80,8 @@ void FUnLuaLibFRotatorSpec::Define()
             Rotator:Set(1,2)\
             return Rotator\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Actual = UnLua::Get<FRotator>(L, -1, UnLua::TType<FRotator>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Actual = UnLuauNova::Get<FRotator>(L, -1, UnLuauNova::TType<FRotator>());
             const auto& Expected = FRotator(1, 2, 0);
             TEST_EQUAL(Actual, Expected);
         });
@@ -93,8 +93,8 @@ void FUnLuaLibFRotatorSpec::Define()
             Rotator:Set(1,2,3)\
             return Rotator\
             ";
-            UnLua::RunChunk(L, Chunk);
-            const auto& Actual = UnLua::Get<FRotator>(L, -1, UnLua::TType<FRotator>());
+            UnLuauNova::RunChunk(L, Chunk);
+            const auto& Actual = UnLuauNova::Get<FRotator>(L, -1, UnLuauNova::TType<FRotator>());
             const auto& Expected = FRotator(1, 2, 3);
             TEST_EQUAL(Actual, Expected);
         });
@@ -104,7 +104,7 @@ void FUnLuaLibFRotatorSpec::Define()
     {
         It(TEXT("转为字符串"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UnLua::RunChunk(L, "return tostring(UE.FRotator(1,2,3))");
+            UnLuauNova::RunChunk(L, "return tostring(UE.FRotator(1,2,3))");
             const auto& Actual = lua_tostring(L, -1);
             const auto& Expected = FRotator(1, 2, 3).ToString();
             TEST_EQUAL(Actual, Expected);
@@ -113,7 +113,7 @@ void FUnLuaLibFRotatorSpec::Define()
 
     AfterEach([this]
     {
-        UnLua::Shutdown();
+        UnLuauNova::Shutdown();
     });
 }
 

@@ -26,7 +26,7 @@ BEGIN_TESTSUITE(FIssue434Test, TEXT("UnLua.Regression.Issue434 MulticastDelegate
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.5f));
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
+            const auto L = UnLuauNova::GetState();
             lua_getglobal(L, "Result1");
             const auto Result1 = (int32)lua_tointeger(L, -1);
             lua_getglobal(L, "Result2");

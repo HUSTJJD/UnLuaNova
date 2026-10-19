@@ -31,7 +31,7 @@ struct FUnLuaTest_Issue366 : FUnLuaTestBase
         const auto Chunk = R"(
                 UE.FUnLuaTestLib()
             )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         return true;
     }

@@ -25,7 +25,7 @@ BEGIN_TESTSUITE(FIssue401Test, TEXT("UnLua.Regression.Issue401 LUA覆写导致�
         const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/Issue401/Issue401");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
+            const auto L = UnLuauNova::GetState();
             lua_getglobal(L, "Result1");
             const auto Result1 = static_cast<int32>(lua_tonumber(L, -1));
             TestEqual(TEXT("Result1"), Result1, 2);

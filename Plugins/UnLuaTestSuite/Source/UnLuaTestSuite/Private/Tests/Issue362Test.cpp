@@ -38,7 +38,7 @@ struct FUnLuaTest_Issue362 : FUnLuaTestBase
         Stub.Issue362Delegate:Execute(Array)
         return Array:Length()
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         const auto Actual = (int)lua_tonumber(L, -1);
         RUNNER_TEST_EQUAL(Actual, 1);

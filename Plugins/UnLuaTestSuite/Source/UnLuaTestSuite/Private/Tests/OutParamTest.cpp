@@ -24,7 +24,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuaTest_OutParamFull, TEXT("UnLua.API.OutPar
 
 bool FUnLuaTest_OutParamFull::RunTest(const FString& Parameters)
 {
-    UnLua::Startup();
+    UnLuauNova::Startup();
 
     const auto Stub = NewObject<UOutParamTestStub>();
 
@@ -44,7 +44,7 @@ bool FUnLuaTest_OutParamFull::RunTest(const FString& Parameters)
     TEST_EQUAL(Radius, ExpectedRadius);
     TEST_EQUAL(bStop, ExpectedStop);
 
-    UnLua::Shutdown();
+    UnLuauNova::Shutdown();
 
     return true;
 }
@@ -54,7 +54,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuaTest_OutParamPartial, TEXT("UnLua.API.Out
 
 bool FUnLuaTest_OutParamPartial::RunTest(const FString& Parameters)
 {
-    UnLua::Startup();
+    UnLuauNova::Startup();
 
     const auto Stub = NewObject<UOutParamTestStub>();
 
@@ -74,7 +74,7 @@ bool FUnLuaTest_OutParamPartial::RunTest(const FString& Parameters)
     TEST_EQUAL(bStop, ExpectedStop);
     TEST_EQUAL(Pkg, ExpectedPkg);
 
-    UnLua::Shutdown();
+    UnLuauNova::Shutdown();
 
     return true;
 }

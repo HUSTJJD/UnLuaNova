@@ -36,7 +36,7 @@ struct FUnLuaTest_Issue668 : FUnLuaTestBase
 			Array:Add(Struct1)
             Array:Add(Struct2)
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         return true;
     }

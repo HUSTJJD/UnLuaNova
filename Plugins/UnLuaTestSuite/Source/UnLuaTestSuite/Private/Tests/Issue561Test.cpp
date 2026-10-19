@@ -38,7 +38,7 @@ struct FUnLuaTest_Issue561 : FUnLuaTestBase
             local Struct2 = UE.FIssue561Struct()
             Struct1.OnMouseEvent = Struct2.OnMouseEvent
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         return true;
     }

@@ -34,12 +34,12 @@ struct FUnLuaTest_Issue293 : FUnLuaTestBase
         const char* Chunk1 = "\
             return UE.UUnLuaTestFunctionLibrary.TestForIssue293('A', 1)\
             ";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
 
         const char* Chunk2 = "\
             return UE.UUnLuaTestFunctionLibrary.TestForIssue293('A', 1, UE.TArray(UE.FColor))\
             ";
-        UnLua::RunChunk(L, Chunk2);
+        UnLuauNova::RunChunk(L, Chunk2);
         const auto Actual = (int32)lua_tointeger(L, -1);
         RUNNER_TEST_EQUAL(Actual, 0);
 

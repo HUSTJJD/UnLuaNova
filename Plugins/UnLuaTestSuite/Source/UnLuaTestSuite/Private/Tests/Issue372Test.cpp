@@ -25,11 +25,11 @@ BEGIN_TESTSUITE(FIssue372Test, TEXT("UnLua.Regression.Issue372 Actor调用K2_Des
         const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/Issue372/Issue372");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
-            UnLua::PushUObject(L, GWorld);
+            const auto L = UnLuauNova::GetState();
+            UnLuauNova::PushUObject(L, GWorld);
             lua_setglobal(L, "World");
 
-            UnLua::PushUObject(L, GWorld);
+            UnLuauNova::PushUObject(L, GWorld);
 
             const auto Chunk = R"(
             local ActorClass = UE.UClass.Load("/UnLuaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBinding.BP_UnLuaTestActor_StaticBinding_C")
@@ -43,7 +43,7 @@ BEGIN_TESTSUITE(FIssue372Test, TEXT("UnLua.Regression.Issue372 Actor调用K2_Des
             end
             return -2 -- LUA_NOREF
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
 
             auto Ref = (int32)lua_tointeger(L, -1);
             TestNotEqual(TEXT("Ref"), Ref, LUA_NOREF);
@@ -52,7 +52,7 @@ BEGIN_TESTSUITE(FIssue372Test, TEXT("UnLua.Regression.Issue372 Actor调用K2_Des
             auto Actual = lua_type(L, -1);
             TestEqual(TEXT("Actual"), Actual, LUA_TTABLE);
 
-            UnLua::RunChunk(L, "Actor:K2_DestroyActor()");
+            UnLuauNova::RunChunk(L, "Actor:K2_DestroyActor()");
             CollectGarbage(RF_NoFlags, true);
 
             lua_rawgeti(L, LUA_REGISTRYINDEX, Ref);

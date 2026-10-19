@@ -33,7 +33,7 @@ struct FUnLuaTest_Issue294 : FUnLuaTestBase
         const char* Chunk1 = "\
             return UE.UUnLuaTestFunctionLibrary.TestForIssue294('A', 1)\
             ";
-        UnLua::RunChunk(L, Chunk1);
+        UnLuauNova::RunChunk(L, Chunk1);
         const auto Actual1 = (int32)lua_tointeger(L, -1);
         RUNNER_TEST_EQUAL(Actual1, 0);
 
@@ -44,7 +44,7 @@ struct FUnLuaTest_Issue294 : FUnLuaTestBase
             end\
             return UE.UUnLuaTestFunctionLibrary.TestForIssue294('A', 1, { UE.UUnLuaTestFunctionLibrary, Callback }, UE.TArray(UE.FColor))\
             ";
-        UnLua::RunChunk(L, Chunk2);
+        UnLuauNova::RunChunk(L, Chunk2);
         const auto Actual2 = (int32)lua_tointeger(L, -1);
         RUNNER_TEST_EQUAL(Actual2, 0);
         lua_pop(L, 1);
@@ -55,7 +55,7 @@ struct FUnLuaTest_Issue294 : FUnLuaTestBase
         lua_pop(L, 1);
 
         lua_getglobal(L, "G_Value2");
-        const auto G_Value2 = (UClass*)UnLua::GetUObject(L, -1);
+        const auto G_Value2 = (UClass*)UnLuauNova::GetUObject(L, -1);
         RUNNER_TEST_EQUAL(G_Value2, UUnLuaTestFunctionLibrary::StaticClass());
 
         return true;

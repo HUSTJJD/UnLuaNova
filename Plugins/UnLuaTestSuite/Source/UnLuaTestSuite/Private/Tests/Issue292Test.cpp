@@ -31,14 +31,14 @@ struct FUnLuaTest_Issue292 : FUnLuaTestBase
 
         const auto World = GetWorld();
         AActor* Actor = World->SpawnActor(AActor::StaticClass());
-        UnLua::PushUObject(L, Actor);
+        UnLuauNova::PushUObject(L, Actor);
         lua_setglobal(L, "G_Actor");
         Actor->K2_DestroyActor();
 
         const char* Chunk = "\
             return G_Actor:IsValid(), UE.UKismetSystemLibrary.IsValid(G_Actor)\
             ";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         RUNNER_TEST_FALSE(lua_toboolean(L, -1));
         RUNNER_TEST_FALSE(lua_toboolean(L, -2));

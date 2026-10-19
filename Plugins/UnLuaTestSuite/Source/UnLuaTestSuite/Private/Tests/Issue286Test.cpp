@@ -25,7 +25,7 @@ BEGIN_TESTSUITE(FIssue286Test, TEXT("UnLua.Regression.Issue286 蓝图 TMap FindR
         const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/Issue286/Issue286");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            const auto L = UnLua::GetState();
+            const auto L = UnLuauNova::GetState();
             lua_getglobal(L, "Result");
             const auto Error = lua_tostring(L, -1);
             TestEqual(TEXT("Result"), FString(Error), "passed");

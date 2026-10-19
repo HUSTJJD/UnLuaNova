@@ -36,9 +36,9 @@ struct FUnLuaTest_Issue476 : FUnLuaTestBase
             G_Stub = NewObject(StubClass, Outer, "Tests.Regression.Issue476.TestStub")
             return G_Stub
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
-        const FWeakObjectPtr Stub = UnLua::GetUObject(L, -1);
+        const FWeakObjectPtr Stub = UnLuauNova::GetUObject(L, -1);
         const FWeakObjectPtr Outer = Stub.Get()->GetOuter();
         CollectGarbage(RF_NoFlags, true);
 

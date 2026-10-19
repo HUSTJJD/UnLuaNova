@@ -20,7 +20,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 BEGIN_DEFINE_SPEC(FUnLuaBindingSpec, "UnLua.Binding", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
-    TSharedPtr<UnLua::FLuaEnv> Env;
+    TSharedPtr<UnLuauNova::FLuaEnv> Env;
     lua_State* L;
 END_DEFINE_SPEC(FUnLuaBindingSpec)
 
@@ -28,7 +28,7 @@ void FUnLuaBindingSpec::Define()
 {
     BeforeEach([this]
     {
-        Env = MakeShared<UnLua::FLuaEnv>();
+        Env = MakeShared<UnLuauNova::FLuaEnv>();
         L = Env->GetMainState();
     });
 
@@ -46,7 +46,7 @@ void FUnLuaBindingSpec::Define()
 				local Stub = NewObject(UE.UUnLuaTestStub)
 				return Stub.ScopedEnum
 			)";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             const auto Actual = (EScopedEnum::Type)lua_tointeger(L, -1);
             const auto Expected = EScopedEnum::Value1;
             TEST_EQUAL(Expected, Actual);
@@ -59,7 +59,7 @@ void FUnLuaBindingSpec::Define()
 				Stub.ScopedEnum = UE.EScopedEnum.Value2
 				return Stub.ScopedEnum
 			)";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             const auto Actual = (EScopedEnum::Type)lua_tointeger(L, -1);
             const auto Expected = EScopedEnum::Value2;
             TEST_EQUAL(Expected, Actual);
@@ -74,7 +74,7 @@ void FUnLuaBindingSpec::Define()
 				local Stub = NewObject(UE.UUnLuaTestStub)
 				return Stub.EnumClass
 			)";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             const auto Actual = (EEnumClass)lua_tointeger(L, -1);
             const auto Expected = EEnumClass::Value1;
             TEST_EQUAL(Expected, Actual);
@@ -87,7 +87,7 @@ void FUnLuaBindingSpec::Define()
 				Stub.EnumClass = UE.EEnumClass.Value2
 				return Stub.EnumClass
 			)";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             const auto Actual = (EEnumClass)lua_tointeger(L, -1);
             const auto Expected = EEnumClass::Value2;
             TEST_EQUAL(Expected, Actual);

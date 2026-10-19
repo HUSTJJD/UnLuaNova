@@ -20,7 +20,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 BEGIN_DEFINE_SPEC(FUnLuaLibFQuatSpec, "UnLua.API.FQuat", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
-    TSharedPtr<UnLua::FLuaEnv> Env;
+    TSharedPtr<UnLuauNova::FLuaEnv> Env;
     lua_State* L;
 END_DEFINE_SPEC(FUnLuaLibFQuatSpec)
 
@@ -28,7 +28,7 @@ void FUnLuaLibFQuatSpec::Define()
 {
     BeforeEach([this]
     {
-        Env = MakeShared<UnLua::FLuaEnv>();
+        Env = MakeShared<UnLuauNova::FLuaEnv>();
         L = Env->GetMainState();
     });
 
@@ -43,7 +43,7 @@ void FUnLuaLibFQuatSpec::Define()
         It(TEXT("默认参数"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             Env->DoString("return UE.FQuat()");
-            const auto& Actual = UnLua::Get<FQuat>(L, -1, UnLua::TType<FQuat>());
+            const auto& Actual = UnLuauNova::Get<FQuat>(L, -1, UnLuauNova::TType<FQuat>());
             const auto& Expected = FQuat(ForceInitToZero);
             TEST_EQUAL(Actual, Expected);
         });
@@ -51,7 +51,7 @@ void FUnLuaLibFQuatSpec::Define()
         It(TEXT("分别指定X/Y/Z/W"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             Env->DoString("return UE.FQuat(4,3,2,1)");
-            const auto& Actual = UnLua::Get<FQuat>(L, -1, UnLua::TType<FQuat>());
+            const auto& Actual = UnLuauNova::Get<FQuat>(L, -1, UnLuauNova::TType<FQuat>());
             const auto& Expected = FQuat(4, 3, 2, 1);
             TEST_EQUAL(Actual, Expected);
         });
@@ -64,7 +64,7 @@ void FUnLuaLibFQuatSpec::Define()
             return Quat
             )";
             Env->DoString(Chunk);
-            const auto& Actual = UnLua::Get<FQuat>(L, -1, UnLua::TType<FQuat>());
+            const auto& Actual = UnLuauNova::Get<FQuat>(L, -1, UnLuauNova::TType<FQuat>());
             const auto& Expected = FQuat(FVector(0, 0, 1), 3.14f);
             TEST_QUAT_EQUAL(Actual, Expected);
         });
@@ -80,7 +80,7 @@ void FUnLuaLibFQuatSpec::Define()
             return Quat
             )";
             Env->DoString(Chunk);
-            const auto& Actual = UnLua::Get<FQuat>(L, -1, UnLua::TType<FQuat>());
+            const auto& Actual = UnLuauNova::Get<FQuat>(L, -1, UnLuauNova::TType<FQuat>());
             const auto& Expected = FQuat(4, 0, 0, 0);
             TEST_EQUAL(Actual, Expected);
         });
@@ -93,7 +93,7 @@ void FUnLuaLibFQuatSpec::Define()
             return Quat
             )";
             Env->DoString(Chunk);
-            const auto& Actual = UnLua::Get<FQuat>(L, -1, UnLua::TType<FQuat>());
+            const auto& Actual = UnLuauNova::Get<FQuat>(L, -1, UnLuauNova::TType<FQuat>());
             const auto& Expected = FQuat(4, 3, 0, 0);
             TEST_EQUAL(Actual, Expected);
         });
@@ -106,7 +106,7 @@ void FUnLuaLibFQuatSpec::Define()
             return Quat
             )";
             Env->DoString(Chunk);
-            const auto& Actual = UnLua::Get<FQuat>(L, -1, UnLua::TType<FQuat>());
+            const auto& Actual = UnLuauNova::Get<FQuat>(L, -1, UnLuauNova::TType<FQuat>());
             const auto& Expected = FQuat(4, 3, 2, 0);
             TEST_EQUAL(Actual, Expected);
         });
@@ -119,7 +119,7 @@ void FUnLuaLibFQuatSpec::Define()
             return Quat
             )";
             Env->DoString(Chunk);
-            const auto& Actual = UnLua::Get<FQuat>(L, -1, UnLua::TType<FQuat>());
+            const auto& Actual = UnLuauNova::Get<FQuat>(L, -1, UnLuauNova::TType<FQuat>());
             const auto& Expected = FQuat(4, 3, 2, 1);
             TEST_EQUAL(Actual, Expected);
         });
@@ -135,7 +135,7 @@ void FUnLuaLibFQuatSpec::Define()
             return Quat
             )";
             Env->DoString(Chunk);
-            const auto& Actual = UnLua::Get<FQuat>(L, -1, UnLua::TType<FQuat>());
+            const auto& Actual = UnLuauNova::Get<FQuat>(L, -1, UnLuauNova::TType<FQuat>());
             auto Expected = FQuat(4, 3, 2, 1);
             Expected.Normalize();
             TEST_EQUAL(Expected, Actual);
@@ -149,7 +149,7 @@ void FUnLuaLibFQuatSpec::Define()
             return Quat
             )";
             Env->DoString(Chunk);
-            const auto& Actual = UnLua::Get<FQuat>(L, -1, UnLua::TType<FQuat>());
+            const auto& Actual = UnLuauNova::Get<FQuat>(L, -1, UnLuauNova::TType<FQuat>());
             auto Expected = FQuat(4, 3, 2, 1);
             Expected.Normalize(100);
             TEST_EQUAL(Expected, Actual);
@@ -165,7 +165,7 @@ void FUnLuaLibFQuatSpec::Define()
             return Quat * 2.0
             )";
             Env->DoString(Chunk);
-            const auto& Actual = UnLua::Get<FQuat>(L, -1, UnLua::TType<FQuat>());
+            const auto& Actual = UnLuauNova::Get<FQuat>(L, -1, UnLuauNova::TType<FQuat>());
             const auto& Expected = FQuat(4, 3, 2, 1) * 2.0f;
             TEST_EQUAL(Actual, Expected);
         });

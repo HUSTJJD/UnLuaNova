@@ -35,7 +35,7 @@ struct FUnLuaTest_Issue344 : FUnLuaTestBase
         local obj = UE.UClass.Load('/UnLuaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C') \
         obj.Int32Property = 1 \
         ";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         return true;
     }

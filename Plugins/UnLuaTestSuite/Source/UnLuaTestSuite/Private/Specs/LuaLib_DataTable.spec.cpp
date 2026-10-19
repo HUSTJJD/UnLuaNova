@@ -27,8 +27,8 @@ void FUnLuaLibDataTableSpec::Define()
 {
     BeforeEach([this]
     {
-        UnLua::Startup();
-        L = UnLua::GetState();
+        UnLuauNova::Startup();
+        L = UnLuauNova::GetState();
     });
 
     Describe(TEXT("GetTableDataRowFromName"), [this]()
@@ -42,7 +42,7 @@ void FUnLuaLibDataTableSpec::Define()
             local Result = UE.UDataTableFunctionLibrary.GetDataTableRowFromName(DataTable, 'Row_1', Row)
             return Row.TestString
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_EQUAL(lua_tostring(L, -1), FString("A"));
         });
 
@@ -54,14 +54,14 @@ void FUnLuaLibDataTableSpec::Define()
             local Result = UE.UDataTableFunctionLibrary.GetDataTableRowFromName(DataTable, 'Row_1', Row)
             return Row.Title
             )";
-            UnLua::RunChunk(L, Chunk);
+            UnLuauNova::RunChunk(L, Chunk);
             TEST_EQUAL(lua_tostring(L, -1), FString("Hello"));
         });
     });
 
     AfterEach([this]
     {
-        UnLua::Shutdown();
+        UnLuauNova::Shutdown();
     });
 }
 

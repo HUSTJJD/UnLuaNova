@@ -34,7 +34,7 @@ struct FUnLuaTest_Issue554 : FUnLuaTestBase
         FUnLuaTestBase::SetUp();
 
         const auto World = GetWorld();
-        UnLua::PushUObject(L, World);
+        UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "World");
 
         const auto Chunk = R"(
@@ -42,7 +42,7 @@ struct FUnLuaTest_Issue554 : FUnLuaTestBase
 	        local Element = Test.Struct[1]
             return Element.Pitch
         )";
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
         const auto Result = lua_tonumber(L, -1);
         RUNNER_TEST_EQUAL(Result, -34.0);
 

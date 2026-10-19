@@ -20,7 +20,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 BEGIN_DEFINE_SPEC(FUnLuaLibDelegateSpec, "UnLua.API.FScriptDelegate", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
-    TSharedPtr<UnLua::FLuaEnv> Env;
+    TSharedPtr<UnLuauNova::FLuaEnv> Env;
     lua_State* L;
     UUnLuaTestStub* Stub;
 END_DEFINE_SPEC(FUnLuaLibDelegateSpec)
@@ -29,10 +29,10 @@ void FUnLuaLibDelegateSpec::Define()
 {
     BeforeEach([this]
     {
-        Env = MakeShared<UnLua::FLuaEnv>();
+        Env = MakeShared<UnLuauNova::FLuaEnv>();
         L = Env->GetMainState();
         Stub = NewObject<UUnLuaTestStub>();
-        UnLua::PushUObject(L, Stub);
+        UnLuauNova::PushUObject(L, Stub);
         lua_setglobal(L, "Stub");
     });
 

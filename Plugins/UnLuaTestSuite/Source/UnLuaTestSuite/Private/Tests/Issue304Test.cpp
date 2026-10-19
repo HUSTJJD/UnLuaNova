@@ -41,7 +41,7 @@ struct FUnLuaTest_Issue304 : FUnLuaTestBase
         return Result
         )";
 
-        UnLua::RunChunk(L, Chunk);
+        UnLuauNova::RunChunk(L, Chunk);
 
         const auto Result = lua_tostring(L, -1);
         RUNNER_TEST_EQUAL(Result, FString("World"));

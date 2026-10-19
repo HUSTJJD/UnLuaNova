@@ -30,7 +30,7 @@ struct FUnLuaTest_Issue284 : FUnLuaTestBase
 
         GetTestRunner().AddExpectedError(TEXT("module 'test.test' not found"), EAutomationExpectedErrorFlags::Contains);
 
-        UnLua::RunChunk(L, "require('test.test')");
+        UnLuauNova::RunChunk(L, "require('test.test')");
 
         return true;
     }
