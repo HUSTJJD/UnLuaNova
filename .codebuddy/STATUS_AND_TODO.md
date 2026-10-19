@@ -22,11 +22,37 @@
 
 ```
 Source/ThirdParty/
-├── Lua55/      ← submodule github.com/lua/lua
-├── Lua55Lib/   ← 本项目：Lua55.Build.cs + Lua55Unity.c（UBT 直接编译 onelua.c）
+├── Lua/        ← submodule github.com/lua/lua
+├── LuaLib/     ← 本项目：Lua.Build.cs + LuaUnity.c + GenerateWrappers.py
 ├── Luau/       ← submodule github.com/luau-lang/luau
-└── LuauLib/    ← 本项目：Luau.Build.cs（External，需 CMake 预构建）
+└── LuauLib/    ← 本项目：Luau.Build.cs + GenerateWrappers.py + Generated/
 ```
+
+**两个后端都由 UBT 直接编译源码，不需要任何预构建步骤。**
+
+这是比照引擎自身的做法定的（实测 `Engine/Source/ThirdParty`：188 个 Build.cs 中
+180 个是 `ModuleType.External` 预编译，8 个由 UBT 编译源码，`nanosvg` 是后者的模板）。
+**整个引擎 ThirdParty 没有一处 Build.cs 真正调用 CMake**——唯一出现 "cmake" 的是
+`HarfBuzz.Build.cs:120` 的注释，指向外部脚本产物的目录布局。Epic 对需要预编译的库
+走 `BuildThirdPartyLibs.bat`，而不是在 Build.cs 里跑外部构建系统。
+
+对 Lua/Luau 这种纯源码、零外部依赖的库，UBT 编译是正确选择：不需要为每个平台×配置
+维护二进制。
+
+| 后端 | 编译单元 | 说明 |
+|---|---|---|
+| Lua | `LuaLib/LuaUnity.c`（1 个） | 上游有官方聚合 `onelua.c`，`#define MAKE_LIB` 后 include 即可 |
+| Luau | `LuauLib/Generated/*.cpp`（57 个） | 无官方聚合，且 3 个文件级 `static` 符号重名，**不能** unity 合并 |
+
+Luau 那 57 个 wrapper 由 `LuauLib/GenerateWrappers.py` 生成，每个只 `#include` 一个
+Luau 源文件，使其保持独立翻译单元。冲突的三个名字是 `createmetatable`
+（`lstrlib.cpp`/`lveclib.cpp`）、`period`（`TimeTrace.cpp`/`lperf.cpp`）、`run`
+（`lapi.cpp`/`lgc.cpp`/`lvmload.cpp`）。
+
+> `Luau.Build.cs` 里 `bUseUnity = false` 是**必需的**：若 UBT 把 wrapper 再合并成
+> unity blob，上述冲突会重新出现。
+
+Luau 子模块增删文件后，重新运行 `python LuauLib/GenerateWrappers.py` 并提交结果。
 
 ---
 

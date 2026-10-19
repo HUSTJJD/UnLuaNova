@@ -31,6 +31,7 @@
 #include "UnLuaNovaSettings.h"
 #include "LuaBackend.h"
 #include "LuaMemoryStats.h"
+#include "LuaProfiler.h"
 
 namespace UnLuaNova
 {
@@ -44,37 +45,9 @@ namespace UnLuaNova
     FLuaEnv::FOnCreated FLuaEnv::OnCreated;
     FLuaEnv::FOnDestroyed FLuaEnv::OnDestroyed;
 
-#if ENABLE_UNREAL_INSIGHTS && CPUPROFILERTRACE_ENABLED
-    void Hook(lua_State* L, lua_Debug* ar)
-    {
-        static TSet<FName> IgnoreNames{FName("Class"), FName("index"), FName("newindex")};
-
-        lua_getinfo(L, "nSl", ar);
-
-        if (ar->what == FName("Lua"))
-        {
-            if (IgnoreNames.Contains(ar->name))
-            {
-                return;
-            }
-
-            const auto EventName = FString::Printf(TEXT(
-                "%s [%s:%d]"),
-                                                   *FString(ar->name ? ar->name : "N/A"),
-                                                   *FPaths::GetBaseFilename(FString(ar->source)),
-                                                   ar->linedefined);
-
-            if (ar->event == 0)
-            {
-                FCpuProfilerTrace::OutputBeginDynamicEvent(*EventName);
-            }
-            else
-            {
-                FCpuProfilerTrace::OutputEndEvent();
-            }
-        }
-    }
-#endif
+    // The profiler hook used to live here. It now lives in LuaProfiler.cpp, which caches
+    // one Insights spec id per function rather than formatting an FString on every single
+    // call/return, and can be toggled at runtime instead of only at compile time.
 
     FLuaEnv::FLuaEnv()
         : bStarted(false)
@@ -162,16 +135,16 @@ namespace UnLuaNova
         OnCreated.Broadcast(*this);
         FUnLuaNovaDelegates::OnLuaStateCreated.Broadcast(L);
 
-#if ENABLE_UNREAL_INSIGHTS && CPUPROFILERTRACE_ENABLED
-        if (FDeadLoopCheck::Timeout)
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Profiling will not working when DeadLoopCheck enabled."))
-        else
-            lua_sethook(L, Hook, LUA_MASKCALL | LUA_MASKRET, 0);
-#endif
+        // The profiler owns the VM hook from here on. It stays uninstalled until you turn
+        // it on with `lua.profiler on`, which keeps the default build untouched and leaves
+        // the hook slot free for FDeadLoopCheck.
+        FLuaProfiler::Get().Attach(L);
     }
 
     FLuaEnv::~FLuaEnv()
     {
+        FLuaProfiler::Get().Detach(L);
+
         OnDestroyed.Broadcast(*this);
         lua_close(L);
         AllEnvs.Remove(L);

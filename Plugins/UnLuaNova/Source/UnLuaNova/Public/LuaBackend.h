@@ -104,6 +104,33 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #endif
 }
 
+// --- debug introspection -------------------------------------------------------
+// Two real API differences the profiler has to live with:
+//
+// 1. lua_getinfo takes an extra `level` argument on Luau.
+// 2. Luau's lua_Debug has no `event` field, so a hook callback cannot tell a call from
+//    a return. Pairing begin/end events (what Unreal Insights wants) is therefore only
+//    possible on plain Lua; on Luau the profiler samples from the interrupt callback
+//    instead. See UNLUANOVA_HAS_HOOK_EVENT below.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_GETINFO(L, Level, What, Ar) lua_getinfo(L, Level, What, Ar)
+#define UNLUANOVA_HAS_HOOK_EVENT 0
+#else
+#define UNLUANOVA_GETINFO(L, Level, What, Ar) lua_getinfo(L, What, Ar)
+#define UNLUANOVA_HAS_HOOK_EVENT 1
+#endif
+
+// --- per-function id, for profiler keys ----------------------------------------
+// Luau exposes a VM-wide unique proto id on lua_Debug, which makes an ideal cache key.
+// Plain Lua has no such field, so key on (source pointer, line the function was defined
+// on) instead - still O(1), still stable for the lifetime of the loaded chunk.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_DEBUG_PROTOID(Ar) ((uint64)((Ar)->protoid))
+#else
+#define UNLUANOVA_DEBUG_PROTOID(Ar) \
+    ((uint64)(((uintptr_t)(Ar)->source) << 32) | (uint32)((Ar)->linedefined))
+#endif
+
 // --- capability flags ----------------------------------------------------------
 // These are the semantics that actually change behaviour, so call sites must branch
 // on them rather than on the backend id.
