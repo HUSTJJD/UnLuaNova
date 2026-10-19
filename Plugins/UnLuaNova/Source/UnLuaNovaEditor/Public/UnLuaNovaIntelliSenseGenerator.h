@@ -49,6 +49,9 @@ private:
 
     void ExportUnLua();
 
+    /** Writes UnLuaNova.d.lua - Luau declarations for luau-analyze. See LuauDecl. */
+    void ExportLuauDecls(const TArray<const UField*> Types);
+
     void CollectTypes(TArray<const UField*> &Types);
     
     // File helper

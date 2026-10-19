@@ -14,6 +14,7 @@
 
 #include "Misc/EngineVersionComparison.h"
 #include "UnLuaNovaIntelliSenseGenerator.h"
+#include "UnLuaNovaLuauDecls.h"
 #if UE_VERSION_NEWER_THAN(5, 1, 0)
 #include "AssetRegistry/AssetRegistryModule.h"
 #else
@@ -103,6 +104,7 @@ void FUnLuaNovaIntelliSenseGenerator::UpdateAll()
         return;
     ExportUE(NativeTypes);
     ExportUnLua();
+    ExportLuauDecls(NativeTypes);
     SlowTask.EnterProgressFrame();
 }
 
@@ -183,6 +185,28 @@ void FUnLuaNovaIntelliSenseGenerator::ExportUnLua()
         return;
 
     PlatformFile.CopyDirectoryTree(*DstDir, *SrcDir, true);
+}
+
+void FUnLuaNovaIntelliSenseGenerator::ExportLuauDecls(const TArray<const UField*> Types)
+{
+    const FString Content = LuauDecl::Generate(Types);
+
+    IFileManager& FileManager = IFileManager::Get();
+    if (!FileManager.DirectoryExists(*OutputDir))
+    {
+        FileManager.MakeDirectory(*OutputDir);
+    }
+
+    // .d.lua rather than .lua: these are declarations for luau-analyze, not something
+    // a script is meant to require at runtime.
+    const FString FilePath = OutputDir / TEXT("UnLuaNova.d.lua");
+
+    FString Existing;
+    FFileHelper::LoadFileToString(Existing, *FilePath);
+    if (Existing != Content)
+    {
+        FFileHelper::SaveStringToFile(Content, *FilePath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+    }
 }
 
 void FUnLuaNovaIntelliSenseGenerator::CollectTypes(TArray<const UField*>& Types)
