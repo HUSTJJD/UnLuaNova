@@ -725,6 +725,58 @@ git checkout -b port/ann-fixes
 
 ---
 
+## 10. Luau 引入（已执行，2026-10-19）
+
+### 10.1 已做
+
+- **子模块**：`Plugins/UnLuauNova/Source/ThirdParty/Luau` → `https://github.com/luau-lang/luau.git`，锁在 **0.743**。
+- **`Luau.Build.cs`**：放在**兄弟包裹目录** `ThirdParty/LuauLib/`，**不放在子模块内**——写进子模块的文件属于 luau-lang/luau 自己那个仓库，永远提交不进本项目。
+
+### 10.2 核实过的集成事实
+
+| 项 | 结论 |
+|---|---|
+| 错误处理 | Luau 默认 `LUA_USE_LONGJMP=0` → **C++ 异常**（`class lua_exception : std::exception`）。UE 默认关异常 → 我们定义 `LUA_USE_LONGJMP=1` 走 setjmp/longjmp，顺带与 Lua 的 pcall/error 模型一致 |
+| userdata 标签 | `lua_newuserdatatagged` / `lua_userdatatag` / `lua_newuserdatadtor` / `LUA_UTAG_LIMIT` 全部可用 → **可直接替换 UnLua 的 `USERDATA_MAGIC` 魔数 hack** |
+| 元表 / 注册表 | `luaL_newmetatable` / `luaL_getmetatable` / `LUA_REGISTRYINDEX` 均存在 |
+| 加载 | `luau_load`（不是 `lua_load`）；**没有字节码 `string.dump`** |
+| GC 操作 | `LUA_GCSTEP / SETGOAL / SETSTEPMUL / SETSTEPSIZE`，**没有 `LUA_GCGEN`**（`LuaEnv.cpp` 那处 5.4 分代 GC 设置必须改） |
+| 需编译量 | VM 37cpp + Compiler 9cpp + Ast 8cpp ≈ **54 个 cpp**；Analysis 77cpp 只在做类型检查工具时才需要 |
+
+### 10.3 移植工作量（实测）
+
+Lua 5.4 内部耦合 **~72 处，14 个文件**：
+
+| 文件 | 处数 |
+|---|---|
+| `UnLuaCore.cpp`（原 LuaCore.cpp） | **35** |
+| `BaseLib/LuaLib_DataTable.cpp` | 10 |
+| `LuaDanglingCheck.cpp` | 6 |
+| `ReflectionUtils/PropertyDesc.cpp` | 6 |
+| `LuaEnv.cpp` | 3 |
+| `MathLib/LuaLib_Math.h` | 3 |
+| 其余 8 个文件 | 各 1~2 |
+
+主要模式：`#include "lstate.h"/"lobject.h"/"lfunc.h"`、自写 `lua_index2value`、userdata 尾部 `FUserdataDesc` 魔数。
+
+### 10.4 语义差异清单（移植时必须逐项处理）
+
+无整数子类型（只有 double）· 无位运算符（用 `bit32`）· **无 table `__gc`** · 无 `__pairs/__ipairs`（改 `__iter`）· 弱表无 ephemeron · 无尾调用 · **`__eq` 对 rawequal 也触发** · 无 `io`/`os`/`loadfile`/`dofile` · 无字节码 `string.dump` · C 调用栈限 200 层。
+
+其中 **无 table `__gc`** 影响 `LuaEnv.cpp` 的 `FManualRefProxy` 兜底，需改 `lua_newuserdatadtor`；
+**无字节码 `string.dump`** 会影响 LuaPanda 调试器与预编译字节码热更方案。
+
+### 10.5 为什么原生 Lua 现在还不能删
+
+删除会让树立刻不可编译，而本机**没有 `UnrealEditor-*.dll`，我无法编译排错**。建议顺序：
+
+1. 先移植 §10.3 的 14 个文件（以 `UnLuaCore.cpp` 为主）
+2. `UnLuauNova.Build.cs` 依赖从 `Lua` 切到 `Luau`
+3. 编译通过 → **再删 `Source/ThirdParty/Lua`**
+4. 最后处理 §10.4 的语义差异与测试套件
+
+---
+
 ## 附：待你确认的三个决策点
 
 1. **项目名**：LuaNova / UnLuaX / PrismLua / Vega / 其他？
