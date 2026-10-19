@@ -2,7 +2,7 @@
 	path = Plugins/UnLuaNova/Source/ThirdParty/Luau
 	url = https://github.com/luau-lang/luau.git
 	branch = master
-[submodule "Plugins/UnLuaNova/Source/ThirdParty/Lua55"]
-	path = Plugins/UnLuaNova/Source/ThirdParty/Lua55
+[submodule "Plugins/UnLuaNova/Source/ThirdParty/Lua"]
+	path = Plugins/UnLuaNova/Source/ThirdParty/Lua
 	url = https://github.com/lua/lua.git
 	branch = master

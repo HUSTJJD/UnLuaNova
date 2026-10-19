@@ -1,26 +1,27 @@
 // Single place where the two supported Lua backends differ.
 //
 // Officially supported backends:
-//   UNLUANOVA_BACKEND_LUA55 (0) - Lua 5.5.x  (https://github.com/lua/lua, vendored as a submodule)
-//   UNLUANOVA_BACKEND_LUAU  (1) - Luau       (https://github.com/luau-lang/luau, vendored as a submodule)  <-- default
+//   UNLUANOVA_BACKEND_LUA  (0) - official Lua (https://github.com/lua/lua, submodule)
+//   UNLUANOVA_BACKEND_LUAU (1) - Luau        (https://github.com/luau-lang/luau, submodule)  <-- default
 //
-// The backend is chosen by UNLUANOVA_LUA_BACKEND, injected by UnLuaNova.Build.cs from
-// the `LuaBackend` setting. This header only supplies a default so a stray translation
-// unit still compiles.
+// The ids are named after the backend, not the version: upgrading Lua means moving the
+// submodule pointer, not touching these names.
+//
+// The two backends cannot coexist in one build - they export the same lua_* symbols, so
+// this is a compile-time choice, not a runtime one. It is made by UNLUANOVA_LUA_BACKEND,
+// injected by UnLuaNova.Build.cs from its `LuaBackend` setting; the default below only
+// exists so a stray translation unit still compiles.
 //
 // Everything else in UnLuaNova must go through the UNLUANOVA_* macros below instead of
 // calling the VM directly, so that neither backend leaks into the rest of the codebase.
 
 #pragma once
 
-#define UNLUANOVA_BACKEND_LUA55 0
+#define UNLUANOVA_BACKEND_LUA 0
 #define UNLUANOVA_BACKEND_LUAU 1
 
 #ifndef UNLUANOVA_LUA_BACKEND
-// Default is Lua 5.5: it compiles straight through UBT (see ThirdParty/Lua55Lib), so
-// the tree always builds. Luau is opt-in and additionally needs its CMake step - see
-// ThirdParty/LuauLib/Luau.Build.cs.
-#define UNLUANOVA_LUA_BACKEND UNLUANOVA_BACKEND_LUA55
+#define UNLUANOVA_LUA_BACKEND UNLUANOVA_BACKEND_LUAU
 #endif
 
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU

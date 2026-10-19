@@ -9,7 +9,8 @@
 -- derivative; plain Lua is 5.5). No 5.2+ features.
 --
 -- Automatically installed when the env starts (see UnLuaNovaLib.cpp). Scripts may also
--- require("UnLua.StringEx") explicitly - the module table is returned as well.
+-- require("UnLuaNova.StringEx") explicitly - the module table is returned as well.
+-- (The require prefix is the directory name, which is why it differs from the global.)
 
 local StringEx = {}
 

@@ -94,19 +94,25 @@ public class UnLuaNova : ModuleRules
         loadBoolConfig("bLegacyArgsPassing", "UNLUANOVA_LEGACY_ARGS_PASSING", true);
 
         // --- Lua backend -------------------------------------------------------------
-        // Two officially supported backends, both vendored as submodules:
-        //   Lua55 -> Source/ThirdParty/Lua55  (github.com/lua/lua)
-        //   Luau  -> Source/ThirdParty/Luau   (github.com/luau-lang/luau)  <-- default
-        // The choice is compile-time because LuaBackend.h resolves VM entry points
-        // (userdata alloc, udata len, chunk load, GC setup) through macros. LuaBackend.h
-        // defaults to Luau when the macro is absent, so a stray TU still builds.
+        // The single place the backend is chosen. Both are submodules:
+        //   Lua  -> Source/ThirdParty/Lua   (github.com/lua/lua),          wrapper: LuaLib
+        //   Luau -> Source/ThirdParty/Luau  (github.com/luau-lang/luau),   wrapper: LuauLib
+        //                                                                    <-- default
+        //
+        // This is a compile-time choice, not a runtime one: the two backends export the
+        // same lua_* symbols and have incompatible bytecode, so they cannot coexist in a
+        // single build. Set it here (or override per-project in
+        // Config/DefaultUnLuaNovaEditor.ini -> LuaBackend=Lua).
+        //
+        // Values are matched case-insensitively; anything other than "Lua" selects Luau,
+        // which is what LuaBackend.h defaults to when the macro is absent.
         string backend;
         if (!config.GetString(section, "LuaBackend", out backend))
-            backend = "Lua55";
+            backend = "Luau";
 
-        if (string.Equals(backend, "Lua55", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(backend, "Lua", StringComparison.OrdinalIgnoreCase))
         {
-            PublicDependencyModuleNames.Add("Lua55");
+            PublicDependencyModuleNames.Add("Lua");
             PublicDefinitions.Add("UNLUANOVA_LUA_BACKEND=0");
         }
         else

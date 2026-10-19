@@ -346,7 +346,7 @@ bool UUnLuaNovaManager::BindClass(UClass* Class, const FString& InModuleName, FS
     if (auto BPGC = Cast<UBlueprintGeneratedClass>(Class))
     {
         lua_rawgeti(L, LUA_REGISTRYINDEX, Ref);
-        lua_getglobal(L, "UnLuaNova");
+        lua_getglobal(L, "UnLua");
         if (lua_getfield(L, -1, "Input") != LUA_TTABLE)
         {
             lua_pop(L, 2);

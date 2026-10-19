@@ -46,8 +46,9 @@ public class Luau : ModuleRules
 				Path.Combine(LuauRoot, "build") + "'. Build them first, e.g.\n" +
 				"    cmake -S \"" + LuauRoot + "\" -B \"" + Path.Combine(LuauRoot, "build") + "\" -DCMAKE_BUILD_TYPE=Release\n" +
 				"    cmake --build \"" + Path.Combine(LuauRoot, "build") + "\" --config Release\n" +
-				"Or switch to the Lua 5.5 backend (Config/DefaultUnLuaNovaEditor.ini -> LuaBackend=Lua55), " +
-				"which compiles through UBT and needs no extra step.");
+				"Or switch to the official Lua backend, which compiles through UBT and needs no\n" +
+				"extra step: Config/DefaultUnLuaNovaEditor.ini -> LuaBackend=Lua\n" +
+				"(or change the default in UnLuaNova.Build.cs).");
 		}
 
 		if (Target.Platform == UnrealTargetPlatform.Win64)

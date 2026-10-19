@@ -87,10 +87,44 @@ Source/ThirdParty/
 
 | # | 问题 | 说明 |
 |---|---|---|
-| D1 | `UNLUANOVA.` vs `UnLua/` 大小写 | `UNLUANOVA` 表用惰性 `__index` → `require("UNLUANOVA.X")`，但目录实际是 `Content/Script/UnLua/`（小写）。Windows 不敏感能跑，**Linux/Mac 会失败**（`HotReload`、`Input`、`StringEx` 全部受影响）。**既有问题，非本次引入** |
+| ~~D1~~ | **已解决**（`7c6b509f` + `715affda`） | 见下方「已修复：标识符分裂」 |
 | D2 | Luau 语义差异未处理 | 无 table `__gc`、无整数子类型、无 `__pairs/__ipairs`（用 `__iter`）、无字节码 `string.dump`、无 `io/os/loadfile/dofile`、`__eq` 对 rawequal 也触发、C 栈 200 层上限。`LuaBackend.h` 已有 `UNLUANOVA_HAS_*` 标记，但**还没有调用点使用它们** |
 | D3 | `UnLuaTestSuite` 未运行 | 所有改造都未经回归测试。套件需编辑器环境（Session Frontend → Automation） |
 | D4 | 旧规划进度未更新 | `PROJECT_PLAN.md` §2（PR 吸纳）、§3（Type Manifest）、§5（路线图 M0-M6）是早期写的，与当前状态有出入 |
+
+---
+
+## 2.5 已修复：标识符分裂（**编译阻塞，很可能就是之前编译失败的原因**）
+
+改名脚本把一部分标识符写成了全大写 `UNLUANOVA`（宏风格），另一部分写成驼峰 `UnLuaNova`（模块名）。C++ 命名空间和类名**大小写敏感**，且没有任何别名兜底。
+
+实测分裂规模：
+
+| 形态 | 分裂情况 |
+|---|---|
+| `namespace UNLUANOVA` vs `namespace UnLuaNova` | `LuaEnv.cpp`、`ObjectRegistry.cpp`、`UnLuaNovaBase.cpp`、`UnLuaNovaLegacy.*`、`UnLuaNovaTemplate.h` 用前者，其头文件用后者 → **定义与声明不匹配** |
+| `UNLUANOVA::` | 390 处 |
+| `LogUNLUANOVA` vs `LogUnLuaNova` | 99 处 / 并存 |
+| `#include "UNLUANOVA…h"` | 102 处，Windows 能解析，Linux/Mac 失败 |
+| `FUNLUANOVAEditorToolbar` vs `FUnLuaNovaEditorToolbar` | 16 / 10 —— **同一个类两种写法** |
+| `UNLUANOVAExport` vs `UnLuaNovaExport`（metadata 标签） | 4 / 1 —— 静态绑定生成器会漏掉一半类型 |
+| Lua 全局表名 | C++ 注册 `UNLUANOVA`，Lua 脚本用 `UnLuaNova`（`EnhancedInput.lua:1`、`HotReload.lua:74/98`、`Input.lua:147`）→ 脚本拿到 nil |
+| `FindPlugin(TEXT("UNLUANOVA"))` | `UnLuaNovaEditorToolbar.cpp:293`，插件名实为 `UnLuaNova` → 返回 nullptr |
+
+**修复**（`715affda`，26 文件 / 852 处纯替换，insertions 与 deletions 完全对称）：
+
+- `namespace UNLUANOVA` → `namespace UnLuaNova`
+- `UNLUANOVA::` → `UnLuaNova::`
+- `LogUNLUANOVA` → `LogUnLuaNova`
+- `#include "UNLUANOVA…"` → `#include "UnLuaNova…"`
+- `UNLUANOVA<CamelCase>` → `UnLuaNova<CamelCase>`（含 `F`/`U` 前缀的类名，因此**不能**用 `\b` 匹配）
+- require 路径前缀 `UNLUANOVA.X` → `UnLuaNova.X`
+- Lua 全局表名统一为 `UnLuaNova`
+
+**刻意保留**（UBT 生成 / 编译期宏，改名会破坏编译）：
+`UNLUANOVA_API`（77 处）、`UNLUANOVA_[A-Z]` 系列（226 处，如 `UNLUANOVA_ENABLE_*`、`UNLUANOVA_LUA_BACKEND`、`UNLUANOVA_HAS_*`）。
+
+另：`Content/Script/UnLua/` → `Content/Script/UnLuaNova/`（`StringEx.lua` 已用 `git mv` 迁入，旧目录删除）。
 
 ---
 

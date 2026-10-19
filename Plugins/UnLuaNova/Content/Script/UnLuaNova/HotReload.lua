@@ -71,7 +71,7 @@ end
 
 local print = function(...)
     if config.debug then
-        UnLuaNova.Log("HotReload ", ...)
+        UnLua.Log("HotReload ", ...)
     end
 end
 
@@ -95,7 +95,7 @@ end
 
 local function load_error_handler(err)
     local msg = err .. "\n" .. debug.traceback()
-    UnLuaNova.LogError(msg)
+    UnLua.LogError(msg)
 end
 
 local function call_hook(name, ...)

@@ -1,6 +1,6 @@
-// Single translation unit that compiles the whole Lua 5.5.1 library.
+// Single translation unit that compiles the whole official Lua library.
 //
-// The real sources live in the ../Lua55 submodule. Upstream ships onelua.c, the official
+// The real sources live in the ../Lua submodule. Upstream ships onelua.c, the official
 // aggregation of every core + stdlib file, so including it here builds Lua on every UE
 // target with no CMake / make / NDK toolchain in the loop - UBT compiles it like any
 // other module source.
@@ -11,4 +11,4 @@
 
 #define MAKE_LIB
 
-#include "../Lua55/onelua.c"
+#include "../Lua/onelua.c"
