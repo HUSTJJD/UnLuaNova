@@ -51,7 +51,7 @@ namespace UnLuaNova
         static int HotReload(lua_State* L)
         {
 #if UNLUANOVA_WITH_HOT_RELOAD
-            if (luaL_dostring(L, "require('UNLUANOVA.HotReload').reload()") != 0)
+            if (luaL_dostring(L, "require('UnLuaNova.HotReload').reload()") != 0)
             {
                 LogError(L);
             }
@@ -242,16 +242,19 @@ namespace UnLuaNova
         int Open(lua_State* L)
         {
             lua_register(L, "print", LogInfo);
-            luaL_requiref(L, "UNLUANOVA", LuaOpen, 1);
+            luaL_requiref(L, "UnLuaNova", LuaOpen, 1);
             luaL_dostring(L, R"(
-                setmetatable(UNLUANOVA, {
+                setmetatable(UnLuaNova, {
                     __index = function(t, k)
-                        local ok, result = pcall(require, "UNLUANOVA." .. tostring(k))
+                        -- the path prefix must match the directory name exactly
+                        -- (Content/Script/UnLuaNova); case-sensitive filesystems will not
+                        -- resolve UNLUANOVA.* to it.
+                        local ok, result = pcall(require, "UnLuaNova." .. tostring(k))
                         if ok then
                             rawset(t, k, result)
                             return result
                         else
-                            t.LogWarn(string.format("failed to load module UNLUANOVA.%s\n%s", k, result))
+                            t.LogWarn(string.format("failed to load module UnLuaNova.%s\n%s", k, result))
                         end
                     end
                 })
@@ -265,7 +268,7 @@ namespace UnLuaNova
 
 #if UNLUANOVA_WITH_HOT_RELOAD
             luaL_dostring(L, R"(
-                pcall(function() _G.require = require('UNLUANOVA.HotReload').require end)
+                pcall(function() _G.require = require('UnLuaNova.HotReload').require end)
             )");
 #endif
 
@@ -273,7 +276,7 @@ namespace UnLuaNova
             // why they are needed). Loaded eagerly because scripts rely on them being there
             // without requiring anything.
             luaL_dostring(L, R"(
-                pcall(require, 'UNLUANOVA.StringEx')
+                pcall(require, 'UnLuaNova.StringEx')
             )");
 
             LegacySupport(L);
@@ -283,7 +286,7 @@ namespace UnLuaNova
 
         FString GetPackagePath(lua_State* L)
         {
-            lua_getglobal(L, "UNLUANOVA");
+            lua_getglobal(L, "UnLuaNova");
             checkf(lua_istable(L, -1), TEXT("UNLUANOVALib not registered"));
             lua_getfield(L, -1, PACKAGE_PATH_KEY);
             const auto PackagePath = lua_tostring(L, -1);
@@ -294,7 +297,7 @@ namespace UnLuaNova
 
         void SetPackagePath(lua_State* L, const FString& PackagePath)
         {
-            lua_getglobal(L, "UNLUANOVA");
+            lua_getglobal(L, "UnLuaNova");
             checkf(lua_istable(L, -1), TEXT("UNLUANOVALib not registered"));
             lua_pushstring(L, TCHAR_TO_UTF8(*PackagePath));
             lua_setfield(L, -2, PACKAGE_PATH_KEY);
