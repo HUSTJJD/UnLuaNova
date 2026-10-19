@@ -1,4 +1,4 @@
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:Test(IntArray, StringArray)
     print("=======Test ", IntArray, StringArray)

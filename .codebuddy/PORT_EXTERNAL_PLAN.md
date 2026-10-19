@@ -1,264 +1,260 @@
-# 外部项目 UnLua feature 移植方案（调研结论）
+# 基于 Luau 重写 feature 的方案
 
-> 源：某内部商业 UE 项目（下称「源项目」）。**源侧路径、项目名、内部插件名与私有 SDK 名均已脱敏**，本文不引用任何源项目绝对路径。
-> 目标：本仓库（插件 `Plugins/UnLuauNova/`，UE 5.8.3 基线，已并入 11 个社区 PR + 静态绑定层 + Luau 子模块未接线）
-> 本文只做方案，不含代码改动。
+> 源项目（某内部商业 UE 项目）**只提供需求清单**，不提供实现。
+> 实现全部基于 Luau v0.743 原生能力重新设计，源码证据见 §1。
+> 源侧路径、项目名、内部插件名、私有 SDK 名均已脱敏，本文不引用任何源项目绝对路径。
 
 ---
 
-## 0. 一个必须先说清的前提：两边不是同一代架构
+## 0. 定位转变：从「移植」到「重写」
 
-| | 源项目 | 本仓库（UnLuauNova） |
+源项目那套东西基于 **Lua 5.3 + UnLua 2.1 老架构**，两边都不是同一代。它的真正价值是：
+
+> **它证明了哪些能力在真实商业项目里被需要，以及需求优先级。** 这是最难 얻得的、花钱买不到的信息。
+
+所以本文的做法是：**只抽取需求，实现全部重写**。带来的直接后果是，上一版方案里有几个结论必须翻转：
+
+| Feature | 上一版（移植视角） | 本版（Luau 视角） |
 |---|---|---|
-| 世代 | UnLua **2.1/2.2** 老架构 | UnLua **2.3.6** 新架构 |
-| 运行时 | `FLuaContext` 单例 `GLuaCxt` | `UnLuauNova::FLuaEnv`（多 Env，可按 World/GameInstance 隔离） |
-| 委托 | `LuaFunctionInjection` / `DelegateHelper` | `LuaOverrides` / `Registries/*` |
-| 反射 | `Public/ReflectionUtils/**` | `Private/Registries/*` + `StaticBinding/*` |
-| Lua VM | Lua 5.3 系（独立插件提供） | Lua 5.4.3，正在迁 Luau |
-
-**结论：源侧核心模块（`Source/UnLua/` 下那份 fork）整体不可用。** 它是从 2.3.6 回退到 2.1 的分支，还丢了 UE5 适配（`UnLuaCompatibility.h` 在 `ENGINE_MINOR_VERSION<25` 分支未判 `ENGINE_MAJOR_VERSION`，UE5.0/5.1 下会把 `FProperty` typedef 成 `UProperty`）。
-**只挑外围的、与内核解耦的能力，按新架构重写接入，不回退架构。**
-
-### 0.1 源侧模块代号对照
-
-为便于执行又不暴露源项目信息，下文统一用代号指代源侧模块：
-
-| 代号 | 实际性质 |
-|---|---|
-| `SrcLuaTrace` | hook 式 Lua CPU Profiler，事件写进 Unreal Insights（自研，约 1300 行） |
-| `SrcBlueprintExport` | 蓝图元数据导出三件套（Helper + ContentBrowser 右键菜单 + Commandlet，约 1580 行） |
-| `SrcLuaFramework` | Lua 环境装配层，含沙盒优先加载器（约 330 行相关代码） |
-| `SrcMemStats` | Lua 内存分配栈采集 + 云端上传（约 270 行） |
-| `SrcRemoteDebugger` | 远程 Lua 调试器 + 编辑器可视化调试 UI（约 6500 行，依赖闭源 SDK） |
-| `SrcSampleProfiler` | 自研采样式 Lua Profiler，TCP 上报（约 6000 行，含第三方 2000 行） |
-| `SrcManualProfilerMark` | 手工埋点式 Profiler（约 330 行） |
-| `SrcIdeLauncher` | 编辑器内拉起外部 IDE 的工具（约 24 KB） |
-| `SrcUserdataParser` | 调试器变量树：UnLua userdata → 反射树展开（约 700 行） |
+| Lua 内存统计 | ❌ 丢弃（改核心 + 全栈回溯 + 云密钥） | ✅ **翻转纳入**，Luau 原生给分类信息，成本骤降 |
+| Lua 调试器 | ❌ 丢弃（闭源 SDK + 5600 行 Slate） | ✅ **翻转为可行**，Luau 原生提供整条调试链；但 UI 形态要改 |
+| stringy C 扩展 | ✅ 新增一个 C 扩展插件 | ⬇️ **降级**：`string.split` 已内建，其余纯 Luau 实现 |
+| 死循环检测 | 不动（已有 `FDeadLoopCheck`） | 🔄 **改造**：用 `interrupt` 替掉 MASKLINE |
+| vector / buffer 编组 | 无 | 🆕 **新增**：老项目给不了，Luau 独有的性能红利 |
 
 ---
 
-## 1. 四条筛选标准（用于下面每一项判定）
+## 1. Luau v0.743 原生能力清单（已核实源码）
 
-1. **不绑私有生态**：不依赖源项目自研 Profiler / 指标系统、外部 IDE、闭源调试 SDK、商业性能工具、云存储上传链路。
-2. **不碰 Lua 内部结构**：不用 `lstate.h`、`G(L)->frealloc`、`ar->i_ci`、`gcvalue`。本仓库目标是迁 Luau 的，任何 Lua 内部布局依赖都是未来债务。
-3. **本仓库没有等价物**：已有 `FDeadLoopCheck`、`FDanglingCheck`、`HotfixLua`、`CustomLoadLuaFile`、`StaticBindingRegistry::Unregister` 的，不再搬重复品。
-4. **能落进现有模块**：不新开 UE 模块（唯一例外是 `UnLuaExtensions` 下的扩展插件，那本来就是插件模板）。
-
----
-
-## 2. 建议纳入（5 项 P0 + 3 项 P1）
-
-### P0-1 · Lua CPU Profiler（源自 `SrcLuaTrace`）— 替换现有 Insights Hook
-
-**为什么值得**：本仓库现在只有一个 30 行的玩具 Hook（`Private/LuaEnv.cpp:46-76`），它有四个硬伤：
-- 每次 call/ret 都 `FString::Printf` 拼串 + `FName` 构造（高频分配）
-- `ar->what == FName("Lua")` 是拿 `const char*` 与 `FName` 比，语义可疑
-- **没有尾调用修正**，Insights 时间轴会错乱
-- 只在编译期 `ENABLE_UNREAL_INSIGHTS` 开，运行时无法开关，且开 DeadLoopCheck 时直接失效（`LuaEnv.cpp:171-174`）
-
-源侧约 1300 行解决了全部这些：函数名缓存（解析表 + 指针哈希桶）、`OutputEventType` 预注册 + 未知 SpecId 补登记（防 SpecId 无限增长）、尾调用修正（`TailParentPtr`）、C 函数/元函数过滤、命令行运行时开关。
-
-**落到哪里**：`Plugins/UnLuauNova/Source/UnLuauNova/Private/LuaProfiler.{h,cpp}`（Runtime 模块内新增文件，不新开模块），由 `FLuaEnv` 持有实例。
-
-**必须改造**：
-
-| 源侧 | 处理 |
-|---|---|
-| 项目私有日志头 + `MOE_LOG` 宏 | 删，换 `UE_LOG(LogUnLuauNova, ...)` |
-| `HELP_TEXT(...)`（源项目内查无定义） | 换 `TEXT(...)` |
-| `#if ENABLE_PERF_MONITOR`（源项目 Target.cs 宏） | 删 |
-| `LUA_GC_EVENT` / `lua_set_gc_event_handler`（源项目给 Lua 打的私有补丁） | 整段删，含 `EnableLuaGCEvent/DisableLuaGCEvent` 两个导出 |
-| 全局裸指针单例 | **必须改成 per-Env**：本仓库是多 `FLuaEnv`，全局单例会串 |
-| `GLuaSrcFullPath` | 本仓库已有同名变量（`Private/UnLuaPrivate.h:105`），可直接用 |
-| 硬编码业务脚本根路径 | 改为配置项 |
-
-**顺带对齐 `PROJECT_PLAN.md` §4.1 的 `ILuaBackend::SetHook`**，这个 profiler 正好是那个抽象的第一个消费者。
-
-工作量：约 1.5 天移植 + 0.5 天自测。
-
----
-
-### P0-2 · 蓝图元数据 JSON 导出（源自 `SrcBlueprintExport`）
-
-**为什么值得**：本仓库编辑器已有 **EmmyLua 注解生成**（`UnLuaIntelliSense.cpp` 20KB + Generator + Commandlet），但**没有结构化元数据导出**。而 `PROJECT_PLAN.md` §3 的 Type Manifest 主线第一句话就是「**可观测：先能看见导出面，再谈收紧**」——这份 JSON 正是"看见导出面"的输入，还能喂 §4.4 的 Luau `.d.lua` 生成。
-
-**与内核零耦合**：三个文件只 include 公开的 `UnLuaInterface.h`，不碰 `UnLua/Private`。这是全部候选里移植风险最低的。
-
-**落到哪里**：`Plugins/UnLuauNova/Source/UnLuauNovaEditor/Private/BlueprintExport/`（3 个文件）+ `Commandlets/UnLuaBlueprintExportCommandlet.{h,cpp}`。
-`UnLuaEditor.Build.cs` 需追加 `AssetRegistry`、`ContentBrowser`、`Json`（`JsonUtilities` 可选）。
-
-**必须改造**：
-1. Commandlet 里 `ExportBlueprintData/CollectProperties/CollectFunctions/...` 是 Helper 的**重复实现**（约 380 行）→ 删掉改调 `FUnLuaBlueprintExportHelper::`，整体从约 1580 行压到约 1200 行
-2. **UE5 API 适配**（引擎基线是 5.8，源是按老版本写的）：
-   - `AssetData.AssetClass` → `AssetData.AssetClassPath`（`FTopLevelAssetPath`）
-   - `AssetRegistry.GetAssetByObjectPath(FName)` / `GetAssetsByClass(Name, Arr, true)` → UE5 新签名
-   - `AssetData.ObjectPath` → `GetSoftObjectPath()`
-3. 砍掉 Python 链路：源侧「导出 JSON 后调 Python 生成 Lua 注释」依赖写死的脚本路径，与本仓库已有 IntelliSense 重复 → 连带 `ExportBlueprintLuaFile` 一起删，只保留 JSON 导出
-4. 两版 JSON 字段不一致（Helper 用 `DefinesGetModuleName`，Commandlet 用 `HasLuaBinding`）→ 统一成 Helper 版
-
-工作量：约 1 天。
-
----
-
-### P0-3 · `stringy`（Lua 字符串扩展）→ `UnLuaExtensions` 新插件
-
-242 行纯 C，MIT，零 UE / 零 UnLua 源码依赖，提供 `split/strip/startswith/endswith/count/find/join/compare`。
-
-**落到哪里**：`Plugins/UnLuaExtensions/LuaStringy/`，**逐字照抄现有 `LuaProtobuf` / `LuaRapidjson` / `LuaSocket` 的模板**（uplugin 依赖 `UnLuauNova`、`LoadingPhase: PreLoadingScreen`、`PrivateDependencyModuleNames: UnLuauNova + Lua`、`bUseUnity=false`、关 UndefinedIdentifierWarning）。
-
-注册就用现有委托，7 行：
-```cpp
-FUnLuaDelegates::OnLuaStateCreated.AddLambda([](lua_State* L) {
-    luaL_requiref(L, "stringy", luaopen_stringy, 1); lua_pop(L, 1);
-});
-```
-
-注意：`fastsearch.h` 无版权头（源自 CPython stringlib），需自行确认许可；`stringy.c` / `lsqlite3.c` 均无独立 LICENSE 文件，移植时补一份。
-
-工作量：约 1 小时。
-
----
-
-### P0-4 · Lua 内存统计回调（**重新设计，不照搬**）
-
-源侧 `SrcMemStats` **明确丢弃**：它要求改 UnLua 核心分配器埋点、每次 Lua 分配都做 `lua_getstack` 全栈回溯 + MD5、依赖云对象存储上传，且模块初始化处**硬编码了云 API 密钥**（安全风险，本方案不引用其值）。
-
-但"Lua 内存可观测"这个需求是真的。本仓库现在只有 `STAT_UnLua_Lua_Memory`（编译期 `UNLUA_STAT_MEMORY_*` 宏），**没有任何运行时回调或查询 API**。
-
-**建议自研一个轻量版**（不搬源码，只取需求）：
-- `FUnLuaDelegates` 加三个 delegate：`OnLuaMemoryAlloc` / `OnLuaMemoryFree` / `OnLuaMemoryRealloc`，**只传 size，绝不做栈回溯**
-- 埋点位置唯一：`LuaEnv.cpp:741-762 DefaultLuaAllocator`（已是 `virtual GetLuaAllocator()`，天然可插拔）
-- 加一个控制台命令 `lua.memstats`，输出当前/峰值/分配次数
-- 默认全关，仅 STATS 或 `-luamemstats` 开启
-
-工作量：约 0.5 天。
-
----
-
-### P0-5 · `SkipObjectReferencer`（UMG ListView 泄漏修复）
-
-源侧给 `IUnLuaInterface` 加的 `BlueprintNativeEvent`，解决 ListView EntryWidget 已销毁但仍被 UnLua 的 `AutoObjectReference` 持有、无法 GC 的问题。
-
-本仓库 `Public/UnLuaInterface.h` **只有 `GetModuleName()` 一个事件**，`UUnLuaManager` 也没有任何按 World 分级清理或跳过引用的机制。这是 UE 项目的高频坑，且成本极低。
-
-**落到哪里**：`Public/UnLuaInterface.h` 加一个 `BlueprintNativeEvent`；`UUnLuaManager::Bind` 判断后跳过 `AutoObjectReference`。约 40 行。
-
-> 配套的 `IgnoreAutoCleanup` + Editor 下的对象分类校验**暂不搬**——那套是 Editor 下的强校验逻辑，与源项目的 World 管理约定绑得较紧，建议先只取 `SkipObjectReferencer`，观察一段时间再决定。
-
-工作量：约 2 小时。
-
----
-
-### P1-1 · 静态导出反注册（`DeportClass/DeportFunction/DeportEnum`）
-
-已核实本仓库确实有这个洞：`Private/Binding.cpp` 的 `FExported` **只增不减**（无 Remove/Unregister），而 `UnLuaEx.h` 里导出 helper 的析构只 `delete ExportedClass`，**指针仍残留在 Map 里** → 模块卸载/热重载后 `FindExportedClass` 可能返回悬空指针。
-
-本仓库新增的 `StaticBindingRegistry` **已有** `Unregister`/`Clear`，说明这是同一类问题的新架构解法，照此给 `FExported` 补一组 Remove 即可。
-
-**落到哪里**：`Private/Binding.cpp` + `Public/Binding.h` + `Public/UnLuaEx.h`（析构里调用）。约 40 行。
-
-工作量：约 2 小时（含验证 2.3.6 是否真复现）。
-
----
-
-### P1-2 · Android 沙盒文件时间戳兜底
-
-源侧 `SrcLuaFramework` 中：Android 下 `IFileManager::GetTimeStamp` 读不到 `ProjectPersistentDownloadDir` 里的热更文件，用 `stat()` + epoch 手工补。这是真机热更判断文件新旧时的实际坑。
-
-本仓库 `LuaEnv.cpp:601-646 LoadFromFileSystem` **已有 DownloadDir 优先**（所以沙盒加载主逻辑不用搬），但**没有时间戳兜底**。
-
-**落到哪里**：`Private/BaseLib/LuaLib_File.cpp`，暴露 `UE.GetFileTimeStamp(Path)`。约 40 行（含显式 `#include <sys/stat.h>`）。
-
-> 同一批的 `UELoadLuaFile` / `UELoadRawFile` / `UELoadEncryptFile` **不搬**：它们是在 Lua 侧再造一套加载路径，本仓库已经有官方钩子 `FUnLuaDelegates::CustomLoadLuaFile`（4 参，带 `FLuaEnv&`），正确性更好。只需在文档里说明用法。
-> `UELoadEncryptFile` 的简易加解密**内置硬编码默认密钥**，本来就不该进开源仓库。
-
-工作量：约 2 小时。
-
----
-
-### P1-3 · `lsqlite3`（待定）
-
-约 2450 行上游代码（MIT），给 Lua 提供 SQLite3 绑定（存档 / 本地库）。**阻塞项**：本仓库完全没有 sqlite3，需先引入引擎 `SQLite`/`SQLiteCore` 模块并配 include path；且与 Luau 的 `luaL_Reg` / `luaL_requiref` 行为未经验证（上游代码有 5.1→5.3 的 shim，Luau 是 5.1 基线，理论可行但需实测）。
-
-建议：**等真有需求再做**，不与本次一起合。
-
----
-
-## 3. 明确丢弃（附理由，避免以后重复调研）
-
-| 源侧代号 | 规模 | 丢弃理由 |
-|---|---|---|
-| `SrcRemoteDebugger` | **约 6500 行** | 依赖闭源调试 SDK（还会拖入 Protobuf / libcurl / OpenSSL）；5600 行 Slate UI 是全部候选中维护负担最重；断点握手走 **Windows-only 命名共享内存**；菜单挂点依赖源项目里另一个编辑器插件。两个子模块共用同一 SDK，要么全留要么全删，不可拆分 |
-| `SrcMemStats` | 约 270 行（插件 2600 行） | 必须改核心分配器 + 每次分配全栈回溯 + 云上传链路 + **硬编码云密钥** |
-| 死循环看门狗 | 约 295 行 | 本仓库已有 `FDeadLoopCheck` + `FDanglingCheck`；且源侧用 `LUA_MASKLINE`（每执行一行回调一次，5~20x 减速） |
-| `lua_State` 地址导出 | 约 50 行 | 只在进程内静态变量存了个指针 + 打日志，外部进程根本拿不到，等于空模块 |
-| `SrcSampleProfiler` | 约 6000 行 | 直接读 Lua 内部 `G(L)->frealloc`、`ar->i_ci->func` —— **与迁 Luau 的方向正面冲突**；且功能被 P0-1 覆盖 |
-| `SrcManualProfilerMark` | 约 330 行 | 绑死源项目自研 Profiler 与指标采集器；剥完后剩下的功能被 P0-1 完全覆盖 |
-| `SrcIdeLauncher` | 约 24 KB | 外部 IDE 可执行文件路径 / adb / 固定端口 / 手写 bat，纯私有生态 |
-| `SrcUserdataParser` | 约 700 行 | 依赖 UnLua `Private` 内部头 + 闭源调试库的私有变量协议。**思路值得留档**：若将来做 Lua 调试器变量视图，应在 UnLua 侧定义中立的 `FLuaDebugVariable` 公开 API，而不是搬这个文件 |
-| 移动端性能指标上报 | 约 3200 行 | 仅 Android/iOS，依赖源项目多个业务模块；启动还会**阻塞轮询最多 10 秒** |
-| `SrcLuaFramework` 的环境表 / 序列化库 / 加解密 / RPC 装配 | 约 330 KB | 属于源项目技术栈选型，不是 UnLua 能力；其中加解密含硬编码密钥 |
-| 源侧 `Source/UnLua/` 核心 fork 全部 | — | 2.1 老架构回退，且 `UnLuaCompatibility.h` 在 UE5.0/5.1 编译失败。**只参考其中的 bugfix 思路** |
-| 多搜索路径 / Lua 环境锁 / 两个私有崩溃兜底开关 | — | 本仓库已用 `PackagePath`（分号分隔）+ DownloadDir 优先覆盖；`FLuaEnv` 多 Env 已隔离；两个开关是源项目私有崩溃兜底 |
-
----
-
-## 4. 落点总表（回答"什么东西放什么位置"）
-
-| 能力 | 落点位置 | 新增/修改 | 模块归属 |
+| 能力 | API | 源码证据 | 能替代源项目的什么 |
 |---|---|---|---|
-| Lua CPU Profiler | `UnLuauNova/Private/LuaProfiler.{h,cpp}` | 新增 2 文件 + 改 `LuaEnv.cpp` | Runtime（现有模块） |
-| 蓝图 JSON 导出 | `UnLuauNovaEditor/Private/BlueprintExport/*` + `Commandlets/UnLuaBlueprintExportCommandlet.*` | 新增 5 文件 + 改 `UnLuaEditorCommands` / `UnLuaEditorModule` / `UnLuaEditor.Build.cs` | Editor（现有模块） |
-| `stringy` | `Plugins/UnLuaExtensions/LuaStringy/` | **新增 1 个扩展插件** | 扩展插件（照模板） |
-| Lua 内存回调 | `UnLuaDelegates.h` + `LuaEnv.cpp` + `UnLuaConsoleCommands.cpp` | 改 3 文件 | Runtime（现有模块） |
-| `SkipObjectReferencer` | `UnLuaInterface.h` + `UnLuaManager.cpp` | 改 2 文件 | Runtime（现有模块） |
-| 导出反注册 | `Binding.{h,cpp}` + `UnLuaEx.h` | 改 3 文件 | Runtime（现有模块） |
-| Android 时间戳兜底 | `BaseLib/LuaLib_File.cpp` | 改 1 文件 | Runtime（现有模块） |
+| 安全点中断 | `lua_Callbacks.interrupt(L, gc)` | `lua.h:615`（注释：safepoints = loop back edges, call/ret, gc） | profiler 的 `sethook(CALL\|RET)`、死循环的 `MASKLINE` |
+| 分配分类回调 | `onallocate(L, block, osize, nsize, memcat, tt, tag)` | `lua.h:630` | 源项目改核心分配器 + `lua_getstack` 全栈回溯 + MD5 |
+| 释放回调 | `onfree(L, block)` | `lua.h:636` | 同上 |
+| 原生断点 | `lua_breakpoint(L, funcidx, line, enabled)` | `lua.h:566` | 源项目的闭源调试 SDK |
+| 原生单步 | `lua_singlestep(L, enabled)` | `lua.h:565` | 同上 |
+| 断点命中查询 | `lua_atbreakpoint(L)` | `lua.h:569` | 同上 |
+| 调试钩子注入 | `lua_callhook` + `lua_Debug::userdata` | `lua.h:552,587` | 同上 |
+| 栈与变量访问 | `lua_stackdepth` / `lua_getargument` / `lua_getlocal` / `lua_getupvalue` | `lua.h:554-560` | 同上 |
+| 覆盖率与计数器 | `lua_getcoverage` / `lua_getcounters` | `lua.h:594,602` | 源项目没有；可做行级热点 |
+| **函数唯一标识** | `lua_Debug::protoid`（VM 内全局唯一，C 函数为 0）、`bytecodeid` | `lua.h:582-583` | 源项目手写的函数指针哈希桶 + 名称缓存 |
+| userdata tag | `lua_newuserdatatagged` / `lua_setuserdatatag` / `LUA_UTAG_LIMIT=128` | `lua.h:219,373`；`luaconf.h:101` | UnLua 现在的 `USERDATA_MAGIC` 魔数 hack |
+| 原生沙盒 | `luaL_sandbox` / `luaL_sandboxthread` | `lualib.h:161-162` | 源项目手写的路径映射 |
+| vector 类型 | `LUA_TVECTOR` / `luaopen_vector` / `LUA_VECTOR_SIZE`(3\|4) / `LUA_VECTOR_DOUBLE` | `luaconf.h:136-142`；`lualib.h:152` | 源项目完全没有 |
+| buffer 类型 | `luaopen_buffer` | `lualib.h:137` | 源项目完全没有 |
+| 字符串 split | `string.split` 已内建 | `lstrlib.cpp:1838` | 源项目 stringy 的 split |
 
-**净结果：源侧 15 个 uplugin 模块 + 8 个插件，收敛成 1 个新文件目录（BlueprintExport）+ 1 个新扩展插件（LuaStringy）+ 6 处现有文件改动。不新增任何 UE 模块。**
+### 1.1 一条贯穿全部 feature 的设计原则
+
+所有 feature **定义在 `ILuaBackend` 抽象层**（`PROJECT_PLAN.md` §4.1 已规划），由后端提供实现：
+
+```
+ILuaBackend::SetInterrupt(fn)        → Luau: lua_Callbacks.interrupt   | Lua54: lua_sethook(CALL|RET)
+ILuaBackend::SetAllocCallbacks(a,f)  → Luau: onallocate/onfree         | Lua54: 自定义 allocator（仅总量）
+ILuaBackend::SetBreakpoint(...)      → Luau: lua_breakpoint            | Lua54: 不支持（降级为无调试）
+ILuaBackend::NewTaggedUserdata(...)  → Luau: lua_newuserdatatagged     | Lua54: user value 存 desc
+```
+
+**Feature 是公共的，红利是 Luau 的。** 这样 Lua54 后端不炸，Luau 后端吃到全部好处。
 
 ---
 
-## 5. 建议执行顺序
+## 2. Feature 重设计
 
-```
-第 1 批（低风险、独立、可立即验证）
-  ├─ P0-3 stringy              ~1h
-  ├─ P0-5 SkipObjectReferencer  ~2h
-  └─ P1-1 导出反注册            ~2h
+### F1 · Lua Profiler
 
-第 2 批（核心收益）
-  ├─ P0-2 蓝图 JSON 导出        ~1d   ← 与 Type Manifest 主线同向，建议优先
-  └─ P0-1 Lua CPU Profiler      ~2d   ← 替换 LuaEnv.cpp 现有 Hook，需自测
+**需求**（源项目证明）：真机定位 Lua 热点，且不能常开。
+**源项目做法**：`sethook(CALL|RET)` + 手写函数名缓存 + 指针哈希桶 + 尾调用修正 + SpecId 管理 ≈ 1300 行。
 
-第 3 批（可选）
-  ├─ P0-4 Lua 内存回调          ~0.5d
-  └─ P1-2 Android 时间戳兜底     ~2h
-```
+**基于 Luau 的新设计**：
+- 用 `interrupt` 在安全点回调，**只做采样**（每 N 个安全点采一次），而不是每个 call/ret 都记事件 → 开销从"每调用两次 C 回调"降到采样率分之一
+- 函数标识直接用 **`lua_Debug::protoid`**（VM 内全局唯一）→ **整删源项目那套名称缓存与指针哈希**
+- **Luau 无尾调用 → 整删源项目的 `TailParentPtr` 尾调用修正**
+- Insights SpecId 映射仍需缓存，但 key 从字符串换成 `protoid`
+- 行级热点可直接用 `lua_getcoverage`（源项目没有）
 
-**前置依赖**：
-- 每批都要先跑通 `UnLuaTestSuite`（Session Frontend → Automation，需编辑器环境）
-- 第 2 批必须在**改名后首次编译通过**之后做。当前 `HEAD` 的改名（`ed1aea4c`）和 Luau 引入都未编译验证过，先确保基线能编，否则无法区分"移植引入的错"和"改名引入的错"
+净效果：源项目 1300 行里，大约 40% 的复杂度（名称缓存、哈希桶、尾调用修正）在 Luau 下**根本不需要存在**。
 
-**每批都建独立分支**，格式 `port/external-<name>`，与 `pr/NNN` 的吸纳分支区分开，便于单独回滚。
+**落点**：`UnLuauNova/Private/Profiler/`，替换 `LuaEnv.cpp:46-76` 现有玩具 Hook。
 
 ---
 
-## 6. 待确认的三个决策点
+### F2 · Lua 内存统计（结论翻转）
 
-1. **蓝图 JSON 导出的定位**：只做"导出面观测工具"（纯 JSON，喂 Type Manifest），还是也要做成"Lua 注释生成"（那就与现有 IntelliSense 重复，建议砍掉）？
-2. **`stringy` 要不要顺带把 `lsqlite3` 一起做**：单独做 lsqlite 要先引入引擎 SQLite 模块，成本跳一个量级。
-3. **移植后的 Lua 侧模块名**：源项目的 profiler 注册名带项目前缀。作为开源项目建议改成 `UnLua.*` 命名空间下的名字（这是本仓库保留的兼容命名空间）。这决定了是否与源项目的 Lua 业务脚本保持兼容。
+**需求**（源项目证明）：真机 Lua 内存增长定位。源项目为此专门建了云端上传链路 + 每次分配全栈回溯，**说明这个需求非常强烈**。
+**源项目做法**：改核心分配器 → 每次分配 `lua_getstack` 全栈回溯 → MD5 去重 → 上传云。开销极大，且初始化处硬编码云密钥。
+
+**基于 Luau 的新设计**：
+- 直接挂 `onallocate` / `onfree`。**Luau 在回调参数里已经给了 `memcat`（内存类别）、`tt`（Lua 类型）、`tag`（userdata tag）** —— 零回溯就能做分类统计
+- 统计维度：按 `memcat × tt × tag` 分桶，输出 Top N
+- **不需要改核心、不需要栈回溯、不需要云、不需要任何凭据**
+- 默认全关，仅 `-luamemstats` 或 STATS 开
+
+成本从源项目的"高"降到"低"，且**安全性问题根本不会出现**。这是本次重写收益最大的一项。
+
+**落点**：`UnLuauNova/Private/MemStats/` + 控制台命令 `lua.memstats`。
+
+---
+
+### F3 · 死循环检测（改造现有）
+
+**需求**：真机/编辑器里 Lua 死循环要能断栈。
+**源项目做法**：`MASKLINE` hook（每执行一行回调一次，5~20x 减速）+ 看门狗线程比对帧计数。
+**本仓库现状**：`FDeadLoopCheck` 用的就是 `lua_sethook(L, OnLuaLineEvent, LUA_MASKLINE)` —— 一样慢。
+
+**基于 Luau 的新设计**：`interrupt` **在循环回边就会触发**，而死循环天然是密集回边 —— 命中率极高，且完全不需要 LINE hook。把 `FGuard` 的语义改成"设置 interrupt 计数阈值 + 帧计数比对"即可。
+
+**落点**：改 `Private/LuaDeadLoopCheck.cpp`。Lua54 后端保留现有 MASKLINE 实现。
+
+---
+
+### F4 · 调试器（结论翻转，但排最后）
+
+**需求**（源项目证明）：断点、单步、变量查看。源项目为此引入闭源 SDK + 5600 行 Slate UI，说明需求真实。
+**源项目做法**：闭源调试 SDK（还拖入 Protobuf/curl/OpenSSL）+ 编辑器内 Slate UI + Windows 命名共享内存握手。
+
+**基于 Luau 的新设计**：Luau 原生提供 `lua_breakpoint` / `lua_singlestep` / `lua_atbreakpoint` / `lua_callhook` / `lua_stackdepth` / `lua_getlocal` / `lua_getupvalue` —— **整条调试协议链都是原生的，闭源 SDK 完全不需要**。
+
+但真正的成本不在协议，在 UI。源项目 5600 行 Slate 就是教训。建议：
+- **做 headless 调试服务**（DAP 风格，走 TCP），UI 交给 VSCode 插件
+- 不在 UE 编辑器里写 Slate 调试器
+- 这样既满足需求，又避开源项目踩的最大的坑
+
+**落点**：这是唯一值得新开的模块 `UnLuauNovaDebugger`（独立协议服务）。**排期放在 Luau 后端稳定之后。**
+
+---
+
+### F5 · 沙盒与热更
+
+**需求**：真机热更、下载目录优先、文件时间戳。
+**源项目做法**：手写 `GetRealFilePath`（自己折叠 `/../`、把 ProjectDir 前缀替换成 DownloadDir）+ Android `stat` 兜底。
+**本仓库现状**：`LuaEnv.cpp:601-646 LoadFromFileSystem` **已有 DownloadDir 优先**，比源项目手写折叠更稳。
+
+**基于 Luau 的新设计**：
+- 路径映射继续用 UE `FPaths`（不搬源项目手写折叠）
+- 新增 `luaL_sandbox` / `luaL_sandboxthread` —— **Luau 原生沙盒**，源项目完全没有这个层次
+- ⚠️ **约束**：Luau 无字节码 `string.dump`，热更只能走源码。这不是缺陷，但要在文档里明确写清楚
+
+**落点**：`LuaEnv.cpp` + `BaseLib/LuaLib_File.cpp` 补 Android 时间戳兜底（约 40 行）。
+
+---
+
+### F6 · 类型声明生成（直接做 Luau 版，不做 EmmyLua）
+
+**需求**：脚本侧对 UE API 的补全与类型检查。
+**源项目做法**：EmmyLua 注解，编辑器里遍历全部 UClass（体感卡顿的来源）。
+
+**基于 Luau 的新设计**：直接生成 **Luau `.d.lua` 类型声明**，喂 `luau-analyze`，**把 UE API 误用从运行时前移到 CI**。这正是 `PROJECT_PLAN.md` §4.4 认定的核心卖点，也是源项目那套技术栈给不了的价值。
+
+**落点**：扩展现有 `UnLuaIntelliSenseGenerator`，加一个 Luau 输出后端（与 EmmyLua 后端并列，可配置）。
+
+---
+
+### F7 · 字符串扩展（降级为纯 Luau）
+
+**需求**：`split` / `strip` / `startswith` / `endswith` / `count` / `join`。
+**源项目做法**：C 扩展模块（242 行）。
+
+**基于 Luau 的新设计**：
+- `string.split` **Luau 已内建**（`lstrlib.cpp:1838`）
+- 其余用**纯 Luau 实现** —— Luau 解释器性能足够，不需要 C 扩展
+- **省掉一个扩展插件**，`Plugins/UnLuaExtensions/` 保持不变
+
+**落点**：`Plugins/UnLuauNova/Content/Script/UnLua/StringEx.lua`。
+
+---
+
+### F8 · vector / buffer 编组（新增，Luau 独有红利）
+
+**需求**：源项目没有 —— 但这是 Luau 能给的最大性能红利，值得单列。
+
+**设计**：
+- `FVector` / `FVector4` / `FQuat` / `FLinearColor` → Luau 原生 `vector`，读值走 `lua_tovector`，省掉一次 userdata 解引用 + 元表查找 + `FProperty` 读
+- `TArray<uint8>` → Luau `buffer`，零拷贝
+
+⚠️ **必须先决策的取舍**：`LUA_VECTOR_SIZE` 是**编译期全局**的，只能 3 或 4 二选一（`luaconf.h:136-138`）。
+- `=3` → `FVector` / `FRotator` 原生，`FQuat` / `FVector4` / `FLinearColor` 走老路径
+- `=4` → `FQuat` / `FVector4` / `FLinearColor` 原生，`FVector` 需特殊处理
+
+另外 UE5 默认 LWC，`FVector` 是 **double**，而 `LUA_VECTOR_DOUBLE` 默认 0（float）。要原生映射就得开 `LUA_VECTOR_DOUBLE=1`，会让所有 vector 变 double（体积翻倍）。**建议先不开，把 vector 编组列为 M5 之后的性能专项**，不要阻塞主线。
+
+---
+
+## 3. 排除项（重写视角下依然不做）
+
+| 项 | 理由 |
+|---|---|
+| 源项目 `Source/UnLua/` 核心 fork | 2.1 老架构回退，且 `UnLuaCompatibility.h` 在 UE5.0/5.1 编译失败 |
+| 源项目的蓝图 JSON 导出 | **需求已由 F6 覆盖且做得更好**（JSON 只是中间产物，终态是 `.d.lua`）。UE5 AssetRegistry 适配那部分工作量也省了 |
+| 移动端性能指标上报（PerfDog 类） | 仅 Android/iOS，绑死多个业务模块，启动阻塞轮询最多 10 秒 |
+| `lsqlite3` | 需先引入引擎 SQLite 模块；且 Luau 下 `luaL_Reg` 行为待验。等真实需求 |
+| 编辑器内拉起外部 IDE | 纯私有生态（IDE 路径 / adb / 固定端口 / 手写 bat） |
+| 手工埋点 Profiler | 被 F1 完全覆盖 |
+| 简易加解密模块 | 内置硬编码默认密钥，不适合开源仓库 |
+
+**保留作为需求参考但未立项的**：`SkipObjectReferencer`（UMG ListView EntryWidget 泄漏）、静态导出反注册（`Binding.cpp` 只增不减）。这两项是纯 UE 生命周期问题，与 Luau 无关，可独立做，不占 Luau 排期。
+
+---
+
+## 4. 前置依赖与执行顺序
+
+**硬前置**：`PROJECT_PLAN.md` §4 的阶段 0（解耦 Lua 内部头）与阶段 1（`ILuaBackend`）。
+这些 feature 全部通过 §1.1 的抽象层访问 VM，**阶段 0 没做完就动手，等于又造一遍源项目那种"改核心才能用"的耦合**。
+
+```
+阶段 0/1（PROJECT_PLAN §4）  解耦 + ILuaBackend 抽象          ← 必须先做
+  │
+阶段 2  Luau 后端跑通（UnLuaTestSuite 全绿）                   ← 硬门槛
+  │
+批次 A —— 直接吃 Luau 原生 API，成本低
+  ├─ F2 内存统计          ~0.5d   （onallocate/onfree）
+  ├─ F3 死循环改造         ~0.5d   （interrupt 替 MASKLINE）
+  ├─ F7 字符串扩展         ~1h     （纯 Luau）
+  └─ F5 沙盒 + 时间戳兜底  ~0.5d
+  │
+批次 B —— 主力
+  └─ F1 Profiler          ~2d     （interrupt 采样 + protoid）
+  │
+批次 C
+  ├─ F6 Luau 类型声明      ~2d     ← 与 Type Manifest 主线同向，建议与 M2/M4 合并做
+  └─ F8 vector/buffer      ~3d     ← 先定 LUA_VECTOR_SIZE，建议 M5 之后
+  │
+批次 D（独立，不占 Luau 排期）
+  ├─ SkipObjectReferencer  ~2h
+  └─ 静态导出反注册         ~2h
+  │
+最后
+  └─ F4 调试服务           ~1~2w   （headless DAP，UI 交 VSCode）
+```
+
+---
+
+## 5. 净结果
+
+| | 源项目 | 本方案 |
+|---|---|---|
+| 模块/插件数 | 15 个 uplugin 模块 + 8 个插件 | **新增 0 个**（F4 若做则 +1 个调试服务模块） |
+| 需改 UnLua 核心 | 是（分配器埋点） | **否**（全部走公开回调 / 抽象层） |
+| 外部依赖 | 闭源 SDK + Protobuf/curl/OpenSSL + 云 + 3.9MB framework | **无** |
+| 硬编码凭据 | 有（云密钥 + 加密密钥） | **无** |
+| 代码来源 | 1300+ 行移植 + 大量改造 | **重写**，且 Luau 让其中约 40% 复杂度不存在 |
+
+---
+
+## 6. 待确认
+
+1. **`LUA_VECTOR_SIZE` 定 3 还是 4**？这决定 F8 的覆盖面，且是编译期全局、不可运行时切换。建议先不定，F8 排到 M5 之后。
+2. **`LUA_VECTOR_DOUBLE` 要不要开**？开了能原生映射 UE5 LWC 的 double FVector，但所有 vector 体积翻倍。
+3. **F4 调试器要不要做**？Luau 让协议层免费，但 headless 服务 + VSCode 插件仍是 1~2 周量级。若不做，至少要把 `ILuaBackend::SetBreakpoint` 留出来。
+4. **`.codebuddy/` 是否随仓库分发**？若否，加一行 `.gitignore`。
 
 ---
 
 ## 附：开源化脱敏检查清单
 
-本仓库在对外开源前，需确认以下几类信息不出现在任何提交中：
-
-- [ ] 源项目名、内部插件名（两个私有插件目录名）、外部 IDE / 调试 SDK 名 —— **本文已脱敏**
-- [ ] 任何指向源项目或本地引擎的绝对路径
-- [ ] 云 API 密钥 / SecretId / SecretKey（源侧某模块初始化处有硬编码，**本方案未引用其值**）
-- [ ] 加解密默认密钥（源侧简易加密模块内硬编码，**本方案未引用其值**）
-- [ ] 内部员工账号名（源侧部分代码注释含作者署名）
-- [ ] `.codebuddy/` 下的规划文档是否随仓库分发——若否，建议加入 `.gitignore`
+- [ ] 源项目名、内部插件名、外部 IDE / 调试 SDK 名 —— **本文已脱敏**
+- [ ] 任何指向源项目或本地引擎的绝对路径 —— **已清理**
+- [ ] 云 API 密钥 / SecretId / SecretKey（源侧某模块初始化处有硬编码，**本文未引用其值**）
+- [ ] 加解密默认密钥（源侧简易加密模块内硬编码，**本文未引用其值**）
+- [ ] **内部员工账号名** —— 源侧代码注释里有多处署名，重写实现时**不得带入**
+- [ ] `.codebuddy/` 是否加入 `.gitignore`

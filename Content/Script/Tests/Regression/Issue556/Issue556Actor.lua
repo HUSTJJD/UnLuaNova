@@ -1,4 +1,4 @@
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:PlayerViewChanged(AddHexHandles, RemoveHexHandlers)
     print("==========PlayerViewChanged", AddHexHandles, RemoveHexHandlers)

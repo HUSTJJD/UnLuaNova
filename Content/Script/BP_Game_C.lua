@@ -1,5 +1,5 @@
 ---@type BP_Game_C
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:ReceiveBeginPlay()
 	self.EnemySpawnInterval = 2.0

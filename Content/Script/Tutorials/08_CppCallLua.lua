@@ -6,7 +6,7 @@
     例如：
     PrivateDependencyModuleNames.AddRange(new string[]
     {
-        "UnLua",
+        "UnLuauNova",
         "Lua",
     });
 
@@ -16,7 +16,7 @@
 
 local Screen = require "Tutorials.Screen"
 
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:ReceiveBeginPlay()
     local msg =

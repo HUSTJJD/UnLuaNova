@@ -1,4 +1,4 @@
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:ReceiveBeginPlay()
     print("self=", self, self:GetName())

@@ -1,16 +1,16 @@
-# UnLua API
+# UnLuauNova API
 
 ## C++ API
 
 ### Global Variables
-* `UnLua::GLuaSrcRelativePath` Relative path of Lua script source files based on Content directory
+* `UnLuauNova::GLuaSrcRelativePath` Relative path of Lua script source files based on Content directory
 
-* `UnLua::GLuaSrcFullPath` Absolute path of Lua script source files
+* `UnLuauNova::GLuaSrcFullPath` Absolute path of Lua script source files
 
 * `FLuaContext::GLuaCxt` Global Lua context
 
 ### Global Functions
-Namespace of UnLua
+Namespace of UnLuauNova
 * `Call` Call a global function in Lua.
 
 * `CallTableFunc` Call a function in a given global table in Lua.
@@ -25,9 +25,9 @@ Namespace of UnLua
 
 * `GetState` Return the global lua_State pointer created by CreateState
 
-* `Startup` Call to start the UnLua, return true for success start, otherwise, return false
+* `Startup` Call to start the UnLuauNova, return true for success start, otherwise, return false
 
-* `Shutdown` Call to stop the UnLua
+* `Shutdown` Call to stop the UnLuauNova
 
 * `LoadFile` Call to load a Lua file with relative path based on Lua Script path without running it, return true if found the file and loaded successfully, otherwise return false
 
@@ -43,15 +43,15 @@ Namespace of UnLua
 
 * `GetLuaCallStack` Get the call stack of the running lua_State
 
-### UnLua's global Delegates
-FUnLuaDelegates
+### UnLuauNova's global Delegates
+FUnLuauNovaDelegates
 * `OnLuaStateCreated` Trriged after created a lua_State, you can get the lua_State in this delegate
 
-* `OnLuaContextInitialized` Trriged after UnLua's context has been initialized
+* `OnLuaContextInitialized` Trriged after UnLuauNova's context has been initialized
 
-* `OnPreLuaContextCleanup` Trriged before starting to clean UnLua's context
+* `OnPreLuaContextCleanup` Trriged before starting to clean UnLuauNova's context
 
-* `OnPostLuaContextCleanup` Trriged after UnLua's context has been cleaned
+* `OnPostLuaContextCleanup` Trriged after UnLuauNova's context has been cleaned
 
 * `OnPreStaticallyExport` Trriged before starting to register the statically exported classes into lua_State
 
@@ -66,10 +66,10 @@ FUnLuaDelegates
 * `LoadLuaFile` Trriged while try to loading lua file, could register user-defined loading
 
 ### Interface
-* `UUnLuaInterface` Core interface for UnLua, used to tell UnLua which UE-Object should be bind with Lua file
+* `UUnLuauNovaInterface` Core interface for UnLuauNova, used to tell UnLuauNova which UE-Object should be bind with Lua file
 
 ### Class
-* `FLuaContext` Wrapper of UnLua's context, contains the main lua_State of UnLua
+* `FLuaContext` Wrapper of UnLuauNova's context, contains the main lua_State of UnLuauNova
 
 * `FLuaIndex` Wrapper of the index of Lua stack
 
@@ -119,20 +119,20 @@ FUnLuaDelegates
 
 * `Execute` Manually excutes all callbacks of the given instance of FScriptDelegate
 
-### UnLua.lua (Functions in UnLua.lua)
+### UnLuauNova.lua (Functions in UnLuauNova.lua)
 * `Class` Create a table like class in OOP
 
 * `print` Override origin `print` by `UEPrint`
 
-## Macros in UnLua module
-* `AUTO_UNLUA_STARTUP` Macro for whether to automatically start or not, default is true
+## Macros in UnLuauNova module
+* `AUTO_UnLuauNova_STARTUP` Macro for whether to automatically start or not, default is true
 
 * `WITH_UE4_NAMESPACE` Macro for whether to use `UE` to access Unreal Class's in Lua or not , default is true
 
 * `SUPPORTS_RPC_CALL` Macro for whether to support RPC calls, default is true
 
-* `SUPPORTS_COMMANDLET` Macro for whether to support UnLua in `commandlet`, default is true
+* `SUPPORTS_COMMANDLET` Macro for whether to support UnLuauNova in `commandlet`, default is true
 
 * `ENABLE_TYPE_CHECK` Macro for whether to check arguments' type is correct or not while calling C++ from Lua, default is true
 
-* `UNLUA_ENABLE_DEBUG` Macro for whether to output UnLua's debugging log, default is true.
+* `UnLuauNova_ENABLE_DEBUG` Macro for whether to output UnLuauNova's debugging log, default is true.

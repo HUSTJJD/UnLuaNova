@@ -7,6 +7,6 @@
 --
 
 ---@type ClassName
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 return M

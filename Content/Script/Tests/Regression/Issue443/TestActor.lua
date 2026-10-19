@@ -1,4 +1,4 @@
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 Result = 0
 

@@ -1,34 +1,34 @@
----@class UnLua
-local UnLua = {}
+---@class UnLuauNova
+local UnLuauNova = {}
 
----Similar to "package.path" for lua module searching with UnLua loader. Used by FLuaEnv::LoadFromFileSystem.
-UnLua.PackagePath = "Content/Script/?.lua;Plugins/UnLua/Content/Script/?.lua"
+---Similar to "package.path" for lua module searching with UnLuauNova loader. Used by FLuaEnv::LoadFromFileSystem.
+UnLuauNova.PackagePath = "Content/Script/?.lua;Plugins/UnLuauNova/Content/Script/?.lua"
 
 ---Whether or not enable FText support at lua runtime which will no longer be treated as a string.
-UnLua.FTextEnabled = false
+UnLuauNova.FTextEnabled = false
 
 ---Define a lua class for binding.
 ---@param SuperClass string @[opt]
-function UnLua.Class(SuperClass)
+function UnLuauNova.Class(SuperClass)
 end
 
 ---Hot reload lua modules
 ---@param ModuleNames table @[opt]Specify a list of module names that need hot reloading. If this parameter is not passed, it will be obtained by default according to the file modification timestamp
-function UnLua.HotReload(ModuleNames)
+function UnLuauNova.HotReload(ModuleNames)
 end
 
 ---Add or find a manual reference to specified UObject. This prevents the object from UE GC.
 ---@param Object UObject
 ---@return userdata @Proxy object of the reference. The reference of UObject will be removed when proxy object deleted by lua GC.
-function UnLua.Ref(Object)
+function UnLuauNova.Ref(Object)
 end
 
 ---Force remove all manual reference to specified UObject.
 ---@param Object UObject
-function UnLua.Unref(Object)
+function UnLuauNova.Unref(Object)
 end
 
-_G.UnLua = UnLua
+_G.UnLuauNova = UnLuauNova
 
 ---@class TArray<TElement>
 local TArray = {}

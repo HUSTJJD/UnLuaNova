@@ -1,5 +1,5 @@
 ---@type BP_PlayerController_C
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:UserConstructionScript()
 	self.ForwardVec = UE.FVector()

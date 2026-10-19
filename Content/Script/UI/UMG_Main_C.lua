@@ -1,5 +1,5 @@
 ---@type UMG_Main_C
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:Construct()
 	self.ExitButton.OnClicked:Add(self, M.OnClicked_ExitButton)	

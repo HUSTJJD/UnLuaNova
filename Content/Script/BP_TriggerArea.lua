@@ -1,5 +1,5 @@
 ---@type BP_TriggerArea_C
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 local function update(self)
     if self.Counter > 0 then

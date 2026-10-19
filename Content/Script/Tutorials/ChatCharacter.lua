@@ -1,5 +1,5 @@
 ---@type ChatCharacter_C
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 local Screen = require "Tutorials.Screen"
 

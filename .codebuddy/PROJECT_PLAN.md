@@ -17,8 +17,9 @@
 | 远端 | `origin = HUSTJJD/UnLua`（你的 fork），`upstream = Tencent/UnLua`（已配好，可直接 fetch） |
 | 插件版本 | UnLua **v2.3.6**（`UnLua.uplugin`） |
 | 引擎 | `TPSProject.uproject` 标 `4.26`，但代码含 `UE_5_0_OR_LATER` / `UE_5_2_OR_LATER` 分支 |
-| Lua VM | **lua-5.4.3**（`Source/ThirdParty/Lua/lua-5.4.3`，另有一份 5.4.4 未启用；因 `Config/DefaultUnLuaEditor.ini` 不存在，走 `Lua.Build.cs` 的默认值） |
-| 无 | LuaJIT / Luau / 任何 VM 抽象层 |
+| Lua VM | **lua-5.4.3**（vendored 源码，另有一份 5.4.4 未启用）→ **已决策升级为 Lua 5.5 子模块**，见 §11 |
+| 已有 | Luau 子模块（`luau-lang/luau` @ 0.743），尚未接线 |
+| 无 | VM 抽象层（阶段 1 待做）；LuaJIT 已排除 |
 
 ### 0.2 上游维护现状（2026-08 数据，已核实）
 
@@ -384,17 +385,33 @@ TSubclassOf<UUnLuaTypeFilter> TypeFilterClass;
 
 ## 4. Lua 虚拟机方案
 
-### 4.1 生态调研结论（2026-10）
+### 4.1 后端选型结论（2026-10 已定稿：**双后端**）
 
-| 方案 | 语言基线 | 活跃度 | 性能 | 与 UnLua 的兼容性成本 | 结论 |
-|---|---|---|---|---|---|
-| **Lua 5.4.x**（现状） | 官方 5.4 | 官方稳定维护 | 基准 | 无（现状） | 保持为默认后端 |
-| **Luau** | Lua 5.1 + 渐进类型 | **极高**：~5.9k★，近 30 天 +110★，C++ 实现，Roblox/Warframe 等商业验证，MIT | 解释器通常快于 5.4；可选 native codegen（x64/arm64） | **中**（需重做 userdata 层，见 §0.3-1） | ✅ **主推方向** |
-| **LuaJIT** | Lua 5.1 | 低：2021 后 Mike Pall 减少投入，仅修 bug，不追 5.2+ | 最强（JIT 场景 3~10x） | **高**（5.1 语义 + 汇编 toolchain + userdata 层重做） | ⚠️ 排最后，且仅非 JIT 受限平台 |
-| **LuaVela**（原 IPONWEB LuaJIT-2.1） | Lua 5.3 + JIT | 低 | 强 | 高 | ❌ 维护风险，不建议 |
-| **Pluto** | Lua 5.4 方言 | 中 | ≈5.4 | 低（同为 5.4 布局） | 🤔 可作为低成本"方言增强"选项，但社区小 |
-| **Ravi / Pallene / Nelua / Terra** | 静态类型 / AOT 优先 | 低~中 | 强（需要类型标注） | 不适用 | ❌ 与"动态热更"场景冲突 |
-| **metalua** | Lua 5.1 宏系统 | **已死**（2013 后停更） | — | — | ❌ **不建议**（你提到的这个可以排除） |
+> **决策（2026-10-19）**：只保留 **Lua 5.5** 与 **Luau** 两个后端，其余（Lua 5.3/5.4.x、LuaJIT、LuaVela、Pluto、Ravi 系等）**一律不再考虑**。两个后端**都以 git 子模块方式引入**。详见 §11。
+
+| 后端 | 语言基线 | 现状 | 与 UnLua 的兼容性成本 | 定位 |
+|---|---|---|---|---|
+| **Lua 5.5**（`lua/lua`，tag `v5.5.1`） | 官方 5.5 | 5.5.0 发布于 2025-12-22，当前 5.5.1（2026-07-24） | 中：UnLua 现有 ~72 处 5.4 内部耦合需重验（见 §11.2） | **默认后端**，保证与上游 UnLua 行为一致 |
+| **Luau**（`luau-lang/luau`，锁 0.743） | Lua 5.1 + 渐进类型 | ~5.9k★，Roblox/Warframe 商业验证，MIT，纯 C++ | 中：需重做 userdata 层（§0.3-1） | **主推方向**，类型系统与原生能力是卖点 |
+
+**为什么不再考虑 LuaJIT**（Roblox 官方公开过的选型理由，同样适用于 UE）：
+1. iOS / Xbox / 主机**禁止运行时 JIT**，LuaJIT 在这些平台只能退回解释器，性能优势消失——而 UnLua 的核心场景恰恰是移动端热更。
+2. LuaJIT 锚定 5.1 语义，拿不到 5.3+ 的整数、`_ENV`、增量 GC。
+3. Luau 是**纯 C++**，与 UE 的 C++17/20 工具链天然契合（LuaJIT 需要平台汇编 toolchain，iOS/Android/主机各自有坑）。
+4. Luau 的 **userdata tag**（`lua_newuserdatatagged`）是 VM 原生的 O(1) 类型判别，**可以直接替换掉 UnLua 现在的 `USERDATA_MAGIC` 魔数结构体 hack**。
+
+**两个后端各自的独有能力**（决定了 Feature 该在哪一侧吃到红利，见 `PORT_EXTERNAL_PLAN.md` §1）：
+
+| 能力 | Lua 5.5 | Luau |
+|---|---|---|
+| 安全点中断 / 采样 | `lua_sethook` | ✅ `lua_Callbacks.interrupt` |
+| 分配分类回调 | 自定义 allocator（仅总量） | ✅ `onallocate(memcat, tt, tag)` |
+| 原生断点 / 单步 | ❌ | ✅ `lua_breakpoint` / `lua_singlestep` |
+| userdata tag | ❌（用 user value 存 desc） | ✅ `LUA_UTAG_LIMIT=128` |
+| 原生沙盒 | 部分（5.5 新增全局变量声明） | ✅ `luaL_sandbox` / `luaL_sandboxthread` |
+| vector / buffer 类型 | ❌ | ✅ `LUA_VECTOR_SIZE` / `luaopen_buffer` |
+| 外部字符串（零拷贝） | ✅ 5.5 新增 | ❌ |
+| 静态类型检查 | ❌ | ✅ `luau-analyze` + `.d.lua` |
 
 **为什么 Luau 优于 LuaJIT 作为第一目标**（这是 Roblox 官方公开过的选型理由，同样适用于 UE）：
 1. iOS / Xbox / 主机**禁止运行时 JIT**，LuaJIT 在这些平台只能退回解释器，性能优势消失——而 UnLua 的核心场景恰恰是移动端热更。
@@ -437,9 +454,9 @@ public:
 };
 ```
 
-- 默认后端 = Lua 5.4.4（顺便把 §0.1 里"两份源码但只用 5.3 那份"的陈旧状态清理掉，统一到 **5.4.4** 并删掉 5.4.3）
-- `Build.cs` 加 `LuaBackend = Lua54 | Luau` 开关，默认 `Lua54`，**不破坏任何现有用户**
-- `UNLUA_LUA_VERSION` 宏体系收敛进后端
+- 后端枚举只有两个：**`Lua55`（默认）** 与 `Luau`。`Build.cs` 开关 `LuaBackend = Lua55 | Luau`
+- **Lua 5.5 以子模块引入**（`lua/lua` @ `v5.5.1`），取代现有 vendored 的 5.4.3 / 5.4.4 两份源码 —— 见 §11.1
+- `UNLUA_LUA_VERSION` 宏体系废弃，版本信息由 `ILuaBackend::GetName()` 提供
 
 #### 阶段 2：Luau 实验后端（预计 3~6 周，长分支 `feature/luau`）
 
@@ -463,9 +480,10 @@ public:
 - **验收门槛**：`UnLuaTestSuite` 全绿 + 在目标平台跑通一个 Lyra-like 示例
 - **回退**：默认仍为 Lua 5.4，Luau 是 opt-in 后端，任何阶段出问题都不影响主发行线
 
-#### 阶段 3：LuaJIT 后端（可选，排最后）
+#### 阶段 3：（已取消）
 
-仅在 Windows / Linux / Android 提供；iOS / 主机自动回退解释器。风险最高收益最窄，建议放到 Luau 稳定后再评估。
+原计划的 LuaJIT 后端**已取消**（2026-10-19 决策）。后端只有 Lua 5.5 与 Luau 两个，不再新增第三个。
+空出的精力投入到 §4.5 静态绑定代码生成——那里的收益（10x 级别）远大于再加一个 VM。
 
 ### 4.3 收益预期（**必须诚实**）
 

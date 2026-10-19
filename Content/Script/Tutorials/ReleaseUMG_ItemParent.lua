@@ -1,5 +1,5 @@
 ---@type ReleaseUMG_ItemParent_C
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:Construct()
     print("ItemParent Construct", self:GetName())

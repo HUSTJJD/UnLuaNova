@@ -18,7 +18,7 @@
 
 local Screen = require "Tutorials.Screen"
 
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:ReceiveBeginPlay()
     local msg = self:SayHi("陌生人")

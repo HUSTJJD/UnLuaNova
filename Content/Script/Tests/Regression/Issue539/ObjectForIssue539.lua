@@ -1,4 +1,4 @@
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:Test(Dest, Obj, Radius, bStop)
     return Dest, nil, Radius, bStop

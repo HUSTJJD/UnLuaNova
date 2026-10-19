@@ -7,7 +7,7 @@
 
 local FLinearColor = UE.FLinearColor
 
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:Construct()
     self.ClickMeButton.OnClicked:Add(self, self.OnButtonClicked)

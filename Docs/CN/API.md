@@ -1,16 +1,16 @@
-# UnLua API
+# UnLuauNova API
 
 ## C++ API
 
 ### 全局变量
-* `UnLua::GLuaSrcRelativePath` Lua源码文件相对于Content目录的相对路径
+* `UnLuauNova::GLuaSrcRelativePath` Lua源码文件相对于Content目录的相对路径
 
-* `UnLua::GLuaSrcFullPath` Lua源码文件所在的绝对路径
+* `UnLuauNova::GLuaSrcFullPath` Lua源码文件所在的绝对路径
 
 * `FLuaContext::GLuaCxt` 全局Lua上下文
 
 ### 全局函数
-命名空间：UnLua
+命名空间：UnLuauNova
 * `Call` 调用某个全局 `function`
 
 * `CallTableFunc` 调用全局 `table` 里的某个 `function`
@@ -25,9 +25,9 @@
 
 * `GetState` 获取 `GLuaCxt` 中的 `lua_State`
 
-* `Startup` 启动UnLua环境
+* `Startup` 启动UnLuauNova环境
 
-* `Shutdown` 停止UnLua环境
+* `Shutdown` 停止UnLuauNova环境
 
 * `LoadFile` 从指定相对路径加载一个Lua文件，但不运行
 
@@ -37,14 +37,14 @@
 
 * `RunChunk` 运行指定的Lua Chunk
 
-* `ReportLuaCallError` 报告Lua错误，如果注册了自定义错误处理委托则会仅执行委托，否则使用UnLua默认的 `UE_LOG` 输出
+* `ReportLuaCallError` 报告Lua错误，如果注册了自定义错误处理委托则会仅执行委托，否则使用UnLuauNova默认的 `UE_LOG` 输出
 
 * `GetStackVariables` 获取当前堆栈上所有相关的变量、`upvalue` 信息
 
 * `GetLuaCallStack` 获取当前Lua调用栈的字符串
 
 ### 全局委托
-FUnLuaDelegates
+FUnLuauNovaDelegates
 * `OnLuaStateCreated` 当一个Lua虚拟机被创建出来时候触发，可以拿到其对应的 `lua_State`
 
 * `OnLuaContextInitialized` 当 `FLuaContext` 初始化完成后触发
@@ -59,17 +59,17 @@ FUnLuaDelegates
 
 * `OnObjectUnbinded` 当某个 `UObject` 的Lua绑定被解绑时触发
 
-* `ReportLuaCallError` 支持注册自定义Lua报错处理委托到UnLua，当Lua报错时会调用这个委托
+* `ReportLuaCallError` 支持注册自定义Lua报错处理委托到UnLuauNova，当Lua报错时会调用这个委托
 
-* `ConfigureLuaGC` 支持注册自定义LuaGC配置委托到UnLua，覆盖UnLua默认传递给 `lua_gc` 的参数
+* `ConfigureLuaGC` 支持注册自定义LuaGC配置委托到UnLuauNova，覆盖UnLuauNova默认传递给 `lua_gc` 的参数
 
-* `LoadLuaFile` 支持注册自定义的Lua文件加载器委托到UnLua，实现自定义Lua文件加载机制
+* `LoadLuaFile` 支持注册自定义的Lua文件加载器委托到UnLuauNova，实现自定义Lua文件加载机制
 
 ### 接口
-* `UUnLuaInterface` UnLua的核心接口，用来标记和识别需要绑定到Lua的对象
+* `UUnLuauNovaInterface` UnLuauNova的核心接口，用来标记和识别需要绑定到Lua的对象
 
 ### 类
-* `FLuaContext` 封装了整个UnLua运行环境上下文
+* `FLuaContext` 封装了整个UnLuauNova运行环境上下文
 
 * `FLuaIndex` 对Lua堆栈索引的简单封装
 
@@ -119,22 +119,22 @@ FUnLuaDelegates
 
 * `Execute` 手动执行 `FScriptDelegate` 所有回调。
 
-### UnLua.lua
-一旦 `require "Unlua"` 后，会产生如下全局函数：
+### UnLuauNova.lua
+一旦 `require "UnLuauNova"` 后，会产生如下全局函数：
 * `Class` 创建一个"类"的table，模仿OOP的概念提供封装、继承的机制
 
 * `print` 使用 `UEPrint` 覆盖Lua原生 `print`
 
 ## 宏定义
-以下宏定义可通过 `UnLua.Build.cs` 修改：
-* `AUTO_UNLUA_STARTUP` 是否自动启动UnLua环境，默认**启用**。
+以下宏定义可通过 `UnLuauNova.Build.cs` 修改：
+* `AUTO_UnLuauNova_STARTUP` 是否自动启动UnLuauNova环境，默认**启用**。
 
 * `WITH_UE4_NAMESPACE` 是否提供一个统一的 `UE` 命名空间 `table` 作为对引擎侧类型的访问入口，默认**启用**。
 
 * `SUPPORTS_RPC_CALL` 是否提供对 `_RPC` 远程方法支持，默认**启用**。
 
-* `SUPPORTS_COMMANDLET` 是否提供在 `commandlet` 环境下的UnLua支持，默认**启用**。
+* `SUPPORTS_COMMANDLET` 是否提供在 `commandlet` 环境下的UnLuauNova支持，默认**启用**。
 
 * `ENABLE_TYPE_CHECK` 是否启用类型检测，帮助在 `UFunction` 调用时进行参数类型合法性检测，默认**启用**。
 
-* `UNLUA_ENABLE_DEBUG` 是否输出UnLua详细的调试日志，默认**禁用**。
+* `UnLuauNova_ENABLE_DEBUG` 是否输出UnLuauNova详细的调试日志，默认**禁用**。

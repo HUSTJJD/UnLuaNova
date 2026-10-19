@@ -7,7 +7,7 @@
 
 local Screen = require "Tutorials.Screen"
 
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 -- 所有绑定到Lua的对象初始化时都会调用Initialize的实例方法
 function M:Initialize()

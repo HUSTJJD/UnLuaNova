@@ -3,7 +3,7 @@ local FVector2D = UE.FVector2D
 local FLinearColor = UE.FLinearColor
 
 ---@type IconWidget_C
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:RandomPosition()
     local x = math.random(0, 1920)

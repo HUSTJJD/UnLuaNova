@@ -17,7 +17,7 @@
 
 local Screen = require "Tutorials.Screen"
 
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 local function print_intro()
     local msg =

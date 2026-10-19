@@ -2,7 +2,7 @@
 ## 1. 生成智能提示信息
 ![生成智能提示信息](../Images/generate_intellisense.png)
 
-打开UnLua工具栏，点击导出智能提示，会在`{UE工程}/Plugins/UnLua/Intermediate`下生成`IntelliSense`的目录。
+打开UnLuauNova工具栏，点击导出智能提示，会在`{UE工程}/Plugins/UnLuauNova/Intermediate`下生成`IntelliSense`的目录。
 
 ## 2. 加入到LuaIDE
 

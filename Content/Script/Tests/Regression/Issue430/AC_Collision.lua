@@ -1,4 +1,4 @@
-local M = UnLua.Class()
+local M = UnLuauNova.Class()
 
 function M:Test(StringArray, FloatArray, StructArray)
     Result1 = StringArray:Num()

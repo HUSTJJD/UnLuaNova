@@ -1,4 +1,4 @@
-local M =  UnLua.Class()
+local M =  UnLuauNova.Class()
 
 function M:Test(OutParam)
     print("Issue 634 Test", OutParam)
