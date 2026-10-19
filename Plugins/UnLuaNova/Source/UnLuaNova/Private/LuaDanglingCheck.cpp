@@ -77,8 +77,8 @@ namespace UnLuaNova
                 }
 
                 bool TwoLevelPtr;
-                void* Userdata = GetUserdataFast(L, -1, &TwoLevelPtr);
-                SetUserdataFlags(Userdata, 1 << 6); // TODO:BIT_RELEASED_TAG
+                GetUserdataFast(L, -1, &TwoLevelPtr);
+                SetUserdataFlags(L, -1, 1 << 6);    // TODO:BIT_RELEASED_TAG
                 check(!TwoLevelPtr)
 
                 lua_pop(L, 1);

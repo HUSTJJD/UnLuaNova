@@ -49,8 +49,8 @@ bool TryToSetMetatable(lua_State *L, const char *MetatableName, UObject* Object 
  */
 void* NewUserdataWithTwoLvPtrTag(lua_State* L, int Size, void* Object);
 void* NewUserdataWithContainerTag(lua_State* L, int Size);
-void MarkUserdataTwoLvPtrTag(void* Userdata);
-void SetUserdataFlags(void* Userdata, uint8 Flags);
+void MarkUserdataTwoLvPtrTag(lua_State* L, int32 Index);
+void SetUserdataFlags(lua_State* L, int32 Index, uint8 Flags);
 UNLUANOVA_API uint8 CalcUserdataPadding(int32 Alignment);
 template <typename T> uint8 CalcUserdataPadding() { return CalcUserdataPadding(alignof(T)); }
 UNLUANOVA_API void* GetUserdata(lua_State *L, int32 Index, bool *OutTwoLvlPtr = nullptr, bool *OutClassMetatable = nullptr);

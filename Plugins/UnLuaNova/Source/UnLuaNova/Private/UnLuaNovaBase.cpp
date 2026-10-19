@@ -323,7 +323,7 @@ namespace UNLUANOVA
         void *Userdata = ::NewUserdataWithPadding(L, Size, MetatableName);
         if (Userdata)
         {
-            MarkUserdataTwoLvPtrTag(Userdata);       // mark the new userdata as a two level pointer
+            MarkUserdataTwoLvPtrTag(L, -1);          // mark the new userdata as a two level pointer
         }
         return Userdata;
     }

@@ -23,13 +23,11 @@ namespace UnLuaNova
     {
         FORCEINLINE int AbsIndex(lua_State* L, int Index)
         {
-#if LUA_VERSION_NUM >= 502
+            // Both supported backends provide lua_absindex, so no version guard is
+            // needed. The old "#if LUA_VERSION_NUM >= 502" fell through to a dead branch
+            // on Luau (which never defines LUA_VERSION_NUM), and that branch referenced
+            // an 'idx' that does not exist in this scope.
             return lua_absindex(L, Index);
-#else
-            if (idx < 0 && idx > LUA_REGISTRYINDEX)
-                idx += lua_gettop(L) + 1;
-            return idx;
-#endif
         }
 
         int EmptyIterator(lua_State* L);

@@ -14,6 +14,7 @@
 
 #include "CollisionHelper.h"
 #include "LuaCore.h"
+#include "LuaBackend.h"
 #include "Binding.h"
 #include "LuaDynamicBinding.h"
 #include "UNLUANOVA.h"
@@ -29,9 +30,9 @@ extern "C" {
 #endif
 #endif
 
-#include "lfunc.h"
-#include "lstate.h"
-#include "lobject.h"
+// No Lua internal headers (lstate.h / lobject.h / lfunc.h) from here on: everything
+// below is built on the public API plus LuaBackend.h, so both supported backends
+// (Lua 5.5 and Luau) compile the same way.
 
 #ifdef __cplusplus
 #if !LUA_COMPILE_AS_CPP
@@ -89,179 +90,85 @@ void SetTableForClass(lua_State *L, const char *Name)
 #define BIT_TWOLEVEL_PTR        (1 << 5)            // two level pointer flag
 #define BIT_SCRIPT_CONTAINER    (1 << 4)            // script container (TArray, TSet, TMap) flag
 
-#pragma  pack(push)
-#pragma  pack(1)
-struct FUserdataDesc
+// The descriptor is allocated immediately BEFORE the payload, so it is reachable from a
+// bare payload pointer as (Ptr - sizeof(FUserdataDesc)). That single property is what
+// lets this file stay on the public API: locating it used to require walking back to
+// 'Udata' and reading U->len, which is why lstate.h/lobject.h were needed at all.
+// It is 8 bytes and 8-aligned so the payload keeps the alignment it had before.
+struct alignas(8) FUserdataDesc
 {
     uint16  magic;
     uint8   tag;
     uint8   padding;
 };
-#pragma  pack(pop)
 
 /**
- * Get 'TValue' from Lua stack
+ * Read the descriptor that sits at the very start of a userdata block.
+ *
+ * 'Block' must be the raw pointer returned by lua_touserdata() - NOT the payload.
+ * Layout is [FUserdataDesc][Padding][payload], so the descriptor is at a fixed offset
+ * and this never reads outside the allocation. (Probing *behind* the payload instead
+ * would read out of bounds for userdata UnLuaNova did not create.)
+ *
+ * Returns null for a null input, or for a userdata UnLuaNova did not create (no magic).
  */
-static TValue* GetTValue(lua_State* L, int32 Index)
+static FUserdataDesc* GetUserdataDesc(void* Block)
 {
-#if 504 == LUA_VERSION_NUM
-    CallInfo* ci = L->ci;
-    if (Index > 0)
-    {
-        StkId o = ci->func + Index;
-        check(Index <= L->ci->top - (ci->func + 1));
-        if (o >= L->top)
-        {
-            return &G(L)->nilvalue;
-        }
-        else
-        {
-            return s2v(o);
-        }
-    }
-    else if (LUA_REGISTRYINDEX < Index)
-    {  /* negative index */
-        check(Index != 0 && -Index <= L->top - (ci->func + 1));
-        return s2v(L->top + Index);
-    }
-    else if (Index == LUA_REGISTRYINDEX)
-    {
-        return &G(L)->l_registry;
-    }
-    else
-    {  /* upvalues */
-        Index = LUA_REGISTRYINDEX - Index;
-        check(Index <= MAXUPVAL + 1);
-        if (ttislcf(s2v(ci->func)))
-        {
-            /* light C function? */
-            return &G(L)->nilvalue;  /* it has no upvalues */
-        }
-        else
-        {
-            CClosure* func = clCvalue(s2v(ci->func));
-            return (Index <= func->nupvalues) ? &func->upvalue[Index - 1] : &G(L)->nilvalue;
-        }
-    }
-#else
-    CallInfo* ci = L->ci;
-    if (Index > 0)
-    {
-        TValue* V = ci->func + Index;
-        check(Index <= ci->top - (ci->func + 1));
-        return V >= L->top ? (TValue*)NULL : V;
-    }
-    else if (Index > LUA_REGISTRYINDEX)             // negative
-    {
-        check(Index != 0 && -Index <= L->top - (ci->func + 1));
-        return L->top + Index;
-    }
-    else if (Index == LUA_REGISTRYINDEX)
-    {
-        return &G(L)->l_registry;
-    }
-    else                                            // upvalues
-    {
-        Index = LUA_REGISTRYINDEX - Index;
-        check(Index <= MAXUPVAL + 1);
-        if (ttislcf(ci->func))
-        {
-            return (TValue*)NULL;                   // light C function has no upvalues
-        }
-        else
-        {
-            CClosure* Closure = clCvalue(ci->func);
-            return (Index <= Closure->nupvalues) ? &Closure->upvalue[Index - 1] : (TValue*)NULL;
-        }
-    }
-#endif
-}
+    if (!Block)
+        return nullptr;
 
-static int32 GetTValueType(TValue* Value)
-{
-#if 504 == LUA_VERSION_NUM
-    return ttype(Value);
-#else
-    return ttnov(Value);
-#endif
-}
-
-static Udata* GetUdata(TValue* Value)
-{
-    return uvalue(Value);
-}
-
-static void* GetUdataMem(Udata* U)
-{
-    return getudatamem(U);
-}
-
-static int32 GetUdataMemSize(Udata* U)
-{
-    return U->len;
-}
-
-static uint8 GetUdataHeaderSize()
-{
-    static uint8 HeaderSize = 0;
-    if (0 == HeaderSize)
-    {
-        lua_State* L = luaL_newstate();
-#if 504 == LUA_VERSION_NUM
-        uint8* Userdata = (uint8*)lua_newuserdatauv(L, 0, 0);
-#else
-        uint8* Userdata = (uint8*)lua_newuserdata(L, 0);
-#endif
-        TValue* Value = GetTValue(L, -1);
-        Udata* U = GetUdata(Value);
-        HeaderSize = Userdata - (uint8*)U;
-        lua_close(L);
-    }
-
-    return HeaderSize;
+    FUserdataDesc* UserdataDesc = (FUserdataDesc*)Block;
+    return (USERDATA_MAGIC == UserdataDesc->magic) ? UserdataDesc : nullptr;
 }
 
 /**
- * Calculate padding size for userdata
+ * Payload address of a block whose descriptor has already been validated.
+ */
+static uint8* GetUserdataPayload(void* Block, const FUserdataDesc* UserdataDesc)
+{
+    return (uint8*)Block + sizeof(FUserdataDesc) + UserdataDesc->padding;
+}
+
+/**
+ * Offset, in bytes, from the start of a Lua userdata block to where the payload has to
+ * begin so that it satisfies 'Alignment'.
+ *
+ * Measured once at runtime instead of derived from sizeof(UUdata): the old formula
+ * hard-coded the 5.4 header size and needed lstate.h/lobject.h to read it back.
  */
 uint8 CalcUserdataPadding(int32 Alignment)
 {
-    uint8 HeaderSize = GetUdataHeaderSize();
-    uint8 AlignByte = Align(HeaderSize, Alignment);
-    return (uint8)(Align(HeaderSize, Alignment) - HeaderSize);      // sizeof(UUdata) == 40
-}
-
-static FUserdataDesc* GetUserdataDesc(Udata* U)
-{
-    FUserdataDesc* UserdataDesc = NULL;
-
-    uint8 DescSize = sizeof(FUserdataDesc);
-    int32 UdataMemSize = GetUdataMemSize(U);
-    if (DescSize <= UdataMemSize)
+    // Where a Lua userdata payload actually starts, relative to the widest alignment we
+    // care about. Lua keeps a fixed offset from the allocation, so one probe represents
+    // every later allocation.
+    static uint8 PayloadBaseOffset = 0xFF;
+    if (0xFF == PayloadBaseOffset)
     {
-        UserdataDesc = (FUserdataDesc*)((uint8*)GetUdataMem(U) + UdataMemSize - DescSize);
-        if (USERDATA_MAGIC != UserdataDesc->magic)
-        {
-            UserdataDesc = NULL;
-        }
+        lua_State* ProbeState = luaL_newstate();
+        void* Probe = UNLUANOVA_NEWDATA(ProbeState, 1);
+        PayloadBaseOffset = (uint8)((uintptr_t)Probe % 16);
+        lua_close(ProbeState);
     }
 
-    return UserdataDesc;
+    // payload starts at (block + Padding + sizeof(FUserdataDesc))
+    const uint32 Base = (uint32)PayloadBaseOffset + (uint32)sizeof(FUserdataDesc);
+    const uint32 Aligned = ((Base + (uint32)Alignment - 1) / (uint32)Alignment) * (uint32)Alignment;
+    return (uint8)(Aligned - Base);
 }
 
 static void* NewUserdataWithDesc(lua_State* L, int Size, uint8 Tag, uint8 Padding)
 {
-#if 504 == LUA_VERSION_NUM
-    uint8* Userdata = (uint8*)lua_newuserdatauv(L, Size + Padding + sizeof(FUserdataDesc), 0);
-#else
-    uint8* Userdata = (uint8*)lua_newuserdata(L, Size + Padding + sizeof(FUserdataDesc));
-#endif
-    FUserdataDesc* UserdataDesc = (FUserdataDesc*)(Userdata + Size + Padding);
+    const uint32 DescSize = (uint32)sizeof(FUserdataDesc);
+
+    // layout: [FUserdataDesc][Padding][payload]
+    uint8* Block = (uint8*)UNLUANOVA_NEWDATA(L, DescSize + Padding + Size);
+
+    FUserdataDesc* UserdataDesc = (FUserdataDesc*)Block;
     UserdataDesc->magic = USERDATA_MAGIC;
     UserdataDesc->tag = Tag;
     UserdataDesc->padding = Padding;
 
-    return Userdata;
+    return GetUserdataPayload(Block, UserdataDesc);
 }
 
 void* NewUserdataWithTwoLvPtrTag(lua_State* L, int Size, void* Object)
@@ -281,20 +188,21 @@ void* NewUserdataWithPaddingTag(lua_State* L, int Size, uint8 Padding)
     return NewUserdataWithDesc(L, Size, BIT_VARIANT_TAG, Padding);
 }
 
-void MarkUserdataTwoLvPtrTag(void* Userdata)
+void MarkUserdataTwoLvPtrTag(lua_State* L, int32 Index)
 {
-    Udata* U = (Udata*)((uint8*)Userdata - GetUdataHeaderSize());
-    FUserdataDesc* UserdataDesc = GetUserdataDesc(U);
+    // Takes the stack index rather than a bare payload pointer: both call sites have L
+    // and the index handy, and going through lua_touserdata() avoids walking back to
+    // 'Udata' - which is exactly what used to require lstate.h/lobject.h.
+    FUserdataDesc* UserdataDesc = GetUserdataDesc(lua_touserdata(L, Index));
     if (UserdataDesc)
     {
         UserdataDesc->tag = (BIT_VARIANT_TAG | BIT_TWOLEVEL_PTR);
     }
 }
 
-void SetUserdataFlags(void* Userdata, uint8 Flags)
+void SetUserdataFlags(lua_State* L, int32 Index, uint8 Flags)
 {
-    Udata* U = (Udata*)((uint8*)Userdata - GetUdataHeaderSize());
-    FUserdataDesc* UserdataDesc = GetUserdataDesc(U);
+    FUserdataDesc* UserdataDesc = GetUserdataDesc(lua_touserdata(L, Index));
     if (UserdataDesc)
     {
         UserdataDesc->tag |= Flags;
@@ -322,13 +230,11 @@ void* GetUserdataFast(lua_State *L, int32 Index, bool *OutTwoLvlPtr)
     bool bTwoLvlPtr = false;
     void* Userdata = nullptr;
 
-    TValue* Value = GetTValue(L, Index);
-    int32 Type = GetTValueType(Value);
+    const int32 Type = lua_type(L, Index);
     if (Type == LUA_TUSERDATA)
     {
-        Udata* U = GetUdata(Value);
-        uint8* Buffer = (uint8*)GetUdataMem(U);
-        FUserdataDesc* UserdataDesc = GetUserdataDesc(U);
+        uint8* Block = (uint8*)lua_touserdata(L, Index);
+        FUserdataDesc* UserdataDesc = GetUserdataDesc(Block);
         if ((UserdataDesc)
             && (UserdataDesc->tag & BIT_VARIANT_TAG))// if the userdata has a variant tag
         {
@@ -336,16 +242,16 @@ void* GetUserdataFast(lua_State *L, int32 Index, bool *OutTwoLvlPtr)
             if (UserdataDesc->tag & BIT_RELEASED_TAG)
                 Userdata = nullptr;
             else
-                Userdata = bTwoLvlPtr ? Buffer : Buffer + UserdataDesc->padding;    // add padding to userdata if it's not a two level pointer
+                Userdata = GetUserdataPayload(Block, UserdataDesc);
         }
         else
         {
-            Userdata = Buffer;
+            Userdata = Block;                       // not created by us: hand back the block start
         }
     }
     else if (Type == LUA_TLIGHTUSERDATA)
     {
-        Userdata = pvalue(Value);                                 // get the light userdata
+        Userdata = lua_touserdata(L, Index);                       // get the light userdata
     }
 
     if (OutTwoLvlPtr)
@@ -512,16 +418,15 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
  */
 void* GetScriptContainer(lua_State *L, int32 Index)
 {
-    TValue* Value = GetTValue(L, Index);
-    if ((Value->tt_ & 0x0F) == LUA_TUSERDATA)
+    if (lua_type(L, Index) == LUA_TUSERDATA)
     {
         uint8 Flag = (BIT_VARIANT_TAG | BIT_SCRIPT_CONTAINER);              // variant tags
 
-        Udata* U = GetUdata(Value);
-        FUserdataDesc* UserdataDesc = GetUserdataDesc(U);
+        void* Block = lua_touserdata(L, Index);
+        FUserdataDesc* UserdataDesc = GetUserdataDesc(Block);
         if (UserdataDesc)
         {
-            return (UserdataDesc->tag & Flag) == Flag ? *((void**)GetUdataMem(U)) : nullptr;
+            return (UserdataDesc->tag & Flag) == Flag ? *((void**)GetUserdataPayload(Block, UserdataDesc)) : nullptr;
         }
     }
     return nullptr;
