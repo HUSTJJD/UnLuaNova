@@ -671,6 +671,60 @@ git checkout -b port/ann-fixes
 
 ---
 
+## 9. PR 吸纳 + 改名（已执行，2026-10-19）
+
+### 9.1 上游分支实况（实测）
+
+| 分支 | 与 master 关系 | 结论 |
+|---|---|---|
+| `develop` | 领先 20 / 落后 1 | ✅ **活的**，已并入 |
+| `dev/2.4` `release/2.4` | 领先 47 / **落后 170** | ❌ 2022 年老分支，弃用 |
+
+### 9.2 已并入 `develop`（20 提交 = 5 个已合并 PR）
+
+`#700` UE5.4 支持 · `#707` HotReload upvalue · `#758` UE5.6 编译 · `#761` UObject delete 崩溃 · `#765` UObject 在 lua 侧 GC 崩溃
+
+**重要发现**：我上一轮手工做的 3 个 Ann 修复，develop 里**已经有了上游同款改动**。为避免重复，先回退我的版本再合并，由 develop 提供。
+唯一仍需我手动补的是 `LuaOverridesClass` 的 5.7+ 守卫——develop 仍是旧 `NEWER_THAN(5,2,1)`，在 5.8 上是编译错误。
+
+### 9.3 已吸纳的 open PR
+
+`git fetch upstream pull/NNN/head` 拉取后逐个 merge，**零冲突合入 11 个**：
+
+`767` Delegate Handle GC · `756` Class 校验 · `748` TSoftObjectPtr 首成员 · `711` nil 参数崩溃 ·
+`719` 继承绑定崩溃 · `639` TArray int32 溢出 · `643` `__GNUC__` 宏 · `684` 模板路径 ·
+`705` NO_LOGGING · `704` IntelliSense 异常 · `672` Copy error
+
+`#771`（UE5.7）冲突，但内容已覆盖：LuaOverridesClass 守卫 + Target.cs V6 我早先已做，
+因此只 cherry-pick 了它 3 个**测试套件**提交（`6b64272e` / `54f16959` / `2a958d81`）。
+
+**未吸纳（有理由，非遗漏）**：
+
+| PR | 原因 |
+|---|---|
+| `746` GameFeature 支持 | merge 冲突，且我原判就是"需 review"，转入 Roadmap |
+| `184` UClass GC 同名误清 | 2020 年 PR，代码已大改；原判就是"重做而非 merge" |
+| `538` is_constructible | 实为 **22 个提交**的特性分支快照（含编辑器扩展示例 + 资产），非单一修复 |
+| `230` | 降级到 Lua 5.3.6，方向相反 |
+| `744` | ini churn + 明文 token + 3626 行 LuaPanda |
+| `199` `693` `696` `697` `759` | P2，转入 Roadmap |
+
+### 9.4 改名已执行（单个可回滚提交 `ed1aea4c`）
+
+473 文件变更。**范围刻意限定为"模块 + 品牌标识"，没有批量改 .h/.cpp 文件名**（那会炸掉 include，且无收益；UBT 只要求模块目录名 == 模块名 == Build.cs 名）。
+
+已改：插件目录、模块目录 + Build.cs、`.uplugin` 模块名、`IMPLEMENT_MODULE` / `LoadModuleChecked` / UHT `ModuleName`、`UNLUA_API` → `UNLUANOVA_API`、`LogUnLua` → `LogUnLuauNova`、命名空间（声明 + `UnLua::` 限定）、插件路径字面量。
+
+**故意保留**：Lua 全局 `UnLua`（脚本兼容）、UCLASS 名、`Config=UnLuaSettings`、`UnLuaTestSuite`。
+
+### 9.5 下一步必须做的
+
+1. **编译**——改名和静态绑定都未经编译验证。
+2. 编译通过后，再单独做 UCLASS 名 + `Config/DefaultUnLuaSettings.ini` 迁移（需 resave 资产）。
+3. `Plugins/UnLuaExtensions` 与 `UnLuaTestSuite` 仍用旧名，要不要一起改由你定。
+
+---
+
 ## 附：待你确认的三个决策点
 
 1. **项目名**：LuaNova / UnLuaX / PrismLua / Vega / 其他？
