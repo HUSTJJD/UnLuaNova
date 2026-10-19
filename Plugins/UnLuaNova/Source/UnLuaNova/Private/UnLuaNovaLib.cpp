@@ -269,6 +269,13 @@ namespace UnLuaNova
             )");
 #endif
 
+            // StringEx installs backend-independent string helpers (see the file header for
+            // why they are needed). Loaded eagerly because scripts rely on them being there
+            // without requiring anything.
+            luaL_dostring(L, R"(
+                pcall(require, 'UNLUANOVA.StringEx')
+            )");
+
             LegacySupport(L);
             lua_pop(L, 1);
             return 1;
