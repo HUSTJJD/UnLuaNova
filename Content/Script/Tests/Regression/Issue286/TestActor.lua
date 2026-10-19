@@ -1,4 +1,4 @@
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:ReceiveBeginPlay()
     local map = UE.TMap(UE.FName, UE.FVector)

@@ -1,5 +1,5 @@
 ---@type BP_CharacterBase_C
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:Initialize(Initializer)
 	self.IsDead = false

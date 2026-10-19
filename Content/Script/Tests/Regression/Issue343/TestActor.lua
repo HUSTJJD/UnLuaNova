@@ -1,7 +1,7 @@
 local FVector = UE.FVector
 local FLinearColor = UE.FLinearColor
 
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:ReceiveBeginPlay()
     ReceiveBeginPlayCalled = 1

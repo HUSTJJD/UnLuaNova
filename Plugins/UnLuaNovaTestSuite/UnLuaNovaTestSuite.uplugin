@@ -1,0 +1,31 @@
+{
+    "FileVersion": 3,
+    "Version": 1,
+    "VersionName": "1.0.0",
+    "FriendlyName": "UnLuaNovaTestSuite",
+    "Description": "Test suite for UnLuaNova",
+    "Category": "Testing",
+    "CreatedBy": "Tencent",
+    "CreatedByURL": "https://www.tencent.com/",
+    "DocsURL": "",
+    "MarketplaceURL": "",
+    "SupportURL": "",
+    "CanContainContent": true,
+    "IsBetaVersion": false,
+    "Installed": false,
+    "CanBeUsedWithUnrealHeaderTool": true,
+    "EnabledByDefault": false,
+    "Plugins": [
+        {
+            "Name": "UnLuaNova",
+            "Enabled": true
+        }
+    ],
+    "Modules": [
+        {
+            "Name": "UnLuaNovaTestSuite",
+            "Type": "Runtime",
+            "LoadingPhase": "Default"
+        }
+    ]
+}

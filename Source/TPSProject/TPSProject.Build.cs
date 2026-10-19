@@ -31,7 +31,7 @@ public class TPSProject : ModuleRules
 
         PrivateDependencyModuleNames.AddRange(new string[]
         {
-            "UnLuauNova",
+            "UnLuaNova",
             "Lua",
         });
     }

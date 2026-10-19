@@ -1,3 +1,6 @@
-[submodule "Plugins/UnLuauNova/Source/ThirdParty/Luau"]
-	path = Plugins/UnLuauNova/Source/ThirdParty/Luau
+[submodule "Plugins/UnLuaNova/Source/ThirdParty/Luau"]
+	path = Plugins/UnLuaNova/Source/ThirdParty/Luau
 	url = https://github.com/luau-lang/luau.git
+[submodule "Plugins/UnLuaNova/Source/ThirdParty/Lua55"]
+	path = Plugins/UnLuaNova/Source/ThirdParty/Lua55
+	url = https://github.com/lua/lua.git

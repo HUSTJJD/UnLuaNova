@@ -1,4 +1,4 @@
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M.Test(v)
     return M.Overridden.Test(v) .. " and " .. tostring(v)

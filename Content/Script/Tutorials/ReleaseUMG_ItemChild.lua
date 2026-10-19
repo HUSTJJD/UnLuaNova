@@ -1,5 +1,5 @@
 ---@type ReleaseUMG_ItemChild_C
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:Construct()
     print("ItemChild Construct")

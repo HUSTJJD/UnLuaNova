@@ -13,14 +13,14 @@ static int32 FTutorialObject_New(lua_State* L)
 	const auto NumParams = lua_gettop(L);
     if (NumParams != 2)
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUA_LOGERROR(L, LogUnLuaNova, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
     const char* NameChars = lua_tostring(L, 2);
     if (!NameChars)
     {
-        UE_LOG(LogUnLuauNova, Log, TEXT("%s: Invalid tutorial name!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UE_LOG(LogUnLuaNova, Log, TEXT("%s: Invalid tutorial name!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 

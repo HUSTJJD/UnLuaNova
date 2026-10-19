@@ -1,5 +1,5 @@
 ---@type BP_AICharacter_C
-local M = UnLuauNova.Class("BP_CharacterBase_C")
+local M = UnLuaNova.Class("BP_CharacterBase_C")
 
 function M:Initialize(Initializer)
 	self.Super.Initialize(self)

@@ -2,7 +2,7 @@ local FVector = UE.FVector
 local FLinearColor = UE.FLinearColor
 
 ---@type GravitySphereActor_C
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:ReceiveBeginPlay()
     local r = math.random()

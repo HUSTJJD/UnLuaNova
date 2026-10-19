@@ -1,5 +1,5 @@
 ---@type BP_WeaponBase_C
-local M = UnLuauNova.Class("Weapon.BP_WeaponBase_C")
+local M = UnLuaNova.Class("Weapon.BP_WeaponBase_C")
 
 function M:UserConstructionScript()
 	self.Super.UserConstructionScript(self)

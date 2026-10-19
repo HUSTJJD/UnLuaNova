@@ -428,7 +428,7 @@ TSubclassOf<UUnLuaTypeFilter> TypeFilterClass;
 - 删除 `LuaCore.cpp` / `LowLevel.cpp` 中的 `#include "lstate.h"` / `"lobject.h"`
 - 移除自写的 `lua_index2value`，改为公开 API 等价实现
 - `USERDATA_MAGIC` + `FUserdataDesc` 尾挂结构 → 改为
-  - Lua 5.4：用 `lua_newuserdatauv` 的 user value 存 desc，或 registry 里的 `lightuserdata → desc` side table
+  - Lua 5.5：用 `lua_newuserdatauv` 的 user value 存 desc，或 registry 里的 `lightuserdata → desc` side table
   - Luau：直接用 userdata tag（阶段 2 自然落到这）
 - 收敛散落的 `#if LUA_VERSION_NUM == 504`（如 `LuaEnv.cpp:135` 的 `lua_gc(L, LUA_GCGEN, 0, 0)`）到一处
 
@@ -442,7 +442,7 @@ class ILuaBackend
 {
 public:
     virtual ~ILuaBackend() = default;
-    virtual FStringView GetName() const = 0;              // "Lua 5.4.4" / "Luau"
+    virtual FStringView GetName() const = 0;              // "Lua 5.5.1" / "Luau 0.743"
     virtual lua_State* CreateState(void* AllocatorUD) = 0;
     virtual void DestroyState(lua_State* L) = 0;
     virtual void ConfigureGC(lua_State* L) = 0;           // 各 VM 的 GC 参数
@@ -461,7 +461,7 @@ public:
 #### 阶段 2：Luau 实验后端（预计 3~6 周，长分支 `feature/luau`）
 
 - 源码放 `Plugins/UnLua/Source/ThirdParty/Luau/`（submodule 或 vendor 均可，MIT 许可兼容）
-- 编译：Luau 自带 CMake，可参考现有 `Lua.Build.cs` 的 CMake 调用方式（比 LuaJIT 简单得多）
+- 编译：Luau 的 VM+Compiler+Ast 约 54 个 cpp，**直接交给 UBT 编**（与 §11.3 给 Lua 5.5 定的做法一致，两边都不要再套一层 CMake）
 - **必须处理的行为差异**（来自 Luau 官方 compatibility 文档，已核对）：
 
 | 差异 | 影响点 | 处理 |
@@ -478,7 +478,7 @@ public:
 | 无 `goto` / `<close>` / `<const>` | UnLua 自带 Lua 代码基本不用 | 影响小 |
 
 - **验收门槛**：`UnLuaTestSuite` 全绿 + 在目标平台跑通一个 Lyra-like 示例
-- **回退**：默认仍为 Lua 5.4，Luau 是 opt-in 后端，任何阶段出问题都不影响主发行线
+- **回退**：默认仍为 Lua 5.5，Luau 是 opt-in 后端，任何阶段出问题都不影响主发行线
 
 #### 阶段 3：（已取消）
 
@@ -522,7 +522,7 @@ Type Manifest (白名单)
 | **M0 · 立基** | fetch `develop` 合并；改名（品牌层）；README/CHANGELOG/LICENSE/CI/CONTRIBUTING；打包配置自动化（从 #744 萃取） | — |
 | **M1 · 收敛社区** | 合入 P0 + 主要 P1 PR，每个补回归用例；发 `v2.4.0`（UE 5.4/5.6/5.7 支持） | M0 |
 | **M2 · 类型克制化** | §3 完整实现（Gateway / Manifest / 三源 / 三档模式 / Report / IntelliSense 同源）；发 `v2.5.0` | M1 |
-| **M3 · VM 解耦** | §4 阶段 0 + 1，默认后端升到 Lua 5.4.4 并清理重复源码；发 `v2.6.0` | M2 |
+| **M3 · VM 解耦** | §4 阶段 0 + 1，后端切到 **Lua 5.5 子模块**并删除 vendored 5.4.x（§11.3）；发 `v2.6.0` | M2 |
 | **M4 · Luau 实验后端** | `feature/luau`；全测试通过；类型声明生成；发 `v3.0.0-preview` | M3 |
 | **M5 · 静态绑定** | 基于 Manifest 的 trampoline / 代码生成；benchmark 对比 | M2 |
 | **M6 · 代码标识重命名**（可选） | `UNLUA_API` → `LNAPI`，模块目录改名，保留兼容别名 | 发行线稳定后 |
@@ -678,7 +678,7 @@ git checkout -b port/ann-fixes
 
 ### 8.7 改名（**未执行**）
 
-`Tools/Rename-To-UnLuauNova.ps1` 已提供，支持 `-WhatIf` 预演。
+`Tools/Rename-To-UnLuaNova.ps1` 已提供，支持 `-WhatIf` 预演。
 
 **故意不自动执行**：改名会动模块名、`UNLUA_API` 和 UCLASS 名，必须先确保当前能编译，否则无法区分"改名引入的错"和"静态绑定引入的错"。建议顺序：**先编译验证 → 再跑脚本 → 再编译 → resave 资产**。
 
@@ -731,7 +731,7 @@ git checkout -b port/ann-fixes
 
 473 文件变更。**范围刻意限定为"模块 + 品牌标识"，没有批量改 .h/.cpp 文件名**（那会炸掉 include，且无收益；UBT 只要求模块目录名 == 模块名 == Build.cs 名）。
 
-已改：插件目录、模块目录 + Build.cs、`.uplugin` 模块名、`IMPLEMENT_MODULE` / `LoadModuleChecked` / UHT `ModuleName`、`UNLUA_API` → `UNLUANOVA_API`、`LogUnLua` → `LogUnLuauNova`、命名空间（声明 + `UnLua::` 限定）、插件路径字面量。
+已改：插件目录、模块目录 + Build.cs、`.uplugin` 模块名、`IMPLEMENT_MODULE` / `LoadModuleChecked` / UHT `ModuleName`、`UNLUA_API` → `UNLUANOVA_API`、`LogUnLua` → `LogUnLuaNova`、命名空间（声明 + `UnLua::` 限定）、插件路径字面量。
 
 **故意保留**：Lua 全局 `UnLua`（脚本兼容）、UCLASS 名、`Config=UnLuaSettings`、`UnLuaTestSuite`。
 
@@ -747,7 +747,7 @@ git checkout -b port/ann-fixes
 
 ### 10.1 已做
 
-- **子模块**：`Plugins/UnLuauNova/Source/ThirdParty/Luau` → `https://github.com/luau-lang/luau.git`，锁在 **0.743**。
+- **子模块**：`Plugins/UnLuaNova/Source/ThirdParty/Luau` → `https://github.com/luau-lang/luau.git`，锁在 **0.743**。
 - **`Luau.Build.cs`**：放在**兄弟包裹目录** `ThirdParty/LuauLib/`，**不放在子模块内**——写进子模块的文件属于 luau-lang/luau 自己那个仓库，永远提交不进本项目。
 
 ### 10.2 核实过的集成事实
@@ -786,10 +786,14 @@ Lua 5.4 内部耦合 **~72 处，14 个文件**：
 
 ### 10.5 为什么原生 Lua 现在还不能删
 
-删除会让树立刻不可编译，而本机**没有 `UnrealEditor-*.dll`，我无法编译排错**。建议顺序：
+删除会让树立刻不可编译，而本机**没有 `UnrealEditor-*.dll`，我无法编译排错**。
+
+> ⚠️ 本节写于"只保留 Luau 单后端"的设想下。**2026-10-19 已改为双后端（Lua 5.5 + Luau 并存）**，因此不再走"删掉原生 Lua"这条路。正确的顺序以 **§11.4** 为准：先解耦 → 再上 `ILuaBackend` → 再把 vendored 5.4.x 换成 Lua 5.5 子模块 → 最后接 Luau。
+
+（下方 1~4 为原设想，仅作历史记录保留。）
 
 1. 先移植 §10.3 的 14 个文件（以 `UnLuaCore.cpp` 为主）
-2. `UnLuauNova.Build.cs` 依赖从 `Lua` 切到 `Luau`
+2. `UnLuaNova.Build.cs` 依赖从 `Lua` 切到 `Luau`
 3. 编译通过 → **再删 `Source/ThirdParty/Lua`**
 4. 最后处理 §10.4 的语义差异与测试套件
 
@@ -799,7 +803,7 @@ Lua 5.4 内部耦合 **~72 处，14 个文件**：
 
 ### 11.1 已落地：`LuaBackend.h`（安全、可编译）
 
-`Plugins/UnLuauNova/Source/UnLuauNova/Public/LuaBackend.h` —— 唯一吸收 VM 差异的地方：
+`Plugins/UnLuaNova/Source/UnLuaNova/Public/LuaBackend.h` —— 唯一吸收 VM 差异的地方：
 
 | 差异点 | Lua 5.4 | Luau |
 |---|---|---|
@@ -807,9 +811,9 @@ Lua 5.4 内部耦合 **~72 处，14 个文件**：
 | userdata 长度 | `lua_rawlen` | `lua_objlen` |
 | 加载 chunk | `luaL_loadbuffer` | `luau_load`（无字节码 loader/dumper） |
 | GC 设置 | `lua_gc(L, LUA_GCGEN, 0, 0)` | `LUA_GCSETGOAL` / `LUA_GCSETSTEPMUL`（**无 `LUA_GCGEN`**） |
-| table `__gc` / 整数子类型 / 字节码 | 有 | **无**（已用 `UNLUAU_HAS_*` 标记） |
+| table `__gc` / 整数子类型 / 字节码 | 有 | **无**（已用 `UNLUANOVA_HAS_*` 标记） |
 
-`UNLUAU_USE_LUAU` 默认 0，所以**今天这棵树仍按原来方式编译**，零风险。
+`UNLUANOVA_LUA_BACKEND` 默认 0，所以**今天这棵树仍按原来方式编译**，零风险。
 
 ### 11.2 一次失败（已回滚，无残留）
 
@@ -824,12 +828,87 @@ Lua 5.4 内部耦合 **~72 处，14 个文件**：
 ### 11.4 下一步（强烈建议先做第 1 步）
 
 1. **把编译跑通** —— `UnrealEditor-*.dll` 缺失，补上后我每一步都能验证，整体会快数倍
-2. 重做 `LuaCore.cpp` 的 userdata 层解耦（可先用 Lua 5.4 验证，因为新布局对两个 VM 都成立）
-3. `LuaEnv.cpp` 的 GC 设置 + `luaL_loadbuffer` → `UNLUAU_LOAD`
+2. 重做 `LuaCore.cpp` 的 userdata 层解耦（**在 Lua 5.5 上做**，新布局对两个 VM 都成立；不要先在 5.4 上做一遍再迁 5.5，会返工）
+3. `LuaEnv.cpp` 的 GC 设置 + `luaL_loadbuffer` → `UNLUANOVA_LOAD`
 4. 其余 11 个文件（`LuaLib_DataTable` 10 / `LuaDanglingCheck` 6 / `PropertyDesc` 6 / `LuaLib_Math.h` 3 …）
-5. `UnLuauNova.Build.cs` 开 `UNLUAU_USE_LUAU=1`，依赖切到 `Luau`
+5. `UnLuaNova.Build.cs` 开 `UNLUANOVA_LUA_BACKEND=1`，依赖切到 `Luau`
 6. 处理语义差异（无 table `__gc`、无整数子类型、无 `__pairs`、无字节码）
 7. 编译 + 测试通过 → **删 `Source/ThirdParty/Lua`**
+
+---
+
+## 11. 双后端决策（2026-10-19 定稿）
+
+### 11.1 决策内容
+
+| 项 | 决定 |
+|---|---|
+| 后端数量 | **只有两个**：Lua 5.5 与 Luau |
+| 已排除 | Lua 5.3 / 5.4.x、LuaJIT、LuaVela、Pluto、Ravi / Pallene / Nelua / Terra、metalua —— **一律不再考虑** |
+| 引入方式 | **两个都以 git 子模块引入** |
+| Lua 版本 | **Lua 5.5**（5.5.0 发布于 2025-12-22，当前 **5.5.1**，`lua/lua` @ `v5.5.1`） |
+| Luau 版本 | 维持 `luau-lang/luau` @ **0.743** |
+| 默认后端 | `Lua55`；`Luau` 为 opt-in |
+
+**子模块布局**（与 §10.1 已定的"包裹目录"模式对称 —— Build.cs 绝不能写进子模块内部）：
+
+```
+Plugins/UnLuaNova/Source/ThirdParty/
+├── Lua55/                  ← submodule: github.com/lua/lua  @ v5.5.1
+├── Lua55Lib/               ← 本项目所有：Lua55.Build.cs
+├── Luau/                   ← submodule: github.com/luau-lang/luau @ 0.743（已有）
+└── LuauLib/                ← 本项目所有：Luau.Build.cs（已有）
+```
+
+### 11.2 ⚠️ 最大风险：Lua 5.5 改了 Table 内部布局
+
+Lua 5.5 的「**更紧凑的数组**（大型数组内存占用减少约 60%）」是 **Table 结构层面的改动**。而 UnLua 现有对 Lua 内部的耦合正好扎在这里（§10.3 实测约 72 处、14 个文件）：
+
+| 文件 | 处数 | 与 5.5 改动的关系 |
+|---|---|---|
+| `UnLuaCore.cpp`（原 LuaCore.cpp） | **35** | `#include "lstate.h"/"lobject.h"`、自写 `lua_index2value`、userdata 尾挂 `FUserdataDesc` —— **正面撞上 Table/TValue 布局变化** |
+| `BaseLib/LuaLib_DataTable.cpp` | 10 | 同上 |
+| `LuaDanglingCheck.cpp` | 6 | 同上 |
+| `ReflectionUtils/PropertyDesc.cpp` | 6 | 同上 |
+| `LuaEnv.cpp` | 3 | 含 `lua_gc(L, LUA_GCGEN, 0, 0)`；5.5 的 GC 改为**主 GC 增量完成**，需验证 `LUA_GCGEN` 语义 |
+| `MathLib/LuaLib_Math.h` | 3 | — |
+| 其余 8 个文件 | 各 1~2 | — |
+
+**结论：阶段 0（解耦）从"建议先做"升级为"硬性前置，且必须在切 5.5 之前完成"。**
+顺序错了会同时面对「内部头 API 变化」和「抽象层缺失」两个问题，排查成本翻倍。
+
+### 11.3 改造清单
+
+| # | 动作 | 说明 |
+|---|---|---|
+| 1 | 删除 `ThirdParty/Lua/` 整个目录 | 含 vendored 的 `lua-5.4.3`、`lua-5.4.4`、`CMakeLists.txt`、`toolchain/`、`Lua.Build.cs` |
+| 2 | 添加子模块 `ThirdParty/Lua55/` | `git submodule add -b v5.5.1 https://github.com/lua/lua.git ...`。⚠️ `lua/lua` 的 tag 是 `v5.5.1`（带 `v` 前缀） |
+| 3 | 新建 `ThirdParty/Lua55Lib/Lua55.Build.cs` | **不用 CMake**，直接把 Lua 5.5 的 `.c` 文件列表交给 UBT 编译 —— 与 Luau 后端（54 个 cpp 交给 UBT）做法一致，且比现有 18KB 的 CMake 现编简单得多 |
+| 4 | `.gitmodules` | 增加第二条 `Lua55` |
+| 5 | `UnLuaNova.Build.cs` | 依赖 `Lua` → 按 `LuaBackend` 开关切 `Lua55` / `Luau` |
+| 6 | 废弃 `UNLUA_LUA_VERSION` | 版本信息改由 `ILuaBackend::GetName()` 提供；`Config/DefaultUnLuaEditor.ini` 的 `LuaVersion` 配置项一并移除 |
+| 7 | 文档 | `Docs/CN/Settings.md` 里"自定义 Lua 版本"一节需重写 |
+
+### 11.4 执行顺序（严格遵守）
+
+```
+① 阶段 0 解耦        ← 硬前置：UnLua 核心零 Lua 内部头依赖
+② 阶段 1 ILuaBackend ← 两个后端实现（Lua55 默认 / Luau opt-in）
+③ 切 Lua 5.5 子模块  ← 此时核心已解耦，切换只剩 Build.cs 与后端实现
+④ UnLuaTestSuite 全绿
+⑤ 接 Luau 后端（阶段 2）
+```
+
+**不要在 ① 之前动 ③。**
+
+### 11.5 Lua 5.5 顺带能拿到的东西
+
+| 新特性 | 对 UnLua 的价值 |
+|---|---|
+| **外部字符串**（使用 Lua 未管理的内存） | FString / FName 编组可零拷贝 —— 与 Luau 的 `buffer` 是同一类机会，可在两个后端各出一份实现 |
+| **全局变量声明** | 与 Luau 的 `luaL_sandbox` 同向，两个后端都能做更严格的沙盒 |
+| `luaL_openselectedlibs` | 精细控制暴露给脚本的标准库，热更安全 |
+| 更紧凑的数组 | 大型 Lua table 内存 -60%，对 UE 侧大量数据容器场景直接受益 |
 
 ---
 

@@ -1,3 +1,3 @@
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 return M

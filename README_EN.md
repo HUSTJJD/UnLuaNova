@@ -1,7 +1,7 @@
-![LOGO](./Docs/Images/UnLuauNova.png)
+![LOGO](./Docs/Images/UnLuaNova.png)
 
 # Overview
-**UnLuauNova** is a **feature-rich**, **easy-learning** and **highly optimized** scripting solution for UE. UnLuauNova follows the programming pattern of UE. UE programmers can use it at zero learning cost.
+**UnLuaNova** is a **feature-rich**, **easy-learning** and **highly optimized** scripting solution for UE. UnLuaNova follows the programming pattern of UE. UE programmers can use it at zero learning cost.
 
 
 # Main features
@@ -25,10 +25,10 @@
 
 
 # Modules
-* **UnLuauNova**. Main **'Runtime'** module.
-* **UnLuauNovaEditor**. **'Editor'** module includes editor extention (Lua template exporting) and a commandlet.
-* **UnLuauNovaDefaultParamCollector**. **'Program'** module to collect default parameters for UFUNCTION.
-* **UnLuauNovaIntelliSense**. **'Program'** module to generate **IntelliSense** (**symbols**) of all **UCLASS**, **UPROPERTY**, **UFUNCTION**, **USTRUCT**, **UENUM** for a **private** IDE (which will be **PUBLIC** soon). It's **disabled** by default.
+* **UnLuaNova**. Main **'Runtime'** module.
+* **UnLuaNovaEditor**. **'Editor'** module includes editor extention (Lua template exporting) and a commandlet.
+* **UnLuaNovaDefaultParamCollector**. **'Program'** module to collect default parameters for UFUNCTION.
+* **UnLuaNovaIntelliSense**. **'Program'** module to generate **IntelliSense** (**symbols**) of all **UCLASS**, **UPROPERTY**, **UFUNCTION**, **USTRUCT**, **UENUM** for a **private** IDE (which will be **PUBLIC** soon). It's **disabled** by default.
 
 
 # Supported engine versions
@@ -42,9 +42,9 @@ Unreal Engine 4.17.x - Unreal Engine 5.x
 
 ![CREATE_BLUEPRINT](Docs/Images/create_blueprint.png)
 
-* Implement **'UnLuauNovaInterface'**.
+* Implement **'UnLuaNovaInterface'**.
 
-![IMPLEMENT_UnLuauNovaInterface](Docs/Images/implement_UnLuauNovaInterface.png)
+![IMPLEMENT_UnLuaNovaInterface](Docs/Images/implement_UnLuaNovaInterface.png)
 
 * Return a Lua file path (**relative** to **'Content/Script'**) in **'GetModuleName'**.
 
@@ -64,9 +64,9 @@ Unreal Engine 4.17.x - Unreal Engine 5.x
 
 
 # Documentation
-* [Programming Guide](Docs/EN/UnLuauNova_Programming_Guide.md)
+* [Programming Guide](Docs/EN/UnLuaNova_Programming_Guide.md)
 * [How to Implement Overriding](Docs/EN/How_To_Implement_Overriding.md)
 
 
 # License
-* UnLuauNova is distributed under the terms of [the MIT license](LICENSE.TXT)
+* UnLuaNova is distributed under the terms of [the MIT license](LICENSE.TXT)

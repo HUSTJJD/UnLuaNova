@@ -1,5 +1,5 @@
 ---@type BP_ProjectileBase_C
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:UserConstructionScript()
 	self.Damage = 128.0

@@ -1,6 +1,6 @@
-require "UnLuauNova"
+require "UnLuaNova"
 
 ---@type Issue532_UMG_C
-local M = UnLuauNova.Class("Tests.Regression.Issue532.Issue532_Base")
+local M = UnLuaNova.Class("Tests.Regression.Issue532.Issue532_Base")
 
 return M

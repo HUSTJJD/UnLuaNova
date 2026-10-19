@@ -1,5 +1,5 @@
 ---@type ABP_AICharacter_C
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:AnimNotify_NotifyPhysics()
 	local BPI_Interfaces = UE.UClass.Load("/Game/Core/Blueprints/BPI_Interfaces.BPI_Interfaces_C")

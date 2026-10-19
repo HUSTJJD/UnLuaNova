@@ -1,5 +1,5 @@
 # Overview
-The main feature of UnLuauNova is overriding 'BlueprintEvent', 'AnimNotify', 'RepNotify', 'InputEvent' without helper codes. This document will introduce the two methods to implement overriding.
+The main feature of UnLuaNova is overriding 'BlueprintEvent', 'AnimNotify', 'RepNotify', 'InputEvent' without helper codes. This document will introduce the two methods to implement overriding.
 
 ---
 

@@ -11,7 +11,7 @@ VSCode环境请参考各插件的配置文档，这里不再赘述。
 - [LuaPanda](https://github.com/Tencent/LuaPanda)
 - [LuaHelper](https://github.com/Tencent/LuaHelper)
 
-注：调试器依赖`luasocket`，UnLuauNova已通过扩展插件集成，如果发现无法连接请检查`{UE工程}/Plugins/UnLuauNovaExtensions`目录是否存在。
+注：调试器依赖`luasocket`，UnLuaNova已通过扩展插件集成，如果发现无法连接请检查`{UE工程}/Plugins/UnLuaNovaExtensions`目录是否存在。
 
 ## 使用 LuaBooster 调试
 

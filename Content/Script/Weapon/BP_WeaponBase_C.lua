@@ -1,5 +1,5 @@
 ---@type BP_WeaponBase_C
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 local EFireType = {	FT_Projectile = 0, FT_InstantHit = 1 }
 

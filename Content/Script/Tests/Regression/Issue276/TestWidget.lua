@@ -1,4 +1,4 @@
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 local function run(self)
     local action = NewObject(UE.UUnLuaLatentAction, self)

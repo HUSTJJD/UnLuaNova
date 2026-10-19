@@ -14,7 +14,7 @@ A: Only can override the `UFUNCTION`s with `BlueprintNativeEvent` property or `B
 
 ## Q: There is log of `Unknown bytecode 0xFF; ignoring it`
 
-A: 0xFF is an Opcode register by UnLuauNova, refer to [Implementation Principle](How_To_Implement_Overriding.md), it will not affect the use.
+A: 0xFF is an Opcode register by UnLuaNova, refer to [Implementation Principle](How_To_Implement_Overriding.md), it will not affect the use.
 
 ## Q: Is there a way to override only part of the logic in the blueprint
 
@@ -26,11 +26,11 @@ A: It is no different from ordinary lua process debugging, you can directly use 
 
 ## Q: How to use IntelliSense?
 
-A: Set `ENABLE_INTELLISENSE=1` in `UnLuauNovaIntelliSense.Build.cs` and regenerate the project, then you can generate Lua IntelliSense in the Intermediate directory under the UnLuauNova plug-in, and add the IntelliSense to the IntelliSense directory of Lua IDE to realize UE smart prompts.
+A: Set `ENABLE_INTELLISENSE=1` in `UnLuaNovaIntelliSense.Build.cs` and regenerate the project, then you can generate Lua IntelliSense in the Intermediate directory under the UnLuaNova plug-in, and add the IntelliSense to the IntelliSense directory of Lua IDE to realize UE smart prompts.
 
-## Q: Which products are using UnLuauNova?
+## Q: Which products are using UnLuaNova?
 
-A: There more than 20 projects using UnLuauNova in Tencent, but unavailable to count projects out of Tencent.
+A: There more than 20 projects using UnLuaNova in Tencent, but unavailable to count projects out of Tencent.
 
 ## Q: Is there any info of G6IDE?
 

@@ -1,5 +1,5 @@
 ---@type UTPSGameInstance
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:ReceiveInit()
 	print("TPSGameInstance:ReceiveInit")

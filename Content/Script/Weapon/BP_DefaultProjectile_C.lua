@@ -1,5 +1,5 @@
 ---@type BP_DefaultProjectile_C
-local M = UnLuauNova.Class("Weapon.BP_ProjectileBase_C")
+local M = UnLuaNova.Class("Weapon.BP_ProjectileBase_C")
 
 function M:Initialize(Initializer)
 	if Initializer then

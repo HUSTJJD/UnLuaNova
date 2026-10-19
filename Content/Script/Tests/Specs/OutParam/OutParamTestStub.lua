@@ -1,4 +1,4 @@
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:ReturnFull(Dest, Obj, Radius, bStop)
     Dest = UE.FVector(0, 0, 0)

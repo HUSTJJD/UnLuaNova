@@ -46,16 +46,19 @@
 
 ### 1.1 一条贯穿全部 feature 的设计原则
 
-所有 feature **定义在 `ILuaBackend` 抽象层**（`PROJECT_PLAN.md` §4.1 已规划），由后端提供实现：
+所有 feature **定义在 `ILuaBackend` 抽象层**（`PROJECT_PLAN.md` §4.1 / §11），由两个后端各自实现：
 
 ```
-ILuaBackend::SetInterrupt(fn)        → Luau: lua_Callbacks.interrupt   | Lua54: lua_sethook(CALL|RET)
-ILuaBackend::SetAllocCallbacks(a,f)  → Luau: onallocate/onfree         | Lua54: 自定义 allocator（仅总量）
-ILuaBackend::SetBreakpoint(...)      → Luau: lua_breakpoint            | Lua54: 不支持（降级为无调试）
-ILuaBackend::NewTaggedUserdata(...)  → Luau: lua_newuserdatatagged     | Lua54: user value 存 desc
+ILuaBackend::SetInterrupt(fn)        → Luau: lua_Callbacks.interrupt   | Lua55: lua_sethook(CALL|RET)
+ILuaBackend::SetAllocCallbacks(a,f)  → Luau: onallocate/onfree(分类)   | Lua55: 自定义 allocator（仅总量）
+ILuaBackend::SetBreakpoint(...)      → Luau: lua_breakpoint            | Lua55: 不支持（降级为无调试）
+ILuaBackend::NewTaggedUserdata(...)  → Luau: lua_newuserdatatagged     | Lua55: user value 存 desc
+ILuaBackend::NewExternalString(...)  → Luau: 不支持（用 buffer）        | Lua55: 外部字符串（5.5 新增）
 ```
 
-**Feature 是公共的，红利是 Luau 的。** 这样 Lua54 后端不炸，Luau 后端吃到全部好处。
+**Feature 是公共的，红利是分侧的。** 两个后端各有一半的独有能力，都不炸。
+
+> **后端只有两个**：Lua 5.5（`lua/lua` @ `v5.5.1`）与 Luau（@ 0.743），**都以子模块引入**。5.4.x / LuaJIT 等已全部排除。详见 `PROJECT_PLAN.md` §11。
 
 ---
 
@@ -75,7 +78,7 @@ ILuaBackend::NewTaggedUserdata(...)  → Luau: lua_newuserdatatagged     | Lua54
 
 净效果：源项目 1300 行里，大约 40% 的复杂度（名称缓存、哈希桶、尾调用修正）在 Luau 下**根本不需要存在**。
 
-**落点**：`UnLuauNova/Private/Profiler/`，替换 `LuaEnv.cpp:46-76` 现有玩具 Hook。
+**落点**：`UnLuaNova/Private/Profiler/`，替换 `LuaEnv.cpp:46-76` 现有玩具 Hook。
 
 ---
 
@@ -92,7 +95,7 @@ ILuaBackend::NewTaggedUserdata(...)  → Luau: lua_newuserdatatagged     | Lua54
 
 成本从源项目的"高"降到"低"，且**安全性问题根本不会出现**。这是本次重写收益最大的一项。
 
-**落点**：`UnLuauNova/Private/MemStats/` + 控制台命令 `lua.memstats`。
+**落点**：`UnLuaNova/Private/MemStats/` + 控制台命令 `lua.memstats`。
 
 ---
 
@@ -104,7 +107,7 @@ ILuaBackend::NewTaggedUserdata(...)  → Luau: lua_newuserdatatagged     | Lua54
 
 **基于 Luau 的新设计**：`interrupt` **在循环回边就会触发**，而死循环天然是密集回边 —— 命中率极高，且完全不需要 LINE hook。把 `FGuard` 的语义改成"设置 interrupt 计数阈值 + 帧计数比对"即可。
 
-**落点**：改 `Private/LuaDeadLoopCheck.cpp`。Lua54 后端保留现有 MASKLINE 实现。
+**落点**：改 `Private/LuaDeadLoopCheck.cpp`。Lua 5.5 后端保留现有 `MASKLINE` 实现（5.5 无 interrupt 等价物）。
 
 ---
 
@@ -120,7 +123,7 @@ ILuaBackend::NewTaggedUserdata(...)  → Luau: lua_newuserdatatagged     | Lua54
 - 不在 UE 编辑器里写 Slate 调试器
 - 这样既满足需求，又避开源项目踩的最大的坑
 
-**落点**：这是唯一值得新开的模块 `UnLuauNovaDebugger`（独立协议服务）。**排期放在 Luau 后端稳定之后。**
+**落点**：这是唯一值得新开的模块 `UnLuaNovaDebugger`（独立协议服务）。**排期放在 Luau 后端稳定之后。**
 
 ---
 
@@ -160,7 +163,7 @@ ILuaBackend::NewTaggedUserdata(...)  → Luau: lua_newuserdatatagged     | Lua54
 - 其余用**纯 Luau 实现** —— Luau 解释器性能足够，不需要 C 扩展
 - **省掉一个扩展插件**，`Plugins/UnLuaExtensions/` 保持不变
 
-**落点**：`Plugins/UnLuauNova/Content/Script/UnLua/StringEx.lua`。
+**落点**：`Plugins/UnLuaNova/Content/Script/UnLua/StringEx.lua`。
 
 ---
 
@@ -198,33 +201,38 @@ ILuaBackend::NewTaggedUserdata(...)  → Luau: lua_newuserdatatagged     | Lua54
 
 ## 4. 前置依赖与执行顺序
 
-**硬前置**：`PROJECT_PLAN.md` §4 的阶段 0（解耦 Lua 内部头）与阶段 1（`ILuaBackend`）。
+**硬前置**：`PROJECT_PLAN.md` §4 阶段 0（解耦 Lua 内部头）+ 阶段 1（`ILuaBackend`）+ **§11 的双后端子模块改造**。
 这些 feature 全部通过 §1.1 的抽象层访问 VM，**阶段 0 没做完就动手，等于又造一遍源项目那种"改核心才能用"的耦合**。
 
+> ⚠️ 顺序不能颠倒：**先解耦，再切 Lua 5.5 子模块**（`PROJECT_PLAN.md` §11.4）。Lua 5.5 改了 Table 内部布局（更紧凑的数组），若先切版本再解耦，会同时面对「内部头 API 变化」和「抽象层缺失」两个问题。
+
 ```
-阶段 0/1（PROJECT_PLAN §4）  解耦 + ILuaBackend 抽象          ← 必须先做
-  │
-阶段 2  Luau 后端跑通（UnLuaTestSuite 全绿）                   ← 硬门槛
-  │
-批次 A —— 直接吃 Luau 原生 API，成本低
+① 阶段 0  解耦：UnLua 核心零 Lua 内部头依赖                    ← 硬前置
+② 阶段 1  ILuaBackend + 双后端子模块（Lua 5.5 / Luau）         ← §11.3 改造清单
+③ Lua 5.5 后端跑通 + UnLuaTestSuite 全绿                       ← 默认后端基线
+④ Luau 后端跑通 + UnLuaTestSuite 全绿                          ← F1~F4/F8 的门槛
+   │
+批次 A —— 只依赖 Lua 5.5，可先做
+  ├─ F5 沙盒 + 时间戳兜底  ~0.5d   （5.5 有全局变量声明可用）
+  └─ F7 字符串扩展         ~1h     （纯 Lua，两后端通用）
+   │
+批次 B —— 吃 Luau 原生 API，成本低
   ├─ F2 内存统计          ~0.5d   （onallocate/onfree）
-  ├─ F3 死循环改造         ~0.5d   （interrupt 替 MASKLINE）
-  ├─ F7 字符串扩展         ~1h     （纯 Luau）
-  └─ F5 沙盒 + 时间戳兜底  ~0.5d
-  │
-批次 B —— 主力
+  └─ F3 死循环改造         ~0.5d   （interrupt 替 MASKLINE）
+   │
+批次 C —— 主力
   └─ F1 Profiler          ~2d     （interrupt 采样 + protoid）
-  │
-批次 C
+   │
+批次 D
   ├─ F6 Luau 类型声明      ~2d     ← 与 Type Manifest 主线同向，建议与 M2/M4 合并做
   └─ F8 vector/buffer      ~3d     ← 先定 LUA_VECTOR_SIZE，建议 M5 之后
-  │
-批次 D（独立，不占 Luau 排期）
+   │
+批次 E（独立，不占后端排期）
   ├─ SkipObjectReferencer  ~2h
   └─ 静态导出反注册         ~2h
-  │
+   │
 最后
-  └─ F4 调试服务           ~1~2w   （headless DAP，UI 交 VSCode）
+  └─ F4 调试服务           ~1~2w   （headless DAP，UI 交 VSCode；仅 Luau 后端可用）
 ```
 
 ---

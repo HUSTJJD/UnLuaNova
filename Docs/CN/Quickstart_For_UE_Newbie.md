@@ -2,14 +2,14 @@
 
 本文站在UE新手视角，以Actor为父类作为用例，说明如何通过Lua来编写/覆盖蓝图逻辑。其他类型同样可以依此类推。
 
-如果你是已经是UE的老手了，建议直接 [开始UnLuauNova之旅](../../README.md#开始UnLuauNova之旅)
+如果你是已经是UE的老手了，建议直接 [开始UnLuaNova之旅](../../README.md#开始UnLuaNova之旅)
 
 ## 1. 新建蓝图
 ![新建蓝图1](../Images/create_new_actor_bp_1.png)
 ![新建蓝图2](../Images/create_new_actor_bp_2.png)
 
 ## 2. 绑定到Lua
-- 双击打开上一步新建好的蓝图，点击UnLuauNova菜单栏中的“绑定”，默认会自动根据蓝图路径填充好Lua的模块路径（如图中①所示）。
+- 双击打开上一步新建好的蓝图，点击UnLuaNova菜单栏中的“绑定”，默认会自动根据蓝图路径填充好Lua的模块路径（如图中①所示）。
 - 如果下次需要修改绑定的路径，可以找到 `GetModuleName` 函数并双击进行修改（如图中②所示）。
 - 完成后记得“编译”并“保存”（如图中③所示）。
 
@@ -17,7 +17,7 @@
 ![绑定Lua2](../Images/bind_to_lua_2.png)
 
 ## 3. 生成Lua模版代码
-点击UnLuauNova菜单栏中的“生成Lua模板文件”，会在工程 `Content/Script` 目录下生成。
+点击UnLuaNova菜单栏中的“生成Lua模板文件”，会在工程 `Content/Script` 目录下生成。
 
 ![生成模板代码](../Images/generate_lua_template.png)
 

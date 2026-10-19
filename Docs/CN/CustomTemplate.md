@@ -1,8 +1,8 @@
 # 生成Lua模版
 
-在绑定类型到Lua后，可以通过 `UnLuauNova工具栏 -> 创建Lua模版文件` 来快速在绑定的路径下生成对应的Lua文件。
+在绑定类型到Lua后，可以通过 `UnLuaNova工具栏 -> 创建Lua模版文件` 来快速在绑定的路径下生成对应的Lua文件。
 
-默认会根据类型名称在 `UnLuauNova/Config/LuaTemplates` 目录下来查找模版文件，如果文件不存在会使用它的父类名称来继续查找。
+默认会根据类型名称在 `UnLuaNova/Config/LuaTemplates` 目录下来查找模版文件，如果文件不存在会使用它的父类名称来继续查找。
 
 ## 自定义
 

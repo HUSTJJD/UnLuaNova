@@ -1,4 +1,4 @@
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:InitState(Parent, Name)
     self.Name = Name
@@ -7,7 +7,7 @@ end
 
 function M:OnTestDelegate(Count)
     local text = tostring(Count)
-    if UnLuauNova.FTextEnabled then
+    if UnLuaNova.FTextEnabled then
         text = UE.FText.FromString(text)
     end
     self.Text:SetText(text)

@@ -14,14 +14,14 @@
     userdata       FVector(1,1,1)   Vector
 
     创建完成后，和原来的原生容器类型使用方式是相同的，更多接口可以参考源码：
-    TArray      Plugins\UnLuauNova\Source\UnLuauNova\Private\BaseLib\LuaLib_Array.cpp
-    TSet        Plugins\UnLuauNova\Source\UnLuauNova\Private\BaseLib\LuaLib_Set.cpp
-    TMap        Plugins\UnLuauNova\Source\UnLuauNova\Private\BaseLib\LuaLib_Map.cpp
+    TArray      Plugins\UnLuaNova\Source\UnLuaNova\Private\BaseLib\LuaLib_Array.cpp
+    TSet        Plugins\UnLuaNova\Source\UnLuaNova\Private\BaseLib\LuaLib_Set.cpp
+    TMap        Plugins\UnLuaNova\Source\UnLuaNova\Private\BaseLib\LuaLib_Map.cpp
 ]] --
 
 local Screen = require "Tutorials.Screen"
 
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 local function print_intro()
     local msg =

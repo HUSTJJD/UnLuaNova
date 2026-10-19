@@ -13,7 +13,7 @@
 
 local Screen = require "Tutorials.Screen"
 
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:ReceiveBeginPlay()
     if not self:HasAuthority() then

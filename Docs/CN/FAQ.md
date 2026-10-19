@@ -17,11 +17,11 @@ self["function name with space"]() -- “静态函数”
 self["function name with space"](self) -- “实例函数”
 ```
 
-## 为什么新建的工程安装了UnLuauNova，打开后提示 `could not be compiled. Try rebuilding from source manually`？
+## 为什么新建的工程安装了UnLuaNova，打开后提示 `could not be compiled. Try rebuilding from source manually`？
 
 新建工程时选择C++项目，而不是蓝图项目。
 
-## 找不到UnLuauNova的绑定按钮？
+## 找不到UnLuaNova的绑定按钮？
 
 蓝图编辑器的窗口宽度太小，导致绑定图标被收缩到下拉按钮了，试试最大化编辑器窗口。
 
@@ -59,7 +59,7 @@ self["function name with space"](self) -- “实例函数”
 
 ## 怎么支持热更新Lua文件？
 
-简单点可以利用UnLuauNova默认的加载机制，会优先加载`FPaths::ProjectPersistentDownloadDir()`目录下的脚本。
+简单点可以利用UnLuaNova默认的加载机制，会优先加载`FPaths::ProjectPersistentDownloadDir()`目录下的脚本。
 
 以Windows平台举例，打包后工程里的Lua文件`require "A.B.C"`，会依次尝试加载：
 1. WindowsNoEditor/项目名/Saved/PersistentDownloadDir/Content/Script/A/B/C.lua
@@ -73,14 +73,14 @@ self["function name with space"](self) -- “实例函数”
 
 ## 为什么改了`package.path`没有效果，可以自定义`require`查找目录吗？
 
-UE有自己的文件系统，如果有自定义查找目录的需求，可以修改`UnLuauNova.PackagePath`来实现，比如：
+UE有自己的文件系统，如果有自定义查找目录的需求，可以修改`UnLuaNova.PackagePath`来实现，比如：
 
 ```lua
-UnLuauNova.PackagePath = UnLuauNova.PackagePath .. ';Plugins/UnLuauNovaExtensions/LuaProtobuf/Content/Script/?.lua'
+UnLuaNova.PackagePath = UnLuaNova.PackagePath .. ';Plugins/UnLuaNovaExtensions/LuaProtobuf/Content/Script/?.lua'
 ```
 
-PS：默认值是`Content/Script/?.lua;Plugins/UnLuauNova/Content/Script/?.lua`。
+PS：默认值是`Content/Script/?.lua;Plugins/UnLuaNova/Content/Script/?.lua`。
 
-## 有哪些产品正在使用UnLuauNova？
+## 有哪些产品正在使用UnLuaNova？
 
-腾讯内部已知的有四十款左右项目在使用UnLuauNova，外部项目暂时无法统计。
+腾讯内部已知的有四十款左右项目在使用UnLuaNova，外部项目暂时无法统计。

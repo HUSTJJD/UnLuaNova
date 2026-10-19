@@ -1,16 +1,16 @@
-# UnLuauNova API
+# UnLuaNova API
 
 ## C++ API
 
 ### Global Variables
-* `UnLuauNova::GLuaSrcRelativePath` Relative path of Lua script source files based on Content directory
+* `UnLuaNova::GLuaSrcRelativePath` Relative path of Lua script source files based on Content directory
 
-* `UnLuauNova::GLuaSrcFullPath` Absolute path of Lua script source files
+* `UnLuaNova::GLuaSrcFullPath` Absolute path of Lua script source files
 
 * `FLuaContext::GLuaCxt` Global Lua context
 
 ### Global Functions
-Namespace of UnLuauNova
+Namespace of UnLuaNova
 * `Call` Call a global function in Lua.
 
 * `CallTableFunc` Call a function in a given global table in Lua.
@@ -25,9 +25,9 @@ Namespace of UnLuauNova
 
 * `GetState` Return the global lua_State pointer created by CreateState
 
-* `Startup` Call to start the UnLuauNova, return true for success start, otherwise, return false
+* `Startup` Call to start the UnLuaNova, return true for success start, otherwise, return false
 
-* `Shutdown` Call to stop the UnLuauNova
+* `Shutdown` Call to stop the UnLuaNova
 
 * `LoadFile` Call to load a Lua file with relative path based on Lua Script path without running it, return true if found the file and loaded successfully, otherwise return false
 
@@ -43,15 +43,15 @@ Namespace of UnLuauNova
 
 * `GetLuaCallStack` Get the call stack of the running lua_State
 
-### UnLuauNova's global Delegates
-FUnLuauNovaDelegates
+### UnLuaNova's global Delegates
+FUnLuaNovaDelegates
 * `OnLuaStateCreated` Trriged after created a lua_State, you can get the lua_State in this delegate
 
-* `OnLuaContextInitialized` Trriged after UnLuauNova's context has been initialized
+* `OnLuaContextInitialized` Trriged after UnLuaNova's context has been initialized
 
-* `OnPreLuaContextCleanup` Trriged before starting to clean UnLuauNova's context
+* `OnPreLuaContextCleanup` Trriged before starting to clean UnLuaNova's context
 
-* `OnPostLuaContextCleanup` Trriged after UnLuauNova's context has been cleaned
+* `OnPostLuaContextCleanup` Trriged after UnLuaNova's context has been cleaned
 
 * `OnPreStaticallyExport` Trriged before starting to register the statically exported classes into lua_State
 
@@ -66,10 +66,10 @@ FUnLuauNovaDelegates
 * `LoadLuaFile` Trriged while try to loading lua file, could register user-defined loading
 
 ### Interface
-* `UUnLuauNovaInterface` Core interface for UnLuauNova, used to tell UnLuauNova which UE-Object should be bind with Lua file
+* `UUnLuaNovaInterface` Core interface for UnLuaNova, used to tell UnLuaNova which UE-Object should be bind with Lua file
 
 ### Class
-* `FLuaContext` Wrapper of UnLuauNova's context, contains the main lua_State of UnLuauNova
+* `FLuaContext` Wrapper of UnLuaNova's context, contains the main lua_State of UnLuaNova
 
 * `FLuaIndex` Wrapper of the index of Lua stack
 
@@ -119,20 +119,20 @@ FUnLuauNovaDelegates
 
 * `Execute` Manually excutes all callbacks of the given instance of FScriptDelegate
 
-### UnLuauNova.lua (Functions in UnLuauNova.lua)
+### UnLuaNova.lua (Functions in UnLuaNova.lua)
 * `Class` Create a table like class in OOP
 
 * `print` Override origin `print` by `UEPrint`
 
-## Macros in UnLuauNova module
-* `AUTO_UnLuauNova_STARTUP` Macro for whether to automatically start or not, default is true
+## Macros in UnLuaNova module
+* `AUTO_UnLuaNova_STARTUP` Macro for whether to automatically start or not, default is true
 
 * `WITH_UE4_NAMESPACE` Macro for whether to use `UE` to access Unreal Class's in Lua or not , default is true
 
 * `SUPPORTS_RPC_CALL` Macro for whether to support RPC calls, default is true
 
-* `SUPPORTS_COMMANDLET` Macro for whether to support UnLuauNova in `commandlet`, default is true
+* `SUPPORTS_COMMANDLET` Macro for whether to support UnLuaNova in `commandlet`, default is true
 
 * `ENABLE_TYPE_CHECK` Macro for whether to check arguments' type is correct or not while calling C++ from Lua, default is true
 
-* `UnLuauNova_ENABLE_DEBUG` Macro for whether to output UnLuauNova's debugging log, default is true.
+* `UnLuaNova_ENABLE_DEBUG` Macro for whether to output UnLuaNova's debugging log, default is true.

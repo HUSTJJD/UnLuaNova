@@ -4,7 +4,7 @@
 
 local Screen = require "Tutorials.Screen"
 
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 local function run(self, name)
     Screen.Print(string.format("协程%s：启动", name))

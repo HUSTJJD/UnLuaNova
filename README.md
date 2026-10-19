@@ -1,9 +1,9 @@
-# UnLuauNova
+# UnLuaNova
 
-**UnLuauNova** 是面向 Unreal Engine 的 Lua 脚本方案，是 [Tencent/UnLua](https://github.com/Tencent/UnLua) 的社区续作。
+**UnLuaNova** 是面向 Unreal Engine 的 Lua 脚本方案，是 [Tencent/UnLua](https://github.com/Tencent/UnLua) 的社区续作。
 
 UnLua 的官方发布线冻结在 v2.3.6（2023-11），`develop` 分支虽仍有零星修复但无版本、无维护者。
-UnLuauNova 把这些散落的社区成果收敛成一条有人维护的发行线，并在此基础上做三件事：
+UnLuaNova 把这些散落的社区成果收敛成一条有人维护的发行线，并在此基础上做三件事：
 
 1. **类型导出克制化** —— 不再默认把整个反射世界暴露给 Lua
 2. **可插拔 Lua 后端** —— 默认 Lua 5.4，实验性支持 [Luau](https://luau.org)
@@ -41,14 +41,14 @@ UnLuauNova 把这些散落的社区成果收敛成一条有人维护的发行线
 
 ## 从 UnLua 迁移
 
-Lua 侧的全局名已从 `UnLua` 改为 **`UnLuauNova`**，需要批量替换：
+Lua 侧的全局名已从 `UnLua` 改为 **`UnLuaNova`**，需要批量替换：
 
 ```lua
 local M = UnLua.Class()        -- UnLua
-local M = UnLuauNova.Class()   -- UnLuauNova
+local M = UnLuaNova.Class()   -- UnLuaNova
 ```
 
-另外 UCLASS 名也已改名（`UUnLuaSettings` → `UUnLuauNovaSettings` 等），需要 resave 资产并迁移 `Config/*.ini` 的 section 名。
+另外 UCLASS 名也已改名（`UUnLuaSettings` → `UUnLuaNovaSettings` 等），需要 resave 资产并迁移 `Config/*.ini` 的 section 名。
 
 ## 文档
 

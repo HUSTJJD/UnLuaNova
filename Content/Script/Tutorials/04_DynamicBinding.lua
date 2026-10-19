@@ -1,5 +1,5 @@
 --[[
-    说明：除了实现 UnLuauNovaInterface 的静态绑定方式外，还可以在运行时动态绑定对象到Lua
+    说明：除了实现 UnLuaNovaInterface 的静态绑定方式外，还可以在运行时动态绑定对象到Lua
 
     对于 Actor 类，可以使用 SpawnActor 接口，例如：
     World:SpawnActor(SpawnClass, Transform, AlwaysSpawn, self, self, "Tutorials.GravitySphereActor")
@@ -12,7 +12,7 @@
 
 local Screen = require "Tutorials.Screen"
 
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:ReceiveBeginPlay()
     local msg =

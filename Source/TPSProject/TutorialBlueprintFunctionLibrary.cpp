@@ -12,11 +12,11 @@ void UTutorialBlueprintFunctionLibrary::CallLuaByGlobalTable()
 {
     PrintScreen(TEXT("[C++]CallLuaByGlobalTable 开始"));
 
-    UnLuauNova::FLuaEnv Env;
+    UnLuaNova::FLuaEnv Env;
     const auto bSuccess = Env.DoString("G_08_CppCallLua = require 'Tutorials.08_CppCallLua'");
     check(bSuccess);
 
-    const auto RetValues = UnLuauNova::CallTableFunc(Env.GetMainState(), "G_08_CppCallLua", "CallMe", 1.1f, 2.2f);
+    const auto RetValues = UnLuaNova::CallTableFunc(Env.GetMainState(), "G_08_CppCallLua", "CallMe", 1.1f, 2.2f);
     check(RetValues.Num() == 1);
 
     const auto Msg = FString::Printf(TEXT("[C++]收到来自Lua的返回，结果=%f"), RetValues[0].Value<float>());
@@ -27,14 +27,14 @@ void UTutorialBlueprintFunctionLibrary::CallLuaByGlobalTable()
 void UTutorialBlueprintFunctionLibrary::CallLuaByFLuaTable()
 {
     PrintScreen(TEXT("[C++]CallLuaByFLuaTable 开始"));
-    UnLuauNova::FLuaEnv Env;
+    UnLuaNova::FLuaEnv Env;
 
-    const auto Require = UnLuauNova::FLuaFunction(&Env, "_G", "require");
+    const auto Require = UnLuaNova::FLuaFunction(&Env, "_G", "require");
     const auto RetValues1 = Require.Call("Tutorials.08_CppCallLua");
     check(RetValues1.Num() == 2);
 
     const auto RetValue = RetValues1[0];
-    const auto LuaTable = UnLuauNova::FLuaTable(&Env, RetValue);
+    const auto LuaTable = UnLuaNova::FLuaTable(&Env, RetValue);
     const auto RetValues2 = LuaTable.Call("CallMe", 3.3f, 4.4f);
     check(RetValues2.Num() == 1);
 
@@ -43,7 +43,7 @@ void UTutorialBlueprintFunctionLibrary::CallLuaByFLuaTable()
     PrintScreen(TEXT("[C++]CallLuaByFLuaTable 结束"));
 }
 
-bool CustomLoader1(UnLuauNova::FLuaEnv& Env, const FString& RelativePath, TArray<uint8>& Data, FString& FullPath)
+bool CustomLoader1(UnLuaNova::FLuaEnv& Env, const FString& RelativePath, TArray<uint8>& Data, FString& FullPath)
 {
     const auto SlashedRelativePath = RelativePath.Replace(TEXT("."), TEXT("/"));
     FullPath = FString::Printf(TEXT("%s%s.lua"), *GLuaSrcFullPath, *SlashedRelativePath);
@@ -58,7 +58,7 @@ bool CustomLoader1(UnLuauNova::FLuaEnv& Env, const FString& RelativePath, TArray
     return false;
 }
 
-bool CustomLoader2(UnLuauNova::FLuaEnv& Env, const FString& RelativePath, TArray<uint8>& Data, FString& FullPath)
+bool CustomLoader2(UnLuaNova::FLuaEnv& Env, const FString& RelativePath, TArray<uint8>& Data, FString& FullPath)
 {
     const auto SlashedRelativePath = RelativePath.Replace(TEXT("."), TEXT("/"));
     const auto L = Env.GetMainState();

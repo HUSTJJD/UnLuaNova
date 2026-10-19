@@ -1,4 +1,4 @@
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:ReceiveBeginPlay()
 	local BehaviorTree = UE.UObject.Load("/Game/Core/Blueprints/AI/BT_Enemy")

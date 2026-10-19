@@ -14,7 +14,7 @@
 
 local Screen = require "Tutorials.Screen"
 
-local M = UnLuauNova.Class()
+local M = UnLuaNova.Class()
 
 function M:ReceiveBeginPlay()
     local msg =
@@ -70,10 +70,10 @@ SetupAxisBindings()
     使用UnLua.Input.BindXXX接口可以实现更细节的输入绑定控制
 
     更多请参考：
-    UnLuauNova\Plugins\UnLuauNova\Content\Script\UnLuauNova\Input.lua
+    UnLuaNova\Plugins\UnLuaNova\Content\Script\UnLuaNova\Input.lua
 ]]
 
-local BindKey = UnLuauNova.Input.BindKey
+local BindKey = UnLuaNova.Input.BindKey
 
 BindKey(M, "C", "Pressed", function(self, Key)
     Screen.Print("按下了C")
