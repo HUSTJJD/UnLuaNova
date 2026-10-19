@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -15,12 +15,12 @@
 #pragma once
 
 #include "Runtime/Launch/Resources/Version.h"
-#include "UNLUANOVABase.h"
-#include "UNLUANOVATemplate.h"
+#include "UnLuaNovaBase.h"
+#include "UnLuaNovaTemplate.h"
 #include "LuaValue.h"
 #include "LuaEnv.h"
 
-namespace UNLUANOVA
+namespace UnLuaNova
 {
     /**
      * lstring wrapper
@@ -218,73 +218,73 @@ namespace UNLUANOVA
     template <typename T>
     FORCEINLINE int32 Push(lua_State* L, TSubclassOf<T>& V, bool bCopy)
     {
-        return UNLUANOVA::PushUObject(L, V.Get());
+        return UnLuaNova::PushUObject(L, V.Get());
     }
 
     template <typename T>
     FORCEINLINE int32 Push(lua_State* L, const TSubclassOf<T>& V, bool bCopy)
     {
-        return UNLUANOVA::PushUObject(L, V.Get());
+        return UnLuaNova::PushUObject(L, V.Get());
     }
 
     template <typename T>
     FORCEINLINE int32 Push(lua_State* L, TSubclassOf<T>&& V, bool bCopy)
     {
-        return UNLUANOVA::PushUObject(L, V.Get());
+        return UnLuaNova::PushUObject(L, V.Get());
     }
 
     template <typename T, typename Allocator>
     FORCEINLINE int32 Push(lua_State* L, TArray<T, Allocator>& V, bool bCopy)
     {
-        return UNLUANOVA::PushArray(L, (const FScriptArray*)(&V), GetTypeInterface<T>(), bCopy);
+        return UnLuaNova::PushArray(L, (const FScriptArray*)(&V), GetTypeInterface<T>(), bCopy);
     }
 
     template <typename T, typename Allocator>
     FORCEINLINE int32 Push(lua_State* L, const TArray<T, Allocator>& V, bool bCopy)
     {
-        return UNLUANOVA::PushArray(L, (const FScriptArray*)(&V), GetTypeInterface<T>(), bCopy);
+        return UnLuaNova::PushArray(L, (const FScriptArray*)(&V), GetTypeInterface<T>(), bCopy);
     }
 
     template <typename T, typename Allocator>
     FORCEINLINE int32 Push(lua_State* L, TArray<T, Allocator>&& V, bool bCopy)
     {
-        return UNLUANOVA::PushArray(L, (const FScriptArray*)(&V), GetTypeInterface<T>(), bCopy);
+        return UnLuaNova::PushArray(L, (const FScriptArray*)(&V), GetTypeInterface<T>(), bCopy);
     }
 
     template <typename T, typename KeyFunc, typename Allocator>
     FORCEINLINE int32 Push(lua_State* L, TSet<T, KeyFunc, Allocator>& V, bool bCopy)
     {
-        return UNLUANOVA::PushSet(L, (const FScriptSet*)(&V), GetTypeInterface<T>(), bCopy);
+        return UnLuaNova::PushSet(L, (const FScriptSet*)(&V), GetTypeInterface<T>(), bCopy);
     }
 
     template <typename T, typename KeyFunc, typename Allocator>
     FORCEINLINE int32 Push(lua_State* L, const TSet<T, KeyFunc, Allocator>& V, bool bCopy)
     {
-        return UNLUANOVA::PushSet(L, (const FScriptSet*)(&V), GetTypeInterface<T>(), bCopy);
+        return UnLuaNova::PushSet(L, (const FScriptSet*)(&V), GetTypeInterface<T>(), bCopy);
     }
 
     template <typename T, typename KeyFunc, typename Allocator>
     FORCEINLINE int32 Push(lua_State* L, TSet<T, KeyFunc, Allocator>&& V, bool bCopy)
     {
-        return UNLUANOVA::PushSet(L, (const FScriptSet*)(&V), GetTypeInterface<T>(), bCopy);
+        return UnLuaNova::PushSet(L, (const FScriptSet*)(&V), GetTypeInterface<T>(), bCopy);
     }
 
     template <typename KeyType, typename ValueType, typename Allocator, typename KeyFunc>
     FORCEINLINE int32 Push(lua_State* L, TMap<KeyType, ValueType, Allocator, KeyFunc>& V, bool bCopy)
     {
-        return UNLUANOVA::PushMap(L, (const FScriptMap*)(&V), GetTypeInterface<KeyType>(), GetTypeInterface<ValueType>(), bCopy);
+        return UnLuaNova::PushMap(L, (const FScriptMap*)(&V), GetTypeInterface<KeyType>(), GetTypeInterface<ValueType>(), bCopy);
     }
 
     template <typename KeyType, typename ValueType, typename Allocator, typename KeyFunc>
     FORCEINLINE int32 Push(lua_State* L, const TMap<KeyType, ValueType, Allocator, KeyFunc>& V, bool bCopy)
     {
-        return UNLUANOVA::PushMap(L, (const FScriptMap*)(&V), GetTypeInterface<KeyType>(), GetTypeInterface<ValueType>(), bCopy);
+        return UnLuaNova::PushMap(L, (const FScriptMap*)(&V), GetTypeInterface<KeyType>(), GetTypeInterface<ValueType>(), bCopy);
     }
 
     template <typename KeyType, typename ValueType, typename Allocator, typename KeyFunc>
     FORCEINLINE int32 Push(lua_State* L, TMap<KeyType, ValueType, Allocator, KeyFunc>&& V, bool bCopy)
     {
-        return UNLUANOVA::PushMap(L, (const FScriptMap*)(&V), GetTypeInterface<KeyType>(), GetTypeInterface<ValueType>(), bCopy);
+        return UnLuaNova::PushMap(L, (const FScriptMap*)(&V), GetTypeInterface<KeyType>(), GetTypeInterface<ValueType>(), bCopy);
     }
 
     FORCEINLINE int32 Push(lua_State* L, FlStringWrapper& V, bool bCopy = false)
@@ -458,17 +458,17 @@ namespace UNLUANOVA
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<UObject*>)
     {
-        return (UNLUANOVA::GetUObject(L, Index) != nullptr);
+        return (UnLuaNova::GetUObject(L, Index) != nullptr);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<UClass*>)
     {
-        return Cast<UClass>(UNLUANOVA::GetUObject(L, Index)) != nullptr;
+        return Cast<UClass>(UnLuaNova::GetUObject(L, Index)) != nullptr;
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<const UClass*>)
     {
-        return Cast<UClass>(UNLUANOVA::GetUObject(L, Index)) != nullptr;
+        return Cast<UClass>(UnLuaNova::GetUObject(L, Index)) != nullptr;
     }
 
     /**
@@ -607,22 +607,22 @@ namespace UNLUANOVA
 
     FORCEINLINE UObject* Get(lua_State* L, int32 Index, TType<UObject*>)
     {
-        return UNLUANOVA::GetUObject(L, Index);
+        return UnLuaNova::GetUObject(L, Index);
     }
 
     FORCEINLINE const UObject* Get(lua_State* L, int32 Index, TType<const UObject*>)
     {
-        return UNLUANOVA::GetUObject(L, Index);
+        return UnLuaNova::GetUObject(L, Index);
     }
 
     FORCEINLINE UClass* Get(lua_State* L, int32 Index, TType<UClass*>)
     {
-        return Cast<UClass>(UNLUANOVA::GetUObject(L, Index));
+        return Cast<UClass>(UnLuaNova::GetUObject(L, Index));
     }
 
     FORCEINLINE const UClass* Get(lua_State* L, int32 Index, TType<const UClass*>)
     {
-        return Cast<UClass>(UNLUANOVA::GetUObject(L, Index));
+        return Cast<UClass>(UnLuaNova::GetUObject(L, Index));
     }
 
     /**
@@ -636,7 +636,7 @@ namespace UNLUANOVA
     template <bool bCopy, typename T1, typename... T2>
     FORCEINLINE int32 PushArgs(lua_State* L, T1&& V1, T2&&... V2)
     {
-        const int32 Ret1 = UNLUANOVA::Push(L, Forward<T1>(V1), bCopy);
+        const int32 Ret1 = UnLuaNova::Push(L, Forward<T1>(V1), bCopy);
         const int32 Ret2 = PushArgs<bCopy>(L, Forward<T2>(V2)...);
         return Ret1 + Ret2;
     }
@@ -685,7 +685,7 @@ namespace UNLUANOVA
         lua_getglobal(L, FuncName);
         if (lua_isfunction(L, -1) == false)
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("Global function %s doesn't exist!"), UTF8_TO_TCHAR(FuncName));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Global function %s doesn't exist!"), UTF8_TO_TCHAR(FuncName));
             lua_pop(L, 2);
             return FLuaRetValues(L, INDEX_NONE);
         }
@@ -710,14 +710,14 @@ namespace UNLUANOVA
         int32 Type = lua_getglobal(L, TableName);
         if (Type != LUA_TTABLE)
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("Global table %s doesn't exist!"), UTF8_TO_TCHAR(TableName));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Global table %s doesn't exist!"), UTF8_TO_TCHAR(TableName));
             lua_pop(L, 2);
             return FLuaRetValues(Env, INDEX_NONE);
         }
         Type = lua_getfield(L, -1, FuncName);
         if (Type != LUA_TFUNCTION)
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("Function %s of global table %s doesn't exist!"), UTF8_TO_TCHAR(FuncName), UTF8_TO_TCHAR(TableName));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Function %s of global table %s doesn't exist!"), UTF8_TO_TCHAR(FuncName), UTF8_TO_TCHAR(TableName));
             lua_pop(L, 3);
             return FLuaRetValues(Env, INDEX_NONE);
         }
@@ -743,7 +743,7 @@ namespace UNLUANOVA
         int32 Type = lua_getfield(L, LuaTable.GetIndex(), FuncName);
         if (Type != LUA_TFUNCTION)
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("Function %s doesn't exist!"), UTF8_TO_TCHAR(FuncName));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Function %s doesn't exist!"), UTF8_TO_TCHAR(FuncName));
             lua_pop(L, 2);
             return FLuaRetValues(L, INDEX_NONE);
         }
@@ -754,31 +754,31 @@ namespace UNLUANOVA
     template <typename T>
     FORCEINLINE T FLuaValue::Value() const
     {
-        return UNLUANOVA::Get(L, Index, TType<T>());
+        return UnLuaNova::Get(L, Index, TType<T>());
     }
 
     template <typename T>
     FORCEINLINE FLuaValue::operator T() const
     {
-        return UNLUANOVA::Get(L, Index, TType<T>());
+        return UnLuaNova::Get(L, Index, TType<T>());
     }
 
     template <typename T, typename Allocator>
     FORCEINLINE FLuaValue::operator TArray<T, Allocator>& () const
     {
-        return UNLUANOVA::Get(L, Index, TType<TArray<T, Allocator>&>());
+        return UnLuaNova::Get(L, Index, TType<TArray<T, Allocator>&>());
     }
 
     template <typename T, typename KeyFunc, typename Allocator>
     FORCEINLINE FLuaValue::operator TSet<T, KeyFunc, Allocator>& () const
     {
-        return UNLUANOVA::Get(L, Index, TType<TSet<T, KeyFunc, Allocator>&>());
+        return UnLuaNova::Get(L, Index, TType<TSet<T, KeyFunc, Allocator>&>());
     }
 
     template <typename KeyType, typename ValueType, typename Allocator, typename KeyFunc>
     FORCEINLINE FLuaValue::operator TMap<KeyType, ValueType, Allocator, KeyFunc>& () const
     {
-        return UNLUANOVA::Get(L, Index, TType<TMap<KeyType, ValueType, Allocator, KeyFunc>&>());
+        return UnLuaNova::Get(L, Index, TType<TMap<KeyType, ValueType, Allocator, KeyFunc>&>());
     }
 
     /**
@@ -798,7 +798,7 @@ namespace UNLUANOVA
         int32 Type = lua_gettable(L, Index);
         if (Type != LUA_TFUNCTION)
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("Function %s of table doesn't exist!"), UTF8_TO_TCHAR(FuncName));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Function %s of table doesn't exist!"), UTF8_TO_TCHAR(FuncName));
             lua_pop(L, 2);
             return FLuaRetValues(L, INDEX_NONE);
         }
@@ -891,7 +891,7 @@ namespace UNLUANOVA
 
         virtual void ReadValue(lua_State* L, const void* ValuePtr, bool bCreateCopy) const override
         {
-            UNLUANOVA::Push(L, *((T*)ValuePtr), bCreateCopy);
+            UnLuaNova::Push(L, *((T*)ValuePtr), bCreateCopy);
         }
 
         virtual bool WriteValue_InContainer(lua_State* L, void* ContainerPtr, int32 IndexInStack, bool bCreateCopy) const override
@@ -902,7 +902,7 @@ namespace UNLUANOVA
         virtual bool WriteValue(lua_State* L, void* ValuePtr, int32 IndexInStack, bool bCreateCopy) const override
         {
             static_assert(TIsCopyConstructible<T>::Value, "type must be copy constructible!");
-            T V = UNLUANOVA::Get(L, IndexInStack, TType<T>());
+            T V = UnLuaNova::Get(L, IndexInStack, TType<T>());
             CopyInternal((T*)ValuePtr, &V, std::conditional_t<TIsTriviallyCopyConstructible<T>::Value, FTrue, FFalse>());
             return false;
         }
@@ -942,7 +942,7 @@ namespace UNLUANOVA
 
         virtual void ReadValue(lua_State* L, const void* ValuePtr, bool bCreateCopy) const override
         {
-            UNLUANOVA::Push(L, *((T**)ValuePtr), bCreateCopy);
+            UnLuaNova::Push(L, *((T**)ValuePtr), bCreateCopy);
         }
 
         virtual bool WriteValue_InContainer(lua_State* L, void* ContainerPtr, int32 IndexInStack, bool bCreateCopy = true) const override
@@ -952,7 +952,7 @@ namespace UNLUANOVA
 
         virtual bool WriteValue(lua_State* L, void* ValuePtr, int32 IndexInStack, bool bCreateCopy) const override
         {
-            T* V = UNLUANOVA::Get(L, IndexInStack, TType<T*>());
+            T* V = UnLuaNova::Get(L, IndexInStack, TType<T*>());
             *((T**)ValuePtr) = V;
             return false;
         }
@@ -973,12 +973,12 @@ namespace UNLUANOVA
     {
         static int32 Push(lua_State* L, T* V)
         {
-            return UNLUANOVA::PushPointer(L, (void*)V, TType<typename TDecay<T>::Type>::GetName());
+            return UnLuaNova::PushPointer(L, (void*)V, TType<typename TDecay<T>::Type>::GetName());
         }
 
         static T* Get(lua_State* L, int32 Index)
         {
-            T* V = (T*)UNLUANOVA::GetPointer(L, Index);
+            T* V = (T*)UnLuaNova::GetPointer(L, Index);
             return V;
         }
     };
@@ -988,12 +988,12 @@ namespace UNLUANOVA
     {
         static int32 Push(lua_State* L, T* V)
         {
-            return UNLUANOVA::PushUObject(L, (UObject*)V);
+            return UnLuaNova::PushUObject(L, (UObject*)V);
         }
 
         static T* Get(lua_State* L, int32 Index)
         {
-            T* V = Cast<T>(UNLUANOVA::GetUObject(L, Index));
+            T* V = Cast<T>(UnLuaNova::GetUObject(L, Index));
             return V;
         }
     };
@@ -1009,7 +1009,7 @@ namespace UNLUANOVA
         {
             if (bCopy)
             {
-                void* Userdata = UNLUANOVA::NewUserdata(L, sizeof(typename TDecay<T>::Type), TType<typename TDecay<T>::Type>::GetName(), alignof(typename TDecay<T>::Type));
+                void* Userdata = UnLuaNova::NewUserdata(L, sizeof(typename TDecay<T>::Type), TType<typename TDecay<T>::Type>::GetName(), alignof(typename TDecay<T>::Type));
                 if (!Userdata)
                 {
                     return 0;
@@ -1022,7 +1022,7 @@ namespace UNLUANOVA
 
         static T Get(lua_State *L, int32 Index, bool bIfNeedCheck = false)
         {
-            T *V = (T*)UNLUANOVA::GetPointer(L, Index);
+            T *V = (T*)UnLuaNova::GetPointer(L, Index);
         	if ( UNLIKELY(!V) && bIfNeedCheck )
         		luaL_typeerror(L, lua_absindex(L, Index), TType<typename TDecay<T>::Type>::GetName());
             return *V;
@@ -1073,7 +1073,7 @@ namespace UNLUANOVA
             char MetatableName[256];
             memset(MetatableName, 0, sizeof(MetatableName));
             FCStringAnsi::Snprintf(MetatableName, sizeof(MetatableName), "%s%s", TType<SmartPtrType<T, Mode>>::GetName(), TType<T>::GetName());
-            void* Userdata = UNLUANOVA::NewSmartPointer(L, sizeof(SmartPtrType<T, Mode>), MetatableName);
+            void* Userdata = UnLuaNova::NewSmartPointer(L, sizeof(SmartPtrType<T, Mode>), MetatableName);
             new(Userdata) SmartPtrType<T, Mode>(V);
         }
         else
@@ -1118,7 +1118,7 @@ namespace UNLUANOVA
 	FORCEINLINE auto GetChecked(lua_State *L, int32 Index, TType<T> Ty)
 		-> std::enable_if_t<!std::is_base_of<TTypeCheckable<T>, TType<T>>::value, T>
     {
-    	// NOT Checkable type && in check context, using custom UNLUANOVA::Get
+    	// NOT Checkable type && in check context, using custom UnLuaNova::Get
     	return Get(L, Index, Ty);
     }
 
@@ -1126,7 +1126,7 @@ namespace UNLUANOVA
 	FORCEINLINE auto GetChecked(lua_State *L, int32 Index, TType<T> Ty)
 		-> std::enable_if_t<std::is_base_of<TTypeCheckable<T>, TType<T>>::value, T>
     {
-    	// Checkable type && in check context, using custom UNLUANOVA::Get or TGenericTypeHelper<T>::Get
+    	// Checkable type && in check context, using custom UnLuaNova::Get or TGenericTypeHelper<T>::Get
     	Ty.EnableCheck();
     	return Get(L, Index, Ty);
     }
@@ -1174,26 +1174,26 @@ namespace UNLUANOVA
     template <typename T>
     FORCEINLINE const TSubclassOf<T>& Get(lua_State* L, int32 Index, TType<const TSubclassOf<T>&>)
     {
-        return UNLUANOVA::Get(L, Index, TType<TSubclassOf<T>&>());
+        return UnLuaNova::Get(L, Index, TType<TSubclassOf<T>&>());
     }
 
     template <template <typename, ESPMode> class SmartPtrType, typename T, ESPMode Mode>
     FORCEINLINE SmartPtrType<T, Mode> Get(lua_State* L, int32 Index, TType<SmartPtrType<T, Mode>>)
     {
-        SmartPtrType<T, Mode>* SmartPtr = (SmartPtrType<T, Mode>*)UNLUANOVA::GetSmartPointer(L, Index);
+        SmartPtrType<T, Mode>* SmartPtr = (SmartPtrType<T, Mode>*)UnLuaNova::GetSmartPointer(L, Index);
         return SmartPtr ? *SmartPtr : SmartPtrType<T, Mode>();
     }
 
     template <template <typename, ESPMode> class SmartPtrType, typename T, ESPMode Mode>
     FORCEINLINE SmartPtrType<T, Mode>* Get(lua_State* L, int32 Index, TType<SmartPtrType<T, Mode>*>)
     {
-        return (SmartPtrType<T, Mode>*)UNLUANOVA::GetSmartPointer(L, Index);
+        return (SmartPtrType<T, Mode>*)UnLuaNova::GetSmartPointer(L, Index);
     }
 
     template <template <typename, ESPMode> class SmartPtrType, typename T, ESPMode Mode>
     FORCEINLINE_DEBUGGABLE SmartPtrType<T, Mode>& Get(lua_State* L, int32 Index, TType<SmartPtrType<T, Mode>&>)
     {
-        SmartPtrType<T, Mode>* SmartPtr = (SmartPtrType<T, Mode>*)UNLUANOVA::GetSmartPointer(L, Index);
+        SmartPtrType<T, Mode>* SmartPtr = (SmartPtrType<T, Mode>*)UnLuaNova::GetSmartPointer(L, Index);
         if (!SmartPtr)
         {
             static SmartPtrType<T, Mode> DefaultPtr(nullptr);
@@ -1205,26 +1205,26 @@ namespace UNLUANOVA
     template <template <typename, ESPMode> class SmartPtrType, typename T, ESPMode Mode>
     FORCEINLINE const SmartPtrType<T, Mode>& Get(lua_State* L, int32 Index, TType<const SmartPtrType<T, Mode>&>)
     {
-        return UNLUANOVA::Get(L, Index, TType<SmartPtrType<T, Mode>&>());
+        return UnLuaNova::Get(L, Index, TType<SmartPtrType<T, Mode>&>());
     }
 
     template <typename T, typename Allocator>
     FORCEINLINE TArray<T, Allocator> Get(lua_State* L, int32 Index, TType<TArray<T, Allocator>>)
     {
-        TArray<T, Allocator>* Array = (TArray<T, Allocator>*)UNLUANOVA::GetArray(L, Index);
+        TArray<T, Allocator>* Array = (TArray<T, Allocator>*)UnLuaNova::GetArray(L, Index);
         return Array ? *Array : TArray<T, Allocator>();
     }
 
     template <typename T, typename Allocator>
     FORCEINLINE TArray<T, Allocator>* Get(lua_State* L, int32 Index, TType<TArray<T, Allocator>*>)
     {
-        return (TArray<T, Allocator>*)UNLUANOVA::GetArray(L, Index);
+        return (TArray<T, Allocator>*)UnLuaNova::GetArray(L, Index);
     }
 
     template <typename T, typename Allocator>
     FORCEINLINE_DEBUGGABLE TArray<T, Allocator>& Get(lua_State* L, int32 Index, TType<TArray<T, Allocator>&>)
     {
-        TArray<T, Allocator>* Array = (TArray<T, Allocator>*)UNLUANOVA::GetArray(L, Index);
+        TArray<T, Allocator>* Array = (TArray<T, Allocator>*)UnLuaNova::GetArray(L, Index);
         if (!Array)
         {
             static TArray<T, Allocator> DefaultArray;
@@ -1236,26 +1236,26 @@ namespace UNLUANOVA
     template <typename T, typename Allocator>
     FORCEINLINE const TArray<T, Allocator>& Get(lua_State* L, int32 Index, TType<const TArray<T, Allocator>&>)
     {
-        return UNLUANOVA::Get(L, Index, TType<TArray<T, Allocator>&>());
+        return UnLuaNova::Get(L, Index, TType<TArray<T, Allocator>&>());
     }
 
     template <typename T, typename KeyFunc, typename Allocator>
     FORCEINLINE TSet<T, KeyFunc, Allocator> Get(lua_State* L, int32 Index, TType<TSet<T, KeyFunc, Allocator>>)
     {
-        TSet<T, KeyFunc, Allocator>* Set = (TSet<T, KeyFunc, Allocator>*)UNLUANOVA::GetSet(L, Index);
+        TSet<T, KeyFunc, Allocator>* Set = (TSet<T, KeyFunc, Allocator>*)UnLuaNova::GetSet(L, Index);
         return Set ? *Set : TSet<T, KeyFunc, Allocator>();
     }
 
     template <typename T, typename KeyFunc, typename Allocator>
     FORCEINLINE TSet<T, KeyFunc, Allocator>* Get(lua_State* L, int32 Index, TType<TSet<T, KeyFunc, Allocator>*>)
     {
-        return (TSet<T, KeyFunc, Allocator>*)UNLUANOVA::GetSet(L, Index);
+        return (TSet<T, KeyFunc, Allocator>*)UnLuaNova::GetSet(L, Index);
     }
 
     template <typename T, typename KeyFunc, typename Allocator>
     FORCEINLINE_DEBUGGABLE TSet<T, KeyFunc, Allocator>& Get(lua_State* L, int32 Index, TType<TSet<T, KeyFunc, Allocator>&>)
     {
-        TSet<T, KeyFunc, Allocator>* Set = (TSet<T, KeyFunc, Allocator>*)UNLUANOVA::GetSet(L, Index);
+        TSet<T, KeyFunc, Allocator>* Set = (TSet<T, KeyFunc, Allocator>*)UnLuaNova::GetSet(L, Index);
         if (!Set)
         {
             static TSet<T, KeyFunc, Allocator> DefaultSet;
@@ -1267,26 +1267,26 @@ namespace UNLUANOVA
     template <typename T, typename KeyFunc, typename Allocator>
     FORCEINLINE const TSet<T, KeyFunc, Allocator>& Get(lua_State* L, int32 Index, TType<const TSet<T, KeyFunc, Allocator>&>)
     {
-        return UNLUANOVA::Get(L, Index, TType<TSet<T, KeyFunc, Allocator>&>());
+        return UnLuaNova::Get(L, Index, TType<TSet<T, KeyFunc, Allocator>&>());
     }
 
     template <typename KeyType, typename ValueType, typename Allocator, typename KeyFunc>
     FORCEINLINE TMap<KeyType, ValueType, Allocator, KeyFunc> Get(lua_State* L, int32 Index, TType<TMap<KeyType, ValueType, Allocator, KeyFunc>>)
     {
-        TMap<KeyType, ValueType, Allocator, KeyFunc>* Map = (TMap<KeyType, ValueType, Allocator, KeyFunc>*)UNLUANOVA::GetMap(L, Index);
+        TMap<KeyType, ValueType, Allocator, KeyFunc>* Map = (TMap<KeyType, ValueType, Allocator, KeyFunc>*)UnLuaNova::GetMap(L, Index);
         return Map ? *Map : TMap<KeyType, ValueType, Allocator, KeyFunc>();
     }
 
     template <typename KeyType, typename ValueType, typename Allocator, typename KeyFunc>
     FORCEINLINE TMap<KeyType, ValueType, Allocator, KeyFunc>* Get(lua_State* L, int32 Index, TType<TMap<KeyType, ValueType, Allocator, KeyFunc>*>)
     {
-        return (TMap<KeyType, ValueType, Allocator, KeyFunc>*)UNLUANOVA::GetMap(L, Index);
+        return (TMap<KeyType, ValueType, Allocator, KeyFunc>*)UnLuaNova::GetMap(L, Index);
     }
 
     template <typename KeyType, typename ValueType, typename Allocator, typename KeyFunc>
     FORCEINLINE_DEBUGGABLE TMap<KeyType, ValueType, Allocator, KeyFunc>& Get(lua_State* L, int32 Index, TType<TMap<KeyType, ValueType, Allocator, KeyFunc>&>)
     {
-        TMap<KeyType, ValueType, Allocator, KeyFunc>* Map = (TMap<KeyType, ValueType, Allocator, KeyFunc>*)UNLUANOVA::GetMap(L, Index);
+        TMap<KeyType, ValueType, Allocator, KeyFunc>* Map = (TMap<KeyType, ValueType, Allocator, KeyFunc>*)UnLuaNova::GetMap(L, Index);
         if (!Map)
         {
             static TMap<KeyType, ValueType, Allocator, KeyFunc> DefaultMap;
@@ -1298,6 +1298,6 @@ namespace UNLUANOVA
     template <typename KeyType, typename ValueType, typename Allocator, typename KeyFunc>
     FORCEINLINE const TMap<KeyType, ValueType, Allocator, KeyFunc>& Get(lua_State* L, int32 Index, TType<const TMap<KeyType, ValueType, Allocator, KeyFunc>&>)
     {
-        return UNLUANOVA::Get(L, Index, TType<TMap<KeyType, ValueType, Allocator, KeyFunc>&>());
+        return UnLuaNova::Get(L, Index, TType<TMap<KeyType, ValueType, Allocator, KeyFunc>&>());
     }
-} // namespace UNLUANOVA
+} // namespace UnLuaNova

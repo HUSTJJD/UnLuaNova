@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -54,7 +54,7 @@ public:
         OwnedBySelf,    // 'ScriptArray' is owned by self, it'll be freed in destructor
     };
 
-    FLuaArray(const FScriptArray* InScriptArray, TSharedPtr<UNLUANOVA::ITypeInterface> InInnerInterface, EScriptArrayFlag Flag = OwnedByOther)
+    FLuaArray(const FScriptArray* InScriptArray, TSharedPtr<UnLuaNova::ITypeInterface> InInnerInterface, EScriptArrayFlag Flag = OwnedByOther)
         : ScriptArray((FScriptArray*)InScriptArray), Inner(InInnerInterface), ElementCache(nullptr), ElementSize(Inner->GetSize()), ScriptArrayFlag(Flag)
     {
         // allocate cache for a single element
@@ -383,7 +383,7 @@ public:
     }
 
     FScriptArray* ScriptArray;
-    TSharedPtr<UNLUANOVA::ITypeInterface> Inner;
+    TSharedPtr<UnLuaNova::ITypeInterface> Inner;
     void* ElementCache;            // can only hold one element...
     int32 ElementSize;
     EScriptArrayFlag ScriptArrayFlag;

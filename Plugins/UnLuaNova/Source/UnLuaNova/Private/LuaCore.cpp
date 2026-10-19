@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -17,7 +17,7 @@
 #include "LuaBackend.h"
 #include "Binding.h"
 #include "LuaDynamicBinding.h"
-#include "UNLUANOVA.h"
+#include "UnLuaNova.h"
 #include "LowLevel.h"
 #include "Containers/LuaSet.h"
 #include "Containers/LuaMap.h"
@@ -219,7 +219,7 @@ void SetUserdataFlags(lua_State* L, int32 Index, uint8 Flags)
  */
 void* GetUserdata(lua_State *L, int32 Index, bool *OutTwoLvlPtr, bool *OutClassMetatable)
 {
-    return UNLUANOVA::LowLevel::GetUserdata(L, Index, OutTwoLvlPtr, OutClassMetatable);
+    return UnLuaNova::LowLevel::GetUserdata(L, Index, OutTwoLvlPtr, OutClassMetatable);
 }
 
 /**
@@ -267,7 +267,7 @@ void* GetUserdataFast(lua_State *L, int32 Index, bool *OutTwoLvlPtr)
  */
 bool TryToSetMetatable(lua_State* L, const char* MetatableName, UObject* Object)
 {
-    const auto Registry = UNLUANOVA::FLuaEnv::FindEnv(L)->GetClassRegistry();
+    const auto Registry = UnLuaNova::FLuaEnv::FindEnv(L)->GetClassRegistry();
     if (!Registry)
         return false;
 
@@ -282,13 +282,13 @@ void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName
     if (Size < 1)
     {
         // userdata size must be greater than 0
-        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("%s, Invalid size!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid size!"), ANSI_TO_TCHAR(__FUNCTION__));
         return nullptr;
     }
     if ((PaddingSize & 0x07) != 0)          // 8 bytes padding at least..., 8, 24, 88
     {
         // padding size must be greater or equal to 8 bytes
-        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("%s, Invalid padding size!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid padding size!"), ANSI_TO_TCHAR(__FUNCTION__));
         return nullptr;
     }
 
@@ -298,7 +298,7 @@ void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName
         bool bSuccess = TryToSetMetatable(L, MetatableName);        // set metatable
         if (!bSuccess)
         {
-            UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
+            UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
             return nullptr;
         }
     }
@@ -311,7 +311,7 @@ void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName
 void* GetCppInstance(lua_State *L, int32 Index)
 {
     bool bTwoLvlPtr = false;
-    void *Userdata = UNLUANOVA::LowLevel::GetUserdata(L, Index, &bTwoLvlPtr);
+    void *Userdata = UnLuaNova::LowLevel::GetUserdata(L, Index, &bTwoLvlPtr);
     if (Userdata)
     {
         return bTwoLvlPtr ? *((void**)Userdata) : Userdata;         // return instance's address
@@ -353,7 +353,7 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
 {
     if (!Key)
     {
-        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("%s, Invalid key!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid key!"), ANSI_TO_TCHAR(__FUNCTION__));
         return nullptr;
     }
 
@@ -371,7 +371,7 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
         lua_pushlightuserdata(L, Key);
         lua_pushvalue(L, -2);
         lua_rawset(L, -4);                                  // cache it in 'ScriptContainerMap'
-        UNLUANOVA::FLuaEnv::FindEnv(L)->GetDanglingCheck()->CaptureContainer(L, Key);
+        UnLuaNova::FLuaEnv::FindEnv(L)->GetDanglingCheck()->CaptureContainer(L, Key);
     }
 #if UE_BUILD_DEBUG
     else
@@ -388,7 +388,7 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
 {
     if (!Key)
     {
-        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("%s, Invalid key!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid key!"), ANSI_TO_TCHAR(__FUNCTION__));
         return nullptr;
     }
 
@@ -406,7 +406,7 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
         lua_pushlightuserdata(L, Key);
         lua_pushvalue(L, -2);
         lua_rawset(L, -4);                                  // cache it in 'ScriptContainerMap'
-        UNLUANOVA::FLuaEnv::FindEnv(L)->GetDanglingCheck()->CaptureContainer(L, Key);
+        UnLuaNova::FLuaEnv::FindEnv(L)->GetDanglingCheck()->CaptureContainer(L, Key);
     }
 
     lua_remove(L, -2);
@@ -459,7 +459,7 @@ void RemoveCachedScriptContainer(lua_State *L, void *Key)
  */
 void PushObjectCore(lua_State *L, UObjectBaseUtility *Object)
 {
-    FString MetatableName = UNLUANOVA::LowLevel::GetMetatableName((UObject*)Object);
+    FString MetatableName = UnLuaNova::LowLevel::GetMetatableName((UObject*)Object);
     if (MetatableName.IsEmpty())
     {
 		lua_pushnil(L);
@@ -467,14 +467,14 @@ void PushObjectCore(lua_State *L, UObjectBaseUtility *Object)
     }
     
 #if UNLUANOVA_ENABLE_DEBUG != 0
-	UE_LOG(LogUNLUANOVA, Log, TEXT("%s : %p,%s,%s"), ANSI_TO_TCHAR(__FUNCTION__), Object,*Object->GetName(), *MetatableName);
+	UE_LOG(LogUnLuaNova, Log, TEXT("%s : %p,%s,%s"), ANSI_TO_TCHAR(__FUNCTION__), Object,*Object->GetName(), *MetatableName);
 #endif
 
     NewUserdataWithTwoLvPtrTag(L, sizeof(void*), Object);  // create a userdata and store the UObject address
     bool bSuccess = TryToSetMetatable(L, TCHAR_TO_UTF8(*MetatableName), (UObject*)Object);
 	if (!bSuccess)
 	{
-        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("%s, Invalid metatable,Name %s, Object %s,%p!"), ANSI_TO_TCHAR(__FUNCTION__), *MetatableName, *Object->GetName(), Object);
+        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid metatable,Name %s, Object %s,%p!"), ANSI_TO_TCHAR(__FUNCTION__), *MetatableName, *Object->GetName(), Object);
     }
 }
 
@@ -560,7 +560,7 @@ static void PushStructElement(lua_State *L, FProperty *Property, void *Value)
 static void PushDelegateElement(lua_State *L, FDelegateProperty *Property, void *Value)
 {
     FScriptDelegate *ScriptDelegate = Property->GetPropertyValuePtr(Value);
-    UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Register(ScriptDelegate, Property, (UObject*)Value);
+    UnLuaNova::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Register(ScriptDelegate, Property, (UObject*)Value);
     NewUserdataWithTwoLvPtrTag(L, sizeof(void*), ScriptDelegate);
 }
 
@@ -575,7 +575,7 @@ static void PushMCDelegateElement(lua_State *L, FMulticastDelegateProperty *Prop
     void *ScriptDelegate = Value;
 #endif
 
-    UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Register(ScriptDelegate, Property, (UObject*)Value);
+    UnLuaNova::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Register(ScriptDelegate, Property, (UObject*)Value);
     NewUserdataWithTwoLvPtrTag(L, sizeof(void*), ScriptDelegate);
 }
 
@@ -596,7 +596,7 @@ public:
     static bool CheckMetaTable(const char *MetatableName) { return MetatableName != nullptr; }
     static void PrePushArray(lua_State *L, const char *MetatableName)
     {
-        const auto& Env = UNLUANOVA::FLuaEnv::FindEnvChecked(L);
+        const auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
         Env.GetClassRegistry()->PushMetatable(L, MetatableName);
     }
     static void PostPushArray(lua_State *L) { lua_pop(L, 1); }
@@ -618,14 +618,14 @@ static void PushPropertyArray(lua_State *L, T *Property, void *Value, void(*Push
 #if !UE_BUILD_SHIPPING
     if (!Property || !Value || Property->ArrayDim < 2 || Property->GetElementSize() < 1)
     {
-        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("%s, Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
         return;
     }
 #endif
 
     if (!TPropertyArrayPushPolicy<T, WithMetaTableName>::CheckMetaTable(MetatableName))
     {
-        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("%s, Invalid metatable name!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid metatable name!"), ANSI_TO_TCHAR(__FUNCTION__));
         return;
     }
 
@@ -736,7 +736,7 @@ int32 GetDelegateInfo(lua_State *L, int32 Index, UObject* &Object, const void* &
         }
         else
         {
-            Object = UNLUANOVA::GetUObject(L, -1);          // target UObject
+            Object = UnLuaNova::GetUObject(L, -1);          // target UObject
         }
         lua_pop(L, 1);
     }
@@ -750,7 +750,7 @@ bool GetObjectMapping(lua_State *L, UObjectBaseUtility *Object)
 {
     if (!Object)
     {
-        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("%s, Invalid object!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid object!"), ANSI_TO_TCHAR(__FUNCTION__));
         return false;
     }
 
@@ -772,8 +772,8 @@ bool GetObjectMapping(lua_State *L, UObjectBaseUtility *Object)
 int32 PushFunction(lua_State *L, UObjectBaseUtility *Object, const char *FunctionName)
 {
     int32 N = lua_gettop(L);
-    lua_pushcfunction(L, UNLUANOVA::ReportLuaCallError);
-    const auto& Env = UNLUANOVA::FLuaEnv::FindEnv(L);
+    lua_pushcfunction(L, UnLuaNova::ReportLuaCallError);
+    const auto& Env = UnLuaNova::FLuaEnv::FindEnv(L);
     const auto Ref = Env->GetObjectRegistry()->GetBoundRef((UObject*)Object);
     if (Ref != LUA_NOREF)
     {
@@ -819,11 +819,11 @@ int32 PushFunction(lua_State *L, UObjectBaseUtility *Object, const char *Functio
 bool PushFunction(lua_State *L, UObjectBaseUtility *Object, int32 FunctionRef)
 {
     int32 N = lua_gettop(L);
-    lua_pushcfunction(L, UNLUANOVA::ReportLuaCallError);
+    lua_pushcfunction(L, UnLuaNova::ReportLuaCallError);
     int32 Type = lua_rawgeti(L, LUA_REGISTRYINDEX, FunctionRef);
     if (Type == LUA_TFUNCTION)
     {
-        UNLUANOVA::PushUObject(L, Object);
+        UnLuaNova::PushUObject(L, Object);
         return true;
     }
     if (int32 NumToPop = lua_gettop(L) - N)
@@ -855,7 +855,7 @@ bool CallFunction(lua_State *L, int32 NumArgs, int32 NumResults)
  */
 static void PushField(lua_State *L, TSharedPtr<FFieldDesc> Field)
 {
-    const auto& Env = UNLUANOVA::FLuaEnv::FindEnvChecked(L);
+    const auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
     check(Field && Field->IsValid());
     if (Field->IsProperty())
     {
@@ -891,7 +891,7 @@ static void GetFieldInternal(lua_State* L)
     lua_pop(L, 1);
 
     // TODO: refactor
-    const auto Registry = UNLUANOVA::FLuaEnv::FindEnv(L)->GetClassRegistry();
+    const auto Registry = UnLuaNova::FLuaEnv::FindEnv(L)->GetClassRegistry();
     FClassDesc* ClassDesc = Registry->Register(ClassName);
     TSharedPtr<FFieldDesc> Field = ClassDesc->RegisterField(FieldName, ClassDesc);
     if (Field && Field->IsValid())
@@ -912,7 +912,7 @@ static void GetFieldInternal(lua_State* L)
                 auto Ptr = lua_touserdata(L, -1);
                 if (Ptr)
                 {
-                    auto Property = static_cast<TSharedPtr<UNLUANOVA::ITypeOps>*>(Ptr);
+                    auto Property = static_cast<TSharedPtr<UnLuaNova::ITypeOps>*>(Ptr);
                     if (Property && Property->IsValid())
                     {
                         auto PropertyDesc = static_cast<FPropertyDesc*>((*Property).Get());
@@ -1044,7 +1044,7 @@ bool PeekTableElement(lua_State *L, void*)
         {
             if (lua_checkstack(L, 2))
             {
-                UObject *p = UNLUANOVA::GetUObject(L, -1);
+                UObject *p = UnLuaNova::GetUObject(L, -1);
                 UStruct *Struct = Cast<UStruct>(p);
                 if (Struct && Struct->IsNative())
                 {
@@ -1106,7 +1106,7 @@ int32 Class_Index(lua_State *L)
     if (!Ptr)
         return 1;
 
-    auto Property = static_cast<TSharedPtr<UNLUANOVA::ITypeOps>*>(Ptr);
+    auto Property = static_cast<TSharedPtr<UnLuaNova::ITypeOps>*>(Ptr);
     if (!Property->IsValid())
         return 0;
     
@@ -1114,10 +1114,10 @@ int32 Class_Index(lua_State *L)
     if (!Self)
         return 1;
 
-    if (UNLUANOVA::LowLevel::IsReleasedPtr(Self))
+    if (UnLuaNova::LowLevel::IsReleasedPtr(Self))
         return luaL_error(L, TCHAR_TO_UTF8(*FString::Printf(TEXT("attempt to read property '%s' on released object"), *(*Property)->GetName())));
 
-    if (!UNLUANOVA::LowLevel::CheckPropertyOwner(L, (*Property).Get(), Self))
+    if (!UnLuaNova::LowLevel::CheckPropertyOwner(L, (*Property).Get(), Self))
         return 0;
 
     (*Property)->ReadValue_InContainer(L, Self, false);
@@ -1135,16 +1135,16 @@ int32 Class_NewIndex(lua_State *L)
     auto Ptr = lua_touserdata(L, -1);
     if (Ptr)
     {
-        auto Property = static_cast<TSharedPtr<UNLUANOVA::ITypeOps>*>(Ptr);
+        auto Property = static_cast<TSharedPtr<UnLuaNova::ITypeOps>*>(Ptr);
         if (Property->IsValid())
         {
             void* Self = GetCppInstance(L, 1);
             if (Self)
             {
-                if (UNLUANOVA::LowLevel::IsReleasedPtr(Self))
+                if (UnLuaNova::LowLevel::IsReleasedPtr(Self))
                     return luaL_error(L, TCHAR_TO_UTF8(*FString::Printf(TEXT("attempt to write property '%s' on released object"), *(*Property)->GetName())));
 
-                if (!UNLUANOVA::LowLevel::CheckPropertyOwner(L, (*Property).Get(), Self))
+                if (!UnLuaNova::LowLevel::CheckPropertyOwner(L, (*Property).Get(), Self))
                     return 0;
 
                 (*Property)->WriteValue_InContainer(L, Self, 3);
@@ -1160,7 +1160,7 @@ int32 Class_NewIndex(lua_State *L)
             lua_pushvalue(L, 3);
             lua_rawset(L, 1);
 
-            //UE_LOG(LogUNLUANOVA, Warning, TEXT("%s: You are modifying metatable! Please make sure you know what you are doing!"), ANSI_TO_TCHAR(__FUNCTION__));
+            //UE_LOG(LogUnLuaNova, Warning, TEXT("%s: You are modifying metatable! Please make sure you know what you are doing!"), ANSI_TO_TCHAR(__FUNCTION__));
         }
     }
     lua_pop(L, 1);
@@ -1174,11 +1174,11 @@ int32 Class_CallUFunction(lua_State *L)
 {
     //!!!Fix!!!
     //delete desc when is not valid
-    auto& Env = UNLUANOVA::FLuaEnv::FindEnvChecked(L);
+    auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
     auto Function = Env.GetObjectRegistry()->Get<FFunctionDesc>(L, lua_upvalueindex(1));
     if (!Function->IsValid())
     {
-        UE_LOG(LogUNLUANOVA, Log, TEXT("%s: Invalid function descriptor!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UE_LOG(LogUnLuaNova, Log, TEXT("%s: Invalid function descriptor!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
     int32 NumParams = lua_gettop(L);
@@ -1191,18 +1191,18 @@ int32 Class_CallUFunction(lua_State *L)
  */
 int32 Class_CallLatentFunction(lua_State *L)
 {
-    auto& Env = UNLUANOVA::FLuaEnv::FindEnvChecked(L);
+    auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
     auto Function = Env.GetObjectRegistry()->Get<FFunctionDesc>(L, lua_upvalueindex(1));
 	if (!Function->IsValid())
     {
-        UE_LOG(LogUNLUANOVA, Log, TEXT("%s: Invalid function descriptor!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UE_LOG(LogUnLuaNova, Log, TEXT("%s: Invalid function descriptor!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
     auto ThreadRef = Env.FindOrAddThread(L);
     if (ThreadRef == LUA_REFNIL)
     {
-        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("%s: Can't call latent action in main lua thread!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s: Can't call latent action in main lua thread!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
@@ -1216,14 +1216,14 @@ FClassDesc* Class_CheckParam(lua_State *L)
     FClassDesc *ClassDesc = (FClassDesc*)lua_touserdata(L, lua_upvalueindex(1));
     if (!ClassDesc)
     {
-        UE_LOG(LogUNLUANOVA, Log, TEXT("Class : Invalid FClassDesc!"));
+        UE_LOG(LogUnLuaNova, Log, TEXT("Class : Invalid FClassDesc!"));
         return NULL;
     }
 
     UClass *Class = ClassDesc->AsClass();
     if (!Class)
     {
-        UE_LOG(LogUNLUANOVA, Log, TEXT("Class : ClassDesc type is not class(Name : %s, Address : %p)"), *ClassDesc->GetName(),ClassDesc);
+        UE_LOG(LogUnLuaNova, Log, TEXT("Class : ClassDesc type is not class(Name : %s, Address : %p)"), *ClassDesc->GetName(),ClassDesc);
         return NULL;
     }
 
@@ -1242,7 +1242,7 @@ int32 Class_StaticClass(lua_State *L)
     }
 
     UClass *Class = ClassDesc->AsClass();
-    UNLUANOVA::PushUObject(L, Class);
+    UnLuaNova::PushUObject(L, Class);
     return 1;
 }
 
@@ -1254,17 +1254,17 @@ int32 Class_Cast(lua_State* L)
     int32 NumParams = lua_gettop(L);
     if (NumParams < 2)
     {
-        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
-    UObject *Object = UNLUANOVA::GetUObject(L, 1);
+    UObject *Object = UnLuaNova::GetUObject(L, 1);
     if (!Object)
     {
         return 0;
     }
 
-    UClass *Class = Cast<UClass>(UNLUANOVA::GetUObject(L, 2));
+    UClass *Class = Cast<UClass>(UnLuaNova::GetUObject(L, 2));
     if (Class && (Object->IsA(Class) || (Class->HasAnyClassFlags(CLASS_Interface) && Class != UInterface::StaticClass() && Object->GetClass()->ImplementsInterface(Class))))
     {
         lua_pushvalue(L, 1);
@@ -1285,8 +1285,8 @@ int32 ScriptStruct_Index(lua_State *L)
     if (lua_type(L, -1) != LUA_TUSERDATA)
         return 1;
 
-    const auto Registry = UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetObjectRegistry();
-    const auto Property = Registry->Get<UNLUANOVA::ITypeOps>(L, -1);
+    const auto Registry = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetObjectRegistry();
+    const auto Property = Registry->Get<UnLuaNova::ITypeOps>(L, -1);
     if (!Property.IsValid())
         return 0;
 
@@ -1304,14 +1304,14 @@ FClassDesc* ScriptStruct_CheckParam(lua_State *L)
     FClassDesc *ClassDesc = (FClassDesc*)lua_touserdata(L, lua_upvalueindex(1));
     if (!ClassDesc)
     {
-        UE_LOG(LogUNLUANOVA, Log, TEXT("ScriptStruct : Invalid FClassDesc!"));
+        UE_LOG(LogUnLuaNova, Log, TEXT("ScriptStruct : Invalid FClassDesc!"));
         return NULL;
     }
 
     UScriptStruct *ScriptStruct = ClassDesc->AsScriptStruct();
     if (!ScriptStruct)
     {
-        // UE_LOG(LogUNLUANOVA, Log, TEXT("ScriptStruct : ClassDesc type is not script struct(Name : %s, Address : %p)"), *ClassDesc->GetName(),ClassDesc);
+        // UE_LOG(LogUnLuaNova, Log, TEXT("ScriptStruct : ClassDesc type is not script struct(Name : %s, Address : %p)"), *ClassDesc->GetName(),ClassDesc);
         return NULL;
     }
 

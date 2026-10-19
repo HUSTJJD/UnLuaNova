@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,15 +12,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UNLUANOVAEx.h"
-#include "UNLUANOVAPrivate.h"
+#include "UnLuaNovaEx.h"
+#include "UnLuaNovaPrivate.h"
 
 UNLUANOVA_DEFINE_STAT(Lua_Memory);
 UNLUANOVA_DEFINE_STAT(PersistentParamBuffer_Memory);
 UNLUANOVA_DEFINE_STAT(OutParmRec_Memory);
 UNLUANOVA_DEFINE_STAT(ContainerElementCache_Memory);
 
-namespace UNLUANOVA
+namespace UnLuaNova
 {
     /**
      * Exported enum
@@ -67,7 +67,7 @@ namespace UNLUANOVA
     }
 #endif
 
-} // namespace UNLUANOVA
+} // namespace UnLuaNova
 
 FString GLuaSrcRelativePath = TEXT("Script/");
 FString GLuaSrcFullPath = FPaths::ConvertRelativePathToFull(FPaths::ProjectContentDir() + GLuaSrcRelativePath);

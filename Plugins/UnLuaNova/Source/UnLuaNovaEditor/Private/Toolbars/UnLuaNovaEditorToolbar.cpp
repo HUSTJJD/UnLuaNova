@@ -1,9 +1,9 @@
 #include "Misc/EngineVersionComparison.h"
-#include "UNLUANOVAPrivate.h"
-#include "UNLUANOVAEditorCore.h"
-#include "UNLUANOVAEditorToolbar.h"
-#include "UNLUANOVAEditorCommands.h"
-#include "UNLUANOVAInterface.h"
+#include "UnLuaNovaPrivate.h"
+#include "UnLuaNovaEditorCore.h"
+#include "UnLuaNovaEditorToolbar.h"
+#include "UnLuaNovaEditorCommands.h"
+#include "UnLuaNovaInterface.h"
 #include "Animation/AnimInstance.h"
 #include "Blueprint/UserWidget.h"
 #include "HAL/PlatformApplicationMisc.h"
@@ -17,34 +17,34 @@
 #include "Layout/Children.h"
 #include "Widgets/Notifications/SNotificationList.h"
 #include "ToolMenus.h"
-#include "UNLUANOVASettings.h"
-#include "UNLUANOVAIntelliSense.h"
+#include "UnLuaNovaSettings.h"
+#include "UnLuaNovaIntelliSense.h"
 #include "Animation/AnimNotifies/AnimNotifyState.h"
 
-#define LOCTEXT_NAMESPACE "FUNLUANOVAEditorModule"
+#define LOCTEXT_NAMESPACE "FUnLuaNovaEditorModule"
 
-FUNLUANOVAEditorToolbar::FUNLUANOVAEditorToolbar()
+FUnLuaNovaEditorToolbar::FUnLuaNovaEditorToolbar()
     : CommandList(new FUICommandList),
       ContextObject(nullptr)
 {
 }
 
-void FUNLUANOVAEditorToolbar::Initialize()
+void FUnLuaNovaEditorToolbar::Initialize()
 {
     BindCommands();
 }
 
-void FUNLUANOVAEditorToolbar::BindCommands()
+void FUnLuaNovaEditorToolbar::BindCommands()
 {
-    const auto& Commands = FUNLUANOVAEditorCommands::Get();
-    CommandList->MapAction(Commands.CreateLuaTemplate, FExecuteAction::CreateRaw(this, &FUNLUANOVAEditorToolbar::CreateLuaTemplate_Executed));
-    CommandList->MapAction(Commands.CopyAsRelativePath, FExecuteAction::CreateRaw(this, &FUNLUANOVAEditorToolbar::CopyAsRelativePath_Executed));
-    CommandList->MapAction(Commands.BindToLua, FExecuteAction::CreateRaw(this, &FUNLUANOVAEditorToolbar::BindToLua_Executed));
-    CommandList->MapAction(Commands.UnbindFromLua, FExecuteAction::CreateRaw(this, &FUNLUANOVAEditorToolbar::UnbindFromLua_Executed));
-    CommandList->MapAction(Commands.RevealInExplorer, FExecuteAction::CreateRaw(this, &FUNLUANOVAEditorToolbar::RevealInExplorer_Executed));
+    const auto& Commands = FUnLuaNovaEditorCommands::Get();
+    CommandList->MapAction(Commands.CreateLuaTemplate, FExecuteAction::CreateRaw(this, &FUnLuaNovaEditorToolbar::CreateLuaTemplate_Executed));
+    CommandList->MapAction(Commands.CopyAsRelativePath, FExecuteAction::CreateRaw(this, &FUnLuaNovaEditorToolbar::CopyAsRelativePath_Executed));
+    CommandList->MapAction(Commands.BindToLua, FExecuteAction::CreateRaw(this, &FUnLuaNovaEditorToolbar::BindToLua_Executed));
+    CommandList->MapAction(Commands.UnbindFromLua, FExecuteAction::CreateRaw(this, &FUnLuaNovaEditorToolbar::UnbindFromLua_Executed));
+    CommandList->MapAction(Commands.RevealInExplorer, FExecuteAction::CreateRaw(this, &FUnLuaNovaEditorToolbar::RevealInExplorer_Executed));
 }
 
-void FUNLUANOVAEditorToolbar::BuildToolbar(FToolBarBuilder& ToolbarBuilder, UObject* InContextObject)
+void FUnLuaNovaEditorToolbar::BuildToolbar(FToolBarBuilder& ToolbarBuilder, UObject* InContextObject)
 {
     if (!InContextObject)
         return;
@@ -58,7 +58,7 @@ void FUNLUANOVAEditorToolbar::BuildToolbar(FToolBarBuilder& ToolbarBuilder, UObj
         {
             ContextObject = InContextObject;
             const auto BindingStatus = GetBindingStatus(Blueprint);
-            const FUNLUANOVAEditorCommands& Commands = FUNLUANOVAEditorCommands::Get();
+            const FUnLuaNovaEditorCommands& Commands = FUnLuaNovaEditorCommands::Get();
             FMenuBuilder MenuBuilder(true, CommandList);
             if (BindingStatus == NotBound)
             {
@@ -73,8 +73,8 @@ void FUNLUANOVAEditorToolbar::BuildToolbar(FToolBarBuilder& ToolbarBuilder, UObj
             }
             return MenuBuilder.MakeWidget();
         }),
-        LOCTEXT("UNLUANOVA_Label", "UNLUANOVA"),
-        LOCTEXT("UNLUANOVA_ToolTip", "UNLUANOVA"),
+        LOCTEXT("UNLUANOVA_Label", "UnLuaNova"),
+        LOCTEXT("UNLUANOVA_ToolTip", "UnLuaNova"),
         TAttribute<FSlateIcon>::Create([Blueprint]
         {
             const auto BindingStatus = GetBindingStatus(Blueprint);
@@ -82,22 +82,22 @@ void FUNLUANOVAEditorToolbar::BuildToolbar(FToolBarBuilder& ToolbarBuilder, UObj
             switch (BindingStatus)
             {
             case Unknown:
-                InStyleName = "UNLUANOVAEditor.Status_Unknown";
+                InStyleName = "UnLuaNovaEditor.Status_Unknown";
                 break;
             case NotBound:
-                InStyleName = "UNLUANOVAEditor.Status_NotBound";
+                InStyleName = "UnLuaNovaEditor.Status_NotBound";
                 break;
             case Bound:
-                InStyleName = "UNLUANOVAEditor.Status_Bound";
+                InStyleName = "UnLuaNovaEditor.Status_Bound";
                 break;
             case BoundButInvalid:
-                InStyleName = "UNLUANOVAEditor.Status_BoundButInvalid";
+                InStyleName = "UnLuaNovaEditor.Status_BoundButInvalid";
                 break;
             default:
                 check(false);
             }
 
-            return FSlateIcon("UNLUANOVAEditorStyle", *InStyleName);
+            return FSlateIcon("UnLuaNovaEditorStyle", *InStyleName);
         })
     );
 
@@ -106,25 +106,25 @@ void FUNLUANOVAEditorToolbar::BuildToolbar(FToolBarBuilder& ToolbarBuilder, UObj
     BuildNodeMenu();
 }
 
-void FUNLUANOVAEditorToolbar::BuildNodeMenu()
+void FUnLuaNovaEditorToolbar::BuildNodeMenu()
 {
     FToolMenuOwnerScoped OwnerScoped(this);
     UToolMenu* BPMenu = UToolMenus::Get()->ExtendMenu("GraphEditor.GraphNodeContextMenu.K2Node_FunctionResult");
-    BPMenu->AddDynamicSection("UNLUANOVA", FNewToolMenuDelegate::CreateLambda([this](UToolMenu* ToolMenu)
+    BPMenu->AddDynamicSection("UnLuaNova", FNewToolMenuDelegate::CreateLambda([this](UToolMenu* ToolMenu)
     {
         UGraphNodeContextMenuContext* GraphNodeCtx = ToolMenu->FindContext<UGraphNodeContextMenuContext>();
         if (GraphNodeCtx && GraphNodeCtx->Graph)
         {
             if (GraphNodeCtx->Graph->GetName() == "GetModuleName")
             {
-                FToolMenuSection& UNLUANOVASection = ToolMenu->AddSection("UNLUANOVA", FText::FromString("UNLUANOVA"));
-                UNLUANOVASection.AddEntry(FToolMenuEntry::InitMenuEntryWithCommandList(FUNLUANOVAEditorCommands::Get().RevealInExplorer, CommandList, LOCTEXT("RevealInExplorer", "Reveal in Explorer")));
+                FToolMenuSection& UnLuaNovaSection = ToolMenu->AddSection("UnLuaNova", FText::FromString("UnLuaNova"));
+                UnLuaNovaSection.AddEntry(FToolMenuEntry::InitMenuEntryWithCommandList(FUnLuaNovaEditorCommands::Get().RevealInExplorer, CommandList, LOCTEXT("RevealInExplorer", "Reveal in Explorer")));
             }
         }
     }), FToolMenuInsert(NAME_None, EToolMenuInsertType::First));
 }
 
-TSharedRef<FExtender> FUNLUANOVAEditorToolbar::GetExtender(UObject* InContextObject)
+TSharedRef<FExtender> FUnLuaNovaEditorToolbar::GetExtender(UObject* InContextObject)
 {
     TSharedRef<FExtender> ToolbarExtender(new FExtender());
     const auto ExtensionDelegate = FToolBarExtensionDelegate::CreateLambda([this, InContextObject](FToolBarBuilder& ToolbarBuilder)
@@ -135,7 +135,7 @@ TSharedRef<FExtender> FUNLUANOVAEditorToolbar::GetExtender(UObject* InContextObj
     return ToolbarExtender;
 }
 
-void FUNLUANOVAEditorToolbar::BindToLua_Executed() const
+void FUnLuaNovaEditorToolbar::BindToLua_Executed() const
 {
     const auto Blueprint = Cast<UBlueprint>(ContextObject);
     if (!IsValid(Blueprint))
@@ -145,13 +145,13 @@ void FUNLUANOVAEditorToolbar::BindToLua_Executed() const
     if (!IsValid(TargetClass))
         return;
 
-    if (TargetClass->ImplementsInterface(UUNLUANOVAInterface::StaticClass()))
+    if (TargetClass->ImplementsInterface(UUnLuaNovaInterface::StaticClass()))
         return;
 
 #if UE_VERSION_OLDER_THAN(5, 1, 0)
-    const auto Ok = FBlueprintEditorUtils::ImplementNewInterface(Blueprint, FName("UNLUANOVAInterface"));
+    const auto Ok = FBlueprintEditorUtils::ImplementNewInterface(Blueprint, FName("UnLuaNovaInterface"));
 #else
-    const auto Ok = FBlueprintEditorUtils::ImplementNewInterface(Blueprint, FTopLevelAssetPath(UUNLUANOVAInterface::StaticClass()));
+    const auto Ok = FBlueprintEditorUtils::ImplementNewInterface(Blueprint, FTopLevelAssetPath(UUnLuaNovaInterface::StaticClass()));
 #endif
     if (!Ok)
         return;
@@ -166,7 +166,7 @@ void FUNLUANOVAEditorToolbar::BindToLua_Executed() const
     }
     else
     {
-        const auto Settings = GetDefault<UUNLUANOVASettings>();
+        const auto Settings = GetDefault<UUnLuaNovaSettings>();
         if (Settings && Settings->ModuleLocatorClass)
         {
             const auto ModuleLocator = Cast<ULuaModuleLocator>(Settings->ModuleLocatorClass->GetDefaultObject());
@@ -178,7 +178,7 @@ void FUNLUANOVAEditorToolbar::BindToLua_Executed() const
     {
         const auto InterfaceDesc = *Blueprint->ImplementedInterfaces.FindByPredicate([](const FBPInterfaceDescription& Desc)
         {
-            return Desc.Interface == UUNLUANOVAInterface::StaticClass();
+            return Desc.Interface == UUnLuaNovaInterface::StaticClass();
         });
         InterfaceDesc.Graphs[0]->Nodes[1]->Pins[1]->DefaultValue = LuaModuleName;
     }
@@ -201,7 +201,7 @@ void FUNLUANOVAEditorToolbar::BindToLua_Executed() const
 #endif
 }
 
-void FUNLUANOVAEditorToolbar::UnbindFromLua_Executed() const
+void FUnLuaNovaEditorToolbar::UnbindFromLua_Executed() const
 {
     const auto Blueprint = Cast<UBlueprint>(ContextObject);
     if (!IsValid(Blueprint))
@@ -211,13 +211,13 @@ void FUNLUANOVAEditorToolbar::UnbindFromLua_Executed() const
     if (!IsValid(TargetClass))
         return;
 
-    if (!TargetClass->ImplementsInterface(UUNLUANOVAInterface::StaticClass()))
+    if (!TargetClass->ImplementsInterface(UUnLuaNovaInterface::StaticClass()))
         return;
 
 #if UE_VERSION_OLDER_THAN(5, 1, 0)
-    FBlueprintEditorUtils::RemoveInterface(Blueprint, FName("UNLUANOVAInterface"));
+    FBlueprintEditorUtils::RemoveInterface(Blueprint, FName("UnLuaNovaInterface"));
 #else
-    FBlueprintEditorUtils::RemoveInterface(Blueprint, FTopLevelAssetPath(UUNLUANOVAInterface::StaticClass()));
+    FBlueprintEditorUtils::RemoveInterface(Blueprint, FTopLevelAssetPath(UUnLuaNovaInterface::StaticClass()));
 #endif
 
 #if !UE_VERSION_OLDER_THAN(4, 26, 0)
@@ -254,7 +254,7 @@ void FUNLUANOVAEditorToolbar::UnbindFromLua_Executed() const
     }
 }
 
-void FUNLUANOVAEditorToolbar::CreateLuaTemplate_Executed()
+void FUnLuaNovaEditorToolbar::CreateLuaTemplate_Executed()
 {
     const auto Blueprint = Cast<UBlueprint>(ContextObject);
     if (!IsValid(Blueprint))
@@ -286,11 +286,11 @@ void FUNLUANOVAEditorToolbar::CreateLuaTemplate_Executed()
 
     if (FPaths::FileExists(FileName))
     {
-        UE_LOG(LogUNLUANOVA, Warning, TEXT("%s"), *FText::Format(LOCTEXT("FileAlreadyExists", "Lua file ({0}) is already existed!"), FText::FromString(TemplateName)).ToString());
+        UE_LOG(LogUnLuaNova, Warning, TEXT("%s"), *FText::Format(LOCTEXT("FileAlreadyExists", "Lua file ({0}) is already existed!"), FText::FromString(TemplateName)).ToString());
         return;
     }
 
-    static FString BaseDir = IPluginManager::Get().FindPlugin(TEXT("UNLUANOVA"))->GetBaseDir();
+    static FString BaseDir = IPluginManager::Get().FindPlugin(TEXT("UnLuaNova"))->GetBaseDir();
     for (auto TemplateClass = Class; TemplateClass; TemplateClass = TemplateClass->GetSuperClass())
     {
         auto TemplateClassName = TemplateClass->GetName().EndsWith("_C") ? TemplateClass->GetName().LeftChop(2) : TemplateClass->GetName();
@@ -305,14 +305,14 @@ void FUNLUANOVAEditorToolbar::CreateLuaTemplate_Executed()
         FString Content;
         FFileHelper::LoadFileToString(Content, *FullFilePath);
         Content = Content.Replace(TEXT("TemplateName"), *TemplateName)
-                         .Replace(TEXT("ClassName"), *UNLUANOVA::IntelliSense::GetTypeName(Class));
+                         .Replace(TEXT("ClassName"), *UnLuaNova::IntelliSense::GetTypeName(Class));
 
         FFileHelper::SaveStringToFile(Content, *FileName, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
         break;
     }
 }
 
-void FUNLUANOVAEditorToolbar::RevealInExplorer_Executed()
+void FUnLuaNovaEditorToolbar::RevealInExplorer_Executed()
 {
     const auto Blueprint = Cast<UBlueprint>(ContextObject);
     if (!IsValid(Blueprint))
@@ -322,7 +322,7 @@ void FUNLUANOVAEditorToolbar::RevealInExplorer_Executed()
     if (!IsValid(TargetClass))
         return;
 
-    if (!TargetClass->ImplementsInterface(UUNLUANOVAInterface::StaticClass()))
+    if (!TargetClass->ImplementsInterface(UUnLuaNovaInterface::StaticClass()))
         return;
 
     const auto Func = TargetClass->FindFunctionByName(FName("GetModuleName"));
@@ -342,7 +342,7 @@ void FUNLUANOVAEditorToolbar::RevealInExplorer_Executed()
     }
     else
     {
-        FNotificationInfo NotificationInfo(FText::FromString("UNLUANOVA Notification"));
+        FNotificationInfo NotificationInfo(FText::FromString("UnLuaNova Notification"));
         NotificationInfo.Text = LOCTEXT("FileNotExist", "The file does not exist.");
         NotificationInfo.bFireAndForget = true;
         NotificationInfo.ExpireDuration = 100.0f;
@@ -351,7 +351,7 @@ void FUNLUANOVAEditorToolbar::RevealInExplorer_Executed()
     }
 }
 
-void FUNLUANOVAEditorToolbar::CopyAsRelativePath_Executed() const
+void FUnLuaNovaEditorToolbar::CopyAsRelativePath_Executed() const
 {
     const auto Blueprint = Cast<UBlueprint>(ContextObject);
     if (!IsValid(Blueprint))
@@ -361,7 +361,7 @@ void FUNLUANOVAEditorToolbar::CopyAsRelativePath_Executed() const
     if (!IsValid(TargetClass))
         return;
 
-    if (!TargetClass->ImplementsInterface(UUNLUANOVAInterface::StaticClass()))
+    if (!TargetClass->ImplementsInterface(UUnLuaNovaInterface::StaticClass()))
         return;
 
     const auto Func = TargetClass->FindFunctionByName(FName("GetModuleName"));

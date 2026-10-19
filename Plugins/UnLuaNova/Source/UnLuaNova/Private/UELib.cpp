@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -30,7 +30,7 @@ static int UE_Index(lua_State* L)
         return 0;
 
     const char* Name = lua_tostring(L, 2);
-    const auto Exported = UNLUANOVA::FindExportedNonReflectedClass(Name);
+    const auto Exported = UnLuaNova::FindExportedNonReflectedClass(Name);
     if (Exported)
     {
         Exported->Register(L);
@@ -39,10 +39,10 @@ static int UE_Index(lua_State* L)
     }
 
     const char Prefix = Name[0];
-    const auto& Env = UNLUANOVA::FLuaEnv::FindEnvChecked(L);
+    const auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
     if (Prefix == 'U' || Prefix == 'A' || Prefix == 'F')
     {
-        const auto ReflectedType = UNLUANOVA::FClassRegistry::LoadReflectedType(Name + 1);
+        const auto ReflectedType = UnLuaNova::FClassRegistry::LoadReflectedType(Name + 1);
         if (!ReflectedType)
             return 0;
 
@@ -53,13 +53,13 @@ static int UE_Index(lua_State* L)
         }
         else
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("attempt to load a blueprint type %s with UE namespace, use UE.UClass.Load or UE.UObject.Load instead."), UTF8_TO_TCHAR(Name));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to load a blueprint type %s with UE namespace, use UE.UClass.Load or UE.UObject.Load instead."), UTF8_TO_TCHAR(Name));
             return 0;
         }
     }
     else if (Prefix == 'E')
     {
-        const auto ReflectedType = UNLUANOVA::FClassRegistry::LoadReflectedType(Name);
+        const auto ReflectedType = UnLuaNova::FClassRegistry::LoadReflectedType(Name);
         if (!ReflectedType)
             return 0;
 
@@ -70,7 +70,7 @@ static int UE_Index(lua_State* L)
         }
         else
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("attempt to load a blueprint enum %s with UE namespace, use UE.UObject.Load instead."), UTF8_TO_TCHAR(Name));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to load a blueprint enum %s with UE namespace, use UE.UObject.Load instead."), UTF8_TO_TCHAR(Name));
             return 0;
         }
     }
@@ -86,18 +86,18 @@ static int32 Global_NewObject(lua_State *L)
     int32 NumParams = lua_gettop(L);
     if (NumParams < 1)
     {
-        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
-    UClass *Class = Cast<UClass>(UNLUANOVA::GetUObject(L, 1));
+    UClass *Class = Cast<UClass>(UnLuaNova::GetUObject(L, 1));
     if (!Class)
     {
-        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Log, TEXT("%s: Invalid class!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Log, TEXT("%s: Invalid class!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
-    UObject* Outer = UNLUANOVA::GetUObject(L, 2);
+    UObject* Outer = UnLuaNova::GetUObject(L, 2);
     if (!Outer)
         Outer = GetTransientPackage();
 
@@ -123,11 +123,11 @@ static int32 Global_NewObject(lua_State *L)
 #endif
         if (Object)
         {
-            UNLUANOVA::PushUObject(L, Object);
+            UnLuaNova::PushUObject(L, Object);
         }
         else
         {
-            UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Log, TEXT("%s: Failed to new object for class %s!"), ANSI_TO_TCHAR(__FUNCTION__), *Class->GetName());
+            UNLUANOVA_LOGERROR(L, LogUnLuaNova, Log, TEXT("%s: Failed to new object for class %s!"), ANSI_TO_TCHAR(__FUNCTION__), *Class->GetName());
             return 0;
         }
     }
@@ -142,7 +142,7 @@ static constexpr luaL_Reg UE_Functions[] = {
     {NULL, NULL}
 };
 
-int UNLUANOVA::UELib::Open(lua_State* L)
+int UnLuaNova::UELib::Open(lua_State* L)
 {
     lua_newtable(L);
     lua_pushstring(L, "__index");
@@ -181,7 +181,7 @@ int UNLUANOVA::UELib::Open(lua_State* L)
     return 1;
 }
 
-void UNLUANOVA::UELib::SetTableForClass(lua_State* L, const char* Name)
+void UnLuaNova::UELib::SetTableForClass(lua_State* L, const char* Name)
 {
     lua_getglobal(L, NAMESPACE_NAME);
     lua_pushstring(L, Name);

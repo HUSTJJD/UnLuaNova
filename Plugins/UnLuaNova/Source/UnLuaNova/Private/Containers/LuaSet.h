@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -25,7 +25,7 @@ public:
         OwnedBySelf,    // 'Set' is owned by self, it'll be freed in destructor
     };
 
-    FLuaSet(const FScriptSet *InScriptSet, TSharedPtr<UNLUANOVA::ITypeInterface> InElementInterface, FScriptSetFlag Flag = OwnedByOther)
+    FLuaSet(const FScriptSet *InScriptSet, TSharedPtr<UnLuaNova::ITypeInterface> InElementInterface, FScriptSetFlag Flag = OwnedByOther)
         : Set((FScriptSet*)InScriptSet), SetLayout(FScriptSet::GetScriptLayout(InElementInterface->GetSize(), InElementInterface->GetAlignment()))
         , ElementInterface(InElementInterface), ElementCache(nullptr), ScriptSetFlag(Flag)
     {
@@ -77,7 +77,7 @@ public:
     FORCEINLINE void Add(const void *Item)
     {
         //SetHelper.AddElement(Item);
-        const UNLUANOVA::ITypeInterface *LocalElementInterface = ElementInterface.Get();
+        const UnLuaNova::ITypeInterface *LocalElementInterface = ElementInterface.Get();
         FScriptSetLayout& LocalSetLayoutForCapture = SetLayout;
         Set->Add(Item, SetLayout,
             [LocalElementInterface](const void* Element) { return LocalElementInterface->GetValueTypeHash(Element); },
@@ -105,7 +105,7 @@ public:
     FORCEINLINE bool Remove(const void *Item)
     {
         //return SetHelper.RemoveElement(Item);
-        const UNLUANOVA::ITypeInterface *LocalElementInterface = ElementInterface.Get();
+        const UnLuaNova::ITypeInterface *LocalElementInterface = ElementInterface.Get();
         int32 FoundIndex = Set->FindIndex(Item, SetLayout,
             [LocalElementInterface](const void* Element) { return LocalElementInterface->GetValueTypeHash(Element); },
             [LocalElementInterface](const void* A, const void* B) { return LocalElementInterface->Identical(A, B); }
@@ -127,7 +127,7 @@ public:
     FORCEINLINE bool Contains(const void *Item) const
     {
         //return SetHelper.FindElementIndexFromHash(Item) != INDEX_NONE;
-        const UNLUANOVA::ITypeInterface *LocalElementInterface = ElementInterface.Get();
+        const UnLuaNova::ITypeInterface *LocalElementInterface = ElementInterface.Get();
         return Set->FindIndex(Item, SetLayout,
             [LocalElementInterface](const void* Element) { return LocalElementInterface->GetValueTypeHash(Element); },
             [LocalElementInterface](const void* A, const void* B) { return LocalElementInterface->Identical(A, B); }
@@ -229,7 +229,7 @@ public:
 
     FScriptSet *Set;
     FScriptSetLayout SetLayout;
-    TSharedPtr<UNLUANOVA::ITypeInterface> ElementInterface;
+    TSharedPtr<UnLuaNova::ITypeInterface> ElementInterface;
     TLuaContainerInterface<FLuaSet> *Interface;
     //FScriptSetHelper SetHelper;
     void *ElementCache;            // can only hold one element...

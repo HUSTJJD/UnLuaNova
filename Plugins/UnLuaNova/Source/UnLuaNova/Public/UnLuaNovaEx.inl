@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,9 +12,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UNLUANOVADebugBase.h"
+#include "UnLuaNovaDebugBase.h"
 
-namespace UNLUANOVA
+namespace UnLuaNova
 {
 
 #if WITH_EDITOR
@@ -146,7 +146,7 @@ namespace UNLUANOVA
     {
         static int Push(lua_State *L, T &&V)
         {
-            UNLUANOVA::Push(L, Forward<T>(V), false);
+            UnLuaNova::Push(L, Forward<T>(V), false);
             return 1;
         }
     };
@@ -189,11 +189,11 @@ namespace UNLUANOVA
         template <typename... ArgType, uint32... N>
         static int32 Invoke(lua_State *L, const TFunction<RetType(ArgType...)> &Func, TTuple<typename TArgTypeTraits<ArgType>::Type...> &Args, TIndices<N...> ParamIndices)
         {
-            RetType RetVal = UNLUANOVA::Invoke(Func, Args, typename TZeroBasedIndices<sizeof...(ArgType)>::Type());
+            RetType RetVal = UnLuaNova::Invoke(Func, Args, typename TZeroBasedIndices<sizeof...(ArgType)>::Type());
 #if UNLUANOVA_LEGACY_RETURN_ORDER
             int32 Num = PushNonConstRefParam<ArgType...>(L, Args, ParamIndices);
 #endif
-            UNLUANOVA::Push(L, Forward<RetType>(RetVal), true);
+            UnLuaNova::Push(L, Forward<RetType>(RetVal), true);
 #if !UNLUANOVA_LEGACY_RETURN_ORDER
             int32 Num = PushNonConstRefParam<ArgType...>(L, Args, ParamIndices);
 #endif
@@ -208,20 +208,20 @@ namespace UNLUANOVA
         static int32 Invoke(lua_State *L, const TFunction<RetType(ArgType...)> &Func, TTuple<typename TArgTypeTraits<ArgType>::Type...> &Args, TIndices<N...> ParamIndices)
         {
             int32 Num = 0;
-            std::remove_cv_t<RetType> *RetValPtr = lua_gettop(L) > sizeof...(ArgType) ? UNLUANOVA::Get(L, sizeof...(ArgType) + 1, TType<std::remove_cv_t<RetType>*>()) : nullptr;
+            std::remove_cv_t<RetType> *RetValPtr = lua_gettop(L) > sizeof...(ArgType) ? UnLuaNova::Get(L, sizeof...(ArgType) + 1, TType<std::remove_cv_t<RetType>*>()) : nullptr;
             if (RetValPtr)
             {
-                *RetValPtr = UNLUANOVA::Invoke(Func, Args, typename TZeroBasedIndices<sizeof...(ArgType)>::Type());
+                *RetValPtr = UnLuaNova::Invoke(Func, Args, typename TZeroBasedIndices<sizeof...(ArgType)>::Type());
                 Num = PushNonConstRefParam<ArgType...>(L, Args, ParamIndices);
                 lua_pushvalue(L, sizeof...(ArgType) + 1);
             }
             else
             {
-                RetType RetVal = UNLUANOVA::Invoke(Func, Args, typename TZeroBasedIndices<sizeof...(ArgType)>::Type());
+                RetType RetVal = UnLuaNova::Invoke(Func, Args, typename TZeroBasedIndices<sizeof...(ArgType)>::Type());
 #if UNLUANOVA_LEGACY_RETURN_ORDER
                 Num = PushNonConstRefParam<ArgType...>(L, Args, ParamIndices);
 #endif
-                UNLUANOVA::Push(L, Forward<typename std::add_lvalue_reference<RetType>::type>(RetVal), true);
+                UnLuaNova::Push(L, Forward<typename std::add_lvalue_reference<RetType>::type>(RetVal), true);
 #if !UNLUANOVA_LEGACY_RETURN_ORDER
                 Num = PushNonConstRefParam<ArgType...>(L, Args, ParamIndices);
 #endif
@@ -235,7 +235,7 @@ namespace UNLUANOVA
         template <typename... ArgType, uint32... N>
         static int32 Invoke(lua_State *L, const TFunction<void(ArgType...)> &Func, TTuple<typename TArgTypeTraits<ArgType>::Type...> &Args, TIndices<N...> ParamIndices)
         {
-            UNLUANOVA::Invoke(Func, Args, typename TZeroBasedIndices<sizeof...(ArgType)>::Type());
+            UnLuaNova::Invoke(Func, Args, typename TZeroBasedIndices<sizeof...(ArgType)>::Type());
             return PushNonConstRefParam<ArgType...>(L, Args, ParamIndices);
         }
     };
@@ -247,7 +247,7 @@ namespace UNLUANOVA
     template <typename... T, uint32... N>
     FORCEINLINE_DEBUGGABLE TTuple<T...> GetArgs(lua_State *L, TIndices<N...>, uint32 Offset = 0)
     {
-        return TTuple<T...>(UNLUANOVA::Get(L, Offset + N, TType<T>())...);
+        return TTuple<T...>(UnLuaNova::Get(L, Offset + N, TType<T>())...);
     }
 
     /**
@@ -256,7 +256,7 @@ namespace UNLUANOVA
 	template <typename... T, uint32... N>
 	FORCEINLINE_DEBUGGABLE TTuple<T...> GetArgsChecked(lua_State *L, TIndices<N...>, uint32 Offset = 0)
     {
-    	return TTuple<T...>(UNLUANOVA::GetChecked(L, Offset + N, TType<T>())...);
+    	return TTuple<T...>(UnLuaNova::GetChecked(L, Offset + N, TType<T>())...);
     }
 
     /**
@@ -314,7 +314,7 @@ namespace UNLUANOVA
         if (Type == LUA_TUSERDATA)
         {
             TSharedPtr<IExportedProperty> Property = *(TSharedPtr<IExportedProperty>*)lua_touserdata(L, -1);
-            void *ContainerPtr = UNLUANOVA::GetPointer(L, 1);
+            void *ContainerPtr = UnLuaNova::GetPointer(L, 1);
             if (ContainerPtr)
             {
                 lua_pop(L, 1);
@@ -335,7 +335,7 @@ namespace UNLUANOVA
         if (Type == LUA_TUSERDATA)
         {
             TSharedPtr<IExportedProperty> Property = *(TSharedPtr<IExportedProperty>*)lua_touserdata(L, -1);
-            void *ContainerPtr = UNLUANOVA::GetPointer(L, 1);
+            void *ContainerPtr = UnLuaNova::GetPointer(L, 1);
             if (ContainerPtr)
             {
                 Property->WriteValue_InContainer(L, ContainerPtr, 3);
@@ -383,7 +383,7 @@ namespace UNLUANOVA
     template <typename ClassType, typename... ArgType>
     template <uint32... N> void TConstructor<ClassType, ArgType...>::Construct(lua_State *L, TTuple<typename TArgTypeTraits<ArgType>::Type...> &Args, TIndices<N...>)
     {
-        void *Userdata = UNLUANOVA::NewUserdata(L, sizeof(ClassType), TCHAR_TO_UTF8(*ClassName), alignof(ClassType));
+        void *Userdata = UnLuaNova::NewUserdata(L, sizeof(ClassType), TCHAR_TO_UTF8(*ClassName), alignof(ClassType));
         if (Userdata)
         {
             new(Userdata) ClassType(Args.template Get<N>()...);
@@ -432,11 +432,11 @@ namespace UNLUANOVA
         lua_rawset(L, -3);
         lua_pushstring(L, "__index");
         lua_pushvalue(L, -3);
-        lua_pushcclosure(L, UNLUANOVA::Index, 1);
+        lua_pushcclosure(L, UnLuaNova::Index, 1);
         lua_rawset(L, -3);
         lua_pushstring(L, "__newindex");
         lua_pushvalue(L, -3);
-        lua_pushcclosure(L, UNLUANOVA::NewIndex, 1);
+        lua_pushcclosure(L, UnLuaNova::NewIndex, 1);
         lua_rawset(L, -3);
         lua_pop(L, 2);
     }
@@ -475,7 +475,7 @@ namespace UNLUANOVA
         memset(MetatableName, 0, sizeof(MetatableName));
         FCStringAnsi::Snprintf(MetatableName, sizeof(MetatableName), "%hs%hs", TType<SmartPtrType>::GetName(), TType<ClassType>::GetName());
         SmartPtrType SharedPtr = SmartPtrType(new ClassType(Args.template Get<N>()...));
-        void *Userdata = UNLUANOVA::NewSmartPointer(L, sizeof(SmartPtrType), MetatableName);
+        void *Userdata = UnLuaNova::NewSmartPointer(L, sizeof(SmartPtrType), MetatableName);
         if (Userdata)
         {
             new(Userdata) SmartPtrType(SharedPtr);
@@ -500,7 +500,7 @@ namespace UNLUANOVA
     int32 TDestructor<ClassType>::Invoke(lua_State *L)
     {
         bool bTwoLvlPtr = false;
-        ClassType *Instance = (ClassType*)UNLUANOVA::GetPointer(L, 1, &bTwoLvlPtr);
+        ClassType *Instance = (ClassType*)UnLuaNova::GetPointer(L, 1, &bTwoLvlPtr);
         if (Instance && !bTwoLvlPtr)
         {
             Instance->~ClassType();
@@ -655,27 +655,27 @@ namespace UNLUANOVA
     void TExportedProperty<T>::ReadValue_InContainer(lua_State *L, const void *ContainerPtr, bool bCreateCopy) const
     {
         T &V = *((T*)((uint8*)ContainerPtr + Offset));
-        UNLUANOVA::Push(L, V, bCreateCopy || (TIsClass<T>::Value && (Offset == 0)));
+        UnLuaNova::Push(L, V, bCreateCopy || (TIsClass<T>::Value && (Offset == 0)));
     }
 
     template <typename T>
     void TExportedProperty<T>::ReadValue(lua_State *L, const void *ValuePtr, bool bCreateCopy) const
     {
         T &V = *((T*)((uint8*)ValuePtr));
-        UNLUANOVA::Push(L, V, bCreateCopy || (TIsClass<T>::Value && (Offset == 0)));
+        UnLuaNova::Push(L, V, bCreateCopy || (TIsClass<T>::Value && (Offset == 0)));
     }
     
     template <typename T>
     bool TExportedProperty<T>::WriteValue_InContainer(lua_State *L, void *ContainerPtr, int32 IndexInStack, bool bCreateCopy) const
     {
-        *((T*)((uint8*)ContainerPtr + Offset)) = UNLUANOVA::Get(L, IndexInStack, TType<typename TArgTypeTraits<T>::Type>());
+        *((T*)((uint8*)ContainerPtr + Offset)) = UnLuaNova::Get(L, IndexInStack, TType<typename TArgTypeTraits<T>::Type>());
         return false;
     }
 
     template <typename T>
     bool TExportedProperty<T>::WriteValue(lua_State *L, void *ValuePtr, int32 IndexInStack, bool bCreateCopy) const
     {
-        *((T*)((uint8*)ValuePtr)) = UNLUANOVA::Get(L, IndexInStack, TType<typename TArgTypeTraits<T>::Type>());
+        *((T*)((uint8*)ValuePtr)) = UnLuaNova::Get(L, IndexInStack, TType<typename TArgTypeTraits<T>::Type>());
         return false;
     }
 
@@ -717,13 +717,13 @@ namespace UNLUANOVA
         T *V = (T*)((uint8*)ContainerPtr + Offset);
         // the first element
         lua_pushinteger(L, 1);
-        UNLUANOVA::Push(L, V[0], bCreateCopy || (TIsClass<T>::Value && (Offset == 0)));
+        UnLuaNova::Push(L, V[0], bCreateCopy || (TIsClass<T>::Value && (Offset == 0)));
         lua_rawset(L, -3);
         // other elements
         for (int32 i = 1; i < ArrayDim; ++i)
         {
             lua_pushinteger(L, i + 1);
-            UNLUANOVA::Push(L, V[i], bCreateCopy);
+            UnLuaNova::Push(L, V[i], bCreateCopy);
             lua_rawset(L, -3);
         }
     }
@@ -740,7 +740,7 @@ namespace UNLUANOVA
         for (int32 i = 0; i < ArrayDim; ++i)
         {
             lua_rawgeti(L, IndexInStack, i + 1);
-            V[i] = UNLUANOVA::Get(L, -1, TType<typename TArgTypeTraits<T>::Type>());
+            V[i] = UnLuaNova::Get(L, -1, TType<typename TArgTypeTraits<T>::Type>());
         }
         lua_pop(L, ArrayDim);
         return false;
@@ -810,7 +810,7 @@ namespace UNLUANOVA
             {
                 if (!SuperClassName.IsEmpty())
                 {
-                    IExportedClass *SuperClass = UNLUANOVA::FindExportedClass(SuperClassName);
+                    IExportedClass *SuperClass = UnLuaNova::FindExportedClass(SuperClassName);
                     if (SuperClass)
                     {
                         SuperClass->Register(L);
@@ -835,7 +835,7 @@ namespace UNLUANOVA
                 lua_pushvalue(L, -2);
                 if (Properties.Num() > 0 || !SuperClassName.IsEmpty())
                 {
-                    lua_pushcclosure(L, UNLUANOVA::Index, 1);
+                    lua_pushcclosure(L, UnLuaNova::Index, 1);
                 }
                 lua_rawset(L, -3);
 
@@ -843,7 +843,7 @@ namespace UNLUANOVA
                 lua_pushvalue(L, -2);
                 if (Properties.Num() > 0 || !SuperClassName.IsEmpty())
                 {
-                    lua_pushcclosure(L, UNLUANOVA::NewIndex, 1);
+                    lua_pushcclosure(L, UnLuaNova::NewIndex, 1);
                 }
                 lua_rawset(L, -3);
 

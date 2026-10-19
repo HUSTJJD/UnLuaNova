@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -18,8 +18,8 @@
 #include "DefaultParamCollection.h"
 #include "LowLevel.h"
 #include "LuaFunction.h"
-#include "UNLUANOVA.h"
-#include "UNLUANOVADebugBase.h"
+#include "UnLuaNova.h"
+#include "UnLuaNovaDebugBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "LuaDeadLoopCheck.h"
@@ -89,7 +89,7 @@ void FFunctionDesc::CallLua(lua_State* L, lua_Integer FunctionRef, lua_Integer S
     TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(*FuncName);
 #endif
     
-    lua_pushcfunction(L, UNLUANOVA::ReportLuaCallError);
+    lua_pushcfunction(L, UnLuaNova::ReportLuaCallError);
     check(Function.IsValid());
     lua_rawgeti(L, LUA_REGISTRYINDEX, FunctionRef);
     check(lua_isfunction(L, -1));
@@ -193,7 +193,7 @@ int32 FFunctionDesc::CallUE(lua_State *L, int32 NumParams, void *Userdata)
     }
     else if (NumParams > 0)
     {
-        Object = UNLUANOVA::GetUObject(L, 1, false);
+        Object = UnLuaNova::GetUObject(L, 1, false);
         FirstParamIndex = 2;
         --NumParams;
     }
@@ -346,13 +346,13 @@ void FFunctionDesc::PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex
             if(lua_type(L, FirstParamIndex + ParamIndex) == LUA_TUSERDATA)
             {
                 // custom latent action info
-                FLatentActionInfo Info = UNLUANOVA::Get<FLatentActionInfo>(L, FirstParamIndex + ParamIndex, UNLUANOVA::TType<FLatentActionInfo>());
+                FLatentActionInfo Info = UnLuaNova::Get<FLatentActionInfo>(L, FirstParamIndex + ParamIndex, UnLuaNova::TType<FLatentActionInfo>());
                 Property->CopyValue(ContainerPtr, &Info);
                 continue;
             }
 
             // bind a callback to the latent function
-            auto& Env = UNLUANOVA::FLuaEnv::FindEnvChecked(L);
+            auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
             FLatentActionInfo LatentActionInfo(ThreadRef, GetTypeHash(FGuid::NewGuid()), TEXT("OnLatentActionCompleted"), (Env.GetManager()));
             Property->CopyValue(ContainerPtr, &LatentActionInfo);
             continue;
@@ -369,7 +369,7 @@ void FFunctionDesc::PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex
             if (Property->CheckPropertyType(L, FirstParamIndex + ParamIndex, ErrorMsg))
                 CleanupFlags[i] = Property->WriteValue_InContainer(L, Params, FirstParamIndex + ParamIndex, false);
             else
-                UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Error, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
+                UNLUANOVA_LOGERROR(L, LogUnLuaNova, Error, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
 #else
             CleanupFlags[i] = Property->WriteValue_InContainer(L, Params, FirstParamIndex + ParamIndex, false);
 #endif
@@ -393,7 +393,7 @@ void FFunctionDesc::PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex
                 FString ErrorMsg = "";
                 if (!Property->CheckPropertyType(L, FirstParamIndex + ParamIndex, ErrorMsg))
                 {
-                    UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
+                    UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
                 }
 #endif
             }
@@ -491,7 +491,7 @@ bool FFunctionDesc::CallLuaInternal(lua_State *L, void *InParams, FOutParmRec *O
     // -3 = [function] ReportLuaCallError
     const auto ErrorHandlerIndex = lua_gettop(L) - 2;
 
-    const auto& Env = UNLUANOVA::FLuaEnv::FindEnvChecked(L);
+    const auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
     const auto DanglingGuard = Env.GetDanglingCheck()->MakeGuard();
 
     if (InParams)
@@ -565,7 +565,7 @@ bool FFunctionDesc::CallLuaInternal(lua_State *L, void *InParams, FOutParmRec *O
         {
             ReturnProperty->GetProperty()->InitializeValue(RetValueAddress);
 #if ENABLE_TYPE_CHECK == 1
-            UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Error, TEXT("FuncName %s has return value, but no value found on stack!"),*FuncName);
+            UNLUANOVA_LOGERROR(L, LogUnLuaNova, Error, TEXT("FuncName %s has return value, but no value found on stack!"),*FuncName);
 #endif
         }
         else
@@ -585,7 +585,7 @@ bool FFunctionDesc::CallLuaInternal(lua_State *L, void *InParams, FOutParmRec *O
 
 bool FFunctionDesc::CheckObject(UObject* Object, FString& Error) const
 {
-    if (Object == UNLUANOVA::LowLevel::ReleasedPtr)
+    if (Object == UnLuaNova::LowLevel::ReleasedPtr)
     {
         Error = FString::Printf(TEXT("attempt to call UFunction '%s' on released object."), *FuncName);
         return false;

@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -17,11 +17,11 @@
 #include "Components/InputComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Engine/LevelScriptActor.h"
-#include "UNLUANOVAManager.h"
+#include "UnLuaNovaManager.h"
 #include "LowLevel.h"
 #include "LuaEnv.h"
-#include "UNLUANOVALegacy.h"
-#include "UNLUANOVAInterface.h"
+#include "UnLuaNovaLegacy.h"
+#include "UnLuaNovaInterface.h"
 #include "LuaCore.h"
 #include "LuaFunction.h"
 #include "ObjectReferencer.h"
@@ -346,7 +346,7 @@ bool UUnLuaNovaManager::BindClass(UClass* Class, const FString& InModuleName, FS
     if (auto BPGC = Cast<UBlueprintGeneratedClass>(Class))
     {
         lua_rawgeti(L, LUA_REGISTRYINDEX, Ref);
-        lua_getglobal(L, "UNLUANOVA");
+        lua_getglobal(L, "UnLuaNova");
         if (lua_getfield(L, -1, "Input") != LUA_TTABLE)
         {
             lua_pop(L, 2);

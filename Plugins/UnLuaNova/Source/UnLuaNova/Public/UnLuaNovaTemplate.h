@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -18,7 +18,7 @@
 #include "Misc/EngineVersionComparison.h"
 #include <type_traits>
 
-namespace UNLUANOVA
+namespace UnLuaNova
 {
 
     /**
@@ -292,29 +292,29 @@ namespace UNLUANOVA
         }
     };
 
-} // namespace UNLUANOVA
+} // namespace UnLuaNova
 
 /**
  * Macros to define types
  */
 #define DEFINE_TYPE(Type) \
-    template<> struct UNLUANOVA::TType<Type, false> \
+    template<> struct UnLuaNova::TType<Type, false> \
     { \
         static const char* GetName() { return #Type; } \
     };
 
 #define DEFINE_NAMED_TYPE(Name, Type) \
-    template<> struct UNLUANOVA::TType<Type, false> \
+    template<> struct UnLuaNova::TType<Type, false> \
     { \
         static const char* GetName() { return Name; } \
     };
 
 #define DEFINE_SMART_POINTER(SmartPtrType) \
-    template <typename T> struct UNLUANOVA::TType<SmartPtrType<T, ESPMode::NotThreadSafe>, false> \
+    template <typename T> struct UnLuaNova::TType<SmartPtrType<T, ESPMode::NotThreadSafe>, false> \
     { \
         static const char* GetName() { return #SmartPtrType; } \
     }; \
-    template <typename T> struct UNLUANOVA::TType<SmartPtrType<T, ESPMode::ThreadSafe>, false> \
+    template <typename T> struct UnLuaNova::TType<SmartPtrType<T, ESPMode::ThreadSafe>, false> \
     { \
         static const char* GetName() { return #SmartPtrType; } \
     };
@@ -348,7 +348,7 @@ DEFINE_SMART_POINTER(TWeakPtr)
  * Define container names
  */
 template<typename ElementType, typename Allocator>
-struct UNLUANOVA::TType<TArray<ElementType, Allocator>, false>
+struct UnLuaNova::TType<TArray<ElementType, Allocator>, false>
 {
 	static const char * GetName()
 	{
@@ -357,7 +357,7 @@ struct UNLUANOVA::TType<TArray<ElementType, Allocator>, false>
 };
 
 template<typename KeyType, typename ValueType, typename SetAllocator, typename KeyFunc>
-struct UNLUANOVA::TType<TMap<KeyType, ValueType, SetAllocator, KeyFunc>, false>
+struct UnLuaNova::TType<TMap<KeyType, ValueType, SetAllocator, KeyFunc>, false>
 {
 	static const char * GetName()
 	{
@@ -366,7 +366,7 @@ struct UNLUANOVA::TType<TMap<KeyType, ValueType, SetAllocator, KeyFunc>, false>
 };
 
 template<typename InElementType, typename KeyFunc, typename Allocator>
-struct UNLUANOVA::TType<TSet<InElementType, KeyFunc, Allocator>, false>
+struct UnLuaNova::TType<TSet<InElementType, KeyFunc, Allocator>, false>
 {
 	static const char * GetName()
 	{

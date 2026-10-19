@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -49,7 +49,7 @@ public:
         OwnedBySelf,    // 'Map' is owned by self, it'll be freed in destructor
     };
 
-    FLuaMap(const FScriptMap *InScriptMap, TSharedPtr<UNLUANOVA::ITypeInterface> InKeyInterface, TSharedPtr<UNLUANOVA::ITypeInterface> InValueInterface, FScriptMapFlag Flag = OwnedByOther)
+    FLuaMap(const FScriptMap *InScriptMap, TSharedPtr<UnLuaNova::ITypeInterface> InKeyInterface, TSharedPtr<UnLuaNova::ITypeInterface> InValueInterface, FScriptMapFlag Flag = OwnedByOther)
         : Map((FScriptMap*)InScriptMap), MapLayout(FScriptMap::GetScriptLayout(InKeyInterface->GetSize(), InKeyInterface->GetAlignment(), InValueInterface->GetSize(), InValueInterface->GetAlignment()))
         , KeyInterface(InKeyInterface), ValueInterface(InValueInterface), Interface(nullptr), ElementCache(nullptr), ScriptMapFlag(Flag)
     {
@@ -123,8 +123,8 @@ public:
     FORCEINLINE void Add(const void *Key, const void *Value)
     {
         //MapHelper.AddPair(Key, Value);
-        const UNLUANOVA::ITypeInterface *LocalKeyInterface = KeyInterface.Get();
-        const UNLUANOVA::ITypeInterface *LocalValueInterface = ValueInterface.Get();
+        const UnLuaNova::ITypeInterface *LocalKeyInterface = KeyInterface.Get();
+        const UnLuaNova::ITypeInterface *LocalValueInterface = ValueInterface.Get();
         Map->Add(Key, Value, MapLayout,
             [LocalKeyInterface](const void* ElementKey) { return LocalKeyInterface->GetValueTypeHash(ElementKey); },
             [LocalKeyInterface](const void* A, const void* B) { return LocalKeyInterface->Identical(A, B); },
@@ -167,7 +167,7 @@ public:
     FORCEINLINE bool Remove(const void *Key)
     {
         //return MapHelper.RemovePair(Key);
-        const UNLUANOVA::ITypeInterface *LocalKeyInterface = KeyInterface.Get();
+        const UnLuaNova::ITypeInterface *LocalKeyInterface = KeyInterface.Get();
         if (uint8* Entry = Map->FindValue(Key, MapLayout,
             [LocalKeyInterface](const void* ElementKey) { return LocalKeyInterface->GetValueTypeHash(ElementKey); },
             [LocalKeyInterface](const void* A, const void* B) { return LocalKeyInterface->Identical(A, B); }
@@ -198,7 +198,7 @@ public:
         //    MapHelper.ValueProp->CopyCompleteValue(OutValue, Value);
         //    return true;
         //}
-        const UNLUANOVA::ITypeInterface *LocalKeyInterface = KeyInterface.Get();
+        const UnLuaNova::ITypeInterface *LocalKeyInterface = KeyInterface.Get();
         uint8 *Value = Map->FindValue(Key, MapLayout,
             [LocalKeyInterface](const void* ElementKey) { return LocalKeyInterface->GetValueTypeHash(ElementKey); },
             [LocalKeyInterface](const void* A, const void* B) { return LocalKeyInterface->Identical(A, B); }
@@ -221,7 +221,7 @@ public:
     FORCEINLINE void* Find(const void *Key)
     {
         //return MapHelper.FindValueFromHash(Key);
-        const UNLUANOVA::ITypeInterface *LocalKeyInterface = KeyInterface.Get();
+        const UnLuaNova::ITypeInterface *LocalKeyInterface = KeyInterface.Get();
         return Map->FindValue(Key, MapLayout,
             [LocalKeyInterface](const void* ElementKey) { return LocalKeyInterface->GetValueTypeHash(ElementKey); },
             [LocalKeyInterface](const void* A, const void* B) { return LocalKeyInterface->Identical(A, B); }
@@ -360,8 +360,8 @@ public:
 
     FScriptMap *Map;
     FScriptMapLayout MapLayout;
-    TSharedPtr<UNLUANOVA::ITypeInterface> KeyInterface;
-    TSharedPtr<UNLUANOVA::ITypeInterface> ValueInterface;
+    TSharedPtr<UnLuaNova::ITypeInterface> KeyInterface;
+    TSharedPtr<UnLuaNova::ITypeInterface> ValueInterface;
     TLuaContainerInterface<FLuaMap> *Interface;
     //FScriptMapHelper MapHelper;
     void *ElementCache;             // can only hold a key-value pair

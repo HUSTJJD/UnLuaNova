@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,7 +12,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UNLUANOVAEx.h"
+#include "UnLuaNovaEx.h"
 #include "LuaCore.h"
 #include "ReflectionUtils/ClassDesc.h"
 
@@ -66,10 +66,10 @@ int32 UClass_Load(lua_State* L)
     if (!Class)
         return 0;
 
-    if (!UNLUANOVA::FLuaEnv::FindEnv(L)->GetClassRegistry()->Register(Class))
+    if (!UnLuaNova::FLuaEnv::FindEnv(L)->GetClassRegistry()->Register(Class))
         return 0;
 
-    UNLUANOVA::PushUObject(L, Class);
+    UnLuaNova::PushUObject(L, Class);
     return 1;
 }
 
@@ -82,11 +82,11 @@ static int32 UClass_IsChildOf(lua_State* L)
     if (NumParams != 2)
         return luaL_error(L, "invalid parameters");
 
-    UClass* SrcClass = Cast<UClass>(UNLUANOVA::GetUObject(L, 1));
+    UClass* SrcClass = Cast<UClass>(UnLuaNova::GetUObject(L, 1));
     if (!SrcClass)
         return luaL_error(L, "invalid source class");
 
-    UClass* TargetClass = Cast<UClass>(UNLUANOVA::GetUObject(L, 2));
+    UClass* TargetClass = Cast<UClass>(UnLuaNova::GetUObject(L, 2));
     if (!TargetClass)
         return luaL_error(L, "invalid target class");
 
@@ -105,14 +105,14 @@ static int32 UClass_GetDefaultObject(lua_State* L)
     if (NumParams != 1)
         return luaL_error(L, "invalid parameters");
 
-    UClass* SrcClass = Cast<UClass>(UNLUANOVA::GetUObject(L, 1));
+    UClass* SrcClass = Cast<UClass>(UnLuaNova::GetUObject(L, 1));
     if (!SrcClass)
         return luaL_error(L, "invalid source class");
 
     UObject* Ret = SrcClass->GetDefaultObject();
     if (Ret)
     {
-        UNLUANOVA::PushUObject(L, Ret);
+        UnLuaNova::PushUObject(L, Ret);
     }
     else
     {

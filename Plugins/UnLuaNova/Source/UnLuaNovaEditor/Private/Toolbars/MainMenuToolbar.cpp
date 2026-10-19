@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -14,50 +14,50 @@
 
 #include "MainMenuToolbar.h"
 #include "ISettingsModule.h"
-#include "UNLUANOVAAboutScreen.h"
-#include "UNLUANOVAIntelliSenseGenerator.h"
+#include "UnLuaNovaAboutScreen.h"
+#include "UnLuaNovaIntelliSenseGenerator.h"
 #include "LevelEditor.h"
-#include "UNLUANOVAEditorCommands.h"
-#include "UNLUANOVAEditorFunctionLibrary.h"
-#include "UNLUANOVAEditorSettings.h"
-#include "UNLUANOVAFunctionLibrary.h"
+#include "UnLuaNovaEditorCommands.h"
+#include "UnLuaNovaEditorFunctionLibrary.h"
+#include "UnLuaNovaEditorSettings.h"
+#include "UnLuaNovaFunctionLibrary.h"
 #include "Interfaces/IMainFrameModule.h"
 #include "ToolMenus.h"
 
-#define LOCTEXT_NAMESPACE "UNLUANOVAMainMenuToolbar"
+#define LOCTEXT_NAMESPACE "UnLuaNovaMainMenuToolbar"
 
 FMainMenuToolbar::FMainMenuToolbar()
     : CommandList(new FUICommandList)
 {
-    CommandList->MapAction(FUNLUANOVAEditorCommands::Get().HotReload, FExecuteAction::CreateStatic(UUNLUANOVAFunctionLibrary::HotReload), FCanExecuteAction());
+    CommandList->MapAction(FUnLuaNovaEditorCommands::Get().HotReload, FExecuteAction::CreateStatic(UUnLuaNovaFunctionLibrary::HotReload), FCanExecuteAction());
 
-    CommandList->MapAction(FUNLUANOVAEditorCommands::Get().GenerateIntelliSense, FExecuteAction::CreateLambda([]
+    CommandList->MapAction(FUnLuaNovaEditorCommands::Get().GenerateIntelliSense, FExecuteAction::CreateLambda([]
     {
-        FUNLUANOVAIntelliSenseGenerator::Get()->UpdateAll();
+        FUnLuaNovaIntelliSenseGenerator::Get()->UpdateAll();
     }), FCanExecuteAction());
 
-    CommandList->MapAction(FUNLUANOVAEditorCommands::Get().OpenRuntimeSettings, FExecuteAction::CreateLambda([]
-    {
-        if (ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings"))
-            SettingsModule->ShowViewer("Project", "Plugins", "UNLUANOVA");
-    }), FCanExecuteAction());
-
-    CommandList->MapAction(FUNLUANOVAEditorCommands::Get().OpenEditorSettings, FExecuteAction::CreateLambda([]
+    CommandList->MapAction(FUnLuaNovaEditorCommands::Get().OpenRuntimeSettings, FExecuteAction::CreateLambda([]
     {
         if (ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings"))
-            SettingsModule->ShowViewer("Project", "Plugins", "UNLUANOVA Editor");
+            SettingsModule->ShowViewer("Project", "Plugins", "UnLuaNova");
     }), FCanExecuteAction());
 
-    CommandList->MapAction(FUNLUANOVAEditorCommands::Get().ReportIssue, FExecuteAction::CreateLambda([]
+    CommandList->MapAction(FUnLuaNovaEditorCommands::Get().OpenEditorSettings, FExecuteAction::CreateLambda([]
+    {
+        if (ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings"))
+            SettingsModule->ShowViewer("Project", "Plugins", "UnLuaNova Editor");
+    }), FCanExecuteAction());
+
+    CommandList->MapAction(FUnLuaNovaEditorCommands::Get().ReportIssue, FExecuteAction::CreateLambda([]
     {
         const TCHAR* URL = TEXT("cmd");
-        const TCHAR* Params = TEXT("/k start https://github.com/Tencent/UNLUANOVA/issues/new/choose");
+        const TCHAR* Params = TEXT("/k start https://github.com/Tencent/UnLuaNova/issues/new/choose");
         FPlatformProcess::ExecProcess(URL, Params, nullptr, nullptr, nullptr);
     }), FCanExecuteAction());
 
-    CommandList->MapAction(FUNLUANOVAEditorCommands::Get().About, FExecuteAction::CreateLambda([]
+    CommandList->MapAction(FUnLuaNovaEditorCommands::Get().About, FExecuteAction::CreateLambda([]
     {
-        const FText AboutWindowTitle = LOCTEXT("AboutUnLua", "About UNLUANOVA");
+        const FText AboutWindowTitle = LOCTEXT("AboutUnLua", "About UnLuaNova");
 
         TSharedPtr<SWindow> AboutWindow =
             SNew(SWindow)
@@ -83,14 +83,14 @@ void FMainMenuToolbar::Initialize()
 {
 #if ENGINE_MAJOR_VERSION >= 5
     UToolMenu* ToolbarMenu = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar.User");
-    FToolMenuSection& Section = ToolbarMenu->AddSection("UNLUANOVASettings");
+    FToolMenuSection& Section = ToolbarMenu->AddSection("UnLuaNovaSettings");
     Section.AddEntry(FToolMenuEntry::InitComboButton(
-		"UNLUANOVASettings",
+		"UnLuaNovaSettings",
 		FUIAction(),
 		FOnGetContent::CreateRaw(this, &FMainMenuToolbar::GenerateUnLuaSettingsMenu),
-		LOCTEXT("UNLUANOVA_Label", "UNLUANOVA"),
-		LOCTEXT("UNLUANOVA_ToolTip", "UNLUANOVA"),
-		FSlateIcon("UNLUANOVAEditorStyle", "UNLUANOVAEditor.UNLUANOVALogo")
+		LOCTEXT("UNLUANOVA_Label", "UnLuaNova"),
+		LOCTEXT("UNLUANOVA_ToolTip", "UnLuaNova"),
+		FSlateIcon("UnLuaNovaEditorStyle", "UnLuaNovaEditor.UnLuaNovaLogo")
 		));
 #else
     TSharedPtr<FExtender> Extender = MakeShareable(new FExtender);
@@ -100,9 +100,9 @@ void FMainMenuToolbar::Initialize()
                                       Builder.BeginSection(NAME_None);
                                       Builder.AddComboButton(FUIAction(),
                                                              FOnGetContent::CreateRaw(this, &FMainMenuToolbar::GenerateUnLuaSettingsMenu),
-                                                             LOCTEXT("UNLUANOVA_Label", "UNLUANOVA"),
-                                                             LOCTEXT("UNLUANOVA_ToolTip", "UNLUANOVA"),
-                                                             FSlateIcon("UNLUANOVAEditorStyle", "UNLUANOVAEditor.UNLUANOVALogo")
+                                                             LOCTEXT("UNLUANOVA_Label", "UnLuaNova"),
+                                                             LOCTEXT("UNLUANOVA_ToolTip", "UnLuaNova"),
+                                                             FSlateIcon("UnLuaNovaEditorStyle", "UnLuaNovaEditor.UnLuaNovaLogo")
                                       );
                                       Builder.EndSection();
                                   })
@@ -110,14 +110,14 @@ void FMainMenuToolbar::Initialize()
     FLevelEditorModule& LevelEditorModule = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
     LevelEditorModule.GetToolBarExtensibilityManager()->AddExtender(Extender);
 #endif
-    const auto& Settings = *GetDefault<UUNLUANOVAEditorSettings>();
+    const auto& Settings = *GetDefault<UUnLuaNovaEditorSettings>();
     if (Settings.UpdateMode == EUpdateMode::Start)
-        UUNLUANOVAEditorFunctionLibrary::FetchNewVersion();
+        UUnLuaNovaEditorFunctionLibrary::FetchNewVersion();
 }
 
 TSharedRef<SWidget> FMainMenuToolbar::GenerateUnLuaSettingsMenu()
 {
-    const FUNLUANOVAEditorCommands& Commands = FUNLUANOVAEditorCommands::Get();
+    const FUnLuaNovaEditorCommands& Commands = FUnLuaNovaEditorCommands::Get();
     FMenuBuilder MenuBuilder(true, CommandList);
 
     MenuBuilder.BeginSection(NAME_None, LOCTEXT("Section_Action", "Action"));
@@ -127,7 +127,7 @@ TSharedRef<SWidget> FMainMenuToolbar::GenerateUnLuaSettingsMenu()
 
     MenuBuilder.BeginSection(NAME_None, LOCTEXT("Section_Help", "Help"));
     MenuBuilder.AddSubMenu(LOCTEXT("Section_SettingsMenu", "Settings"),
-                           LOCTEXT("Section_SettingsMenu_ToolTip", "UNLUANOVA Settings"),
+                           LOCTEXT("Section_SettingsMenu_ToolTip", "UnLuaNova Settings"),
                            FNewMenuDelegate::CreateLambda([Commands](FMenuBuilder& SubMenuBuilder)
                            {
                                SubMenuBuilder.AddMenuEntry(Commands.OpenRuntimeSettings, NAME_None, LOCTEXT("OpenRuntimeSettings", "Runtime"));

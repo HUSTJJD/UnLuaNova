@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -15,7 +15,7 @@
 #pragma once
 
 #include "CoreUObject.h"
-#include "UNLUANOVABase.h"
+#include "UnLuaNovaBase.h"
 
 #if NO_LOGGING
     #define UNLUANOVA_LOG(L, CategoryName, Verbosity, Format, ...)
@@ -26,7 +26,7 @@
     {\
     	FString LogMsg = FString::Printf(Format, ##__VA_ARGS__);\
         luaL_traceback(L, L, "", 0); \
-        UE_LOG(LogUNLUANOVA, Log, TEXT("%s%s"),*LogMsg,UTF8_TO_TCHAR(lua_tostring(L,-1))); \
+        UE_LOG(LogUnLuaNova, Log, TEXT("%s%s"),*LogMsg,UTF8_TO_TCHAR(lua_tostring(L,-1))); \
         lua_pop(L,1); \
     }
 
@@ -34,7 +34,7 @@
     {\
     	FString LogMsg = FString::Printf(Format, ##__VA_ARGS__);\
         luaL_traceback(L, L, "", 0); \
-        UE_LOG(LogUNLUANOVA, Warning, TEXT("%s%s"),*LogMsg,UTF8_TO_TCHAR(lua_tostring(L,-1))); \
+        UE_LOG(LogUnLuaNova, Warning, TEXT("%s%s"),*LogMsg,UTF8_TO_TCHAR(lua_tostring(L,-1))); \
         lua_pop(L,1); \
     }
 
@@ -42,13 +42,13 @@
     {\
     	FString LogMsg = FString::Printf(Format, ##__VA_ARGS__);\
         luaL_traceback(L, L, "", 0); \
-        UE_LOG(LogUNLUANOVA, Error, TEXT("%s%s"),*LogMsg,UTF8_TO_TCHAR(lua_tostring(L,-1))); \
+        UE_LOG(LogUnLuaNova, Error, TEXT("%s%s"),*LogMsg,UTF8_TO_TCHAR(lua_tostring(L,-1))); \
         lua_pop(L,1); \
     }
 #endif
 
 #if STATS
-DECLARE_STATS_GROUP(TEXT("UNLUANOVA"), STATGROUP_UnLua, STATCAT_Advanced);
+DECLARE_STATS_GROUP(TEXT("UnLuaNova"), STATGROUP_UnLua, STATCAT_Advanced);
 DECLARE_MEMORY_STAT_EXTERN(TEXT("Lua Memory"), STAT_UnLua_Lua_Memory, STATGROUP_UnLua, /*UNLUANOVA_API*/);
 DECLARE_MEMORY_STAT_EXTERN(TEXT("Persistent Parameter Buffer Memory"), STAT_UnLua_PersistentParamBuffer_Memory, STATGROUP_UnLua, /*UNLUANOVA_API*/);
 DECLARE_MEMORY_STAT_EXTERN(TEXT("OutParmRec Memory"), STAT_UnLua_OutParmRec_Memory, STATGROUP_UnLua, /*UNLUANOVA_API*/);

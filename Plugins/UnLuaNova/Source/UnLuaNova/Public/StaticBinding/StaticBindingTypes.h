@@ -1,6 +1,6 @@
 // Static binding descriptors.
 //
-// The point of these structs is to move work that UNLUANOVA currently does on *every*
+// The point of these structs is to move work that UnLuaNova currently does on *every*
 // cross-boundary access (reflection lookups, virtual dispatch, flag tests) into a
 // pre-resolved, POD, generator-friendly table.
 //
@@ -122,10 +122,10 @@ struct FStaticFuncBinding
 	UFunction* Function = nullptr;
 };
 
-/** A pre-resolved UCLASS / UScriptStruct. `TypeName` matches UNLUANOVA's metatable name. */
+/** A pre-resolved UCLASS / UScriptStruct. `TypeName` matches UnLuaNova's metatable name. */
 struct FStaticTypeBinding
 {
-	/** Metatable name as UNLUANOVA sees it, e.g. TEXT("Actor"), TEXT("Vector"), TEXT("MyEnum"). */
+	/** Metatable name as UnLuaNova sees it, e.g. TEXT("Actor"), TEXT("Vector"), TEXT("MyEnum"). */
 	const TCHAR* TypeName = nullptr;
 
 	const FStaticPropBinding* Props = nullptr;

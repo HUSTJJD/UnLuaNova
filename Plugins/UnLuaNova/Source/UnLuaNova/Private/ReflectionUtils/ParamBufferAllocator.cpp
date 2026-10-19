@@ -1,6 +1,6 @@
 #include "ParamBufferAllocator.h"
 
-#include "UNLUANOVAPrivate.h"
+#include "UnLuaNovaPrivate.h"
 
 FParamBufferAllocator_Always::FParamBufferAllocator_Always(const UFunction& Func)
 {

@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -34,7 +34,7 @@ bool FPropertyDesc::IsValid() const
         return false;
     
 #if ENGINE_MAJOR_VERSION <= 4 && ENGINE_MINOR_VERSION < 25
-    return UNLUANOVA::IsUObjectValid(Property);
+    return UnLuaNova::IsUObjectValid(Property);
 #else
     bool bValid = true;
 
@@ -42,23 +42,23 @@ bool FPropertyDesc::IsValid() const
     {
     case CPT_Interface:
         {
-            bValid = UNLUANOVA::IsUObjectValid(((FInterfaceProperty*)Property)->InterfaceClass);
+            bValid = UnLuaNova::IsUObjectValid(((FInterfaceProperty*)Property)->InterfaceClass);
             break;
         }
     case CPT_Delegate:
         {
-            bValid = UNLUANOVA::IsUObjectValid(((FDelegateProperty*)Property)->SignatureFunction);
+            bValid = UnLuaNova::IsUObjectValid(((FDelegateProperty*)Property)->SignatureFunction);
             break;
         }
     case CPT_MulticastDelegate:
     case CPT_MulticastSparseDelegate:
         {
-            bValid = UNLUANOVA::IsUObjectValid(((FMulticastDelegateProperty*)Property)->SignatureFunction);
+            bValid = UnLuaNova::IsUObjectValid(((FMulticastDelegateProperty*)Property)->SignatureFunction);
             break;
         }
     case CPT_Struct:
         {
-            bValid = UNLUANOVA::IsUObjectValid(((FStructProperty*)Property)->Struct);
+            bValid = UnLuaNova::IsUObjectValid(((FStructProperty*)Property)->Struct);
             break;
         }
     case CPT_ObjectReference:
@@ -66,7 +66,7 @@ bool FPropertyDesc::IsValid() const
     case CPT_LazyObjectReference:
     case CPT_SoftObjectReference:
         {
-            bValid = UNLUANOVA::IsUObjectValid(((FObjectPropertyBase*)Property)->PropertyClass);
+            bValid = UnLuaNova::IsUObjectValid(((FObjectPropertyBase*)Property)->PropertyClass);
             break;
         }
     }
@@ -279,7 +279,7 @@ public:
 
     virtual bool CopyBack(lua_State *L, int32 SrcIndexInStack, void *DestContainerPtr) override
     {
-        UObject *Object = UNLUANOVA::GetUObject(L, SrcIndexInStack);
+        UObject *Object = UnLuaNova::GetUObject(L, SrcIndexInStack);
         if (Object && DestContainerPtr && IsOutParameter())
         {
             if (MetaClass)
@@ -302,7 +302,7 @@ public:
             return false;
 
         bool bTwoLvlPtr;
-        void** Userdata = (void**)UNLUANOVA::LowLevel::GetUserdata(L, DestIndexInStack, &bTwoLvlPtr);
+        void** Userdata = (void**)UnLuaNova::LowLevel::GetUserdata(L, DestIndexInStack, &bTwoLvlPtr);
         if (!bTwoLvlPtr || !Userdata)
             return false;
 
@@ -330,21 +330,21 @@ public:
         {
             if (IsSoftObject)
             {
-                UNLUANOVA::PushUObject(L, SoftObjectProperty->GetObjectPropertyValue(ValuePtr));
+                UnLuaNova::PushUObject(L, SoftObjectProperty->GetObjectPropertyValue(ValuePtr));
             }
             else
             {
-                UNLUANOVA::PushUObject(L, ObjectBaseProperty->GetObjectPropertyValue(ValuePtr));
+                UnLuaNova::PushUObject(L, ObjectBaseProperty->GetObjectPropertyValue(ValuePtr));
             }
         }
     }
 
     virtual bool SetValueInternal(lua_State *L, void *ValuePtr, int32 IndexInStack, bool bCopyValue) const override
     {
-        auto Object = UNLUANOVA::GetUObject(L, IndexInStack, false);
-        if (UNLUANOVA::LowLevel::IsReleasedPtr(Object))
+        auto Object = UnLuaNova::GetUObject(L, IndexInStack, false);
+        if (UnLuaNova::LowLevel::IsReleasedPtr(Object))
         {
-            UNLUANOVA_LOGWARNING(L, LogUNLUANOVA, Warning, TEXT("attempt to set property %s with released object"), *GetName());
+            UNLUANOVA_LOGWARNING(L, LogUnLuaNova, Warning, TEXT("attempt to set property %s with released object"), *GetName());
             Object = nullptr;
         }
 
@@ -364,7 +364,7 @@ public:
             {
                 if (!Object->GetClass()->IsChildOf(ObjectBaseProperty->PropertyClass))
                 {
-                    UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("Invalid value type : property.type=%s, value.type=%s"), *ObjectBaseProperty->PropertyClass->GetName(), *Object->GetClass()->GetName());
+                    UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("Invalid value type : property.type=%s, value.type=%s"), *ObjectBaseProperty->PropertyClass->GetName(), *Object->GetClass()->GetName());
                 }
             }
 #endif
@@ -376,8 +376,8 @@ public:
 #if ENABLE_TYPE_CHECK == 1
     virtual bool CheckPropertyType(lua_State* L, int32 IndexInStack, FString& ErrorMsg, void* UserData)
     {
-        UNLUANOVA::FAutoStack AutoStack(L);
-        UObject* Object = UNLUANOVA::GetUObject(L, IndexInStack);
+        UnLuaNova::FAutoStack AutoStack(L);
+        UObject* Object = UnLuaNova::GetUObject(L, IndexInStack);
         if (Object)
         {
             if (MetaClass)
@@ -463,7 +463,7 @@ public:
             }
             else
             {
-                UNLUANOVA::PushPointer(L, (void*)ValuePtr, "FSoftObjectPtr", bFirstPropOfScriptStruct);
+                UnLuaNova::PushPointer(L, (void*)ValuePtr, "FSoftObjectPtr", bFirstPropOfScriptStruct);
             }
         }
     }
@@ -489,7 +489,7 @@ public:
 #if ENABLE_TYPE_CHECK == 1
     virtual bool CheckPropertyType(lua_State* L, int32 IndexInStack, FString& ErrorMsg, void* UserData)
     {
-        UNLUANOVA::FAutoStack AutoStack(L);
+        UnLuaNova::FAutoStack AutoStack(L);
 
         int32 Type = lua_type(L, IndexInStack);
         if (Type != LUA_TNIL)
@@ -550,14 +550,14 @@ public:
         else
         {
             const FScriptInterface &Interface = InterfaceProperty->GetPropertyValue(ValuePtr);
-            UNLUANOVA::PushUObject(L, Interface.GetObject());
+            UnLuaNova::PushUObject(L, Interface.GetObject());
         }
     }
 
     virtual bool SetValueInternal(lua_State *L, void *ValuePtr, int32 IndexInStack, bool bCopyValue) const override
     {
         FScriptInterface *Interface = (FScriptInterface*)ValuePtr;
-        UObject *Value = UNLUANOVA::GetUObject(L, IndexInStack);
+        UObject *Value = UnLuaNova::GetUObject(L, IndexInStack);
         Interface->SetObject(Value);
         Interface->SetInterface(Value ? Value->GetInterfaceAddress(InterfaceProperty->InterfaceClass) : nullptr);
         return true;
@@ -566,9 +566,9 @@ public:
 #if ENABLE_TYPE_CHECK == 1
     virtual bool CheckPropertyType(lua_State* L, int32 IndexInStack, FString& ErrorMsg, void* UserData)
     {
-        UNLUANOVA::FAutoStack AutoStack(L);
+        UnLuaNova::FAutoStack AutoStack(L);
 
-        UObject* Object = UNLUANOVA::GetUObject(L, IndexInStack);
+        UObject* Object = UnLuaNova::GetUObject(L, IndexInStack);
         if (Object)
         {
             UClass* Class = Object->GetClass();
@@ -766,7 +766,7 @@ public:
 
     virtual void GetValueInternal(lua_State *L, const void *ValuePtr, bool bCreateCopy) const override
     {
-        const auto& Registry = UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetContainerRegistry();
+        const auto& Registry = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetContainerRegistry();
         FScriptArray *ScriptArray;
         if (bCreateCopy)
         {
@@ -834,7 +834,7 @@ public:
 #if ENABLE_TYPE_CHECK == 1
     virtual bool CheckPropertyType(lua_State* L, int32 IndexInStack, FString& ErrorMsg, void* UserData)
     {
-        UNLUANOVA::FAutoStack AutoStack(L);
+        UnLuaNova::FAutoStack AutoStack(L);
 
         int32 Type = lua_type(L, IndexInStack);
         if (Type != LUA_TNIL)
@@ -871,8 +871,8 @@ public:
 #endif
 
     // interfaces from 'TLuaContainerInterface<FLuaArray>'
-    virtual TSharedPtr<UNLUANOVA::ITypeInterface> GetInnerInterface() const override { return InnerProperty; }
-    virtual TSharedPtr<UNLUANOVA::ITypeInterface> GetExtraInterface() const override { return TSharedPtr<UNLUANOVA::ITypeInterface>(); }
+    virtual TSharedPtr<UnLuaNova::ITypeInterface> GetInnerInterface() const override { return InnerProperty; }
+    virtual TSharedPtr<UnLuaNova::ITypeInterface> GetExtraInterface() const override { return TSharedPtr<UnLuaNova::ITypeInterface>(); }
     static bool FillArray(lua_State *L, void *Userdata)
     {
         FLuaArray *Array = (FLuaArray*)Userdata;
@@ -883,7 +883,7 @@ public:
     }
 
 private:
-    TSharedPtr<UNLUANOVA::ITypeInterface> InnerProperty;
+    TSharedPtr<UnLuaNova::ITypeInterface> InnerProperty;
 };
 
 
@@ -922,7 +922,7 @@ public:
 
     virtual void GetValueInternal(lua_State *L, const void *ValuePtr, bool bCreateCopy) const override
     {
-        const auto& Registry = UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetContainerRegistry();
+        const auto& Registry = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetContainerRegistry();
         FScriptMap *ScriptMap;
         if (bCreateCopy)
         {
@@ -969,7 +969,7 @@ public:
 #if ENABLE_TYPE_CHECK == 1
     virtual bool CheckPropertyType(lua_State* L, int32 IndexInStack, FString& ErrorMsg, void* UserData)
     {
-        UNLUANOVA::FAutoStack AutoStack(L);
+        UnLuaNova::FAutoStack AutoStack(L);
 
         int32 Type = lua_type(L, IndexInStack);
         if (Type != LUA_TNIL)
@@ -1006,8 +1006,8 @@ public:
 #endif
 
     // interfaces from 'TLuaContainerInterface<FLuaMap>'
-    virtual TSharedPtr<UNLUANOVA::ITypeInterface> GetInnerInterface() const override { return KeyProperty; }
-    virtual TSharedPtr<UNLUANOVA::ITypeInterface> GetExtraInterface() const override { return ValueProperty; }
+    virtual TSharedPtr<UnLuaNova::ITypeInterface> GetInnerInterface() const override { return KeyProperty; }
+    virtual TSharedPtr<UnLuaNova::ITypeInterface> GetExtraInterface() const override { return ValueProperty; }
     static bool FillMap(lua_State *L, void *Userdata)
     {
         FLuaMap *Map = (FLuaMap*)Userdata;
@@ -1021,8 +1021,8 @@ public:
     }
 
 private:
-    TSharedPtr<UNLUANOVA::ITypeInterface> KeyProperty;
-    TSharedPtr<UNLUANOVA::ITypeInterface> ValueProperty;
+    TSharedPtr<UnLuaNova::ITypeInterface> KeyProperty;
+    TSharedPtr<UnLuaNova::ITypeInterface> ValueProperty;
 };
 
 /**
@@ -1060,7 +1060,7 @@ public:
 
     virtual void GetValueInternal(lua_State *L, const void *ValuePtr, bool bCreateCopy) const override
     {
-        const auto& Registry = UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetContainerRegistry();
+        const auto& Registry = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetContainerRegistry();
         FScriptSet *ScriptSet;
         if (bCreateCopy)
         {
@@ -1107,7 +1107,7 @@ public:
 #if ENABLE_TYPE_CHECK == 1
     virtual bool CheckPropertyType(lua_State* L, int32 IndexInStack, FString& ErrorMsg, void* UserData)
     {
-        UNLUANOVA::FAutoStack AutoStack(L);
+        UnLuaNova::FAutoStack AutoStack(L);
 
         int32 Type = lua_type(L, IndexInStack);
         if (Type != LUA_TNIL)
@@ -1144,8 +1144,8 @@ public:
 #endif
 
     // interfaces from 'TLuaContainerInterface<FLuaSet>'
-    virtual TSharedPtr<UNLUANOVA::ITypeInterface> GetInnerInterface() const override { return InnerProperty; }
-    virtual TSharedPtr<UNLUANOVA::ITypeInterface> GetExtraInterface() const override { return TSharedPtr<UNLUANOVA::ITypeInterface>(); }
+    virtual TSharedPtr<UnLuaNova::ITypeInterface> GetInnerInterface() const override { return InnerProperty; }
+    virtual TSharedPtr<UnLuaNova::ITypeInterface> GetExtraInterface() const override { return TSharedPtr<UnLuaNova::ITypeInterface>(); }
     static bool FillSet(lua_State *L, void *Userdata)
     {
         FLuaSet *Set = (FLuaSet*)Userdata;
@@ -1156,7 +1156,7 @@ public:
     }
 
 private:
-    TSharedPtr<UNLUANOVA::ITypeInterface> InnerProperty;
+    TSharedPtr<UnLuaNova::ITypeInterface> InnerProperty;
 };
 
 void FPropertyDesc::SetPropertyType(int8 Type)
@@ -1188,12 +1188,12 @@ class FScriptStructPropertyDesc : public FStructPropertyDesc
 {
 public:
     explicit FScriptStructPropertyDesc(FProperty *InProperty)
-        : FStructPropertyDesc(InProperty), StructName(*UNLUANOVA::LowLevel::GetMetatableName(StructProperty->Struct))
+        : FStructPropertyDesc(InProperty), StructName(*UnLuaNova::LowLevel::GetMetatableName(StructProperty->Struct))
     {
         const auto ScriptStruct = CastChecked<UScriptStruct>(StructProperty->Struct);
         const auto CppStructOps = ScriptStruct->GetCppStructOps();
         StructSize = CppStructOps ? CppStructOps->GetSize() : ScriptStruct->GetStructureSize();
-        UserdataPadding = UNLUANOVA::LowLevel::CalculateUserdataPadding(StructProperty->Struct);
+        UserdataPadding = UnLuaNova::LowLevel::CalculateUserdataPadding(StructProperty->Struct);
     }
 
     virtual int32 GetSize() const override
@@ -1239,7 +1239,7 @@ public:
             }
             else
             {
-                UNLUANOVA::PushPointer(L, (void*)ValuePtr, StructName.Get(), bFirstPropOfScriptStruct);
+                UnLuaNova::PushPointer(L, (void*)ValuePtr, StructName.Get(), bFirstPropOfScriptStruct);
             }
         }
     }
@@ -1265,7 +1265,7 @@ public:
 #if ENABLE_TYPE_CHECK == 1
     virtual bool CheckPropertyType(lua_State* L, int32 IndexInStack, FString& ErrorMsg, void* UserData)
     {
-        UNLUANOVA::FAutoStack AutoStack(L);
+        UnLuaNova::FAutoStack AutoStack(L);
         int32 Type = lua_type(L, IndexInStack);
         if (Type != LUA_TNIL)
         {
@@ -1290,7 +1290,7 @@ public:
                 return false;
             }
 
-            FClassDesc* CurrentClassDesc = UNLUANOVA::FLuaEnv::FindEnv(L)->GetClassRegistry()->Find(MetatableName);
+            FClassDesc* CurrentClassDesc = UnLuaNova::FLuaEnv::FindEnv(L)->GetClassRegistry()->Find(MetatableName);
             if (!CurrentClassDesc)
             {
                 ErrorMsg = FString::Printf(TEXT("metatable of userdata needed in registry but got no found"));
@@ -1327,21 +1327,21 @@ public:
     {
         if (UNLIKELY(!PropertyPtr.IsValid()))
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("attempt to read invalid property '%s'"), *Name);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to read invalid property '%s'"), *Name);
             lua_pushnil(L);
             return;
         }
 
-        if (UNLUANOVA::LowLevel::IsReleasedPtr(ContainerPtr))
+        if (UnLuaNova::LowLevel::IsReleasedPtr(ContainerPtr))
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("attempt to read property '%s' on released object"), *Name);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to read property '%s' on released object"), *Name);
             lua_pushnil(L);
             return;
         }
 
         const void* ValuePtr = Property->ContainerPtrToValuePtr<void>(ContainerPtr);
         FScriptDelegate* ScriptDelegate = (FScriptDelegate*)DelegateProperty->GetPropertyValuePtr(ValuePtr);
-        UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Register(ScriptDelegate, DelegateProperty, ScriptDelegate->GetUObject());
+        UnLuaNova::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Register(ScriptDelegate, DelegateProperty, ScriptDelegate->GetUObject());
         GetValueInternal(L, ScriptDelegate, bCreateCopy);
     }
 
@@ -1349,21 +1349,21 @@ public:
     {
         if (UNLIKELY(!PropertyPtr.IsValid()))
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("attempt to write invalid property '%s'"), *Name);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to write invalid property '%s'"), *Name);
             return false;
         }
 
-        if (UNLUANOVA::LowLevel::IsReleasedPtr(ContainerPtr))
+        if (UnLuaNova::LowLevel::IsReleasedPtr(ContainerPtr))
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("attempt to write property '%s' on released object"), *Name);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to write property '%s' on released object"), *Name);
             return false;
         }
 
-        auto DelegateRegistry = UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry();
+        auto DelegateRegistry = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry();
         void* ValuePtr = Property->ContainerPtrToValuePtr<void>(ContainerPtr);
         FScriptDelegate* ScriptDelegate = DelegateProperty->GetPropertyValuePtr(ValuePtr);
 
-        // https://github.com/Tencent/UNLUANOVA/issues/566
+        // https://github.com/Tencent/UnLuaNova/issues/566
         if (Property->GetOwner<UFunction>())
         {
             ValuePtr = DelegateRegistry->Register(ScriptDelegate, DelegateProperty);
@@ -1385,7 +1385,7 @@ public:
         else
         {
             FScriptDelegate *ScriptDelegate = DelegateProperty->GetPropertyValuePtr((void*)ValuePtr);
-            UNLUANOVA::PushPointer(L, ScriptDelegate, "FScriptDelegate", bFirstPropOfScriptStruct);
+            UnLuaNova::PushPointer(L, ScriptDelegate, "FScriptDelegate", bFirstPropOfScriptStruct);
         }
     }
 
@@ -1396,7 +1396,7 @@ public:
         if (lua_isfunction(L, IndexInStack))
         {
             FScriptDelegate *Delegate = DelegateProperty->GetPropertyValuePtr(ValuePtr);
-            UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Bind(L, IndexInStack, Delegate, Object);
+            UnLuaNova::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Bind(L, IndexInStack, Delegate, Object);
             return bCopyValue;
         }
 
@@ -1405,7 +1405,7 @@ public:
         {
             FScriptDelegate *Delegate = DelegateProperty->GetPropertyValuePtr(ValuePtr);
             lua_rawgeti(L, IndexInStack, FuncIdxInTable);
-            UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Bind(L, -1, Delegate, Object);
+            UnLuaNova::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Bind(L, -1, Delegate, Object);
             lua_pop(L, 1);
         }
         return bCopyValue;
@@ -1442,21 +1442,21 @@ public:
     {
         if (UNLIKELY(!PropertyPtr.IsValid()))
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("attempt to read invalid property '%s'"), *Name);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to read invalid property '%s'"), *Name);
             lua_pushnil(L);
             return;
         }
 
-        if (UNLUANOVA::LowLevel::IsReleasedPtr(ContainerPtr))
+        if (UnLuaNova::LowLevel::IsReleasedPtr(ContainerPtr))
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("attempt to read property '%s' on released object"), *Name);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to read property '%s' on released object"), *Name);
             lua_pushnil(L);
             return;
         }
 
         void* ValuePtr = (void*)Property->ContainerPtrToValuePtr<void>(ContainerPtr);
         UObject* Owner = Property->GetOwnerStruct()->IsA<UClass>() ? (UObject*)ContainerPtr : nullptr;
-        UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Register(ValuePtr, DelegateProperty, Owner);
+        UnLuaNova::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Register(ValuePtr, DelegateProperty, Owner);
         GetValueInternal(L, ValuePtr, bCreateCopy);
     }
 
@@ -1464,20 +1464,20 @@ public:
     {
         if (UNLIKELY(!PropertyPtr.IsValid()))
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("attempt to write invalid property %s"), *Name);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to write invalid property %s"), *Name);
             lua_pushnil(L);
             return false;
         }
 
-        if (UNLIKELY(UNLUANOVA::LowLevel::IsReleasedPtr(ContainerPtr)))
+        if (UNLIKELY(UnLuaNova::LowLevel::IsReleasedPtr(ContainerPtr)))
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("attempt to write property '%s' on released object"), *Name);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to write property '%s' on released object"), *Name);
             return false;
         }
 
         void* ValuePtr = Property->ContainerPtrToValuePtr<void>(ContainerPtr);
         UObject* Owner = Property->GetOwnerStruct()->IsA<UClass>() ? (UObject*)ContainerPtr : nullptr;
-        UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Register(ValuePtr, DelegateProperty, Owner);
+        UnLuaNova::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Register(ValuePtr, DelegateProperty, Owner);
         return SetValueInternal(L, ValuePtr, IndexInStack, bCreateCopy);
     }
 
@@ -1490,7 +1490,7 @@ public:
         else
         {
             T *ScriptDelegate = (T*)ValuePtr;
-            UNLUANOVA::PushPointer(L, ScriptDelegate, TMulticastDelegateTraits<T>::GetName(), bFirstPropOfScriptStruct);
+            UnLuaNova::PushPointer(L, ScriptDelegate, TMulticastDelegateTraits<T>::GetName(), bFirstPropOfScriptStruct);
         }
     }
 
@@ -1501,7 +1501,7 @@ public:
         if (lua_isfunction(L, IndexInStack))
         {
             FScriptDelegate *Delegate = DelegateProperty->GetPropertyValuePtr(ValuePtr);
-            UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Bind(L, IndexInStack, Delegate, Object);
+            UnLuaNova::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry()->Bind(L, IndexInStack, Delegate, Object);
             return bCopyValue;
         }
         
@@ -1510,7 +1510,7 @@ public:
         if (FuncIdxInTable != INDEX_NONE)
         {
             T *ScriptDelegate = (T*)ValuePtr;
-            const auto Registry = UNLUANOVA::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry();
+            const auto Registry = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetDelegateRegistry();
             Registry->Register(ScriptDelegate, MulticastDelegateProperty, Object);
             lua_rawgeti(L, IndexInStack, FuncIdxInTable);
             Registry->Add(L, -1, ScriptDelegate, Object);

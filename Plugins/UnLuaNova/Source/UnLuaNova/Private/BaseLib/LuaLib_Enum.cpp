@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -15,8 +15,8 @@
 #include "BaseLib/LuaLib_Enum.h"
 #include "CollisionHelper.h"
 #include "LuaEnv.h"
-#include "UNLUANOVALegacy.h"
-#include "UNLUANOVAPrivate.h"
+#include "UnLuaNovaLegacy.h"
+#include "UnLuaNovaPrivate.h"
 
 /**
  * __index meta methods for enum
@@ -38,7 +38,7 @@ int32 Enum_Index(lua_State *L)
     lua_rawget(L, 1);
     check(lua_isstring(L, -1));
 
-    const auto Enum = UNLUANOVA::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(lua_tostring(L, -1));
+    const auto Enum = UnLuaNova::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(lua_tostring(L, -1));
     if (!Enum)
     {
         lua_pop(L, 1);
@@ -70,7 +70,7 @@ int32 Enum_GetMaxValue(lua_State* L)
 		if (Type == LUA_TSTRING)
 		{
 			const char* EnumName = lua_tostring(L, -1);
-            const auto EnumDesc = UNLUANOVA::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(EnumName);
+            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(EnumName);
 			if (EnumDesc)
 			{
 				UEnum* Enum = EnumDesc->GetEnum();
@@ -108,7 +108,7 @@ int32 Enum_GetNameStringByValue(lua_State* L)
         if (Type == LUA_TSTRING)
         {
             const char* EnumName = lua_tostring(L, -1);
-            const auto EnumDesc = UNLUANOVA::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(EnumName);
+            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(EnumName);
             if (EnumDesc)
             {
                 UEnum* Enum = EnumDesc->GetEnum();
@@ -122,7 +122,7 @@ int32 Enum_GetNameStringByValue(lua_State* L)
     }
     lua_pop(L, 1);
 
-    UNLUANOVA::Push(L, ValueName);
+    UnLuaNova::Push(L, ValueName);
 
     return 1;
 }
@@ -147,7 +147,7 @@ int32 Enum_GetDisplayNameTextByValue(lua_State* L)
         if (Type == LUA_TSTRING)
         {
             const char* EnumName = lua_tostring(L, -1);
-            const auto EnumDesc = UNLUANOVA::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(EnumName);
+            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(EnumName);
             if (EnumDesc)
             {
                 UEnum* Enum = EnumDesc->GetEnum();
@@ -161,7 +161,7 @@ int32 Enum_GetDisplayNameTextByValue(lua_State* L)
     }
     lua_pop(L, 1);
 
-    UNLUANOVA::Push(L, ValueName);
+    UnLuaNova::Push(L, ValueName);
 
     return 1;
 }
@@ -177,7 +177,7 @@ int32 CollisionEnum_Index(lua_State* L, int32 (*Converter)(FName))
         int32 Value = Converter(FName(Name));
         if (Value == INDEX_NONE)
         {
-            UNLUANOVA_LOGWARNING(L, LogUNLUANOVA, Warning, TEXT("%s: Cann't find enum %s!"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(Name));
+            UNLUANOVA_LOGWARNING(L, LogUnLuaNova, Warning, TEXT("%s: Cann't find enum %s!"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(Name));
         }
         lua_pushvalue(L, 2);
         lua_pushinteger(L, Value);

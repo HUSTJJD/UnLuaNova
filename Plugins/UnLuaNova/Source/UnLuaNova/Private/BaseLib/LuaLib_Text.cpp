@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -14,9 +14,9 @@
 
 #if UNLUANOVA_ENABLE_FTEXT
 
-#include "UNLUANOVAEx.h"
+#include "UnLuaNovaEx.h"
 
-namespace UNLUANOVA
+namespace UnLuaNova
 {
     static int32 FText_ToString(lua_State* L)
     {

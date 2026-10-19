@@ -1,11 +1,11 @@
-#include "UNLUANOVALib.h"
+#include "UnLuaNovaLib.h"
 #include "LowLevel.h"
 #include "LuaEnv.h"
-#include "UNLUANOVABase.h"
+#include "UnLuaNovaBase.h"
 
 namespace UnLuaNova
 {
-    namespace UNLUANOVALib
+    namespace UnLuaNovaLib
     {
         static const char* PACKAGE_PATH_KEY = "PackagePath";
 
@@ -248,7 +248,7 @@ namespace UnLuaNova
                     __index = function(t, k)
                         -- the path prefix must match the directory name exactly
                         -- (Content/Script/UnLuaNova); case-sensitive filesystems will not
-                        -- resolve UNLUANOVA.* to it.
+                        -- resolve UnLuaNova.* to it.
                         local ok, result = pcall(require, "UnLuaNova." .. tostring(k))
                         if ok then
                             rawset(t, k, result)
@@ -261,9 +261,9 @@ namespace UnLuaNova
             )");
 
 #if UNLUANOVA_ENABLE_FTEXT
-            luaL_dostring(L, "UNLUANOVA.FTextEnabled = true");
+            luaL_dostring(L, "UnLuaNova.FTextEnabled = true");
 #else
-            luaL_dostring(L, "UNLUANOVA.FTextEnabled = false");
+            luaL_dostring(L, "UnLuaNova.FTextEnabled = false");
 #endif
 
 #if UNLUANOVA_WITH_HOT_RELOAD
@@ -287,7 +287,7 @@ namespace UnLuaNova
         FString GetPackagePath(lua_State* L)
         {
             lua_getglobal(L, "UnLuaNova");
-            checkf(lua_istable(L, -1), TEXT("UNLUANOVALib not registered"));
+            checkf(lua_istable(L, -1), TEXT("UnLuaNovaLib not registered"));
             lua_getfield(L, -1, PACKAGE_PATH_KEY);
             const auto PackagePath = lua_tostring(L, -1);
             checkf(PackagePath, TEXT("invalid PackagePath"));
@@ -298,7 +298,7 @@ namespace UnLuaNova
         void SetPackagePath(lua_State* L, const FString& PackagePath)
         {
             lua_getglobal(L, "UnLuaNova");
-            checkf(lua_istable(L, -1), TEXT("UNLUANOVALib not registered"));
+            checkf(lua_istable(L, -1), TEXT("UnLuaNovaLib not registered"));
             lua_pushstring(L, TCHAR_TO_UTF8(*PackagePath));
             lua_setfield(L, -2, PACKAGE_PATH_KEY);
             lua_pop(L, 2);

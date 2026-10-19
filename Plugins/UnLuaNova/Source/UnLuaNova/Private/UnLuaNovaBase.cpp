@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -14,16 +14,16 @@
 
 #include "LowLevel.h"
 #include "LuaCore.h"
-#include "UNLUANOVADelegates.h"
+#include "UnLuaNovaDelegates.h"
 #include "ObjectReferencer.h"
-#include "UNLUANOVAModule.h"
+#include "UnLuaNovaModule.h"
 #include "Containers/LuaSet.h"
 #include "Containers/LuaMap.h"
 
-DEFINE_LOG_CATEGORY(LogUNLUANOVA);
-DEFINE_LOG_CATEGORY(UNLUANOVADelegate);
+DEFINE_LOG_CATEGORY(LogUnLuaNova);
+DEFINE_LOG_CATEGORY(UnLuaNovaDelegate);
 
-namespace UNLUANOVA
+namespace UnLuaNova
 {
     bool IsUObjectValid(UObjectBase* ObjPtr)
     {
@@ -34,30 +34,30 @@ namespace UNLUANOVA
 
     lua_State* CreateState()
     {
-        IUNLUANOVAModule::Get().SetActive(true);
+        IUnLuaNovaModule::Get().SetActive(true);
         return GetState();
     }
 
     lua_State* GetState()
     {
-        const auto Env = IUNLUANOVAModule::Get().GetEnv();
+        const auto Env = IUnLuaNovaModule::Get().GetEnv();
         return Env ? Env->GetMainState() : nullptr;
     }
 
     bool Startup()
     {
-        IUNLUANOVAModule::Get().SetActive(true);
+        IUnLuaNovaModule::Get().SetActive(true);
         return true;
     }
 
     void Shutdown()
     {
-        IUNLUANOVAModule::Get().SetActive(false);
+        IUnLuaNovaModule::Get().SetActive(false);
     }
 
     bool IsEnabled()
     {
-        return IUNLUANOVAModule::Get().IsActive();
+        return IUnLuaNovaModule::Get().IsActive();
     }
 
     /**
@@ -68,20 +68,20 @@ namespace UNLUANOVA
         FString FullFilePath = GetFullPathFromRelativePath(RelativeFilePath);
         if (FullFilePath.IsEmpty())
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("the lua file try to load does not exist! : %s"), *RelativeFilePath);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("the lua file try to load does not exist! : %s"), *RelativeFilePath);
             return false;
         }
 
         if (FullFilePath != GLuaSrcFullPath + RelativeFilePath)
         {
-            UE_LOG(LogUNLUANOVA, Log, TEXT("Load lua file from DownloadDir : %s"), *FullFilePath);
+            UE_LOG(LogUnLuaNova, Log, TEXT("Load lua file from DownloadDir : %s"), *FullFilePath);
         }
 
         TArray<uint8> Data;
         bool bSuccess = FFileHelper::LoadFileToArray(Data, *FullFilePath, 0);
         if (!bSuccess)
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("%s: Failed to load lua file!"), ANSI_TO_TCHAR(__FUNCTION__));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("%s: Failed to load lua file!"), ANSI_TO_TCHAR(__FUNCTION__));
             return false;
         }
 
@@ -97,7 +97,7 @@ namespace UNLUANOVA
         int32 Code = luaL_loadbufferx(L, Chunk, ChunkSize, ChunkName, Mode);        // loads the buffer as a Lua chunk
         if (Code != LUA_OK)
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("Failed to call luaL_loadbufferx, error code: %d"), Code);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to call luaL_loadbufferx, error code: %d"), Code);
             ReportLuaCallError(L);                          // report pcall error
         }
 
@@ -129,7 +129,7 @@ namespace UNLUANOVA
     {
         if (!Chunk)
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("%s: Invalid lua chunk!"), ANSI_TO_TCHAR(__FUNCTION__));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("%s: Invalid lua chunk!"), ANSI_TO_TCHAR(__FUNCTION__));
             return false;
         }
 
@@ -150,9 +150,9 @@ namespace UNLUANOVA
      */
     int32 ReportLuaCallError(lua_State *L)
     {
-        if (FUNLUANOVADelegates::ReportLuaCallError.IsBound())
+        if (FUnLuaNovaDelegates::ReportLuaCallError.IsBound())
         {
-            return FUNLUANOVADelegates::ReportLuaCallError.Execute(L);      // developers can provide error reporter themselves
+            return FUnLuaNovaDelegates::ReportLuaCallError.Execute(L);      // developers can provide error reporter themselves
         }
 
         int32 Type = lua_type(L, -1);
@@ -161,7 +161,7 @@ namespace UNLUANOVA
             const char *ErrorString = lua_tostring(L, -1);
             luaL_traceback(L, L, ErrorString, 1);
             ErrorString = lua_tostring(L, -1);
-            UE_LOG(LogUNLUANOVA, Error, TEXT("Lua error message: %s"), UTF8_TO_TCHAR(ErrorString));
+            UE_LOG(LogUnLuaNova, Error, TEXT("Lua error message: %s"), UTF8_TO_TCHAR(ErrorString));
         }
         else if (Type == LUA_TTABLE)
         {
@@ -171,7 +171,7 @@ namespace UNLUANOVA
             while (lua_next(L, -2) != 0)
             {
                 const char *ErrorString = lua_tostring(L, -1);
-                UE_LOG(LogUNLUANOVA, Error, TEXT("Lua error message %d : %s"), MessageIndex++, UTF8_TO_TCHAR(ErrorString));
+                UE_LOG(LogUnLuaNova, Error, TEXT("Lua error message %d : %s"), MessageIndex++, UTF8_TO_TCHAR(ErrorString));
                 lua_pop(L, 1);
             }
         }
@@ -236,7 +236,7 @@ namespace UNLUANOVA
                     bool bSuccess = TryToSetMetatable(L, MetatableName);        // set metatable
                     if (!bSuccess)
                     {
-                        UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("Invalid metatable, metatable name: %s!"),  UTF8_TO_TCHAR(MetatableName));
+                        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("Invalid metatable, metatable name: %s!"),  UTF8_TO_TCHAR(MetatableName));
                         return 1;
                     }
                 }
@@ -257,7 +257,7 @@ namespace UNLUANOVA
                 bool bSuccess = TryToSetMetatable(L, MetatableName);        // set metatable
                 if (!bSuccess)
                 {
-                    UNLUANOVA_LOGERROR(L, LogUNLUANOVA, Warning, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
+                    UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
                     lua_pop(L, 1);
                     return 1;
                 }
@@ -517,4 +517,4 @@ namespace UNLUANOVA
         }
     }
 
-} // namespace UNLUANOVA
+} // namespace UnLuaNova

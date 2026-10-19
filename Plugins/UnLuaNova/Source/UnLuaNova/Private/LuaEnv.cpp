@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UNLUANOVA available.
+// Tencent is pleased to support the open source community by making UnLuaNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -24,15 +24,15 @@
 #include "LuaDynamicBinding.h"
 #include "UELib.h"
 #include "ObjectReferencer.h"
-#include "UNLUANOVADelegates.h"
-#include "UNLUANOVAInterface.h"
-#include "UNLUANOVALegacy.h"
+#include "UnLuaNovaDelegates.h"
+#include "UnLuaNovaInterface.h"
+#include "UnLuaNovaLegacy.h"
 #include "UnLuaNovaLib.h"
-#include "UNLUANOVASettings.h"
+#include "UnLuaNovaSettings.h"
 #include "LuaBackend.h"
 #include "LuaMemoryStats.h"
 
-namespace UNLUANOVA
+namespace UnLuaNova
 {
 #if UE_VERSION_NEWER_THAN(5, 5, 0)
     constexpr EInternalObjectFlags AsyncObjectFlags = EInternalObjectFlags_AsyncLoading | EInternalObjectFlags::Async;
@@ -79,15 +79,15 @@ namespace UNLUANOVA
     FLuaEnv::FLuaEnv()
         : bStarted(false)
     {
-        const auto Settings = GetDefault<UUNLUANOVASettings>();
+        const auto Settings = GetDefault<UUnLuaNovaSettings>();
         ModuleLocator = Settings->ModuleLocatorClass.GetDefaultObject();
-        ensureMsgf(ModuleLocator, TEXT("Invalid lua module locator, lua binding will not work properly. please check UNLUANOVA runtime settings."));
+        ensureMsgf(ModuleLocator, TEXT("Invalid lua module locator, lua binding will not work properly. please check UnLuaNova runtime settings."));
 
         RegisterDelegates();
 
 #if PLATFORM_WINDOWS
         // 防止类似AppleProResMedia插件忘了恢复Dll查找目录
-        // https://github.com/Tencent/UNLUANOVA/issues/534
+        // https://github.com/Tencent/UnLuaNova/issues/534
         const auto Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("Binaries/Win64"));
         FPlatformProcess::PushDllDirectory(*Dir);
         L = lua_newstate(GetLuaAllocator(), nullptr);
@@ -131,16 +131,16 @@ namespace UNLUANOVA
         LowLevel::CreateWeakValueTable(L);
         lua_rawset(L, LUA_REGISTRYINDEX);
 
-        if (FUNLUANOVADelegates::ConfigureLuaGC.IsBound())
+        if (FUnLuaNovaDelegates::ConfigureLuaGC.IsBound())
         {
-            FUNLUANOVADelegates::ConfigureLuaGC.Execute(L);
+            FUnLuaNovaDelegates::ConfigureLuaGC.Execute(L);
         }
         else
         {
             UNLUANOVA_SETUP_GC(L);
         }
 
-        FUNLUANOVADelegates::OnPreStaticallyExport.Broadcast();
+        FUnLuaNovaDelegates::OnPreStaticallyExport.Broadcast();
 
         // register statically exported classes
         auto ExportedNonReflectedClasses = GetExportedNonReflectedClasses();
@@ -160,11 +160,11 @@ namespace UNLUANOVA
         UnLuaNovaLib::Open(L);
 
         OnCreated.Broadcast(*this);
-        FUNLUANOVADelegates::OnLuaStateCreated.Broadcast(L);
+        FUnLuaNovaDelegates::OnLuaStateCreated.Broadcast(L);
 
 #if ENABLE_UNREAL_INSIGHTS && CPUPROFILERTRACE_ENABLED
         if (FDeadLoopCheck::Timeout)
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("Profiling will not working when DeadLoopCheck enabled."))
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Profiling will not working when DeadLoopCheck enabled."))
         else
             lua_sethook(L, Hook, LUA_MASKCALL | LUA_MASKRET, 0);
 #endif
@@ -222,7 +222,7 @@ namespace UNLUANOVA
 
     void FLuaEnv::Start(const TMap<FString, UObject*>& Args)
     {
-        const auto& Setting = *GetDefault<UUNLUANOVASettings>();
+        const auto& Setting = *GetDefault<UUnLuaNovaSettings>();
         Start(Setting.StartupModuleName, Args);
     }
 
@@ -341,7 +341,7 @@ namespace UNLUANOVA
             return false;
         }
 
-        static UClass* InterfaceClass = UUNLUANOVAInterface::StaticClass();
+        static UClass* InterfaceClass = UUnLuaNovaInterface::StaticClass();
         const bool bImplUnluaInterface = Class->ImplementsInterface(InterfaceClass);
 
         if (IsInAsyncLoadingThread())
@@ -368,7 +368,7 @@ namespace UNLUANOVA
         if (Class->GetName().Contains(TEXT("SKEL_")))
             return false;
 
-        if (!ensureMsgf(ModuleLocator, TEXT("Invalid lua module locator, lua binding will not work properly. please check UNLUANOVA runtime settings.")))
+        if (!ensureMsgf(ModuleLocator, TEXT("Invalid lua module locator, lua binding will not work properly. please check UnLuaNova runtime settings.")))
             return false;
 
         const auto ModuleName = ModuleLocator->Locate(Object);
@@ -378,7 +378,7 @@ namespace UNLUANOVA
 #if !UE_BUILD_SHIPPING
         if (GLuaDynamicBinding.IsValid(Class) && GLuaDynamicBinding.ModuleName != ModuleName)
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("Dynamic binding '%s' ignored as it conflicts static binding '%s'."), *GLuaDynamicBinding.ModuleName, *ModuleName);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Dynamic binding '%s' ignored as it conflicts static binding '%s'."), *GLuaDynamicBinding.ModuleName, *ModuleName);
         }
 #endif
 
@@ -418,7 +418,7 @@ namespace UNLUANOVA
         if (Size > 3 && Buffer[0] == static_cast<char>(0xEF) && Buffer[1] == static_cast<char>(0xBB) && Buffer[2] == static_cast<char>(0xBF))
         {
 #if !UNLUANOVA_LEGACY_ALLOW_BOM
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("Lua chunk with utf-8 BOM:%s"), UTF8_TO_TCHAR(InName));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Lua chunk with utf-8 BOM:%s"), UTF8_TO_TCHAR(InName));
 #endif
             return LoadBuffer(InL, Buffer + 3, Size - 3, InName);
         }
@@ -428,7 +428,7 @@ namespace UNLUANOVA
         const int32 Code = luaL_loadbufferx(InL, Buffer, Size, InName, nullptr);
         if (Code != LUA_OK)
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("Failed to call luaL_loadbufferx, error code: %d"), Code);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to call luaL_loadbufferx, error code: %d"), Code);
             ReportLuaCallError(InL); // report pcall error
             lua_pushnil(InL); /* error (message is on top of the stack) */
             lua_insert(InL, -2); /* put before error message */
@@ -446,7 +446,7 @@ namespace UNLUANOVA
 
     void FLuaEnv::HotReload()
     {
-        DoString("UNLUANOVA.HotReload()");
+        DoString("UnLuaNova.HotReload()");
     }
 
     int32 FLuaEnv::FindThread(const lua_State* Thread)
@@ -470,7 +470,7 @@ namespace UNLUANOVA
         if (Status != LUA_OK)
         {
             const auto ErrMsg = lua_tostring(Thread, -1);
-            UE_LOG(LogUNLUANOVA, Error, TEXT("%s"), UTF8_TO_TCHAR(ErrMsg));
+            UE_LOG(LogUnLuaNova, Error, TEXT("%s"), UTF8_TO_TCHAR(ErrMsg));
         }
 
         ThreadToRef.Remove(Thread);
@@ -478,11 +478,11 @@ namespace UNLUANOVA
         luaL_unref(L, LUA_REGISTRYINDEX, ThreadRef); // remove the reference if the coroutine finishes its execution
     }
 
-    UUNLUANOVAManager* FLuaEnv::GetManager()
+    UUnLuaNovaManager* FLuaEnv::GetManager()
     {
         if (!Manager)
         {
-            Manager = NewObject<UUNLUANOVAManager>();
+            Manager = NewObject<UUnLuaNovaManager>();
             Manager->Env = this;
             Manager->AddToRoot();
         }
@@ -552,13 +552,13 @@ namespace UNLUANOVA
     int FLuaEnv::LoadFromCustomLoader(lua_State* L)
     {
         auto& Env = *(FLuaEnv*)lua_touserdata(L, lua_upvalueindex(1));
-        if (FUNLUANOVADelegates::CustomLoadLuaFile.IsBound())
+        if (FUnLuaNovaDelegates::CustomLoadLuaFile.IsBound())
         {
             // legacy support
             const FString FileName(UTF8_TO_TCHAR(lua_tostring(L, 1)));
             TArray<uint8> Data;
             FString ChunkName(TEXT("chunk"));
-            if (FUNLUANOVADelegates::CustomLoadLuaFile.Execute(Env, FileName, Data, ChunkName))
+            if (FUnLuaNovaDelegates::CustomLoadLuaFile.Execute(Env, FileName, Data, ChunkName))
             {
                 if (Env.LoadString(L, Data, ChunkName))
                     return 1;
@@ -643,7 +643,7 @@ namespace UNLUANOVA
         lua_remove(L, -2);
         if (!lua_istable(L, -1))
         {
-            UE_LOG(LogUNLUANOVA, Warning, TEXT("Invalid package.serachers!"));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Invalid package.serachers!"));
             return;
         }
 
