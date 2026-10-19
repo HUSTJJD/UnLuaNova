@@ -29,7 +29,7 @@
 #include "UNLUANOVALegacy.h"
 #include "UnLuaNovaLib.h"
 #include "UNLUANOVASettings.h"
-#include "lstate.h"
+#include "LuaBackend.h"
 
 namespace UNLUANOVA
 {
@@ -136,13 +136,7 @@ namespace UNLUANOVA
         }
         else
         {
-#if 504 == LUA_VERSION_NUM
-            lua_gc(L, LUA_GCGEN, 0, 0);
-#else
-            // default Lua GC config in UNLUANOVA
-            lua_gc(L, LUA_GCSETPAUSE, 100);
-            lua_gc(L, LUA_GCSETSTEPMUL, 5000);
-#endif
+            UNLUANOVA_SETUP_GC(L);
         }
 
         FUNLUANOVADelegates::OnPreStaticallyExport.Broadcast();
@@ -216,13 +210,13 @@ namespace UNLUANOVA
         if (!L)
             return nullptr;
 
-        const auto MainThread = G(L)->mainthread;
+        const auto MainThread = UnLuaNovaGetMainState(const_cast<lua_State*>(L));
         return AllEnvs.FindRef(MainThread);
     }
 
     FLuaEnv& FLuaEnv::FindEnvChecked(const lua_State* L)
     {
-        return *AllEnvs.FindChecked(G(L)->mainthread);
+        return *AllEnvs.FindChecked(UnLuaNovaGetMainState(const_cast<lua_State*>(L)));
     }
 
     void FLuaEnv::Start(const TMap<FString, UObject*>& Args)
@@ -467,12 +461,8 @@ namespace UNLUANOVA
             return;
 
         lua_State* Thread = *ThreadPtr;
-#if 504 == LUA_VERSION_NUM
         int NResults = 0;
-        int32 Status = lua_resume(Thread, L, 0, &NResults);
-#else
-        int32 Status = lua_resume(Thread, L, 0);
-#endif
+        const int32 Status = UNLUANOVA_RESUME(Thread, L, 0, &NResults);
         if (Status == LUA_YIELD)
             return;
 

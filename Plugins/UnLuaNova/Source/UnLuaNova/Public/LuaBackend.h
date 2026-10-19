@@ -74,6 +74,32 @@
 	} while (false)
 #endif
 
+// --- coroutine resume ---------------------------------------------------------
+// Lua 5.4/5.5 report the number of results through an out param; Luau's lua_resume
+// takes only three arguments. Callers pass &NResults and it is simply ignored on Luau.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_RESUME(L, From, NArgs, NResults) lua_resume(L, From, NArgs)
+#else
+#define UNLUANOVA_RESUME(L, From, NArgs, NResults) lua_resume(L, From, NArgs, NResults)
+#endif
+
+// --- main thread ---------------------------------------------------------------
+// Luau exposes lua_mainthread() directly. Plain Lua keeps the main thread in the
+// registry instead, so fetch it from there - that is public API, and avoids the
+// G(L)->mainthread shortcut that would otherwise drag in lstate.h.
+inline lua_State* UnLuaNovaGetMainState(lua_State* L)
+{
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+    return lua_mainthread(L);
+#else
+    const int Top = lua_gettop(L);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
+    lua_State* MainThread = lua_tothread(L, -1);
+    lua_settop(L, Top);
+    return MainThread;
+#endif
+}
+
 // --- capability flags ----------------------------------------------------------
 // These are the semantics that actually change behaviour, so call sites must branch
 // on them rather than on the backend id.
