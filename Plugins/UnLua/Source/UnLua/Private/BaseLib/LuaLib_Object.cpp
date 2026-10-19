@@ -231,27 +231,6 @@ int32 UObject_Identical(lua_State* L)
  */
 int32 UObject_Delete(lua_State* L)
 {
-    const auto NumParams = lua_gettop(L);
-    if (NumParams != 1)
-        return luaL_error(L, "invalid parameters");
-
-    bool bTwoLvlPtr = false;
-    bool bClassMetatable = false;
-    void* Userdata = GetUserdata(L, 1, &bTwoLvlPtr, &bClassMetatable);
-    if (!Userdata)
-        return 0;
-
-    if (bClassMetatable)
-        return 0;
-
-    if (!bTwoLvlPtr)
-        return 0;
-
-    UObject* Object = (UObject*)*(void**)Userdata;
-    if (UnLua::LowLevel::IsReleasedPtr(Object))
-        return 0;
-
-    UnLua::FLuaEnv::FindEnvChecked(L).GetObjectRegistry()->NotifyUObjectLuaGC(Object);
     return 0;
 }
 
@@ -270,7 +249,7 @@ static const luaL_Reg UObjectLib[] =
     {"Release", UObject_Release},
     {"Destroy", UObject_Release},
     {"__eq", UObject_Identical},
-    {"__gc", UObject_Delete},
+    // {"__gc", UObject_Delete},
     {nullptr, nullptr}
 };
 
@@ -320,7 +299,7 @@ BEGIN_EXPORT_CLASS(FSoftObjectPtr, const UObject*)
     ADD_CONST_FUNCTION_EX("IsNull", bool, IsNull)
     ADD_CONST_FUNCTION_EX("IsPending", bool, IsPending)
     ADD_FUNCTION_EX("Reset", void, Reset)
-    ADD_FUNCTION_EX("Set", void, operator=, const UObject*)
+    ADD_FUNCTION_EX("Set", FSoftObjectPtr&, operator=, const UObject*)
     ADD_FUNCTION_EX("GetAssetName", FString, GetAssetName)
     ADD_FUNCTION_EX("GetLongPackageName", FString, GetLongPackageName)
     ADD_CONST_FUNCTION_EX("Get", UObject*, Get)
