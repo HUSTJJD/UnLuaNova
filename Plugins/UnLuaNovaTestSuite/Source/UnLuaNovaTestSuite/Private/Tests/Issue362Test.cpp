@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLuaNova available.
+// Tencent is pleased to support the open source community by making UNLUANOVA available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,13 +12,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaNovaTestCommon.h"
+#include "UNLUANOVATestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-#if UnLuaNovaNOVA_LEGACY_ARGS_PASSING
+#if UNLUANOVA_LEGACY_ARGS_PASSING
 
-struct FUnLuaNovaTest_Issue362 : FUnLuaNovaTestBase
+struct FUNLUANOVATest_Issue362 : FUNLUANOVATestBase
 {
     virtual bool InstantTest() override
     {
@@ -27,10 +27,10 @@ struct FUnLuaNovaTest_Issue362 : FUnLuaNovaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaNovaTestBase::SetUp();
+        FUNLUANOVATestBase::SetUp();
 
         const auto Chunk = R"(
-        local Stub = NewObject(UE.UUnLuaNovaTestStub)
+        local Stub = NewObject(UE.UUNLUANOVATestStub)
         Stub.Issue362Delegate:Bind(Stub, function(_, InArray)
             InArray:Add(1)
         end)
@@ -38,7 +38,7 @@ struct FUnLuaNovaTest_Issue362 : FUnLuaNovaTestBase
         Stub.Issue362Delegate:Execute(Array)
         return Array:Length()
         )";
-        UnLuaNova::RunChunk(L, Chunk);
+        UNLUANOVA::RunChunk(L, Chunk);
 
         const auto Actual = (int)lua_tonumber(L, -1);
         RUNNER_TEST_EQUAL(Actual, 1);
@@ -47,7 +47,7 @@ struct FUnLuaNovaTest_Issue362 : FUnLuaNovaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaNovaTest_Issue362, TEXT("UnLuaNova.Regression.Issue362 TArray引用做委托参数在lua中修改不生效"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUNLUANOVATest_Issue362, TEXT("UNLUANOVA.Regression.Issue362 TArray引用做委托参数在lua中修改不生效"))
 
 #endif
 #endif
