@@ -41,3 +41,41 @@
 
 ## 其他工具
 * 支持[自定义生成Lua模版](CustomTemplate.md)
+
+## 相对 UnLua 的增量
+
+以下是 UnLuaNova 在 UnLua v2.3.6 之上新增的能力。
+
+### 双 Lua 后端
+
+* 支持 **Lua 5.5** 与 **Luau** 两个后端，默认 Luau，通过配置切换（见[设置](Settings.md#lua后端)）
+* 两者均以 git 子模块引入，克隆后需执行 `git submodule update --init --recursive`
+* 后端差异全部收敛在 `LuaBackend.h`；上层功能定义在抽象层，由各后端提供实现
+
+### 可观测性
+
+* **CPU 性能分析**：Lua 函数级数据写入 Unreal Insights，`lua.profiler` 运行时开关
+* **内存统计**：总量（占用 / 峰值 / 分配次数）与分类（内存类别 / Lua 类型 / userdata 标签），`lua.memstats`
+* **调试服务**：headless 断点、单步、调用栈与局部变量查看，`lua.dbg`
+* **沙盒**：加固 Lua 全局表，`lua.sandbox`
+* **死循环检测**：与 CPU 性能分析可同时开启，通过 VM Hook 分发器共享 Hook 槽，不再互相覆盖
+
+以上命令的用法见[控制台命令](ConsoleCommand.md)。
+
+### 静态绑定
+
+* 类型选择采用 **opt-out**：默认导出全部类型，只需给不想要的类型标记 `meta=(UnLuaNovaNoExport)`
+* 在某个基类上标记 `meta=(UnLuaNovaExport)` 即可把整个类族拉回，适合类型数量庞大的项目
+* 读取路径不使用独占锁，类型数量增长不会放大单次访问开销
+* 详见[静态导出与静态绑定](StaticExportBinding.md)
+
+### 脚本侧类型检查
+
+* 可生成 Luau `.d.lua` 类型声明，交由 `luau-analyze` 做静态检查，把一部分 UE API 误用提前到编译期
+* 见[智能提示](IntelliSense.md)
+
+### 字符串扩展
+
+* 纯 Lua 实现的常用字符串函数（`split` / `strip` / `startswith` / `endswith` / `count` / `join`）
+* `local StringEx = require("UnLuaNova.StringEx")`
+* 以模块形式提供而非写入全局 `string` 表，因此与沙盒模式不冲突

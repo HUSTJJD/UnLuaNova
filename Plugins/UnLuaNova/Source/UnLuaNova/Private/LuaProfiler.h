@@ -35,8 +35,9 @@ namespace UnLuaNova
      *     running and emits a point event. Coarser, but Insights still shows where the
      *     time clusters.
      *
-     * Off by default. Toggle at runtime with `lua.profiler on|off` - note that it shares
-     * the VM hook with FDeadLoopCheck, so enabling this disables that.
+     * Off by default. Toggle at runtime with `lua.profiler on|off`. The hook is claimed
+     * through FLuaVmHooks, so FDeadLoopCheck stays active alongside it - the two used to
+     * overwrite each other, which is exactly what the dispatcher exists to prevent.
      */
     class FLuaProfiler
     {

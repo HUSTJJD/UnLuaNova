@@ -189,12 +189,19 @@ namespace UnLuaNova
             if (Arg.Equals(TEXT("on"), ESearchCase::IgnoreCase))
             {
                 Stats.bEnabled.store(true, std::memory_order_relaxed);
+
+                // The categorized view needs the VM's allocation callbacks, so it is only
+                // wired up while tracking is on - off means literally no hook installed.
+                if (auto Env = Module->GetEnv())
+                    Stats.Attach(Env->GetMainState());
+
                 UE_LOG(LogUnLuaNova, Log, TEXT("Lua memory tracking enabled."));
                 return;
             }
             if (Arg.Equals(TEXT("off"), ESearchCase::IgnoreCase))
             {
                 Stats.bEnabled.store(false, std::memory_order_relaxed);
+                Stats.Detach();
                 UE_LOG(LogUnLuaNova, Log, TEXT("Lua memory tracking disabled."));
                 return;
             }
@@ -215,6 +222,10 @@ namespace UnLuaNova
         }
 
         UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Stats.BuildReport());
+
+        // Categorized breakdown is Luau-only; on other backends it reports that and stops.
+        // Empty until 'lua.memstats on' has been run, since that is what installs the hooks.
+        UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Stats.BuildCategoryReport());
     }
 
     void FUnLuaNovaConsoleCommands::Profiler(const TArray<FString>& Args) const

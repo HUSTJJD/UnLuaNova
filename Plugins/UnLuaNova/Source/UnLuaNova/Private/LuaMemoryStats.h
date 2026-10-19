@@ -10,6 +10,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "LuaBackend.h"
 
 #include <atomic>
 
@@ -33,6 +34,8 @@ namespace UnLuaNova
     public:
         static FLuaMemoryStats& Get();
 
+        FLuaMemoryStats() { Reset(); }
+
         /** Hot path - called for every allocation / reallocation. */
         void TrackAlloc(size_t OldSize, size_t NewSize);
 
@@ -47,8 +50,18 @@ namespace UnLuaNova
 
         void Reset();
 
-        /** Multi-line summary, sized in MB, for the console. */
-        FString BuildReport() const;
+        /**
+         * Luau only: install / withdraw the categorized allocation callbacks. No-op on
+         * plain Lua, which has no equivalent - there the allocator hook is all there is.
+         */
+        void Attach(lua_State* L);
+        void Detach();
+
+        /** Hot path, Luau only. Driven from onallocate; the VM supplies the classification. */
+        void TrackCategorizedAlloc(uint8 MemCat, int32 Type, int32 Tag, size_t NewSize);
+
+        /** Where allocation volume is going, per category / type / userdata tag. */
+        FString BuildCategoryReport(int32 TopN = 8) const;
 
         std::atomic<bool> bEnabled{false};
 
@@ -58,5 +71,18 @@ namespace UnLuaNova
         std::atomic<uint64> AllocCount{0};
         std::atomic<uint64> ReallocCount{0};
         std::atomic<uint64> FreeCount{0};
+
+        // Categorized breakdown. Sized to the full domain of each dimension so the hot
+        // path is an array index rather than a hash lookup: memcat is a uint8, Lua type
+        // tags stay well under 32, and LUA_UTAG_LIMIT is 128.
+        static constexpr int32 MemCatBuckets = 256;
+        static constexpr int32 TypeBuckets = 32;
+        static constexpr int32 TagBuckets = 128;
+
+        std::atomic<int64> VolumeByMemCat[MemCatBuckets];
+        std::atomic<int64> VolumeByType[TypeBuckets];
+        std::atomic<int64> VolumeByTag[TagBuckets];
+
+        lua_State* AttachedState = nullptr;
     };
 }

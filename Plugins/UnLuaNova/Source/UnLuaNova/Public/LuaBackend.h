@@ -164,6 +164,28 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #define UNLUANOVA_STACKDEPTH(L) 0
 #endif
 
+// --- allocation callbacks -----------------------------------------------------
+// Luau reports every allocation through lua_Callbacks, and crucially passes the
+// memory category, the Lua type and the userdata tag *as arguments* - so a breakdown
+// by "what kind of memory" costs no stack walk at all. Plain Lua has no such thing;
+// its allocator hook only ever sees a size, which is all the port FLuaMemoryStats
+// already uses.
+//
+// Note that onfree carries no size, so the categorized view counts allocation
+// *volume* (churn) rather than live bytes. Live totals come from the allocator hook.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_HAS_ALLOC_CALLBACKS 1
+#define UNLUANOVA_SET_ALLOC_CALLBACKS(L, Alloc, Free) \
+    do \
+    { \
+        lua_callbacks(L)->onallocate = (Alloc); \
+        lua_callbacks(L)->onfree = (Free); \
+    } while (0)
+#else
+#define UNLUANOVA_HAS_ALLOC_CALLBACKS 0
+#define UNLUANOVA_SET_ALLOC_CALLBACKS(L, Alloc, Free) ((void)0)
+#endif
+
 // --- per-function id, for profiler keys ----------------------------------------
 // Luau exposes a VM-wide unique proto id on lua_Debug, which makes an ideal cache key.
 // Plain Lua has no such field, so key on (source pointer, line the function was defined

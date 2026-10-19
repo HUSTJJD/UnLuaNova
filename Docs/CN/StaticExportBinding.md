@@ -22,6 +22,33 @@
  * FIntPoint
  * FIntVector
 
+## 静态绑定代码生成
+
+除了上面默认导出的引擎类型，还可以为项目自己的类型生成静态绑定表，绕开反射热路径。
+
+由 Commandlet 在构建期生成：
+
+```
+UnrealEditor-Cmd.exe <工程>.uproject -run=UnLuaNovaStaticBindingGenerator
+```
+
+生成的代码落在 `Source/<工程模块>/Generated/` 下（在模块目录内才会被 UBT 编译）。
+
+### 类型选择（opt-out）
+
+默认导出全部类型，项目只需要声明**不要什么**：
+
+| 顺序 | 规则 |
+|---|---|
+| 1 | `meta=(UnLuaNovaExport)` 在本类或任一祖先 → 强制导出，覆盖以下全部过滤 |
+| 2 | 排除 `SKEL_` / `REINST_` / `TRASHCLASS_` / `HOTRELOADED_` / `PLACEHOLDER-CLASS` 前缀 |
+| 3 | 排除 `CLASS_Deprecated` / `CLASS_Transient` |
+| 4 | 排除 `meta=(UnLuaNovaNoExport)` |
+
+在基类上标记一次 `meta=(UnLuaNovaExport)`，它的整个派生体系都会被导出 —— 这对类型数量庞大的项目尤其省事。
+
+*注：运行后日志会输出 `selected N types`。若数量大到编译吃力，可以改为只绑定核心模块（如 `/Script/Engine`、`/Script/UMG`）来收窄，项目类型永远位于自己的模块中，不会被误伤。*
+
 ## 静态导出
 
 UnLuaNova 提供了一种简单的方案来静态导出类型/成员变量/枚举等。

@@ -83,7 +83,9 @@ public class UnLuaNova : ModuleRules
         loadBoolConfig("bEnableDebug", "UNLUANOVA_ENABLE_DEBUG", false);
         loadBoolConfig("bEnablePersistentParamBuffer", "ENABLE_PERSISTENT_PARAM_BUFFER", true);
         loadBoolConfig("bEnableTypeChecking", "ENABLE_TYPE_CHECK", true);
-        loadBoolConfig("bEnableUnrealInsights", "ENABLE_UNREAL_INSIGHTS", false);
+        // Removed: ENABLE_UNREAL_INSIGHTS was a compile-time flag for the UE-side trace
+        // scopes in FunctionDesc.cpp. Those are now gated at runtime on the profiler
+        // toggle ('lua.profiler'), so a rebuild is no longer needed to turn them on.
         loadBoolConfig("bEnableCallOverriddenFunction", "ENABLE_CALL_OVERRIDDEN_FUNCTION", true);
         loadBoolConfig("bEnableFText", "UNLUANOVA_ENABLE_FTEXT", false);
         loadBoolConfig("bLuaCompileAsCpp", "LUA_COMPILE_AS_CPP", false);

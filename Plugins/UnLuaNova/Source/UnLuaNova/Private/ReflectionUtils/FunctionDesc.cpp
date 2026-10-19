@@ -23,6 +23,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "LuaDeadLoopCheck.h"
+#include "LuaProfiler.h"
 #include "Containers/StaticBitArray.h"
 #include "StaticBinding/StaticBindingRegistry.h"
 
@@ -85,8 +86,11 @@ FFunctionDesc::FFunctionDesc(UFunction *InFunction, FParameterCollection *InDefa
 
 void FFunctionDesc::CallLua(lua_State* L, lua_Integer FunctionRef, lua_Integer SelfRef, FFrame& Stack, RESULT_DECL)
 {
-#if ENABLE_UNREAL_INSIGHTS && CPUPROFILERTRACE_ENABLED
-    TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(*FuncName);
+#if CPUPROFILERTRACE_ENABLED
+    // Runtime-gated on the profiler toggle rather than a compile-time flag, so
+    // 'lua.profiler on' lights up both the Lua-side events and these UE-side scopes in
+    // one go - no rebuild, and no second setting to remember.
+    TRACE_CPUPROFILER_EVENT_SCOPE_TEXT_CONDITIONAL(*FuncName, UnLuaNova::FLuaProfiler::Get().IsEnabled());
 #endif
     
     lua_pushcfunction(L, UnLuaNova::ReportLuaCallError);
@@ -159,8 +163,11 @@ void FFunctionDesc::CallLua(lua_State* L, lua_Integer FunctionRef, lua_Integer S
 
 bool FFunctionDesc::CallLua(lua_State* L, int32 LuaRef, void* Params, UObject* Self)
 {
-#if ENABLE_UNREAL_INSIGHTS && CPUPROFILERTRACE_ENABLED
-    TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(*FuncName);
+#if CPUPROFILERTRACE_ENABLED
+    // Runtime-gated on the profiler toggle rather than a compile-time flag, so
+    // 'lua.profiler on' lights up both the Lua-side events and these UE-side scopes in
+    // one go - no rebuild, and no second setting to remember.
+    TRACE_CPUPROFILER_EVENT_SCOPE_TEXT_CONDITIONAL(*FuncName, UnLuaNova::FLuaProfiler::Get().IsEnabled());
 #endif
     
     bool bOk = PushFunction(L, Self, LuaRef);
@@ -178,8 +185,11 @@ bool FFunctionDesc::CallLua(lua_State* L, int32 LuaRef, void* Params, UObject* S
  */
 int32 FFunctionDesc::CallUE(lua_State *L, int32 NumParams, void *Userdata)
 {
-#if ENABLE_UNREAL_INSIGHTS && CPUPROFILERTRACE_ENABLED
-    TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(*FuncName);
+#if CPUPROFILERTRACE_ENABLED
+    // Runtime-gated on the profiler toggle rather than a compile-time flag, so
+    // 'lua.profiler on' lights up both the Lua-side events and these UE-side scopes in
+    // one go - no rebuild, and no second setting to remember.
+    TRACE_CPUPROFILER_EVENT_SCOPE_TEXT_CONDITIONAL(*FuncName, UnLuaNova::FLuaProfiler::Get().IsEnabled());
 #endif
 
     check(Function.IsValid());
@@ -261,8 +271,11 @@ int32 FFunctionDesc::CallUE(lua_State *L, int32 NumParams, void *Userdata)
  */
 int32 FFunctionDesc::CallUEFast(lua_State* L, int32 NumParams, int32 FirstParamIndex, UObject* Object, void* Userdata)
 {
-#if ENABLE_UNREAL_INSIGHTS && CPUPROFILERTRACE_ENABLED
-    TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(*FuncName);
+#if CPUPROFILERTRACE_ENABLED
+    // Runtime-gated on the profiler toggle rather than a compile-time flag, so
+    // 'lua.profiler on' lights up both the Lua-side events and these UE-side scopes in
+    // one go - no rebuild, and no second setting to remember.
+    TRACE_CPUPROFILER_EVENT_SCOPE_TEXT_CONDITIONAL(*FuncName, UnLuaNova::FLuaProfiler::Get().IsEnabled());
 #endif
 
     check(Function.IsValid());
