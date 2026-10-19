@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Blueprint/UserWidget.h"
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue476 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue476 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -28,11 +28,11 @@ struct FUnLuaTest_Issue476 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto Chunk = R"(
-            local Outer = NewObject(UE.UUnLuaTestStub)
-            local StubClass = UE.UClass.Load("/UnLuaTestSuite/Tests/Regression/Issue476/BP_UnLuaTestStub_Issue476.BP_UnLuaTestStub_Issue476_C")
+            local Outer = NewObject(UE.UUnLuauNovaTestStub)
+            local StubClass = UE.UClass.Load("/UnLuauNovaTestSuite/Tests/Regression/Issue476/BP_UnLuaTestStub_Issue476.BP_UnLuaTestStub_Issue476_C")
             G_Stub = NewObject(StubClass, Outer, "Tests.Regression.Issue476.TestStub")
             return G_Stub
         )";
@@ -43,9 +43,9 @@ struct FUnLuaTest_Issue476 : FUnLuaTestBase
         CollectGarbage(RF_NoFlags, true);
 
         if (Stub.IsValid())
-            UnLuaTestSuite::PrintReferenceChain(Stub.Get());
+            UnLuauNovaTestSuite::PrintReferenceChain(Stub.Get());
         if (Outer.IsValid())
-            UnLuaTestSuite::PrintReferenceChain(Outer.Get());
+            UnLuauNovaTestSuite::PrintReferenceChain(Outer.Get());
 
         RUNNER_TEST_FALSE(Stub.IsValid());
         RUNNER_TEST_FALSE(Outer.IsValid());
@@ -53,6 +53,6 @@ struct FUnLuaTest_Issue476 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue476, TEXT("UnLua.Regression.Issue476 通过NewObject接口添加的UObject引用无法释放"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue476, TEXT("UnLuauNova.Regression.Issue476 通过NewObject接口添加的UObject引用无法释放"))
 
 #endif

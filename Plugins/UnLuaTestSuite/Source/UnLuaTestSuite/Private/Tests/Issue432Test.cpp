@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,12 +12,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue432 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue432 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -26,13 +26,13 @@ struct FUnLuaTest_Issue432 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
         UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "G_World");
         const auto Chunk = R"(
-            local ActorClass = UE.UClass.Load("/UnLuaTestSuite/Tests/Regression/Issue432/BP_UnLuaTestActor_Issue432.BP_UnLuaTestActor_Issue432_C")
+            local ActorClass = UE.UClass.Load("/UnLuauNovaTestSuite/Tests/Regression/Issue432/BP_UnLuaTestActor_Issue432.BP_UnLuaTestActor_Issue432_C")
             local Actor = G_World:SpawnActor(ActorClass)
             Actor:Test()
         )";
@@ -41,6 +41,6 @@ struct FUnLuaTest_Issue432 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue432, TEXT("UnLua.Regression.Issue432 Lua调用的函数返回蓝图结构体会check"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue432, TEXT("UnLuauNova.Regression.Issue432 Lua调用的函数返回蓝图结构体会check"))
 
 #endif

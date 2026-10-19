@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -19,15 +19,15 @@
 #include "GameFramework/Actor.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GameFramework/Character.h"
-#include "UnLua.h"
-#include "UnLuaInterface.h"
-#include "UnLuaTestHelpers.generated.h"
+#include "UnLuauNova.h"
+#include "UnLuauNovaInterface.h"
+#include "UnLuauNovaTestHelpers.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FUnLuaTestSimpleEvent);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FUnLuauNovaTestSimpleEvent);
 
-DECLARE_DYNAMIC_DELEGATE(FUnLuaTestSimpleHandler);
+DECLARE_DYNAMIC_DELEGATE(FUnLuauNovaTestSimpleHandler);
 
-DECLARE_DYNAMIC_DELEGATE_RetVal_OneParam(int32, FUnLuaTestComplexHandler, FString&, Name);
+DECLARE_DYNAMIC_DELEGATE_RetVal_OneParam(int32, FUnLuauNovaTestComplexHandler, FString&, Name);
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FIssue304Event, TArray<FString>, Array);
 
@@ -71,19 +71,19 @@ enum class EUnLuaTestEnum : uint8
 };
 
 UCLASS(Blueprintable)
-class UNLUATESTSUITE_API UUnLuaTestStub : public UObject
+class UnLuauNovaTESTSUITE_API UUnLuauNovaTestStub : public UObject
 {
     GENERATED_BODY()
 
 public:
     UPROPERTY()
-    FUnLuaTestSimpleEvent SimpleEvent;
+    FUnLuauNovaTestSimpleEvent SimpleEvent;
 
     UPROPERTY()
-    FUnLuaTestSimpleHandler SimpleHandler;
+    FUnLuauNovaTestSimpleHandler SimpleHandler;
 
     UPROPERTY()
-    FUnLuaTestComplexHandler ComplexHandler;
+    FUnLuauNovaTestComplexHandler ComplexHandler;
 
     UPROPERTY()
     FIssue304Event Issue304Event;
@@ -104,7 +104,7 @@ public:
     UPROPERTY()
     TMap<int32, int32> MapForIssue407;
 
-    UUnLuaTestStub()
+    UUnLuauNovaTestStub()
     {
         Counter = 0;
         ScopedEnum = EScopedEnum::Value1;
@@ -118,7 +118,7 @@ public:
 };
 
 UCLASS()
-class UNLUATESTSUITE_API UUnLuaTestStubForIssue446 : public UObject, public FTickableGameObject, public IUnLuaInterface
+class UnLuauNovaTESTSUITE_API UUnLuauNovaTestStubForIssue446 : public UObject, public FTickableGameObject, public IUnLuauNovaInterface
 {
     GENERATED_BODY()
 
@@ -143,7 +143,7 @@ public:
 };
 
 UCLASS()
-class UNLUATESTSUITE_API AUnLuaTestActor : public AActor
+class UnLuauNovaTESTSUITE_API AUnLuaTestActor : public AActor
 {
     GENERATED_BODY()
 
@@ -159,7 +159,7 @@ public:
 };
 
 USTRUCT(BlueprintType)
-struct UNLUATESTSUITE_API FUnLuaTestTableRow : public FTableRowBase
+struct UnLuauNovaTESTSUITE_API FUnLuauNovaTestTableRow : public FTableRowBase
 {
     GENERATED_USTRUCT_BODY()
 
@@ -169,12 +169,12 @@ struct UNLUATESTSUITE_API FUnLuaTestTableRow : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     int32 Level;
 
-    FUnLuaTestTableRow() : Level(0)
+    FUnLuauNovaTestTableRow() : Level(0)
     {
     }
 };
 
-struct UNLUATESTSUITE_API FUnLuaTestLib
+struct UnLuauNovaTESTSUITE_API FUnLuauNovaTestLib
 {
     static void TestForBaseSpec1(int32 A, int32& B, const int32& C, FString& D)
     {
@@ -193,7 +193,7 @@ struct UNLUATESTSUITE_API FUnLuaTestLib
 DECLARE_DYNAMIC_DELEGATE_TwoParams(FIssule294Event, int32, Value1, UObject*, Value2);
 
 UCLASS()
-class UNLUATESTSUITE_API UUnLuaTestFunctionLibrary : public UBlueprintFunctionLibrary
+class UnLuauNovaTESTSUITE_API UUnLuauNovaTestFunctionLibrary : public UBlueprintFunctionLibrary
 {
     GENERATED_BODY()
 
@@ -243,7 +243,7 @@ class UNLUATESTSUITE_API UUnLuaTestFunctionLibrary : public UBlueprintFunctionLi
     }
 
     UFUNCTION(BlueprintCallable)
-    static void TestForIssue376(UPARAM(ref) FUnLuaTestTableRow& Struct)
+    static void TestForIssue376(UPARAM(ref) FUnLuauNovaTestTableRow& Struct)
     {
         Struct.Level = 100;
     }

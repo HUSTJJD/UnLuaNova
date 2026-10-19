@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -15,7 +15,7 @@
 #pragma once
 
 #include "LuaCore.h"
-#include "UnLuaCompatibility.h"
+#include "UnLuauNovaCompatibility.h"
 
 static uint64 GetTypeHash(lua_State* L, int32 Index)
 {
@@ -230,8 +230,8 @@ namespace UnLuauNova
     template <typename T>
     struct TMathTypeTraits
     {
-        typedef unluaReal FieldType;
-        typedef unluaReal ScalarType;
+        typedef UnLuauNovaReal FieldType;
+        typedef UnLuauNovaReal ScalarType;
 
         enum { NUM_FIELDS = 3 };
     };
@@ -266,8 +266,8 @@ namespace UnLuauNova
     template <>
     struct TMathTypeTraits<FVector2D>
     {
-        typedef unluaReal FieldType;
-        typedef unluaReal ScalarType;
+        typedef UnLuauNovaReal FieldType;
+        typedef UnLuauNovaReal ScalarType;
 
         enum { NUM_FIELDS = 2 };
     };
@@ -275,8 +275,8 @@ namespace UnLuauNova
     template <>
     struct TMathTypeTraits<FVector4>
     {
-        typedef unluaReal FieldType;
-        typedef unluaReal ScalarType;
+        typedef UnLuauNovaReal FieldType;
+        typedef UnLuauNovaReal ScalarType;
 
         enum { NUM_FIELDS = 4 };
     };
@@ -285,7 +285,7 @@ namespace UnLuauNova
     struct TMathTypeTraits<FQuat>
     {
         typedef FQuat FieldType;
-        typedef unluaReal ScalarType;
+        typedef UnLuauNovaReal ScalarType;
 
         enum { NUM_FIELDS = 1 };
     };
@@ -294,7 +294,7 @@ namespace UnLuauNova
     struct TMathTypeTraits<FTransform>
     {
         typedef FTransform FieldType;
-        typedef unluaReal ScalarType;
+        typedef UnLuauNovaReal ScalarType;
 
         enum { NUM_FIELDS = 1 };
     };

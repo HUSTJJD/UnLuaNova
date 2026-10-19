@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -15,14 +15,14 @@
 
 #include "Issue554Test.h"
 #include "LowLevel.h"
-#include "UnLuaSettings.h"
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaSettings.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue554 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue554 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -31,7 +31,7 @@ struct FUnLuaTest_Issue554 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
         UnLuauNova::PushUObject(L, World);
@@ -50,6 +50,6 @@ struct FUnLuaTest_Issue554 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue554, TEXT("UnLua.Regression.Issue554 访问非TArray的结构体数组报错"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue554, TEXT("UnLuauNova.Regression.Issue554 访问非TArray的结构体数组报错"))
 
 #endif

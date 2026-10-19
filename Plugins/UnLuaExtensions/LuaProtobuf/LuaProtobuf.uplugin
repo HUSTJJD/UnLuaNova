@@ -3,7 +3,7 @@
     "Version": 1,
     "VersionName": "1.0.0",
     "FriendlyName": "LuaProtobuf",
-    "Description": "LuaProtobuf extensions for UnLua",
+    "Description": "LuaProtobuf extensions for UnLuauNova",
     "Category": "Scripting",
     "CreatedBy": "Tencent",
     "CreatedByURL": "https://www.tencent.com/",

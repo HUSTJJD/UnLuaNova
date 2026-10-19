@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,8 +12,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaCompatibility.h"
-#include "UnLuaEx.h"
+#include "UnLuauNovaCompatibility.h"
+#include "UnLuauNovaEx.h"
 #include "LuaLib_Math.h"
 
 static int32 FRotator_New(lua_State* L)
@@ -35,9 +35,9 @@ static int32 FRotator_New(lua_State* L)
         }
     case 4:
         {
-            const unluaReal& Pitch = lua_tonumber(L, 2);
-            const unluaReal& Yaw = lua_tonumber(L, 3);
-            const unluaReal& Roll = lua_tonumber(L, 4);
+            const UnLuauNovaReal& Pitch = lua_tonumber(L, 2);
+            const UnLuauNovaReal& Yaw = lua_tonumber(L, 3);
+            const UnLuauNovaReal& Roll = lua_tonumber(L, 4);
             new(Userdata) FRotator(Pitch, Yaw, Roll);
             break;
         }
@@ -102,7 +102,7 @@ static int32 FRotator_Set(lua_State* L)
     if (!V)
         return luaL_error(L, "invalid FRotator");
 
-    UnLuauNova::TFieldSetter3<unluaReal>::Set(L, NumParams, &V->Pitch);
+    UnLuauNova::TFieldSetter3<UnLuauNovaReal>::Set(L, NumParams, &V->Pitch);
     return 0;
 }
 
@@ -133,7 +133,7 @@ BEGIN_EXPORT_REFLECTED_CLASS(FRotator)
     ADD_CONST_FUNCTION_EX("__mul", FRotator, operator*, float)
     ADD_FUNCTION_EX("Add", FRotator, operator+=, const FRotator&)
     ADD_FUNCTION_EX("Sub", FRotator, operator-=, const FRotator&)
-    ADD_FUNCTION_EX("Mul", FRotator, operator*=, unluaReal)
+    ADD_FUNCTION_EX("Mul", FRotator, operator*=, UnLuauNovaReal)
     ADD_LIB(FRotatorLib)
 END_EXPORT_CLASS()
 

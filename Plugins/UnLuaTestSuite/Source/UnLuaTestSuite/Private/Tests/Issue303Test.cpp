@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,12 +12,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue303 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue303 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -26,7 +26,7 @@ struct FUnLuaTest_Issue303 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         TArray<FString> Array;
         Array.Add("a");
@@ -49,6 +49,6 @@ struct FUnLuaTest_Issue303 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue303, TEXT("UnLua.Regression.Issue303 部分情况下为TArray创建拷贝至lua时会产生崩溃"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue303, TEXT("UnLuauNova.Regression.Issue303 部分情况下为TArray创建拷贝至lua时会产生崩溃"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

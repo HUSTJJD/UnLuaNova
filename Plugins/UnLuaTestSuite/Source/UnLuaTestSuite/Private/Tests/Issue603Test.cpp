@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,17 +13,17 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "TestCommands.h"
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationCommon.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_TESTSUITE(FIssue603Test, TEXT("UnLua.Regression.Issue603 在Lua监听的事件中再次触发事件会导致崩溃"))
+BEGIN_TESTSUITE(FIssue603Test, TEXT("UnLuauNova.Regression.Issue603 在Lua监听的事件中再次触发事件会导致崩溃"))
 
     bool FIssue603Test::RunTest(const FString& Parameters)
     {
-        const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/Issue603/Issue603");
+        const auto MapName = TEXT("/UnLuauNovaTestSuite/Tests/Regression/Issue603/Issue603");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FEngineWaitLatentCommand(1.0));
         ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());

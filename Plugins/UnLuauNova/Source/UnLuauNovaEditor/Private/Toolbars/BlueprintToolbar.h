@@ -1,4 +1,4 @@
-﻿// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include "UnLuaEditorToolbar.h"
+#include "UnLuauNovaEditorToolbar.h"
 
-class FBlueprintToolbar : FUnLuaEditorToolbar
+class FBlueprintToolbar : FUnLuauNovaEditorToolbar
 {
 public:
     virtual void Initialize() override;

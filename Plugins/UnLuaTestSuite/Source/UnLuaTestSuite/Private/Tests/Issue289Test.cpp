@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,12 +12,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue289 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue289 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -26,11 +26,11 @@ struct FUnLuaTest_Issue289 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
 
-        const auto ActorClass = LoadClass<AActor>(nullptr, TEXT("/UnLuaTestSuite/Tests/Regression/Issue289/BP_UnLuaTestActor_Issue289.BP_UnLuaTestActor_Issue289_C"));
+        const auto ActorClass = LoadClass<AActor>(nullptr, TEXT("/UnLuauNovaTestSuite/Tests/Regression/Issue289/BP_UnLuaTestActor_Issue289.BP_UnLuaTestActor_Issue289_C"));
         const auto Actor = World->SpawnActor(ActorClass);
 
         auto& Env = UnLuauNova::FLuaEnv::FindEnvChecked(L);
@@ -50,6 +50,6 @@ struct FUnLuaTest_Issue289 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue289, TEXT("UnLua.Regression.Issue289 UClass在被UEGC后没有释放相应的绑定"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue289, TEXT("UnLuauNova.Regression.Issue289 UClass在被UEGC后没有释放相应的绑定"))
 
 #endif

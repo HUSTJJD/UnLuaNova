@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,12 +12,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue314 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue314 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -26,16 +26,16 @@ struct FUnLuaTest_Issue314 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
         UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "G_World");
 
         const auto Chunk = "\
-        local ParentClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Regression/Issue314/BP_UnLuaTestActor_Issue314_Parent.BP_UnLuaTestActor_Issue314_Parent_C')\
+        local ParentClass = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Regression/Issue314/BP_UnLuaTestActor_Issue314_Parent.BP_UnLuaTestActor_Issue314_Parent_C')\
         local ParentActor = G_World:SpawnActor(ParentClass)\
-        local ChildClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Regression/Issue314/BP_UnLuaTestActor_Issue314_Child.BP_UnLuaTestActor_Issue314_Child_C')\
+        local ChildClass = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Regression/Issue314/BP_UnLuaTestActor_Issue314_Child.BP_UnLuaTestActor_Issue314_Child_C')\
         local ChildActor = G_World:SpawnActor(ChildClass)\
         print('access ParentActor.Cube -> ', ParentActor.Cube)\
         Result = ChildActor.Cube ~= nil\
@@ -52,6 +52,6 @@ struct FUnLuaTest_Issue314 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue314, TEXT("UnLua.Regression.Issue314 访问过父类不存在的字段，后续在子类中也只能取到nil"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue314, TEXT("UnLuauNova.Regression.Issue314 访问过父类不存在的字段，后续在子类中也只能取到nil"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

@@ -1,6 +1,6 @@
 #include "ParamBufferAllocator.h"
 
-#include "UnLuaPrivate.h"
+#include "UnLuauNovaPrivate.h"
 
 FParamBufferAllocator_Always::FParamBufferAllocator_Always(const UFunction& Func)
 {
@@ -30,7 +30,7 @@ FParamBufferAllocator_Persistent::~FParamBufferAllocator_Persistent()
 {
     for (int i = 0; i < Buffers.Num(); ++i)
     {
-        UNLUA_STAT_MEMORY_FREE(Buffers[i], PersistentParamBuffer);
+        UnLuauNovaNOVA_STAT_MEMORY_FREE(Buffers[i], PersistentParamBuffer);
         FMemory::Free(Buffers[i]);
     }
 }
@@ -43,7 +43,7 @@ void* FParamBufferAllocator_Persistent::Get()
     Counter++;
     const auto Buffer = FMemory::Malloc(ParmsSize, 16);
     FMemory::Memzero(Buffer, ParmsSize);
-    UNLUA_STAT_MEMORY_ALLOC(Buffer, PersistentParamBuffer);
+    UnLuauNovaNOVA_STAT_MEMORY_ALLOC(Buffer, PersistentParamBuffer);
     Buffers.Add(Buffer);
     return Buffer;
 }

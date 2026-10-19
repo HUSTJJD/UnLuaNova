@@ -1,4 +1,4 @@
-﻿// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "LuaModuleLocator.h"
-#include "UnLuaInterface.h"
+#include "UnLuauNovaInterface.h"
 
 FString ULuaModuleLocator::Locate(const UObject* Object)
 {
@@ -34,12 +34,12 @@ FString ULuaModuleLocator::Locate(const UObject* Object)
         return "";
     }
 
-    if (!CDO->GetClass()->ImplementsInterface(UUnLuaInterface::StaticClass()))
+    if (!CDO->GetClass()->ImplementsInterface(UUnLuauNovaInterface::StaticClass()))
     {
         return "";
     }
 
-    return IUnLuaInterface::Execute_GetModuleName(CDO);
+    return IUnLuauNovaInterface::Execute_GetModuleName(CDO);
 }
 
 FString ULuaModuleLocator_ByPackage::Locate(const UObject* Object)

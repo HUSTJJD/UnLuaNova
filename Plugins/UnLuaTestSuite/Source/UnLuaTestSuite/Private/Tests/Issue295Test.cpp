@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,17 +13,17 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "TestCommands.h"
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_TESTSUITE(FIssue295Test, TEXT("UnLua.Regression.Issue295 动态绑定的UMG对象，在切换地图回调Destruct导致崩溃"))
+BEGIN_TESTSUITE(FIssue295Test, TEXT("UnLuauNova.Regression.Issue295 动态绑定的UMG对象，在切换地图回调Destruct导致崩溃"))
 
     bool FIssue295Test::RunTest(const FString& Parameters)
     {
-        const auto MapName1 = TEXT("/UnLuaTestSuite/Tests/Regression/Issue295/Issue295_1");
-        const auto MapName2 = TEXT("/UnLuaTestSuite/Tests/Regression/Issue295/Issue295_2");
+        const auto MapName1 = TEXT("/UnLuauNovaTestSuite/Tests/Regression/Issue295/Issue295_1");
+        const auto MapName2 = TEXT("/UnLuauNovaTestSuite/Tests/Regression/Issue295/Issue295_2");
 
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName1))
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
@@ -32,7 +32,7 @@ BEGIN_TESTSUITE(FIssue295Test, TEXT("UnLua.Regression.Issue295 动态绑定的UM
             lua_setglobal(L, "GWorld");
 
             const char* Chunk = R"(
-            local UMGClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Regression/Issue295/UnLuaTestUMG_Issue295.UnLuaTestUMG_Issue295_C') 
+            local UMGClass = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Regression/Issue295/UnLuauNovaTestUMG_Issue295.UnLuauNovaTestUMG_Issue295_C') 
             local Outer = GWorld
             
             local UMG1 = NewObject(UMGClass, Outer, 'UMG1', 'Tests.Regression.Issue295.TestUMG')
@@ -54,7 +54,7 @@ BEGIN_TESTSUITE(FIssue295Test, TEXT("UnLua.Regression.Issue295 动态绑定的UM
             lua_setglobal(L, "GWorld");
 
             const char* Chunk = R"(
-            local UMGClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Regression/Issue295/UnLuaTestUMG_Issue295.UnLuaTestUMG_Issue295_C') 
+            local UMGClass = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Regression/Issue295/UnLuauNovaTestUMG_Issue295.UnLuauNovaTestUMG_Issue295_C') 
             local Outer = GWorld
             
             local UMG1 = NewObject(UMGClass, Outer, 'UMG1', 'Tests.Regression.Issue295.TestUMG')

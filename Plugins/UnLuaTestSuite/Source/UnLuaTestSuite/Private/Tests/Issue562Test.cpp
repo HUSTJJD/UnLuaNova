@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -14,15 +14,15 @@
 
 
 #include "LowLevel.h"
-#include "UnLuaCompatibility.h"
-#include "UnLuaSettings.h"
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaCompatibility.h"
+#include "UnLuauNovaSettings.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue562 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue562 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -31,12 +31,12 @@ struct FUnLuaTest_Issue562 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         // 使用-binnedmalloc2来提高复现概率
 
         const auto Chunk1 = R"(
-            local InterfaceClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Regression/Issue562/BPI_Issue562.BPI_Issue562_C')
+            local InterfaceClass = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Regression/Issue562/BPI_Issue562.BPI_Issue562_C')
             local Array = UE.TArray(InterfaceClass)
         )";
         UnLuauNova::RunChunk(L, Chunk1);
@@ -57,6 +57,6 @@ struct FUnLuaTest_Issue562 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue562, TEXT("UnLua.Regression.Issue562 容器元素为蓝图类型时，在蓝图Class被提前UE回收后，会导致容器在luagc时报错"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue562, TEXT("UnLuauNova.Regression.Issue562 容器元素为蓝图类型时，在蓝图Class被提前UE回收后，会导致容器在luagc时报错"))
 
 #endif

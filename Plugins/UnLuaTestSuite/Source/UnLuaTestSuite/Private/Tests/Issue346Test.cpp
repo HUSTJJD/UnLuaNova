@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,13 +12,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaSettings.h"
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaSettings.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue346 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue346 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -27,7 +27,7 @@ struct FUnLuaTest_Issue346 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        auto& Settings = *GetMutableDefault<UUnLuaSettings>();
+        auto& Settings = *GetMutableDefault<UUnLuauNovaSettings>();
         Settings.ModuleLocatorClass = ULuaModuleLocator_ByPackage::StaticClass();
 
         // 其他测试用例可能产生了一些绑定对象在内存里，在这里肯定是找不到module的
@@ -36,10 +36,10 @@ struct FUnLuaTest_Issue346 : FUnLuaTestBase
         UE_LOG(LogTemp, Error, TEXT("dummy not found"));
         UE_LOG(LogTemp, Error, TEXT("dummy Failed to attach"));
         
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
         
         const auto Chunk = R"(
-            local FunctionLibrary = UE.UObject.Load("/UnLuaTestSuite/Tests/Regression/Issue346/BFL_Issue346.BFL_Issue346_C")
+            local FunctionLibrary = UE.UObject.Load("/UnLuauNovaTestSuite/Tests/Regression/Issue346/BFL_Issue346.BFL_Issue346_C")
             print("FunctionLibrary=", FunctionLibrary, type(FunctionLibrary))
             local Result = FunctionLibrary.Test("lua")
             return Result
@@ -52,13 +52,13 @@ struct FUnLuaTest_Issue346 : FUnLuaTestBase
 
     virtual void TearDown() override
     {
-        auto& Settings = *GetMutableDefault<UUnLuaSettings>();
+        auto& Settings = *GetMutableDefault<UUnLuauNovaSettings>();
         Settings.ModuleLocatorClass = ULuaModuleLocator::StaticClass();
 
-        FUnLuaTestBase::TearDown();
+        FUnLuauNovaTestBase::TearDown();
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue346, TEXT("UnLua.Regression.Issue346 BlueprintFunctionLibrary无法静态绑定到lua文件"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue346, TEXT("UnLuauNova.Regression.Issue346 BlueprintFunctionLibrary无法静态绑定到lua文件"))
 
 #endif

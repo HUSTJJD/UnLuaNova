@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -24,7 +24,7 @@ class UIssue494IFOperationTip : public UInterface
     GENERATED_BODY()
 };
 
-class UNLUATESTSUITE_API IIssue494IFOperationTip
+class UnLuauNovaTESTSUITE_API IIssue494IFOperationTip
 {
     GENERATED_BODY()
 

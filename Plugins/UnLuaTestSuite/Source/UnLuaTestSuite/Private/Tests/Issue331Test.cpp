@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,13 +12,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue331 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue331 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -27,10 +27,10 @@ struct FUnLuaTest_Issue331 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const char* Chunk = "\
-            return UE.UUnLuaTestFunctionLibrary.TestForIssue331()\
+            return UE.UUnLuauNovaTestFunctionLibrary.TestForIssue331()\
             ";
         UnLuauNova::RunChunk(L, Chunk);
         const auto Result = (bool)lua_toboolean(L, -1);
@@ -40,6 +40,6 @@ struct FUnLuaTest_Issue331 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue331, TEXT("UnLua.Regression.Issue331 UENUM的某一项为表达式时，默认值没有分析出来"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue331, TEXT("UnLuauNova.Regression.Issue331 UENUM的某一项为表达式时，默认值没有分析出来"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

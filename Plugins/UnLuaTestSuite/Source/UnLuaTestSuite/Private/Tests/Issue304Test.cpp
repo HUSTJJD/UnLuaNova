@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,12 +12,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue304 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue304 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -26,10 +26,10 @@ struct FUnLuaTest_Issue304 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto Chunk = R"(
-        local Stub = NewObject(UE.UUnLuaTestStub)
+        local Stub = NewObject(UE.UUnLuauNovaTestStub)
         Stub.Issue304Event:Add(Stub, function(_, InArray)
             Result = InArray:Get(2)
         end)
@@ -50,6 +50,6 @@ struct FUnLuaTest_Issue304 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue304, TEXT("UnLua.Regression.Issue304 Lua中监听delegate，接收TArray参数，使用Get获取其中元素导致崩溃"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue304, TEXT("UnLuauNova.Regression.Issue304 Lua中监听delegate，接收TArray参数，使用Get获取其中元素导致崩溃"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

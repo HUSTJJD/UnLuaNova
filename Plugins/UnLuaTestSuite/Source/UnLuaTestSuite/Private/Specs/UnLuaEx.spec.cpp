@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,19 +12,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaBase.h"
-#include "UnLuaTemplate.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaTemplate.h"
 #include "Misc/AutomationTest.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FUnLuaBindingSpec, "UnLua.Binding", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FUnLuauNovaBindingSpec, "UnLuauNova.Binding", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     TSharedPtr<UnLuauNova::FLuaEnv> Env;
     lua_State* L;
-END_DEFINE_SPEC(FUnLuaBindingSpec)
+END_DEFINE_SPEC(FUnLuauNovaBindingSpec)
 
-void FUnLuaBindingSpec::Define()
+void FUnLuauNovaBindingSpec::Define()
 {
     BeforeEach([this]
     {
@@ -43,7 +43,7 @@ void FUnLuaBindingSpec::Define()
         It(TEXT("Get"), EAsyncExecution::TaskGraphMainThread, [this]
         {
             const auto Chunk = R"(
-				local Stub = NewObject(UE.UUnLuaTestStub)
+				local Stub = NewObject(UE.UUnLuauNovaTestStub)
 				return Stub.ScopedEnum
 			)";
             UnLuauNova::RunChunk(L, Chunk);
@@ -55,7 +55,7 @@ void FUnLuaBindingSpec::Define()
         It(TEXT("Set"), EAsyncExecution::TaskGraphMainThread, [this]
         {
             const auto Chunk = R"(
-				local Stub = NewObject(UE.UUnLuaTestStub)
+				local Stub = NewObject(UE.UUnLuauNovaTestStub)
 				Stub.ScopedEnum = UE.EScopedEnum.Value2
 				return Stub.ScopedEnum
 			)";
@@ -71,7 +71,7 @@ void FUnLuaBindingSpec::Define()
         It(TEXT("Get"), EAsyncExecution::TaskGraphMainThread, [this]
         {
             const auto Chunk = R"(
-				local Stub = NewObject(UE.UUnLuaTestStub)
+				local Stub = NewObject(UE.UUnLuauNovaTestStub)
 				return Stub.EnumClass
 			)";
             UnLuauNova::RunChunk(L, Chunk);
@@ -83,7 +83,7 @@ void FUnLuaBindingSpec::Define()
         It(TEXT("Set"), EAsyncExecution::TaskGraphMainThread, [this]
         {
             const auto Chunk = R"(
-				local Stub = NewObject(UE.UUnLuaTestStub)
+				local Stub = NewObject(UE.UUnLuauNovaTestStub)
 				Stub.EnumClass = UE.EEnumClass.Value2
 				return Stub.EnumClass
 			)";

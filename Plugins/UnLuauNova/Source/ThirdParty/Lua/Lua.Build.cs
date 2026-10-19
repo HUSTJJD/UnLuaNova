@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -388,7 +388,7 @@ public class Lua : ModuleRules
             ? new ConfigFile(configFileReference)
             : new ConfigFile();
         var config = new ConfigHierarchy(new[] { configFile });
-        const string section = "/Script/UnLuaEditor.UnLuaEditorSettings";
+        const string section = "/Script/UnLuauNovaEditor.UnLuauNovaEditorSettings";
         bool flag;
         if (config.GetBool(section, "bLuaCompileAsCpp", out flag))
             return flag;
@@ -404,7 +404,7 @@ public class Lua : ModuleRules
             ? new ConfigFile(configFileReference)
             : new ConfigFile();
         var config = new ConfigHierarchy(new[] { configFile });
-        const string section = "/Script/UnLuaEditor.UnLuaEditorSettings";
+        const string section = "/Script/UnLuauNovaEditor.UnLuauNovaEditorSettings";
         string version;
         if (config.GetString(section, "LuaVersion", out version))
             return version;

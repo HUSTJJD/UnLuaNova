@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,19 +12,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaBase.h"
-#include "UnLuaTemplate.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaTemplate.h"
 #include "Misc/AutomationTest.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "GameFramework/GameModeBase.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FUnLuaLibClassSpec, "UnLua.API.UClass", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FUnLuauNovaLibClassSpec, "UnLuauNova.API.UClass", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     lua_State* L;
-END_DEFINE_SPEC(FUnLuaLibClassSpec)
+END_DEFINE_SPEC(FUnLuauNovaLibClassSpec)
 
-void FUnLuaLibClassSpec::Define()
+void FUnLuauNovaLibClassSpec::Define()
 {
     BeforeEach([this]
     {

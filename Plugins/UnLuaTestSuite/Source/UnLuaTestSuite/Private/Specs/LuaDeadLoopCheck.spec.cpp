@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,15 +12,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestHelpers.h"
-#include "UnLuaModule.h"
-#include "UnLuaSettings.h"
-#include "UnLuaTemplate.h"
+#include "UnLuauNovaTestHelpers.h"
+#include "UnLuauNovaModule.h"
+#include "UnLuauNovaSettings.h"
+#include "UnLuauNovaTemplate.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FLuaDeadLoopCheckSpec, "UnLua.Settings", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FLuaDeadLoopCheckSpec, "UnLuauNova.Settings", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
 
     virtual bool SuppressLogWarnings() override
     {
@@ -35,23 +35,23 @@ void FLuaDeadLoopCheckSpec::Define()
     {
         AfterEach(EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            auto& Settings = *GetMutableDefault<UUnLuaSettings>();
+            auto& Settings = *GetMutableDefault<UUnLuauNovaSettings>();
             Settings.DeadLoopCheck = 0;
         });
 
         It(TEXT("设置防止无限循环的超时时间"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            // a preceding PIE-based test deactivates UnLua on a deferred tick, so the module
+            // a preceding PIE-based test deactivates UnLuauNova on a deferred tick, so the module
             // may still be active here; Startup() would then early-return without applying
             // DeadLoopCheck to FDeadLoopCheck::Timeout and the chunk below never times out
             UnLuauNova::Shutdown();
 
-            auto& Settings = *GetMutableDefault<UUnLuaSettings>();
+            auto& Settings = *GetMutableDefault<UUnLuauNovaSettings>();
             Settings.DeadLoopCheck = 1;
 
             UnLuauNova::Startup();
 
-            const auto Env = IUnLuaModule::Get().GetEnv();
+            const auto Env = IUnLuauNovaModule::Get().GetEnv();
             AddExpectedError(TEXT("timeout"), EAutomationExpectedErrorFlags::Contains);
             const auto Chunk = R"(
                 local count = 0

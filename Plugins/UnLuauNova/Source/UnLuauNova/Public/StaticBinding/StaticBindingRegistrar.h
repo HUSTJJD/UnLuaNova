@@ -16,9 +16,9 @@ struct FStaticBindingAutoRegistrar
 	}
 };
 
-#define UNLUA_SB_CONCAT_INNER(A, B) A##B
-#define UNLUA_SB_CONCAT(A, B) UNLUA_SB_CONCAT_INNER(A, B)
+#define UnLuauNovaNOVA_SB_CONCAT_INNER(A, B) A##B
+#define UnLuauNovaNOVA_SB_CONCAT(A, B) UnLuauNovaNOVA_SB_CONCAT_INNER(A, B)
 
 /** Emitted at the end of each generated binding table. */
-#define UNLUA_REGISTER_STATIC_BINDING(TypeName) \
-	static FStaticBindingAutoRegistrar UNLUA_SB_CONCAT(GStaticBindingRegistrar_, TypeName)(&TypeBinding_##TypeName)
+#define UnLuauNovaNOVA_REGISTER_STATIC_BINDING(TypeName) \
+	static FStaticBindingAutoRegistrar UnLuauNovaNOVA_SB_CONCAT(GStaticBindingRegistrar_, TypeName)(&TypeBinding_##TypeName)

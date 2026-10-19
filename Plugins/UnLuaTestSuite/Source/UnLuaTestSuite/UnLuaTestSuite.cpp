@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,21 +12,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestSuite.h"
+#include "UnLuauNovaTestSuite.h"
 
-class FUnLuaTestSuite : public IUnLuaTestSuite
+class FUnLuauNovaTestSuite : public IUnLuauNovaTestSuite
 {
     virtual void StartupModule() override;
 
     virtual void ShutdownModule() override;
 };
 
-IMPLEMENT_MODULE(FUnLuaTestSuite, UnLuaTestSuite)
+IMPLEMENT_MODULE(FUnLuauNovaTestSuite, UnLuauNovaTestSuite)
 
-void FUnLuaTestSuite::StartupModule()
+void FUnLuauNovaTestSuite::StartupModule()
 {
 }
 
-void FUnLuaTestSuite::ShutdownModule()
+void FUnLuauNovaTestSuite::ShutdownModule()
 {
 }

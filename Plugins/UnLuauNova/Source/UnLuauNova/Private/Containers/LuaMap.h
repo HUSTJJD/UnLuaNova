@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -58,7 +58,7 @@ public:
         StructBuilder.AddMember(InValueInterface->GetSize(), InValueInterface->GetAlignment());
         // allocate cache for a key-value pair with alignment
         ElementCache = FMemory::Malloc(StructBuilder.GetSize(), StructBuilder.GetAlignment());
-        UNLUA_STAT_MEMORY_ALLOC(ElementCache, ContainerElementCache);
+        UnLuauNovaNOVA_STAT_MEMORY_ALLOC(ElementCache, ContainerElementCache);
     }
 
     FLuaMap(const FScriptMap *InScriptMap, TLuaContainerInterface<FLuaMap> *InMapInterface, FScriptMapFlag Flag = OwnedByOther)
@@ -75,7 +75,7 @@ public:
             StructBuilder.AddMember(ValueInterface->GetSize(), ValueInterface->GetAlignment());
             // allocate cache for a key-value pair with alignment
             ElementCache = FMemory::Malloc(StructBuilder.GetSize(), StructBuilder.GetAlignment());
-            UNLUA_STAT_MEMORY_ALLOC(ElementCache, ContainerElementCache);
+            UnLuauNovaNOVA_STAT_MEMORY_ALLOC(ElementCache, ContainerElementCache);
         }
     }
 
@@ -86,7 +86,7 @@ public:
             Clear();
             delete Map;
         }
-        UNLUA_STAT_MEMORY_FREE(ElementCache, ContainerElementCache);
+        UnLuauNovaNOVA_STAT_MEMORY_FREE(ElementCache, ContainerElementCache);
         FMemory::Free(ElementCache);
     }
 

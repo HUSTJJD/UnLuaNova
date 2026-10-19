@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,13 +12,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Components/CapsuleComponent.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue292 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue292 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -27,7 +27,7 @@ struct FUnLuaTest_Issue292 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
         AActor* Actor = World->SpawnActor(AActor::StaticClass());
@@ -47,6 +47,6 @@ struct FUnLuaTest_Issue292 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue292, TEXT("UnLua.Regression.Issue292 actor调用K2_DestroyActor后，立刻调用IsValid会返回true"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue292, TEXT("UnLuauNova.Regression.Issue292 actor调用K2_DestroyActor后，立刻调用IsValid会返回true"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

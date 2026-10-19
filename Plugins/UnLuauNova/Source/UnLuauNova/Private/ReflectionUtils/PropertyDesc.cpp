@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -344,7 +344,7 @@ public:
         auto Object = UnLuauNova::GetUObject(L, IndexInStack, false);
         if (UnLuauNova::LowLevel::IsReleasedPtr(Object))
         {
-            UNLUA_LOGWARNING(L, LogUnLuauNova, Warning, TEXT("attempt to set property %s with released object"), *GetName());
+            UnLuauNovaNOVA_LOGWARNING(L, LogUnLuauNova, Warning, TEXT("attempt to set property %s with released object"), *GetName());
             Object = nullptr;
         }
 
@@ -364,7 +364,7 @@ public:
             {
                 if (!Object->GetClass()->IsChildOf(ObjectBaseProperty->PropertyClass))
                 {
-                    UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("Invalid value type : property.type=%s, value.type=%s"), *ObjectBaseProperty->PropertyClass->GetName(), *Object->GetClass()->GetName());
+                    UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("Invalid value type : property.type=%s, value.type=%s"), *ObjectBaseProperty->PropertyClass->GetName(), *Object->GetClass()->GetName());
                 }
             }
 #endif
@@ -689,7 +689,7 @@ public:
         }
         else
         {
-#if UNLUA_ENABLE_FTEXT
+#if UnLuauNovaNOVA_ENABLE_FTEXT
             const auto Text = TextProperty->GetPropertyValue(ValuePtr);
             const auto Userdata = NewTypedUserdata(L, FText);
             const auto NewTextPtr = new(Userdata) FText;
@@ -702,7 +702,7 @@ public:
 
     virtual bool SetValueInternal(lua_State* L, void* ValuePtr, int32 IndexInStack, bool bCopyValue) const override
     {
-#if UNLUA_ENABLE_FTEXT
+#if UnLuauNovaNOVA_ENABLE_FTEXT
         TextProperty->SetPropertyValue(ValuePtr, *(FText*)GetCppInstanceFast(L, IndexInStack));
 #else
         TextProperty->SetPropertyValue(ValuePtr, FText::FromString(UTF8_TO_TCHAR(lua_tostring(L, IndexInStack))));
@@ -714,7 +714,7 @@ public:
     virtual bool CheckPropertyType(lua_State* L, int32 IndexInStack, FString& ErrorMsg, void* UserData)
     {
         const auto Type = lua_type(L, IndexInStack);
-#if UNLUA_ENABLE_FTEXT
+#if UnLuauNovaNOVA_ENABLE_FTEXT
         if (Type != LUA_TUSERDATA)
         {
             ErrorMsg = FString::Printf(TEXT("userdata is needed but got %s"), UTF8_TO_TCHAR(lua_typename(L, Type)));
@@ -1363,7 +1363,7 @@ public:
         void* ValuePtr = Property->ContainerPtrToValuePtr<void>(ContainerPtr);
         FScriptDelegate* ScriptDelegate = DelegateProperty->GetPropertyValuePtr(ValuePtr);
 
-        // https://github.com/Tencent/UnLua/issues/566
+        // https://github.com/Tencent/UnLuauNova/issues/566
         if (Property->GetOwner<UFunction>())
         {
             ValuePtr = DelegateRegistry->Register(ScriptDelegate, DelegateProperty);

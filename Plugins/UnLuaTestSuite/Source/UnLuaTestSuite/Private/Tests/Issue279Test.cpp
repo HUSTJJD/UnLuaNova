@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,13 +12,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue279 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue279 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -27,14 +27,14 @@ struct FUnLuaTest_Issue279 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
         UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "World");
 
         const auto Chunk1 = R"(
-            local ActorClass = UE.UClass.Load("/UnLuaTestSuite/Tests/Regression/Issue279/BP_TestActor.BP_TestActor_C")
+            local ActorClass = UE.UClass.Load("/UnLuauNovaTestSuite/Tests/Regression/Issue279/BP_TestActor.BP_TestActor_C")
             Actor = World:SpawnActor(ActorClass)
             Actor:Run()
         )";
@@ -52,6 +52,6 @@ struct FUnLuaTest_Issue279 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue279, TEXT("UnLua.Regression.Issue279 lua覆写蓝图的同名函数之后，无法将特定类型的函数参数保存到lua对象中"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue279, TEXT("UnLuauNova.Regression.Issue279 lua覆写蓝图的同名函数之后，无法将特定类型的函数参数保存到lua对象中"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

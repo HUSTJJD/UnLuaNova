@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,19 +12,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaBase.h"
-#include "UnLuaTemplate.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaTemplate.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FUnLuaLibArraySpec, "UnLua.API.TArray", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FUnLuauNovaLibArraySpec, "UnLuauNova.API.TArray", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     TSharedPtr<UnLuauNova::FLuaEnv> Env;
     lua_State* L;
-END_DEFINE_SPEC(FUnLuaLibArraySpec)
+END_DEFINE_SPEC(FUnLuauNovaLibArraySpec)
 
-void FUnLuaLibArraySpec::Define()
+void FUnLuauNovaLibArraySpec::Define()
 {
     BeforeEach([this]
     {
@@ -115,7 +115,7 @@ void FUnLuaLibArraySpec::Define()
         It(TEXT("构造TArray<UStruct>"), EAsyncExecution::TaskGraphMainThread, [this]
         {
             const auto Chunk = R"(
-            local Struct_TableRow = UE.UObject.Load("/UnLuaTestSuite/Tests/Misc/Struct_TableRow.Struct_TableRow")
+            local Struct_TableRow = UE.UObject.Load("/UnLuauNovaTestSuite/Tests/Misc/Struct_TableRow.Struct_TableRow")
             local Array = UE.TArray(Struct_TableRow)
 
             local Item1 = Struct_TableRow()
@@ -674,11 +674,11 @@ void FUnLuaLibArraySpec::Define()
         It(TEXT("按引用获取元素（原生）"), EAsyncExecution::TaskGraphMainThread, [this]
         {
             const auto Chunk = R"(
-            local UUnLuaTestStub = UE.UUnLuaTestStub
-            local Array = UE.TArray(UE.UUnLuaTestStub)
+            local UUnLuauNovaTestStub = UE.UUnLuauNovaTestStub
+            local Array = UE.TArray(UE.UUnLuauNovaTestStub)
 
-            local Stub1 = NewObject(UUnLuaTestStub)
-            local Stub2 = NewObject(UUnLuaTestStub)
+            local Stub1 = NewObject(UUnLuauNovaTestStub)
+            local Stub2 = NewObject(UUnLuauNovaTestStub)
 
             Array:Add(Stub1)
             Array:Add(Stub2)
@@ -701,7 +701,7 @@ void FUnLuaLibArraySpec::Define()
         It(TEXT("按引用获取元素（蓝图）"), EAsyncExecution::TaskGraphMainThread, [this]
         {
             const auto Chunk = R"(
-            local Struct_TableRow = UE.UObject.Load("/UnLuaTestSuite/Tests/Misc/Struct_TableRow.Struct_TableRow")
+            local Struct_TableRow = UE.UObject.Load("/UnLuauNovaTestSuite/Tests/Misc/Struct_TableRow.Struct_TableRow")
             local Array = UE.TArray(Struct_TableRow)
 
             local Row1 = Struct_TableRow()

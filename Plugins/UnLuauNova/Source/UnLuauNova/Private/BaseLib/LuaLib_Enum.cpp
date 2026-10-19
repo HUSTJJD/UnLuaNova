@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -15,8 +15,8 @@
 #include "BaseLib/LuaLib_Enum.h"
 #include "CollisionHelper.h"
 #include "LuaEnv.h"
-#include "UnLuaLegacy.h"
-#include "UnLuaPrivate.h"
+#include "UnLuauNovaLegacy.h"
+#include "UnLuauNovaPrivate.h"
 
 /**
  * __index meta methods for enum
@@ -177,7 +177,7 @@ int32 CollisionEnum_Index(lua_State* L, int32 (*Converter)(FName))
         int32 Value = Converter(FName(Name));
         if (Value == INDEX_NONE)
         {
-            UNLUA_LOGWARNING(L, LogUnLuauNova, Warning, TEXT("%s: Cann't find enum %s!"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(Name));
+            UnLuauNovaNOVA_LOGWARNING(L, LogUnLuauNova, Warning, TEXT("%s: Cann't find enum %s!"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(Name));
         }
         lua_pushvalue(L, 2);
         lua_pushinteger(L, Value);

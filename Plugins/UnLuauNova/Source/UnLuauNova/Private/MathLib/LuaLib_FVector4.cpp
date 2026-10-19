@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,8 +12,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaCompatibility.h"
-#include "UnLuaEx.h"
+#include "UnLuauNovaCompatibility.h"
+#include "UnLuauNovaEx.h"
 #include "LuaLib_Math.h"
 
 static int32 FVector4_New(lua_State* L)
@@ -30,31 +30,31 @@ static int32 FVector4_New(lua_State* L)
         }
     case 2:
         {
-            const unluaReal& X = lua_tonumber(L, 2);
+            const UnLuauNovaReal& X = lua_tonumber(L, 2);
             new(Userdata) FVector4(X);
             return 1;
         }
     case 3:
         {
-            const unluaReal& X = lua_tonumber(L, 2);
-            const unluaReal& Y = lua_tonumber(L, 3);
+            const UnLuauNovaReal& X = lua_tonumber(L, 2);
+            const UnLuauNovaReal& Y = lua_tonumber(L, 3);
             new(Userdata) FVector4(X, Y);
             return 1;
         }
     case 4:
         {
-            const unluaReal& X = lua_tonumber(L, 2);
-            const unluaReal& Y = lua_tonumber(L, 3);
-            const unluaReal& Z = lua_tonumber(L, 4);
+            const UnLuauNovaReal& X = lua_tonumber(L, 2);
+            const UnLuauNovaReal& Y = lua_tonumber(L, 3);
+            const UnLuauNovaReal& Z = lua_tonumber(L, 4);
             new(Userdata) FVector4(X, Y, Z);
             return 1;
         }
     case 5:
         {
-            const unluaReal& X = lua_tonumber(L, 2);
-            const unluaReal& Y = lua_tonumber(L, 3);
-            const unluaReal& Z = lua_tonumber(L, 4);
-            const unluaReal& W = lua_tonumber(L, 5);
+            const UnLuauNovaReal& X = lua_tonumber(L, 2);
+            const UnLuauNovaReal& Y = lua_tonumber(L, 3);
+            const UnLuauNovaReal& Z = lua_tonumber(L, 4);
+            const UnLuauNovaReal& W = lua_tonumber(L, 5);
             new(Userdata) FVector4(X, Y, Z, W);
             return 1;
         }
@@ -73,7 +73,7 @@ static int32 FVector4_Set(lua_State* L)
     if (!V)
         return luaL_error(L, "invalid FVector4");
 
-    UnLuauNova::TFieldSetter4<unluaReal>::Set(L, NumParams, &V->X);
+    UnLuauNova::TFieldSetter4<UnLuauNovaReal>::Set(L, NumParams, &V->X);
     return 0;
 }
 
@@ -91,14 +91,14 @@ static int32 FVector4_UNM(lua_State* L)
 static const luaL_Reg FVector4Lib[] =
 {
     {"Set", FVector4_Set},
-    {"Add", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TAdd<unluaReal>, true>::Calculate},
-    {"Sub", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TSub<unluaReal>, true>::Calculate},
-    {"Mul", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TMul<unluaReal>, true>::Calculate},
-    {"Div", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TDiv<unluaReal>, true>::Calculate},
-    {"__add", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TAdd<unluaReal>>::Calculate},
-    {"__sub", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TSub<unluaReal>>::Calculate},
-    {"__mul", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TMul<unluaReal>>::Calculate},
-    {"__div", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TDiv<unluaReal>>::Calculate},
+    {"Add", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TAdd<UnLuauNovaReal>, true>::Calculate},
+    {"Sub", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TSub<UnLuauNovaReal>, true>::Calculate},
+    {"Mul", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TMul<UnLuauNovaReal>, true>::Calculate},
+    {"Div", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TDiv<UnLuauNovaReal>, true>::Calculate},
+    {"__add", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TAdd<UnLuauNovaReal>>::Calculate},
+    {"__sub", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TSub<UnLuauNovaReal>>::Calculate},
+    {"__mul", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TMul<UnLuauNovaReal>>::Calculate},
+    {"__div", UnLuauNova::TMathCalculation<FVector4, UnLuauNova::TDiv<UnLuauNovaReal>>::Calculate},
     {"__tostring", UnLuauNova::TMathUtils<FVector4>::ToString},
     {"__unm", FVector4_UNM},
     {"__call", FVector4_New},
@@ -115,7 +115,7 @@ BEGIN_EXPORT_REFLECTED_CLASS(FVector4)
     ADD_EXTERNAL_FUNCTION(float, Dot3, const FVector4&, const FVector4&)
     ADD_EXTERNAL_FUNCTION(float, Dot4, const FVector4&, const FVector4&)
 #else
-    ADD_EXTERNAL_FUNCTION_EX("Dot3", unluaReal, Dot3<unluaReal>, const FVector4&, const FVector4&)
+    ADD_EXTERNAL_FUNCTION_EX("Dot3", UnLuauNovaReal, Dot3<UnLuauNovaReal>, const FVector4&, const FVector4&)
 #endif
     ADD_CONST_FUNCTION_EX("Cross", FVector4, operator^, const FVector4&)
     ADD_FUNCTION(Size)

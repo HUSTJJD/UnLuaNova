@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -24,11 +24,11 @@
 #include "LuaDynamicBinding.h"
 #include "UELib.h"
 #include "ObjectReferencer.h"
-#include "UnLuaDelegates.h"
-#include "UnLuaInterface.h"
-#include "UnLuaLegacy.h"
-#include "UnLuaLib.h"
-#include "UnLuaSettings.h"
+#include "UnLuauNovaDelegates.h"
+#include "UnLuauNovaInterface.h"
+#include "UnLuauNovaLegacy.h"
+#include "UnLuauNovaLib.h"
+#include "UnLuauNovaSettings.h"
 #include "lstate.h"
 
 namespace UnLuauNova
@@ -78,15 +78,15 @@ namespace UnLuauNova
     FLuaEnv::FLuaEnv()
         : bStarted(false)
     {
-        const auto Settings = GetDefault<UUnLuaSettings>();
+        const auto Settings = GetDefault<UUnLuauNovaSettings>();
         ModuleLocator = Settings->ModuleLocatorClass.GetDefaultObject();
-        ensureMsgf(ModuleLocator, TEXT("Invalid lua module locator, lua binding will not work properly. please check unlua runtime settings."));
+        ensureMsgf(ModuleLocator, TEXT("Invalid lua module locator, lua binding will not work properly. please check UnLuauNova runtime settings."));
 
         RegisterDelegates();
 
 #if PLATFORM_WINDOWS
         // 防止类似AppleProResMedia插件忘了恢复Dll查找目录
-        // https://github.com/Tencent/UnLua/issues/534
+        // https://github.com/Tencent/UnLuauNova/issues/534
         const auto Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("Binaries/Win64"));
         FPlatformProcess::PushDllDirectory(*Dir);
         L = lua_newstate(GetLuaAllocator(), nullptr);
@@ -119,8 +119,8 @@ namespace UnLuauNova
         DanglingCheck = new FDanglingCheck(this);
         DeadLoopCheck = new FDeadLoopCheck(this);
 
-        AutoObjectReference.SetName("UnLua_AutoReference");
-        ManualObjectReference.SetName("UnLua_ManualReference");
+        AutoObjectReference.SetName("UnLuauNovaNOVA_AutoReference");
+        ManualObjectReference.SetName("UnLuauNovaNOVA_ManualReference");
 
         lua_pushstring(L, "StructMap"); // create weak table 'StructMap'
         LowLevel::CreateWeakValueTable(L);
@@ -130,22 +130,22 @@ namespace UnLuauNova
         LowLevel::CreateWeakValueTable(L);
         lua_rawset(L, LUA_REGISTRYINDEX);
 
-        if (FUnLuaDelegates::ConfigureLuaGC.IsBound())
+        if (FUnLuauNovaDelegates::ConfigureLuaGC.IsBound())
         {
-            FUnLuaDelegates::ConfigureLuaGC.Execute(L);
+            FUnLuauNovaDelegates::ConfigureLuaGC.Execute(L);
         }
         else
         {
 #if 504 == LUA_VERSION_NUM
             lua_gc(L, LUA_GCGEN, 0, 0);
 #else
-            // default Lua GC config in UnLua
+            // default Lua GC config in UnLuauNova
             lua_gc(L, LUA_GCSETPAUSE, 100);
             lua_gc(L, LUA_GCSETSTEPMUL, 5000);
 #endif
         }
 
-        FUnLuaDelegates::OnPreStaticallyExport.Broadcast();
+        FUnLuauNovaDelegates::OnPreStaticallyExport.Broadcast();
 
         // register statically exported classes
         auto ExportedNonReflectedClasses = GetExportedNonReflectedClasses();
@@ -162,10 +162,10 @@ namespace UnLuauNova
         for (const auto& Enum : ExportedEnums)
             Enum->Register(L);
 
-        UnLuaLib::Open(L);
+        UnLuauNovaLib::Open(L);
 
         OnCreated.Broadcast(*this);
-        FUnLuaDelegates::OnLuaStateCreated.Broadcast(L);
+        FUnLuauNovaDelegates::OnLuaStateCreated.Broadcast(L);
 
 #if ENABLE_UNREAL_INSIGHTS && CPUPROFILERTRACE_ENABLED
         if (FDeadLoopCheck::Timeout)
@@ -227,7 +227,7 @@ namespace UnLuauNova
 
     void FLuaEnv::Start(const TMap<FString, UObject*>& Args)
     {
-        const auto& Setting = *GetDefault<UUnLuaSettings>();
+        const auto& Setting = *GetDefault<UUnLuauNovaSettings>();
         Start(Setting.StartupModuleName, Args);
     }
 
@@ -346,7 +346,7 @@ namespace UnLuauNova
             return false;
         }
 
-        static UClass* InterfaceClass = UUnLuaInterface::StaticClass();
+        static UClass* InterfaceClass = UUnLuauNovaInterface::StaticClass();
         const bool bImplUnluaInterface = Class->ImplementsInterface(InterfaceClass);
 
         if (IsInAsyncLoadingThread())
@@ -373,7 +373,7 @@ namespace UnLuauNova
         if (Class->GetName().Contains(TEXT("SKEL_")))
             return false;
 
-        if (!ensureMsgf(ModuleLocator, TEXT("Invalid lua module locator, lua binding will not work properly. please check unlua runtime settings.")))
+        if (!ensureMsgf(ModuleLocator, TEXT("Invalid lua module locator, lua binding will not work properly. please check UnLuauNova runtime settings.")))
             return false;
 
         const auto ModuleName = ModuleLocator->Locate(Object);
@@ -419,10 +419,10 @@ namespace UnLuauNova
         // TODO: env support
         // TODO: return value support
 
-#if UNLUA_LEGACY_ALLOW_BOM || WITH_EDITOR
+#if UnLuauNovaNOVA_LEGACY_ALLOW_BOM || WITH_EDITOR
         if (Size > 3 && Buffer[0] == static_cast<char>(0xEF) && Buffer[1] == static_cast<char>(0xBB) && Buffer[2] == static_cast<char>(0xBF))
         {
-#if !UNLUA_LEGACY_ALLOW_BOM
+#if !UnLuauNovaNOVA_LEGACY_ALLOW_BOM
             UE_LOG(LogUnLuauNova, Warning, TEXT("Lua chunk with utf-8 BOM:%s"), UTF8_TO_TCHAR(InName));
 #endif
             return LoadBuffer(InL, Buffer + 3, Size - 3, InName);
@@ -451,7 +451,7 @@ namespace UnLuauNova
 
     void FLuaEnv::HotReload()
     {
-        DoString("UnLua.HotReload()");
+        DoString("UnLuauNova.HotReload()");
     }
 
     int32 FLuaEnv::FindThread(const lua_State* Thread)
@@ -487,11 +487,11 @@ namespace UnLuauNova
         luaL_unref(L, LUA_REGISTRYINDEX, ThreadRef); // remove the reference if the coroutine finishes its execution
     }
 
-    UUnLuaManager* FLuaEnv::GetManager()
+    UUnLuauNovaManager* FLuaEnv::GetManager()
     {
         if (!Manager)
         {
-            Manager = NewObject<UUnLuaManager>();
+            Manager = NewObject<UUnLuauNovaManager>();
             Manager->Env = this;
             Manager->AddToRoot();
         }
@@ -561,13 +561,13 @@ namespace UnLuauNova
     int FLuaEnv::LoadFromCustomLoader(lua_State* L)
     {
         auto& Env = *(FLuaEnv*)lua_touserdata(L, lua_upvalueindex(1));
-        if (FUnLuaDelegates::CustomLoadLuaFile.IsBound())
+        if (FUnLuauNovaDelegates::CustomLoadLuaFile.IsBound())
         {
             // legacy support
             const FString FileName(UTF8_TO_TCHAR(lua_tostring(L, 1)));
             TArray<uint8> Data;
             FString ChunkName(TEXT("chunk"));
-            if (FUnLuaDelegates::CustomLoadLuaFile.Execute(Env, FileName, Data, ChunkName))
+            if (FUnLuauNovaDelegates::CustomLoadLuaFile.Execute(Env, FileName, Data, ChunkName))
             {
                 if (Env.LoadString(L, Data, ChunkName))
                     return 1;
@@ -615,7 +615,7 @@ namespace UnLuauNova
             return luaL_error(L, TCHAR_TO_UTF8(*Msg));
         };
 
-        const auto PackagePath = UnLuaLib::GetPackagePath(L);
+        const auto PackagePath = UnLuauNovaLib::GetPackagePath(L);
         if (PackagePath.IsEmpty())
             return 0;
 
@@ -742,7 +742,7 @@ namespace UnLuauNova
     {
         if (nsize == 0)
         {
-            UNLUA_STAT_MEMORY_FREE(ptr, Lua);
+            UnLuauNovaNOVA_STAT_MEMORY_FREE(ptr, Lua);
             FMemory::Free(ptr);
             return nullptr;
         }
@@ -751,11 +751,11 @@ namespace UnLuauNova
         if (!ptr)
         {
             Buffer = FMemory::Malloc(nsize);
-            UNLUA_STAT_MEMORY_ALLOC(Buffer, Lua);
+            UnLuauNovaNOVA_STAT_MEMORY_ALLOC(Buffer, Lua);
         }
         else
         {
-            UNLUA_STAT_MEMORY_REALLOC(ptr, Buffer, Lua);
+            UnLuauNovaNOVA_STAT_MEMORY_REALLOC(ptr, Buffer, Lua);
             Buffer = FMemory::Realloc(ptr, nsize);
         }
         return Buffer;

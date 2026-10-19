@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -16,10 +16,10 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "UnLuaBenchmarkFunctionLibrary.generated.h"
+#include "UnLuauNovaBenchmarkFunctionLibrary.generated.h"
 
 UCLASS()
-class UUnLuaBenchmarkFunctionLibrary : public UBlueprintFunctionLibrary
+class UUnLuauNovaBenchmarkFunctionLibrary : public UBlueprintFunctionLibrary
 {
     GENERATED_BODY()
 

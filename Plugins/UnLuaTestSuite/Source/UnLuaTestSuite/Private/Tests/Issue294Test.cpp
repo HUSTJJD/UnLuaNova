@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,14 +12,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Components/CapsuleComponent.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue294 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue294 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -28,10 +28,10 @@ struct FUnLuaTest_Issue294 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const char* Chunk1 = "\
-            return UE.UUnLuaTestFunctionLibrary.TestForIssue294('A', 1)\
+            return UE.UUnLuauNovaTestFunctionLibrary.TestForIssue294('A', 1)\
             ";
         UnLuauNova::RunChunk(L, Chunk1);
         const auto Actual1 = (int32)lua_tointeger(L, -1);
@@ -42,7 +42,7 @@ struct FUnLuaTest_Issue294 : FUnLuaTestBase
                 G_Value1 = Value1\
                 G_Value2 = Value2\
             end\
-            return UE.UUnLuaTestFunctionLibrary.TestForIssue294('A', 1, { UE.UUnLuaTestFunctionLibrary, Callback }, UE.TArray(UE.FColor))\
+            return UE.UUnLuauNovaTestFunctionLibrary.TestForIssue294('A', 1, { UE.UUnLuauNovaTestFunctionLibrary, Callback }, UE.TArray(UE.FColor))\
             ";
         UnLuauNova::RunChunk(L, Chunk2);
         const auto Actual2 = (int32)lua_tointeger(L, -1);
@@ -56,12 +56,12 @@ struct FUnLuaTest_Issue294 : FUnLuaTestBase
 
         lua_getglobal(L, "G_Value2");
         const auto G_Value2 = (UClass*)UnLuauNova::GetUObject(L, -1);
-        RUNNER_TEST_EQUAL(G_Value2, UUnLuaTestFunctionLibrary::StaticClass());
+        RUNNER_TEST_EQUAL(G_Value2, UUnLuauNovaTestFunctionLibrary::StaticClass());
 
         return true;
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue294, TEXT("UnLua.Regression.Issue294 AutoCreateRefTerm标记的参数需要生成默认值"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue294, TEXT("UnLuauNova.Regression.Issue294 AutoCreateRefTerm标记的参数需要生成默认值"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

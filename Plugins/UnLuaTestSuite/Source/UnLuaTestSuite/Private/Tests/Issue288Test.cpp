@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,12 +12,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue288 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue288 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -26,10 +26,10 @@ struct FUnLuaTest_Issue288 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto Chunk1 = R"(
-        local UMGClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Regression/Issue288/UnLuaTestUMG_Issue288.UnLuaTestUMG_Issue288_C')
+        local UMGClass = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Regression/Issue288/UnLuauNovaTestUMG_Issue288.UnLuauNovaTestUMG_Issue288_C')
         G_UMG = NewObject(UMGClass)
         )";
         UnLuauNova::RunChunk(L, Chunk1);
@@ -49,13 +49,13 @@ struct FUnLuaTest_Issue288 : FUnLuaTestBase
 
         Texture2D = FindObject<UTexture2D>(nullptr, TEXT("/Game/FPWeapon/Textures/UE4_LOGO_CARD.UE4_LOGO_CARD"));
         if (Texture2D)
-            UnLuaTestSuite::PrintReferenceChain(Texture2D);
+            UnLuauNovaTestSuite::PrintReferenceChain(Texture2D);
         RUNNER_TEST_NULL(Texture2D);
 
         return true;
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue288, TEXT("UnLua.Regression.Issue288 UMG里Image用到的Texture内存泄漏"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue288, TEXT("UnLuauNova.Regression.Issue288 UMG里Image用到的Texture内存泄漏"))
 
 #endif

@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,13 +12,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue323 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue323 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -27,10 +27,10 @@ struct FUnLuaTest_Issue323 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const char* Chunk1 = "\
-            return UE.UUnLuaTestFunctionLibrary.TestForIssue323()\
+            return UE.UUnLuauNovaTestFunctionLibrary.TestForIssue323()\
             ";
         UnLuauNova::RunChunk(L, Chunk1);
         const auto Result = (bool)lua_toboolean(L, -1);
@@ -40,6 +40,6 @@ struct FUnLuaTest_Issue323 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue323, TEXT("UnLua.Regression.Issue323 一些默认参数的写法没有分析出来"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue323, TEXT("UnLuauNova.Regression.Issue323 一些默认参数的写法没有分析出来"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

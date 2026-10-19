@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -15,12 +15,12 @@
 #include "ObjectRegistry.h"
 #include "LowLevel.h"
 #include "LuaEnv.h"
-#include "UnLuaDelegates.h"
+#include "UnLuauNovaDelegates.h"
 
 namespace UnLuauNova
 {
-    static const char* REGISTRY_KEY = "UnLua_ObjectMap";
-    static const char* MANUAL_REF_PROXY_MAP = "UnLua_ManualRefProxyMap";
+    static const char* REGISTRY_KEY = "UnLuauNovaNOVA_ObjectMap";
+    static const char* MANUAL_REF_PROXY_MAP = "UnLuauNovaNOVA_ManualRefProxyMap";
 
     static int ReleaseSharedPtr(lua_State* L)
     {
@@ -62,7 +62,7 @@ namespace UnLuauNova
         lua_pushcfunction(L, ReleaseSharedPtr);
         lua_rawset(L, -3);
 
-        luaL_newmetatable(L, "UnLuaManualRefProxy");
+        luaL_newmetatable(L, "UnLuauNovaManualRefProxy");
         lua_pushstring(L, "__gc");
         lua_pushcfunction(L, ReleaseManualRef);
         lua_rawset(L, -3);
@@ -155,7 +155,7 @@ namespace UnLuauNova
         const auto Ret = luaL_ref(L, LUA_REGISTRYINDEX);
         ObjectRefs.Add(Object, Ret);
 
-        FUnLuaDelegates::OnObjectBinded.Broadcast(Object); // 'INSTANCE' is on the top of stack now
+        FUnLuauNovaDelegates::OnObjectBinded.Broadcast(Object); // 'INSTANCE' is on the top of stack now
 
         lua_rawset(L, -3);
         lua_pop(L, 1);
@@ -204,7 +204,7 @@ namespace UnLuauNova
 
         check(lua_istable(L, -1));
         luaL_unref(L, LUA_REGISTRYINDEX, Ref);
-        FUnLuaDelegates::OnObjectUnbinded.Broadcast(Object); // object instance ('INSTANCE') is on the top of stack now
+        FUnLuauNovaDelegates::OnObjectUnbinded.Broadcast(Object); // object instance ('INSTANCE') is on the top of stack now
 
         lua_pushstring(L, "Object");
         lua_rawget(L, -2);
@@ -225,7 +225,7 @@ namespace UnLuauNova
             auto Ptr = lua_newuserdata(L, sizeof(FManualRefProxy));
             auto Proxy = new(Ptr)FManualRefProxy;
             Proxy->Object = Object;
-            luaL_getmetatable(L, "UnLuaManualRefProxy");
+            luaL_getmetatable(L, "UnLuauNovaManualRefProxy");
             lua_setmetatable(L, -2);
             lua_pushlightuserdata(L, Object);
             lua_pushvalue(L, -2);

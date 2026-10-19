@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -33,7 +33,7 @@ void FLuaProtobufModule::OnLuaEnvCreated(UnLuauNova::FLuaEnv& Env)
 {
     Env.AddBuiltInLoader(TEXT("pb"), luaopen_pb);
     Env.AddBuiltInLoader(TEXT("pb.unsafe"), luaopen_pb_unsafe);
-    Env.DoString("UnLua.PackagePath = UnLua.PackagePath .. ';/Plugins/UnLuaExtensions/LuaProtobuf/Content/Script/?.lua'");
+    Env.DoString("UnLuauNova.PackagePath = UnLuauNova.PackagePath .. ';/Plugins/UnLuauNovaExtensions/LuaProtobuf/Content/Script/?.lua'");
 }
 
 IMPLEMENT_MODULE(FLuaProtobufModule, LuaProtobuf)

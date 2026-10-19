@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,28 +12,28 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaBase.h"
-#include "UnLuaTemplate.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaTemplate.h"
 #include "GameFramework/DefaultPawn.h"
 #include "Misc/AutomationTest.h"
 #include "Engine.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FUnLuaLibWorldSpec, "UnLua.API.World", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FUnLuauNovaLibWorldSpec, "UnLuauNova.API.World", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     lua_State* L;
     UWorld* World;
-END_DEFINE_SPEC(FUnLuaLibWorldSpec)
+END_DEFINE_SPEC(FUnLuauNovaLibWorldSpec)
 
-void FUnLuaLibWorldSpec::Define()
+void FUnLuauNovaLibWorldSpec::Define()
 {
     BeforeEach([this]
     {
         UnLuauNova::Startup();
         L = UnLuauNova::GetState();
 
-        World = UWorld::CreateWorld(EWorldType::Game, false, "UnLuaTest");
+        World = UWorld::CreateWorld(EWorldType::Game, false, "UnLuauNovaTest");
         FWorldContext& WorldContext = GEngine->CreateNewWorldContext(EWorldType::Game);
         WorldContext.SetCurrentWorld(World);
 

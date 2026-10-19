@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -18,7 +18,7 @@
 #include "LuaModuleLocator.generated.h"
 
 UCLASS()
-class UNLUAUNOVA_API ULuaModuleLocator : public UObject
+class UNLUANOVA_API ULuaModuleLocator : public UObject
 {
     GENERATED_BODY()
 public:
@@ -26,7 +26,7 @@ public:
 };
 
 UCLASS()
-class UNLUAUNOVA_API ULuaModuleLocator_ByPackage : public ULuaModuleLocator
+class UNLUANOVA_API ULuaModuleLocator_ByPackage : public ULuaModuleLocator
 {
     GENERATED_BODY()
 public:

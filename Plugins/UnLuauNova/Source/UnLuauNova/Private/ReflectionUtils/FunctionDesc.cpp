@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -18,8 +18,8 @@
 #include "DefaultParamCollection.h"
 #include "LowLevel.h"
 #include "LuaFunction.h"
-#include "UnLua.h"
-#include "UnLuaDebugBase.h"
+#include "UnLuauNova.h"
+#include "UnLuauNovaDebugBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "LuaDeadLoopCheck.h"
@@ -369,7 +369,7 @@ void FFunctionDesc::PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex
             if (Property->CheckPropertyType(L, FirstParamIndex + ParamIndex, ErrorMsg))
                 CleanupFlags[i] = Property->WriteValue_InContainer(L, Params, FirstParamIndex + ParamIndex, false);
             else
-                UNLUA_LOGERROR(L, LogUnLuauNova, Error, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
+                UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Error, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
 #else
             CleanupFlags[i] = Property->WriteValue_InContainer(L, Params, FirstParamIndex + ParamIndex, false);
 #endif
@@ -393,7 +393,7 @@ void FFunctionDesc::PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex
                 FString ErrorMsg = "";
                 if (!Property->CheckPropertyType(L, FirstParamIndex + ParamIndex, ErrorMsg))
                 {
-                    UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
+                    UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
                 }
 #endif
             }
@@ -409,7 +409,7 @@ int32 FFunctionDesc::PostCall(lua_State * L, int32 NumParams, int32 FirstParamIn
 {
     int32 NumReturnValues = 0;
 
-#if UNLUA_LEGACY_RETURN_ORDER
+#if UnLuauNovaNOVA_LEGACY_RETURN_ORDER
     for (int32 Index : OutPropertyIndices)
     {
         const auto& Property = Properties[Index];
@@ -438,7 +438,7 @@ int32 FFunctionDesc::PostCall(lua_State * L, int32 NumParams, int32 FirstParamIn
         ++NumReturnValues;
     }
 
-#if !UNLUA_LEGACY_RETURN_ORDER
+#if !UnLuauNovaNOVA_LEGACY_RETURN_ORDER
     // !!!Fix!!!
     // out parameters always use return format, copyback is better,but some parameters such 
     // as int can not be copy back
@@ -502,7 +502,7 @@ bool FFunctionDesc::CallLuaInternal(lua_State *L, void *InParams, FOutParmRec *O
             if (Property->IsReturnParameter())
                 continue;
 
-            Property->ReadValue_InContainer(L, InParams, !UNLUA_LEGACY_ARGS_PASSING);
+            Property->ReadValue_InContainer(L, InParams, !UnLuauNovaNOVA_LEGACY_ARGS_PASSING);
         }
     }
 
@@ -522,7 +522,7 @@ bool FFunctionDesc::CallLuaInternal(lua_State *L, void *InParams, FOutParmRec *O
     // suppose out param is also pushed on stack? this is assumed done by user... so we can not trust it
     int32 NumResultOnStack = lua_gettop(L) - ErrorHandlerIndex;
     int32 OutPropertyIndex = ErrorHandlerIndex + 1;
-#if !UNLUA_LEGACY_RETURN_ORDER
+#if !UnLuauNovaNOVA_LEGACY_RETURN_ORDER
     if (ReturnPropertyIndex > INDEX_NONE)
         OutPropertyIndex++;
 #endif
@@ -565,12 +565,12 @@ bool FFunctionDesc::CallLuaInternal(lua_State *L, void *InParams, FOutParmRec *O
         {
             ReturnProperty->GetProperty()->InitializeValue(RetValueAddress);
 #if ENABLE_TYPE_CHECK == 1
-            UNLUA_LOGERROR(L, LogUnLuauNova, Error, TEXT("FuncName %s has return value, but no value found on stack!"),*FuncName);
+            UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Error, TEXT("FuncName %s has return value, but no value found on stack!"),*FuncName);
 #endif
         }
         else
         {
-#if UNLUA_LEGACY_RETURN_ORDER
+#if UnLuauNovaNOVA_LEGACY_RETURN_ORDER
             constexpr auto IndexInStack = -1;
 #else
             const auto IndexInStack = -NumResultOnStack;

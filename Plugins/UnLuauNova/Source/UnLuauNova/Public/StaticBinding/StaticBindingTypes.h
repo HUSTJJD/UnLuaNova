@@ -1,6 +1,6 @@
 // Static binding descriptors.
 //
-// The point of these structs is to move work that UnLua currently does on *every*
+// The point of these structs is to move work that UnLuauNova currently does on *every*
 // cross-boundary access (reflection lookups, virtual dispatch, flag tests) into a
 // pre-resolved, POD, generator-friendly table.
 //
@@ -122,10 +122,10 @@ struct FStaticFuncBinding
 	UFunction* Function = nullptr;
 };
 
-/** A pre-resolved UCLASS / UScriptStruct. `TypeName` matches UnLua's metatable name. */
+/** A pre-resolved UCLASS / UScriptStruct. `TypeName` matches UnLuauNova's metatable name. */
 struct FStaticTypeBinding
 {
-	/** Metatable name as UnLua sees it, e.g. TEXT("Actor"), TEXT("Vector"), TEXT("MyEnum"). */
+	/** Metatable name as UnLuauNova sees it, e.g. TEXT("Actor"), TEXT("Vector"), TEXT("MyEnum"). */
 	const TCHAR* TypeName = nullptr;
 
 	const FStaticPropBinding* Props = nullptr;
@@ -142,11 +142,11 @@ struct FStaticTypeBinding
 };
 
 /** Build-time helper: turn a UPROPERTY/UFUNCTION name into a descriptor array entry. */
-#define UNLUA_STATIC_PROP(NameLiteral, KindValue) \
+#define UnLuauNovaNOVA_STATIC_PROP(NameLiteral, KindValue) \
 	{ TEXT(#NameLiteral), 0, EStaticPropKind::KindValue, nullptr }
 
-#define UNLUA_STATIC_PARAM(NameLiteral, KindValue) \
+#define UnLuauNovaNOVA_STATIC_PARAM(NameLiteral, KindValue) \
 	{ TEXT(#NameLiteral), 0, EStaticPropKind::KindValue, nullptr }
 
-#define UNLUA_STATIC_FUNC_BEGIN(NameLiteral) \
+#define UnLuauNovaNOVA_STATIC_FUNC_BEGIN(NameLiteral) \
 	{ TEXT(#NameLiteral), 0, MAX_uint16, 0, FStaticFuncFlags(), nullptr, nullptr }

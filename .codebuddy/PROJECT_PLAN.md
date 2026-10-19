@@ -533,11 +533,11 @@ git checkout -b pr/771-ue5.7
 
 ---
 
-## 7. Ann 项目里那份 UnLua 的评估（已实测比对）
+## 7. 另一个本地项目里那份 UnLua 的评估（已实测比对）
 
 ### 7.1 结论：**不要拿它当 base，但要挑 3 个真改动移植过来**
 
-| 项 | `d:/learning/UnLua`（fork） | `Ann/Plugins/ThirdParty/UnLua` |
+| 项 | 本仓库（fork） | 该项目内的 `Plugins/ThirdParty/UnLua` |
 |---|---|---|
 | 版本 | v2.3.6 @ `3f112e8` | v2.3.6，**就是 fork 的父提交** |
 | 与上游的关系 | 标准 fork，有 `upstream` remote，可 cherry-pick / merge develop | 塞在游戏仓库的非标准路径，**无法同步上游** |
@@ -566,7 +566,7 @@ git checkout -b pr/771-ue5.7
 rapidjson = require("rapidjson")
 pb = require("pb")
 ```
-这是 Ann 项目用了 `LuaRapidjson` / `LuaProtobuf` 扩展插件的产物。作为开源项目分发，没有这两个插件的用户会在启动时直接报错。
+这是该项目用了 `LuaRapidjson` / `LuaProtobuf` 扩展插件的产物。作为开源项目分发，没有这两个插件的用户会在启动时直接报错。
 
 **建议做法**：单独开 `feature/lua-driven-class` 分支：
 1. 移植 `Class.lua`（`Index`/`NewIndex`/`Class` 实现，可直接用，质量不错）
@@ -576,7 +576,7 @@ pb = require("pb")
 
 ### 7.4 clang-format 需要单独决策
 
-你显然在 Ann 里对整个 UnLua 跑过 clang-format（Tab 风格）。这在自己的项目里没问题，但在要持续同步上游的 fork 里是灾难——**每一个被格式化过的文件，以后每次 merge 上游都会全量冲突**。
+该副本里显然对整个 UnLua 跑过 clang-format（Tab 风格）。这在自己的项目里没问题，但在要持续同步上游的 fork 里是灾难——**每一个被格式化过的文件，以后每次 merge 上游都会全量冲突**。
 
 建议三选一：
 - **A（推荐）**：新仓库**不做整体格式化**；`.clang-format` 只约束你新增的文件（`Source/UnLua/Private/TypeExport*/` 等）
@@ -592,7 +592,7 @@ git checkout -b port/ann-fixes
 # 1) UnLuaBase.cpp 格式串缺参（UB）
 # 2) LuaEnv.cpp  EInternalObjectFlags_AsyncLoading（需包 UE_VERSION 条件）
 # 3) LuaLib_Object.cpp  FSoftObjectPtr& 返回类型（与 PR #748 合并处理）
-# 手工改这 3 处，不要整文件拷贝（Ann 版本带 Tab 重排 + 旧版权头）
+# 手工改这 3 处，不要整文件拷贝（该副本带 Tab 重排 + 旧版权头）
 ```
 
 ---
@@ -601,7 +601,7 @@ git checkout -b port/ann-fixes
 
 ### 8.1 引擎基线：UE 5.8.3
 
-引擎确认在 `D:\learning\AnnBuildTools\AnnUnrealEngine`（**源码版 5.8.3，已编译**）。已改：
+引擎确认在 `<本地引擎源码目录>`（**源码版 5.8.3，已编译**）。已改：
 
 - `TPSProject.uproject` → `EngineAssociation = {12D1A55F-4B0B-6F15-0801-49AF79F4FD77}`
 - 三个 `*.Target.cs` → `BuildSettingsVersion.V6` + `IncludeOrderVersion = EngineIncludeOrderVersion.Latest`
@@ -609,7 +609,7 @@ git checkout -b port/ann-fixes
   已核实 5.8 中 `UClass::Children` 与 **`UField::Next` 都是 `TObjectPtr<UField>`**，因此 5.7+ 原地遍历
   （`#else` 分支）重新成立。
 
-### 8.2 Ann 的 3 个修复（已核实并合入）
+### 8.2 那 3 个修复（已核实并合入）
 
 | 文件 | 修复 | 5.8 核实结论 |
 |---|---|---|
@@ -645,7 +645,7 @@ git checkout -b port/ann-fixes
 ### 8.5 生成器用法
 
 ```powershell
-& "D:\learning\AnnBuildTools\AnnUnrealEngine\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" `
+& "<本地引擎源码目录>\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" `
    "d:\learning\UnLua\TPSProject.uproject" `
    -run=UnLuaStaticBindingGenerator -Types=Actor,Pawn,Character
 ```
@@ -684,7 +684,7 @@ git checkout -b port/ann-fixes
 
 `#700` UE5.4 支持 · `#707` HotReload upvalue · `#758` UE5.6 编译 · `#761` UObject delete 崩溃 · `#765` UObject 在 lua 侧 GC 崩溃
 
-**重要发现**：我上一轮手工做的 3 个 Ann 修复，develop 里**已经有了上游同款改动**。为避免重复，先回退我的版本再合并，由 develop 提供。
+**重要发现**：我上一轮手工做的那 3 个修复，develop 里**已经有了上游同款改动**。为避免重复，先回退我的版本再合并，由 develop 提供。
 唯一仍需我手动补的是 `LuaOverridesClass` 的 5.7+ 守卫——develop 仍是旧 `NEWER_THAN(5,2,1)`，在 5.8 上是编译错误。
 
 ### 9.3 已吸纳的 open PR

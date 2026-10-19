@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,12 +12,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue376 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue376 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -26,11 +26,11 @@ struct FUnLuaTest_Issue376 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto Chunk = R"(
-        local Struct = UE.FUnLuaTestTableRow()
-        UE.UUnLuaTestFunctionLibrary.TestForIssue376(Struct)
+        local Struct = UE.FUnLuauNovaTestTableRow()
+        UE.UUnLuauNovaTestFunctionLibrary.TestForIssue376(Struct)
         return Struct.Level
         )";
         UnLuauNova::RunChunk(L, Chunk);
@@ -40,6 +40,6 @@ struct FUnLuaTest_Issue376 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue376, TEXT("UnLua.Regression.Issue376 引用参数传递失败"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue376, TEXT("UnLuauNova.Regression.Issue376 引用参数传递失败"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

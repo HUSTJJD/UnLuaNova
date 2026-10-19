@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -121,7 +121,7 @@ private:
      *
      * Skips the work that a pre-resolved FStaticFuncBinding makes unnecessary:
      *   - GetFunctionCallspace(): UObject::ProcessEvent already queries it for
-     *     FUNC_Native functions, and never needs it otherwise. UnLua calls it for
+     *     FUNC_Native functions, and never needs it otherwise. UnLuauNova calls it for
      *     every call, including pure Blueprint functions.
      *   - ULuaFunction::Get(): the override redirect can only hit overridable functions.
      *   - FindFunctionByName(): only needed for interface functions.

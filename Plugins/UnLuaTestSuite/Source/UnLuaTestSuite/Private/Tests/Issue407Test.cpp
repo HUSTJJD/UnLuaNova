@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,13 +12,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Components/CapsuleComponent.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue407 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue407 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -27,10 +27,10 @@ struct FUnLuaTest_Issue407 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto Chunk = R"(
-            local Stub = NewObject(UE.UUnLuaTestStub)
+            local Stub = NewObject(UE.UUnLuauNovaTestStub)
             local Values = Stub.MapForIssue407:Values()
             Result = Stub:TestForIssue407(Values)
         )";
@@ -43,6 +43,6 @@ struct FUnLuaTest_Issue407 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue407, TEXT("UnLua.Regression.Issue407 无法在lua中将一个TMap调用Keys的结果传给C++"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue407, TEXT("UnLuauNova.Regression.Issue407 无法在lua中将一个TMap调用Keys的结果传给C++"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

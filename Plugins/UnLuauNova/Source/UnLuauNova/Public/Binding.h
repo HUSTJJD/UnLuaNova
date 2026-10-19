@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -14,31 +14,31 @@
 
 #pragma once
 
-#include "UnLuaBase.h"
+#include "UnLuauNovaBase.h"
 
 namespace UnLuauNova
 {
-    UNLUAUNOVA_API void ExportClass(IExportedClass* Class);
+    UNLUANOVA_API void ExportClass(IExportedClass* Class);
 
-    UNLUAUNOVA_API void ExportEnum(IExportedEnum* Enum);
+    UNLUANOVA_API void ExportEnum(IExportedEnum* Enum);
 
-    UNLUAUNOVA_API void ExportFunction(IExportedFunction* Function);
+    UNLUANOVA_API void ExportFunction(IExportedFunction* Function);
 
-    UNLUAUNOVA_API void AddType(FString Name, TSharedPtr<ITypeInterface> TypeInterface);
+    UNLUANOVA_API void AddType(FString Name, TSharedPtr<ITypeInterface> TypeInterface);
 
-    UNLUAUNOVA_API TMap<FString, IExportedClass*> GetExportedReflectedClasses();
+    UNLUANOVA_API TMap<FString, IExportedClass*> GetExportedReflectedClasses();
 
-    UNLUAUNOVA_API TMap<FString, IExportedClass*> GetExportedNonReflectedClasses();
+    UNLUANOVA_API TMap<FString, IExportedClass*> GetExportedNonReflectedClasses();
 
-    UNLUAUNOVA_API TArray<IExportedEnum*> GetExportedEnums();
+    UNLUANOVA_API TArray<IExportedEnum*> GetExportedEnums();
 
-    UNLUAUNOVA_API TArray<IExportedFunction*> GetExportedFunctions();
+    UNLUANOVA_API TArray<IExportedFunction*> GetExportedFunctions();
 
-    UNLUAUNOVA_API IExportedClass* FindExportedClass(FString Name);
+    UNLUANOVA_API IExportedClass* FindExportedClass(FString Name);
 
-    UNLUAUNOVA_API IExportedClass* FindExportedReflectedClass(FString Name);
+    UNLUANOVA_API IExportedClass* FindExportedReflectedClass(FString Name);
 
-    UNLUAUNOVA_API IExportedClass* FindExportedNonReflectedClass(FString Name);
+    UNLUANOVA_API IExportedClass* FindExportedNonReflectedClass(FString Name);
 
-    UNLUAUNOVA_API TSharedPtr<ITypeInterface> FindTypeInterface(FString Name);
+    UNLUANOVA_API TSharedPtr<ITypeInterface> FindTypeInterface(FString Name);
 }

@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,8 +12,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaCompatibility.h"
-#include "UnLuaEx.h"
+#include "UnLuauNovaCompatibility.h"
+#include "UnLuauNovaEx.h"
 #include "LuaLib_Math.h"
 
 static int32 FQuat_New(lua_State* L)
@@ -29,10 +29,10 @@ static int32 FQuat_New(lua_State* L)
         }
     case 5:
         {
-            const unluaReal& X = lua_tonumber(L, 2);
-            const unluaReal& Y = lua_tonumber(L, 3);
-            const unluaReal& Z = lua_tonumber(L, 4);
-            const unluaReal& W = lua_tonumber(L, 5);
+            const UnLuauNovaReal& X = lua_tonumber(L, 2);
+            const UnLuauNovaReal& Y = lua_tonumber(L, 3);
+            const UnLuauNovaReal& Z = lua_tonumber(L, 4);
+            const UnLuauNovaReal& W = lua_tonumber(L, 5);
             new(Userdata) FQuat(X, Y, Z, W);
             break;
         }
@@ -114,7 +114,7 @@ static int32 FQuat_Set(lua_State* L)
     if (!V)
         return luaL_error(L, "invalid FQuat");
 
-    UnLuauNova::TFieldSetter4<unluaReal>::Set(L, NumParams, &V->X);
+    UnLuauNova::TFieldSetter4<UnLuauNovaReal>::Set(L, NumParams, &V->X);
     return 0;
 }
 
@@ -123,8 +123,8 @@ static const luaL_Reg FQuatLib[] =
     {"Normalize", FQuat_Normalize},
     {"FromAxisAndAngle", FQuat_FromAxisAndAngle},
     {"Set", FQuat_Set},
-    {"Mul", UnLuauNova::TMathCalculation<FQuat, UnLuauNova::TMul<FQuat>, true, UnLuauNova::TMul<FQuat, unluaReal>>::Calculate},
-    {"__mul", UnLuauNova::TMathCalculation<FQuat, UnLuauNova::TMul<FQuat>, false, UnLuauNova::TMul<FQuat, unluaReal>>::Calculate},
+    {"Mul", UnLuauNova::TMathCalculation<FQuat, UnLuauNova::TMul<FQuat>, true, UnLuauNova::TMul<FQuat, UnLuauNovaReal>>::Calculate},
+    {"__mul", UnLuauNova::TMathCalculation<FQuat, UnLuauNova::TMul<FQuat>, false, UnLuauNova::TMul<FQuat, UnLuauNovaReal>>::Calculate},
     {"__tostring", UnLuauNova::TMathUtils<FQuat>::ToString},
     {"__call", FQuat_New},
     {nullptr, nullptr}
@@ -136,7 +136,7 @@ BEGIN_EXPORT_REFLECTED_CLASS(FQuat)
     ADD_FUNCTION(Size)
     ADD_FUNCTION(SizeSquared)
 #if ENGINE_MAJOR_VERSION >=5
-    ADD_CONST_FUNCTION_EX("ToAxisAndAngle", void, TQuat::ToAxisAndAngle, UE::Math::TVector<unluaReal>&, unluaReal&)
+    ADD_CONST_FUNCTION_EX("ToAxisAndAngle", void, TQuat::ToAxisAndAngle, UE::Math::TVector<UnLuauNovaReal>&, UnLuauNovaReal&)
 #else
     ADD_FUNCTION(ToAxisAndAngle)
 #endif
@@ -154,10 +154,10 @@ BEGIN_EXPORT_REFLECTED_CLASS(FQuat)
     ADD_NAMED_FUNCTION("ToRotator", Rotator)
     ADD_CONST_FUNCTION_EX("__add", FQuat, operator+, const FQuat&)
     ADD_CONST_FUNCTION_EX("__sub", FQuat, operator-, const FQuat&)
-    ADD_CONST_FUNCTION_EX("__div", FQuat, operator/, const unluaReal)
+    ADD_CONST_FUNCTION_EX("__div", FQuat, operator/, const UnLuauNovaReal)
     ADD_FUNCTION_EX("Add", FQuat, operator+=, const FQuat&)
     ADD_FUNCTION_EX("Sub", FQuat, operator-=, const FQuat&)
-    ADD_FUNCTION_EX("Div", FQuat, operator/=, const unluaReal)
+    ADD_FUNCTION_EX("Div", FQuat, operator/=, const UnLuauNovaReal)
     ADD_LIB(FQuatLib)
 END_EXPORT_CLASS()
 

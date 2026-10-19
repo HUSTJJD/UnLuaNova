@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -15,8 +15,8 @@
 #pragma once
 
 #include "lua.hpp"
-#include "UnLuaPrivate.h"
-#include "UnLuaCompatibility.h"
+#include "UnLuauNovaPrivate.h"
+#include "UnLuauNovaCompatibility.h"
 
 struct FScriptContainerDesc
 {
@@ -51,14 +51,14 @@ void* NewUserdataWithTwoLvPtrTag(lua_State* L, int Size, void* Object);
 void* NewUserdataWithContainerTag(lua_State* L, int Size);
 void MarkUserdataTwoLvPtrTag(void* Userdata);
 void SetUserdataFlags(void* Userdata, uint8 Flags);
-UNLUAUNOVA_API uint8 CalcUserdataPadding(int32 Alignment);
+UNLUANOVA_API uint8 CalcUserdataPadding(int32 Alignment);
 template <typename T> uint8 CalcUserdataPadding() { return CalcUserdataPadding(alignof(T)); }
-UNLUAUNOVA_API void* GetUserdata(lua_State *L, int32 Index, bool *OutTwoLvlPtr = nullptr, bool *OutClassMetatable = nullptr);
-UNLUAUNOVA_API void* GetUserdataFast(lua_State *L, int32 Index, bool *OutTwoLvlPtr = nullptr);
-UNLUAUNOVA_API void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName, uint8 PaddingSize = 0);
+UNLUANOVA_API void* GetUserdata(lua_State *L, int32 Index, bool *OutTwoLvlPtr = nullptr, bool *OutClassMetatable = nullptr);
+UNLUANOVA_API void* GetUserdataFast(lua_State *L, int32 Index, bool *OutTwoLvlPtr = nullptr);
+UNLUANOVA_API void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName, uint8 PaddingSize = 0);
 #define NewTypedUserdata(L, Type) NewUserdataWithPadding(L, sizeof(Type), #Type, CalcUserdataPadding<Type>())
-UNLUAUNOVA_API void* GetCppInstance(lua_State *L, int32 Index);
-UNLUAUNOVA_API void* GetCppInstanceFast(lua_State *L, int32 Index);
+UNLUANOVA_API void* GetCppInstance(lua_State *L, int32 Index);
+UNLUANOVA_API void* GetCppInstanceFast(lua_State *L, int32 Index);
 
 /**
  * Functions to handle script containers
@@ -101,12 +101,12 @@ bool CallFunction(lua_State *L, int32 NumArgs, int32 NumResults);
 /**
  * Get corresponding Lua instance for a UObjectBaseUtility
  */
-UNLUAUNOVA_API bool GetObjectMapping(lua_State *L, UObjectBaseUtility *Object);
+UNLUANOVA_API bool GetObjectMapping(lua_State *L, UObjectBaseUtility *Object);
 
 /**
  * Add Lua package path
  */
-UNLUAUNOVA_API void AddPackagePath(lua_State *L, const char *Path);
+UNLUANOVA_API void AddPackagePath(lua_State *L, const char *Path);
 
 /**
  * Functions to create weak table

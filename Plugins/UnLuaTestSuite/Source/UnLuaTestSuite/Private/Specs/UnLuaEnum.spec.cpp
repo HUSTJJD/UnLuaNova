@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,18 +12,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaBase.h"
-#include "UnLuaTemplate.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaTemplate.h"
 #include "Misc/AutomationTest.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FUnLuaEnumSpec, "UnLua.API.Enum", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FUnLuauNovaEnumSpec, "UnLuauNova.API.Enum", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     lua_State* L;
-END_DEFINE_SPEC(FUnLuaEnumSpec)
+END_DEFINE_SPEC(FUnLuauNovaEnumSpec)
 
-void FUnLuaEnumSpec::Define()
+void FUnLuauNovaEnumSpec::Define()
 {
     BeforeEach([this]
     {
@@ -60,7 +60,7 @@ void FUnLuaEnumSpec::Define()
             return UE.ECollisionResponse:GetDisplayNameTextByValue(UE.ECollisionResponse.ECR_Overlap)
             )";
             UnLuauNova::RunChunk(L, Chunk);
-#if UNLUA_ENABLE_FTEXT
+#if UnLuauNovaNOVA_ENABLE_FTEXT
             const auto Actual = *(FText*)GetCppInstanceFast(L, -1);
             const auto Expected = UEnum::GetDisplayValueAsText(ECR_Overlap);
             TEST_TRUE(Expected.EqualTo(Actual))

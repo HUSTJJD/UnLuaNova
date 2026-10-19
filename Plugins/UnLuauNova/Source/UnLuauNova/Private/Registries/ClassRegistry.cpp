@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Registries/ClassRegistry.h"
-#include "UnLuaCompatibility.h"
+#include "UnLuauNovaCompatibility.h"
 #include "LuaEnv.h"
 #include "Binding.h"
 #include "LowLevel.h"

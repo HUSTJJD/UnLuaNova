@@ -2,8 +2,8 @@
     "FileVersion": 3,
     "Version": 1,
     "VersionName": "1.0.0",
-    "FriendlyName": "UnLuaTestSuite",
-    "Description": "Test suite for UnLua",
+    "FriendlyName": "UnLuauNovaTestSuite",
+    "Description": "Test suite for UnLuauNova",
     "Category": "Testing",
     "CreatedBy": "Tencent",
     "CreatedByURL": "https://www.tencent.com/",
@@ -23,7 +23,7 @@
     ],
     "Modules": [
         {
-            "Name": "UnLuaTestSuite",
+            "Name": "UnLuauNovaTestSuite",
             "Type": "Runtime",
             "LoadingPhase": "Default"
         }

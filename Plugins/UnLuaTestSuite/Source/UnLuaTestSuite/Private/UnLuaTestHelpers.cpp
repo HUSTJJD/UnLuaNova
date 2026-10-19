@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,19 +12,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestHelpers.h"
-#include "UnLua.h"
-#include "UnLuaEx.h"
+#include "UnLuauNovaTestHelpers.h"
+#include "UnLuauNova.h"
+#include "UnLuauNovaEx.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_EXPORT_CLASS(FUnLuaTestLib)
+BEGIN_EXPORT_CLASS(FUnLuauNovaTestLib)
     ADD_SHARED_PTR_CONSTRUCTOR(ESPMode::NotThreadSafe)
     ADD_STATIC_FUNCTION(TestForBaseSpec1)
     ADD_STATIC_FUNCTION(TestForBaseSpec2)
 END_EXPORT_CLASS()
 
-IMPLEMENT_EXPORTED_CLASS(FUnLuaTestLib)
+IMPLEMENT_EXPORTED_CLASS(FUnLuauNovaTestLib)
 
 BEGIN_EXPORT_ENUM_EX(EScopedEnum::Type, EScopedEnum)
     ADD_SCOPED_ENUM_VALUE(Value1)
@@ -36,15 +36,15 @@ BEGIN_EXPORT_ENUM(EEnumClass)
     ADD_SCOPED_ENUM_VALUE(Value2)
 END_EXPORT_ENUM(EEnumClass)
 
-BEGIN_EXPORT_REFLECTED_CLASS(UUnLuaTestStub)
+BEGIN_EXPORT_REFLECTED_CLASS(UUnLuauNovaTestStub)
     ADD_PROPERTY(ScopedEnum)
     ADD_PROPERTY(EnumClass)
 END_EXPORT_CLASS()
 
-IMPLEMENT_EXPORTED_CLASS(UUnLuaTestStub)
+IMPLEMENT_EXPORTED_CLASS(UUnLuauNovaTestStub)
 
 #endif
-int32 UUnLuaTestStub::TestForIssue407(TArray<int32> Array)
+int32 UUnLuauNovaTestStub::TestForIssue407(TArray<int32> Array)
 {
     return Array.Num();
 }

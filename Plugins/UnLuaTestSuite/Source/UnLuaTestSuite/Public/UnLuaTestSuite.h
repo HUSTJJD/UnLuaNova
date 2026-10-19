@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -18,16 +18,16 @@
 #include "Modules/ModuleInterface.h"
 #include "Modules/ModuleManager.h"
 
-class IUnLuaTestSuite : public IModuleInterface
+class IUnLuauNovaTestSuite : public IModuleInterface
 {
 public:
-    static inline IUnLuaTestSuite& Get()
+    static inline IUnLuauNovaTestSuite& Get()
     {
-        return FModuleManager::LoadModuleChecked<IUnLuaTestSuite>("UnLuaTestSuite");
+        return FModuleManager::LoadModuleChecked<IUnLuauNovaTestSuite>("UnLuauNovaTestSuite");
     }
 
     static inline bool IsAvailable()
     {
-        return FModuleManager::Get().IsModuleLoaded("UnLuaTestSuite");
+        return FModuleManager::Get().IsModuleLoaded("UnLuauNovaTestSuite");
     }
 };

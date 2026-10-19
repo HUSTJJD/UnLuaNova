@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,16 +13,16 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "TestCommands.h"
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_TESTSUITE(FIssue443Test, TEXT("UnLua.Regression.Issue443 在某些代码块内无法调用蓝图函数"))
+BEGIN_TESTSUITE(FIssue443Test, TEXT("UnLuauNova.Regression.Issue443 在某些代码块内无法调用蓝图函数"))
 
     bool FIssue443Test::RunTest(const FString& Parameters)
     {
-        const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/Issue443/Issue443");
+        const auto MapName = TEXT("/UnLuauNovaTestSuite/Tests/Regression/Issue443/Issue443");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f));
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {

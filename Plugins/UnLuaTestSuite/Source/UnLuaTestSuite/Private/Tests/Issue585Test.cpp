@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,15 +12,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaCompatibility.h"
-#include "UnLuaSettings.h"
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaCompatibility.h"
+#include "UnLuauNovaSettings.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue585 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue585 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -29,11 +29,11 @@ struct FUnLuaTest_Issue585 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         // 正常加载Enum
         const auto Chunk1 = R"(
-            G_Enum = UE.UObject.Load("/UnLuaTestSuite/Tests/Misc/Enum_UserDefined.Enum_UserDefined")
+            G_Enum = UE.UObject.Load("/UnLuauNovaTestSuite/Tests/Misc/Enum_UserDefined.Enum_UserDefined")
             print("G_Enum.A=", G_Enum.A)
         )";
         UnLuauNova::RunChunk(L, Chunk1);
@@ -54,8 +54,8 @@ struct FUnLuaTest_Issue585 : FUnLuaTestBase
 
         // 支持UnLua.Ref来持有
         const auto Chunk3 = R"(
-            G_Enum = UE.UObject.Load("/UnLuaTestSuite/Tests/Misc/Enum_UserDefined.Enum_UserDefined")
-            UnLua.Ref(G_Enum)
+            G_Enum = UE.UObject.Load("/UnLuauNovaTestSuite/Tests/Misc/Enum_UserDefined.Enum_UserDefined")
+            UnLuauNova.Ref(G_Enum)
         )";
         UnLuauNova::RunChunk(L, Chunk3);
         
@@ -63,6 +63,6 @@ struct FUnLuaTest_Issue585 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue585, TEXT("UnLua.Regression.Issue585 蓝图枚举无法被UnLuaRef"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue585, TEXT("UnLuauNova.Regression.Issue585 蓝图枚举无法被UnLuaRef"))
 
 #endif

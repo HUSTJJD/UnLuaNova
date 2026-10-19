@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,18 +12,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaBase.h"
-#include "UnLuaTemplate.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaTemplate.h"
 #include "Misc/AutomationTest.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FUnLuaLibSetSpec, "UnLua.API.TSet", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FUnLuauNovaLibSetSpec, "UnLuauNova.API.TSet", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     lua_State* L;
-END_DEFINE_SPEC(FUnLuaLibSetSpec)
+END_DEFINE_SPEC(FUnLuauNovaLibSetSpec)
 
-void FUnLuaLibSetSpec::Define()
+void FUnLuauNovaLibSetSpec::Define()
 {
     BeforeEach([this]
     {
@@ -81,7 +81,7 @@ void FUnLuaLibSetSpec::Define()
         It(TEXT("构造TSet<UScriptStruct>"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             const char* Chunk = R"(
-            local Struct_TableRow = UE.UObject.Load("/UnLuaTestSuite/Tests/Misc/Struct_TableRow.Struct_TableRow")
+            local Struct_TableRow = UE.UObject.Load("/UnLuauNovaTestSuite/Tests/Misc/Struct_TableRow.Struct_TableRow")
             local Set = UE.TSet(Struct_TableRow)
 
             local Item1 = Struct_TableRow()

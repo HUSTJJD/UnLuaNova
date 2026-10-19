@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,21 +13,21 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "TestCommands.h"
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_TESTSUITE(FIssue446Test, TEXT("UnLua.Regression.Issue446 实现了FTickableGameObject的对象在Tick里调用自身被Lua覆写的方法会崩溃"))
+BEGIN_TESTSUITE(FIssue446Test, TEXT("UnLuauNova.Regression.Issue446 实现了FTickableGameObject的对象在Tick里调用自身被Lua覆写的方法会崩溃"))
 
     bool FIssue446Test::RunTest(const FString& Parameters)
     {
-        static UUnLuaTestStubForIssue446* Stub;
-        const auto MapName = TEXT("/UnLuaTestSuite/Tests/Misc/Empty");
+        static UUnLuauNovaTestStubForIssue446* Stub;
+        const auto MapName = TEXT("/UnLuauNovaTestSuite/Tests/Misc/Empty");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
-            Stub = NewObject<UUnLuaTestStubForIssue446>();
+            Stub = NewObject<UUnLuauNovaTestStubForIssue446>();
             Stub->AddToRoot();
             return true;
             }));

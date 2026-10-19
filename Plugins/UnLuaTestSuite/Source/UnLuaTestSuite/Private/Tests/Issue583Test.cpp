@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -15,14 +15,14 @@
 
 #include "Issue583Test.h"
 #include "LowLevel.h"
-#include "UnLuaSettings.h"
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaSettings.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue583 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue583 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -31,10 +31,10 @@ struct FUnLuaTest_Issue583 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto Chunk = R"(
-            local DataTable = UE.UObject.Load('/UnLuaTestSuite/Tests/Regression/Issue583/DataTable_Issue583.DataTable_Issue583')
+            local DataTable = UE.UObject.Load('/UnLuauNovaTestSuite/Tests/Regression/Issue583/DataTable_Issue583.DataTable_Issue583')
             local Row = UE.FIssue583Row()
             local Result = UE.UDataTableFunctionLibrary.GetDataTableRowFromName(DataTable, 'Row_1', Row)
             local Records = Row.Records:Values()
@@ -48,6 +48,6 @@ struct FUnLuaTest_Issue583 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue583, TEXT("UnLua.Regression.Issue583 在Lua中遍历TMap字段的Values接口返回值时引起的崩溃"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue583, TEXT("UnLuauNova.Regression.Issue583 在Lua中遍历TMap字段的Values接口返回值时引起的崩溃"))
 
 #endif

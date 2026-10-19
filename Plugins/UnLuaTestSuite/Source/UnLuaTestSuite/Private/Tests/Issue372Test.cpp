@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,16 +13,16 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "TestCommands.h"
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_TESTSUITE(FIssue372Test, TEXT("UnLua.Regression.Issue372 Actor调用K2_DestroyActor销毁时，lua部分会在注册表残留"));
+BEGIN_TESTSUITE(FIssue372Test, TEXT("UnLuauNova.Regression.Issue372 Actor调用K2_DestroyActor销毁时，lua部分会在注册表残留"));
 
     bool FIssue372Test::RunTest(const FString& Parameters)
     {
-        const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/Issue372/Issue372");
+        const auto MapName = TEXT("/UnLuauNovaTestSuite/Tests/Regression/Issue372/Issue372");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
             const auto L = UnLuauNova::GetState();
@@ -32,7 +32,7 @@ BEGIN_TESTSUITE(FIssue372Test, TEXT("UnLua.Regression.Issue372 Actor调用K2_Des
             UnLuauNova::PushUObject(L, GWorld);
 
             const auto Chunk = R"(
-            local ActorClass = UE.UClass.Load("/UnLuaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBinding.BP_UnLuaTestActor_StaticBinding_C")
+            local ActorClass = UE.UClass.Load("/UnLuauNovaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBinding.BP_UnLuaTestActor_StaticBinding_C")
             Actor = World:SpawnActor(ActorClass)
 
             local registry = debug.getregistry()

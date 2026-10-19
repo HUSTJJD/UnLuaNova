@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Engine.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -24,7 +24,7 @@ static void Run(TFunction<void(lua_State*, UWorld*)> Test)
     UnLuauNova::Startup();
     const auto L = UnLuauNova::GetState();
 
-    const auto World = UWorld::CreateWorld(EWorldType::Game, false, "UnLuaTest");
+    const auto World = UWorld::CreateWorld(EWorldType::Game, false, "UnLuauNovaTest");
     FWorldContext& WorldContext = GEngine->CreateNewWorldContext(EWorldType::Game);
     WorldContext.SetCurrentWorld(World);
 
@@ -46,15 +46,15 @@ static void Run(TFunction<void(lua_State*, UWorld*)> Test)
     UnLuauNova::Shutdown();
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuaTest_StaticBinding, TEXT("UnLua.API.Binding.Static 静态绑定，继承UnLuaInterface::GetModuleName指定脚本路径"),
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuauNovaTest_StaticBinding, TEXT("UnLuauNova.API.Binding.Static 静态绑定，继承UnLuaInterface::GetModuleName指定脚本路径"),
                                  EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter);
 
-bool FUnLuaTest_StaticBinding::RunTest(const FString& Parameters)
+bool FUnLuauNovaTest_StaticBinding::RunTest(const FString& Parameters)
 {
     Run([this](lua_State* L, UWorld* World)
     {
         const char* Chunk1 = R"(
-                    local ActorClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBinding.BP_UnLuaTestActor_StaticBinding_C')
+                    local ActorClass = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBinding.BP_UnLuaTestActor_StaticBinding_C')
                     G_Actor = World:SpawnActor(ActorClass)
                 )";
         UnLuauNova::RunChunk(L, Chunk1);
@@ -74,14 +74,14 @@ bool FUnLuaTest_StaticBinding::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuaTest_DynamicBinding, TEXT("UnLua.API.Binding.Dynamic 动态绑定，SpawnActor时指定脚本路径"), EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter);
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuauNovaTest_DynamicBinding, TEXT("UnLuauNova.API.Binding.Dynamic 动态绑定，SpawnActor时指定脚本路径"), EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter);
 
-bool FUnLuaTest_DynamicBinding::RunTest(const FString& Parameters)
+bool FUnLuauNovaTest_DynamicBinding::RunTest(const FString& Parameters)
 {
     Run([this](lua_State* L, UWorld* World)
     {
         const char* Chunk1 = R"(
-                    local ActorClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Binding/BP_UnLuaTestActor_DynamicBinding.BP_UnLuaTestActor_DynamicBinding_C')
+                    local ActorClass = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Binding/BP_UnLuaTestActor_DynamicBinding.BP_UnLuaTestActor_DynamicBinding_C')
                     local Transform = UE.FTransform()
                     G_Actor = World:SpawnActor(ActorClass, Transform, UE.ESpawnActorCollisionHandlingMethod.AlwaysSpawn, nil, nil, 'Tests.Binding.BP_UnLuaTestActor')
                 )";
@@ -101,16 +101,16 @@ bool FUnLuaTest_DynamicBinding::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuaTest_ConflictedBinding, TEXT("UnLua.API.Binding.Priority 绑定冲突：静态绑定优先于动态绑定"), EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter);
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuauNovaTest_ConflictedBinding, TEXT("UnLuauNova.API.Binding.Priority 绑定冲突：静态绑定优先于动态绑定"), EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter);
 
-bool FUnLuaTest_ConflictedBinding::RunTest(const FString& Parameters)
+bool FUnLuauNovaTest_ConflictedBinding::RunTest(const FString& Parameters)
 {
     Run([this](lua_State* L, UWorld* World)
     {
         AddExpectedError(TEXT("conflicts"), EAutomationExpectedErrorFlags::Contains);
 
         const char* Chunk1 = R"(
-                    local ActorClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBinding.BP_UnLuaTestActor_StaticBinding_C')
+                    local ActorClass = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBinding.BP_UnLuaTestActor_StaticBinding_C')
                     local Transform = UE.FTransform()
                     G_Actor = World:SpawnActor(ActorClass, Transform, UE.ESpawnActorCollisionHandlingMethod.AlwaysSpawn, nil, nil, 'Tests.Binding.Foo')
                 )";
@@ -129,14 +129,14 @@ bool FUnLuaTest_ConflictedBinding::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuaTest_MultipleBinding, TEXT("UnLua.API.Binding.Multiple 多重绑定：同一个Lua脚本绑定到不同类"), EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter);
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuauNovaTest_MultipleBinding, TEXT("UnLuauNova.API.Binding.Multiple 多重绑定：同一个Lua脚本绑定到不同类"), EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter);
 
-bool FUnLuaTest_MultipleBinding::RunTest(const FString& Parameters)
+bool FUnLuauNovaTest_MultipleBinding::RunTest(const FString& Parameters)
 {
     Run([this](lua_State* L, UWorld* World)
     {
         const char* Chunk1 = R"(
-                    local ActorClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBindingChild.BP_UnLuaTestActor_StaticBindingChild_C')
+                    local ActorClass = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBindingChild.BP_UnLuaTestActor_StaticBindingChild_C')
                     G_Actor = World:SpawnActor(ActorClass)
                 )";
         UnLuauNova::RunChunk(L, Chunk1);
@@ -155,14 +155,14 @@ bool FUnLuaTest_MultipleBinding::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuaTest_Overridden, TEXT("UnLua.API.Binding.Overridden 覆写：同一个Lua脚本绑定到不同类"), EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter);
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuauNovaTest_Overridden, TEXT("UnLuauNova.API.Binding.Overridden 覆写：同一个Lua脚本绑定到不同类"), EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter);
 
-bool FUnLuaTest_Overridden::RunTest(const FString& Parameters)
+bool FUnLuauNovaTest_Overridden::RunTest(const FString& Parameters)
 {
     Run([this](lua_State* L, UWorld* World)
     {
         const char* Chunk = R"(
-                    local ActorClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBindingChild.BP_UnLuaTestActor_StaticBindingChild_C')
+                    local ActorClass = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBindingChild.BP_UnLuaTestActor_StaticBindingChild_C')
                     G_Actor = World:SpawnActor(ActorClass)
                     return G_Actor:Greeting('ABC')
                 )";

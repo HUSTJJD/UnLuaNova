@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,12 +12,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue366 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue366 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -26,10 +26,10 @@ struct FUnLuaTest_Issue366 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto Chunk = R"(
-                UE.FUnLuaTestLib()
+                UE.FUnLuauNovaTestLib()
             )";
         UnLuauNova::RunChunk(L, Chunk);
 
@@ -37,6 +37,6 @@ struct FUnLuaTest_Issue366 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue366, TEXT("UnLua.Regression.Issue366 使用ADD_SHARED_PTR_CONSTRUCTOR后启动直接崩溃"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue366, TEXT("UnLuauNova.Regression.Issue366 使用ADD_SHARED_PTR_CONSTRUCTOR后启动直接崩溃"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

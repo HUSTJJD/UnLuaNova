@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -19,7 +19,7 @@
 
 /** 用于承载所有运行时覆写创建的ULuaFunction */
 UCLASS(Transient)
-class UNLUAUNOVA_API ULuaOverridesClass : public UClass
+class UNLUANOVA_API ULuaOverridesClass : public UClass
 {
     GENERATED_BODY()
 

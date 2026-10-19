@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -22,7 +22,7 @@
 #include "Registries/ContainerRegistry.h"
 #include "Registries/PropertyRegistry.h"
 #include "Registries/EnumRegistry.h"
-#include "UnLuaManager.h"
+#include "UnLuauNovaManager.h"
 #include "lua.hpp"
 #include "ObjectReferencer.h"
 #include "HAL/Platform.h"
@@ -32,7 +32,7 @@
 
 namespace UnLuauNova
 {
-    class UNLUAUNOVA_API FLuaEnv
+    class UNLUANOVA_API FLuaEnv
         : public FUObjectArray::FUObjectDeleteListener
     {
         friend FClassRegistry;
@@ -92,7 +92,7 @@ namespace UnLuauNova
 
         void ResumeThread(int32 ThreadRef);
 
-        UUnLuaManager* GetManager();
+        UUnLuauNovaManager* GetManager();
 
         FORCEINLINE FClassRegistry* GetClassRegistry() const { return ClassRegistry; }
 
@@ -166,7 +166,7 @@ namespace UnLuauNova
         FCriticalSection CandidatesLock;
         FObjectReferencer AutoObjectReference;
         FObjectReferencer ManualObjectReference;
-        UUnLuaManager* Manager = nullptr;
+        UUnLuauNovaManager* Manager = nullptr;
         FClassRegistry* ClassRegistry;
         FObjectRegistry* ObjectRegistry;
         FDelegateRegistry* DelegateRegistry;

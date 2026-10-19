@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,16 +13,16 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "TestCommands.h"
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_TESTSUITE(FIssue455Test, TEXT("UnLua.Regression.Issue455 CacheScriptContainer导致的崩溃"))
+BEGIN_TESTSUITE(FIssue455Test, TEXT("UnLuauNova.Regression.Issue455 CacheScriptContainer导致的崩溃"))
 
     bool FIssue455Test::RunTest(const FString& Parameters)
     {
-        const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/Issue455/Issue455");
+        const auto MapName = TEXT("/UnLuauNovaTestSuite/Tests/Regression/Issue455/Issue455");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this] {
             const auto L = UnLuauNova::GetState();

@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Blueprint/UserWidget.h"
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue445 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue445 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -28,7 +28,7 @@ struct FUnLuaTest_Issue445 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
 
@@ -37,7 +37,7 @@ struct FUnLuaTest_Issue445 : FUnLuaTestBase
         World->BeginPlay();
         World->bBegunPlay = true;
 
-        const auto ActorClass = LoadClass<AUnLuaTestActor>(World, TEXT("/UnLuaTestSuite/Tests/Regression/Issue445/BP_UnLuaTestActor_Issue445.BP_UnLuaTestActor_Issue445_C"));
+        const auto ActorClass = LoadClass<AUnLuaTestActor>(World, TEXT("/UnLuauNovaTestSuite/Tests/Regression/Issue445/BP_UnLuaTestActor_Issue445.BP_UnLuaTestActor_Issue445_C"));
         const auto Actor = (AUnLuaTestActor*)World->SpawnActor(ActorClass);
         const auto Result = Actor->TestForIssue445(1);
         RUNNER_TEST_TRUE(Result!= nullptr)
@@ -45,6 +45,6 @@ struct FUnLuaTest_Issue445 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue445, TEXT("UnLua.Regression.Issue445 TSubclassOf作为函数返回值，从lua传回C++为空"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue445, TEXT("UnLuauNova.Regression.Issue445 TSubclassOf作为函数返回值，从lua传回C++为空"))
 
 #endif

@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -20,7 +20,7 @@
 #include "LuaEnv.h"
 #include "Registries/EnumRegistry.h"
 
-static const char* REGISTRY_KEY = "UnLua_UELib";
+static const char* REGISTRY_KEY = "UnLuauNovaNOVA_UELib";
 static const char* NAMESPACE_NAME = "UE";
 
 static int UE_Index(lua_State* L)
@@ -86,14 +86,14 @@ static int32 Global_NewObject(lua_State *L)
     int32 NumParams = lua_gettop(L);
     if (NumParams < 1)
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
     UClass *Class = Cast<UClass>(UnLuauNova::GetUObject(L, 1));
     if (!Class)
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: Invalid class!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: Invalid class!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
@@ -127,7 +127,7 @@ static int32 Global_NewObject(lua_State *L)
         }
         else
         {
-            UNLUA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: Failed to new object for class %s!"), ANSI_TO_TCHAR(__FUNCTION__), *Class->GetName());
+            UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: Failed to new object for class %s!"), ANSI_TO_TCHAR(__FUNCTION__), *Class->GetName());
             return 0;
         }
     }

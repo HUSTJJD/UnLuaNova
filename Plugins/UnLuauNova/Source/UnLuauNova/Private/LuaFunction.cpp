@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -16,7 +16,7 @@
 #include "LuaFunction.h"
 #include "LuaOverrides.h"
 #include "LuaOverridesClass.h"
-#include "UnLuaModule.h"
+#include "UnLuauNovaModule.h"
 #include "ReflectionUtils/PropertyDesc.h"
 #include "Misc/EngineVersionComparison.h"
 
@@ -26,7 +26,7 @@ static constexpr size_t ScriptMagicHeaderSize = sizeof ScriptMagicHeader;
 DEFINE_FUNCTION(ULuaFunction::execCallLua)
 {
     const auto LuaFunction = Cast<ULuaFunction>(Stack.CurrentNativeFunction);
-    const auto Env = IUnLuaModule::Get().GetEnv(Context);
+    const auto Env = IUnLuauNovaModule::Get().GetEnv(Context);
     if (!Env)
     {
         // PIE 结束时可能已经没有Lua环境了
@@ -40,7 +40,7 @@ DEFINE_FUNCTION(ULuaFunction::execScriptCallLua)
     const auto LuaFunction = Get(Stack.CurrentNativeFunction);
     if (!LuaFunction)
         return;
-    const auto Env = IUnLuaModule::Get().GetEnv(Context);
+    const auto Env = IUnLuauNovaModule::Get().GetEnv(Context);
     if (!Env)
     {
         // PIE 结束时可能已经没有Lua环境了

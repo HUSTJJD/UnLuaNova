@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -15,18 +15,18 @@
 
 #include "IssueOverridesTest.h"
 #include "TestCommands.h"
-#include "UnLuaSettings.h"
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaSettings.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_TESTSUITE(FIssueOverridesTest, TEXT("UnLua.Regression.IssueOverrides 覆写引起的问题"))
+BEGIN_TESTSUITE(FIssueOverridesTest, TEXT("UnLuauNova.Regression.IssueOverrides 覆写引起的问题"))
 
     bool FIssueOverridesTest::RunTest(const FString& Parameters)
     {
-        const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/IssueOverrides/IssueOverrides.IssueOverrides");
+        const auto MapName = TEXT("/UnLuauNovaTestSuite/Tests/Regression/IssueOverrides/IssueOverrides.IssueOverrides");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FEngineWaitLatentCommand(0.5));
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {

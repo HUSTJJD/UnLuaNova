@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,13 +12,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Components/CapsuleComponent.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue291 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue291 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -27,7 +27,7 @@ struct FUnLuaTest_Issue291 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
         UnLuauNova::PushUObject(L, World);
@@ -38,7 +38,7 @@ struct FUnLuaTest_Issue291 : FUnLuaTestBase
             local function test(x, y, z)\
                 Flag = true\
             end\
-            local ActorClass = UE.UClass.Load('/UnLuaTestSuite/Tests/Regression/Issue291/BP_UnLuaTestActor_Issue291.BP_UnLuaTestActor_Issue291_C')\
+            local ActorClass = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Regression/Issue291/BP_UnLuaTestActor_Issue291.BP_UnLuaTestActor_Issue291_C')\
             local Actor = G_World:SpawnActor(ActorClass)\
             Actor.Capsule.OnInputTouchBegin:Add(Actor.Capsule, test)\
             collectgarbage('collect')\
@@ -57,6 +57,6 @@ struct FUnLuaTest_Issue291 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue291, TEXT("UnLua.Regression.Issue291 delegate绑定本身不在lua里有引用的object，在绑定后触发gc会导致无法调用绑定的函数"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue291, TEXT("UnLuauNova.Regression.Issue291 delegate绑定本身不在lua里有引用的object，在绑定后触发gc会导致无法调用绑定的函数"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

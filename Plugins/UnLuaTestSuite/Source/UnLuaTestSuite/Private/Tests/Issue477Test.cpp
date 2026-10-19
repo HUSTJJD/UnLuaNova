@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Blueprint/UserWidget.h"
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue477 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue477 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -28,11 +28,11 @@ struct FUnLuaTest_Issue477 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto Chunk = R"(
-            local DataTable = UE.UObject.Load('/UnLuaTestSuite/Tests/Regression/Issue477/DataTable_Issue477.DataTable_Issue477')
-            local RowStruct = UE.UObject.Load('/UnLuaTestSuite/Tests/Regression/Issue477/Struct_Issue477.Struct_Issue477')
+            local DataTable = UE.UObject.Load('/UnLuauNovaTestSuite/Tests/Regression/Issue477/DataTable_Issue477.DataTable_Issue477')
+            local RowStruct = UE.UObject.Load('/UnLuauNovaTestSuite/Tests/Regression/Issue477/Struct_Issue477.Struct_Issue477')
             local RowNames = UE.UDataTableFunctionLibrary.GetDataTableRowNames(DataTable)
             local Sum = 0
             for i=1, RowNames:Num() do
@@ -51,6 +51,6 @@ struct FUnLuaTest_Issue477 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue477, TEXT("UnLua.Regression.Issue477 遍历蓝图结构体的DataTable会发生拷贝错误"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue477, TEXT("UnLuauNova.Regression.Issue477 遍历蓝图结构体的DataTable会发生拷贝错误"))
 
 #endif

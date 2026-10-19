@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,14 +12,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Components/CapsuleComponent.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue328 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue328 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -28,7 +28,7 @@ struct FUnLuaTest_Issue328 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
 
@@ -37,7 +37,7 @@ struct FUnLuaTest_Issue328 : FUnLuaTestBase
         World->BeginPlay();
         World->bBegunPlay = true;
         
-        const auto ActorClass = LoadClass<AUnLuaTestActor>(World, TEXT("/UnLuaTestSuite/Tests/Regression/Issue328/BP_UnLuaTestActor_Issue328.BP_UnLuaTestActor_Issue328_C"));
+        const auto ActorClass = LoadClass<AUnLuaTestActor>(World, TEXT("/UnLuauNovaTestSuite/Tests/Regression/Issue328/BP_UnLuaTestActor_Issue328.BP_UnLuaTestActor_Issue328_C"));
         const auto Actor = (AUnLuaTestActor*)World->SpawnActor(ActorClass);
         const auto Result = Actor->TestForIssue328();
         RUNNER_TEST_TRUE(Result);
@@ -46,6 +46,6 @@ struct FUnLuaTest_Issue328 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue328, TEXT("UnLua.Regression.Issue328 C++调用LUA覆写带返回值的函数会崩溃"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue328, TEXT("UnLuauNova.Regression.Issue328 C++调用LUA覆写带返回值的函数会崩溃"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

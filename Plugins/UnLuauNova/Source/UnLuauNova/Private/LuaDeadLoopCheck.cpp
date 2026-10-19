@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -14,7 +14,7 @@
 
 #include "LuaDeadLoopCheck.h"
 #include "HAL/RunnableThread.h"
-#include "UnLuaModule.h"
+#include "UnLuauNovaModule.h"
 
 namespace UnLuauNova
 {

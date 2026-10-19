@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,17 +13,17 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "TestCommands.h"
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationCommon.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_TESTSUITE(FIssue276Test, TEXT("UnLua.Regression.Issue276 游戏世界暂停后，coroutine delay 功能不工作"))
+BEGIN_TESTSUITE(FIssue276Test, TEXT("UnLuauNova.Regression.Issue276 游戏世界暂停后，coroutine delay 功能不工作"))
 
     bool FIssue276Test::RunTest(const FString& Parameters)
     {
-        const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/Issue276/Issue276");
+        const auto MapName = TEXT("/UnLuauNovaTestSuite/Tests/Regression/Issue276/Issue276");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FEngineWaitLatentCommand(1.0));
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {

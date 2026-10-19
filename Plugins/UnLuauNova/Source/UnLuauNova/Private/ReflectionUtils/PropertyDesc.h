@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -16,8 +16,8 @@
 
 #include "lua.hpp"
 #include "LowLevel.h"
-#include "UnLuaBase.h"
-#include "UnLuaCompatibility.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaCompatibility.h"
 #include "UObject/WeakFieldPtr.h"
 
 /**
@@ -258,4 +258,4 @@ protected:
     FString Name = TEXT("");
 };
 
-UNLUAUNOVA_API int32 GetPropertyType(const FProperty *Property);
+UNLUANOVA_API int32 GetPropertyType(const FProperty *Property);

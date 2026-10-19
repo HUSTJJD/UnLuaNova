@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -16,14 +16,14 @@
 #include "Issue517Test.h"
 
 #include "LowLevel.h"
-#include "UnLuaSettings.h"
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaSettings.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue517 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue517 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -32,10 +32,10 @@ struct FUnLuaTest_Issue517 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        auto& Settings = *GetMutableDefault<UUnLuaSettings>();
+        auto& Settings = *GetMutableDefault<UUnLuauNovaSettings>();
         Settings.DanglingCheck = true;
 
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
         UnLuauNova::PushUObject(L, World);
@@ -77,6 +77,6 @@ struct FUnLuaTest_Issue517 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue517, TEXT("UnLua.Regression.Issue517 Actor的Struct成员变量在Lua里引用，释放后仍旧可以访问"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue517, TEXT("UnLuauNova.Regression.Issue517 Actor的Struct成员变量在Lua里引用，释放后仍旧可以访问"))
 
 #endif

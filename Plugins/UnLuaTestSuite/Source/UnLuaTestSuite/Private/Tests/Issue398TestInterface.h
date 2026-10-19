@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -17,12 +17,12 @@
 #include "Issue398TestInterface.generated.h"
 
 UINTERFACE(BlueprintType)
-class UNLUATESTSUITE_API UInterfaceForIssue398 : public UInterface
+class UnLuauNovaTESTSUITE_API UInterfaceForIssue398 : public UInterface
 {
     GENERATED_BODY()
 };
 
-class UNLUATESTSUITE_API IInterfaceForIssue398
+class UnLuauNovaTESTSUITE_API IInterfaceForIssue398
 {
     GENERATED_BODY()
 };

@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,19 +12,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaBase.h"
-#include "UnLuaTemplate.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaTemplate.h"
 #include "Misc/AutomationTest.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FUnLuaLibMapSpec, "UnLua.API.TMap", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FUnLuauNovaLibMapSpec, "UnLuauNova.API.TMap", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     TSharedPtr<UnLuauNova::FLuaEnv> Env;
     lua_State* L;
-END_DEFINE_SPEC(FUnLuaLibMapSpec)
+END_DEFINE_SPEC(FUnLuauNovaLibMapSpec)
 
-void FUnLuaLibMapSpec::Define()
+void FUnLuauNovaLibMapSpec::Define()
 {
     BeforeEach([this]
     {
@@ -88,7 +88,7 @@ void FUnLuaLibMapSpec::Define()
         It(TEXT("构造TMap<UStruct,UStruct>"), EAsyncExecution::TaskGraphMainThread, [this]
         {
             const auto Chunk = R"(
-            local Struct_TableRow = UE.UObject.Load("/UnLuaTestSuite/Tests/Misc/Struct_TableRow.Struct_TableRow")
+            local Struct_TableRow = UE.UObject.Load("/UnLuauNovaTestSuite/Tests/Misc/Struct_TableRow.Struct_TableRow")
             local Map = UE.TMap(Struct_TableRow, Struct_TableRow)
 
             local Item1 = Struct_TableRow()
@@ -335,11 +335,11 @@ void FUnLuaLibMapSpec::Define()
         It(TEXT("按引用获取元素（原生）"), EAsyncExecution::TaskGraphMainThread, [this]
         {
             const auto Chunk = R"(
-            local UUnLuaTestStub = UE.UUnLuaTestStub
-            local Map = UE.TMap(0, UE.UUnLuaTestStub)
+            local UUnLuauNovaTestStub = UE.UUnLuauNovaTestStub
+            local Map = UE.TMap(0, UE.UUnLuauNovaTestStub)
 
-            local Stub1 = NewObject(UUnLuaTestStub)
-            local Stub2 = NewObject(UUnLuaTestStub)
+            local Stub1 = NewObject(UUnLuauNovaTestStub)
+            local Stub2 = NewObject(UUnLuauNovaTestStub)
 
             Map:Add(1, Stub1)
             Map:Add(2, Stub2)
@@ -362,7 +362,7 @@ void FUnLuaLibMapSpec::Define()
         It(TEXT("按引用获取元素（蓝图）"), EAsyncExecution::TaskGraphMainThread, [this]
         {
             const auto Chunk = R"(
-            local Struct_TableRow = UE.UObject.Load("/UnLuaTestSuite/Tests/Misc/Struct_TableRow.Struct_TableRow")
+            local Struct_TableRow = UE.UObject.Load("/UnLuauNovaTestSuite/Tests/Misc/Struct_TableRow.Struct_TableRow")
             local Map = UE.TMap(0, Struct_TableRow)
 
             local Row1 = Struct_TableRow()

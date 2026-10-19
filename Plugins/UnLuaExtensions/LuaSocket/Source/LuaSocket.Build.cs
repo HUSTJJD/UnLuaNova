@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -53,7 +53,7 @@ public class LuaSocket : ModuleRules
         PrivateDefinitions.AddRange(
             new[]
             {
-                "EXTENSION_NAMESPACE_BEGIN=namespace UnLuaExtensions { namespace LuaSocket {",
+                "EXTENSION_NAMESPACE_BEGIN=namespace UnLuauNovaExtensions { namespace LuaSocket {",
                 "EXTENSION_NAMESPACE_END=}}",
                 "LUA_LIB"
             }

@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Issue595Test.h"
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue595 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue595 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -28,7 +28,7 @@ struct FUnLuaTest_Issue595 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto Chunk = R"(
             local Obj = NewObject(UE.UIssue595Object)
@@ -44,6 +44,6 @@ struct FUnLuaTest_Issue595 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue595, TEXT("UnLua.Regression.Issue595 Lua无法调用Interface中函数"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue595, TEXT("UnLuauNova.Regression.Issue595 Lua无法调用Interface中函数"))
 
 #endif

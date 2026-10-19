@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,13 +12,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Components/CapsuleComponent.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue400 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue400 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -27,12 +27,12 @@ struct FUnLuaTest_Issue400 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto Chunk = R"(
-            local Stub1 = NewObject(UE.UUnLuaTestStub)
-            local Stub2 = NewObject(UE.UUnLuaTestStub)
-            local Stub3 = NewObject(UE.UUnLuaTestStub)
+            local Stub1 = NewObject(UE.UUnLuauNovaTestStub)
+            local Stub2 = NewObject(UE.UUnLuauNovaTestStub)
+            local Stub3 = NewObject(UE.UUnLuauNovaTestStub)
 
             local Counter = 0
             local function Callback()
@@ -59,6 +59,6 @@ struct FUnLuaTest_Issue400 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue400, TEXT("UnLua.Regression.Issue400 不同实例的多播委托绑定相同实例函数，清理时崩溃"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue400, TEXT("UnLuauNova.Regression.Issue400 不同实例的多播委托绑定相同实例函数，清理时崩溃"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

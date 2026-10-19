@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Blueprint/UserWidget.h"
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue473 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue473 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -28,10 +28,10 @@ struct FUnLuaTest_Issue473 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto Chunk = R"(
-            local StubClass = UE.UClass.Load("/UnLuaTestSuite/Tests/Regression/Issue473/BP_UnLuaTestStub_Issue473.BP_UnLuaTestStub_Issue473_C")
+            local StubClass = UE.UClass.Load("/UnLuauNovaTestSuite/Tests/Regression/Issue473/BP_UnLuaTestStub_Issue473.BP_UnLuaTestStub_Issue473_C")
             local Stub = NewObject(StubClass)
             print("Stub.Name=", Stub.Name)
             return Stub:TestForIssue473(Stub.Name)
@@ -44,6 +44,6 @@ struct FUnLuaTest_Issue473 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue473, TEXT("UnLua.Regression.Issue473 FName类型参数中文乱码"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue473, TEXT("UnLuauNova.Regression.Issue473 FName类型参数中文乱码"))
 
 #endif

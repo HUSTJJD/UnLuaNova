@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -24,7 +24,7 @@ namespace UnLuauNova
 }
 
 UCLASS()
-class UNLUAUNOVA_API ULuaDelegateHandler : public UObject
+class UNLUANOVA_API ULuaDelegateHandler : public UObject
 {
     friend UnLuauNova::FDelegateRegistry;
 

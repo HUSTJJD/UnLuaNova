@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -23,7 +23,7 @@ namespace UnLuauNova
     /**
      * Lua stack index wrapper
      */
-    struct UNLUAUNOVA_API FLuaIndex
+    struct UNLUANOVA_API FLuaIndex
     {
         FLuaIndex(lua_State* L, int32 Index);
         FLuaIndex(FLuaEnv* Env, int32 Index);
@@ -38,7 +38,7 @@ namespace UnLuauNova
     /**
      * Generic Lua value
      */
-    struct UNLUAUNOVA_API FLuaValue : public FLuaIndex
+    struct UNLUANOVA_API FLuaValue : public FLuaIndex
     {
         explicit FLuaValue(lua_State* L, int32 Index);
         explicit FLuaValue(lua_State* L, int32 Index, int32 Type);
@@ -69,7 +69,7 @@ namespace UnLuauNova
     /**
      * Lua function return values
      */
-    struct UNLUAUNOVA_API FLuaRetValues
+    struct UNLUANOVA_API FLuaRetValues
     {
         explicit FLuaRetValues(lua_State* L, int32 NumResults);
         explicit FLuaRetValues(FLuaEnv* Env, int32 NumResults);
@@ -93,7 +93,7 @@ namespace UnLuauNova
     /**
      * Lua table wrapper
      */
-    struct UNLUAUNOVA_API FLuaTable : public FLuaIndex
+    struct UNLUANOVA_API FLuaTable : public FLuaIndex
     {
         explicit FLuaTable(lua_State* L, int32 Index);
         explicit FLuaTable(lua_State* L, FLuaValue Value);
@@ -122,7 +122,7 @@ namespace UnLuauNova
     /**
      * Lua function wrapper
      */
-    struct UNLUAUNOVA_API FLuaFunction
+    struct UNLUANOVA_API FLuaFunction
     {
         explicit FLuaFunction(lua_State* L, const char* GlobalFuncName);
         explicit FLuaFunction(lua_State* L, const char* GlobalTableName, const char* FuncName);

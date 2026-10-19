@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -15,14 +15,14 @@
 #include "OutParamTest.h"
 
 #include "Engine.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuaTest_OutParamFull, TEXT("UnLua.API.OutParam.Full 返回全部Out参数"), EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter);
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuauNovaTest_OutParamFull, TEXT("UnLuauNova.API.OutParam.Full 返回全部Out参数"), EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter);
 
-bool FUnLuaTest_OutParamFull::RunTest(const FString& Parameters)
+bool FUnLuauNovaTest_OutParamFull::RunTest(const FString& Parameters)
 {
     UnLuauNova::Startup();
 
@@ -49,10 +49,10 @@ bool FUnLuaTest_OutParamFull::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuaTest_OutParamPartial, TEXT("UnLua.API.OutParam.Partial 返回部分Out参数，剩余部分使用传入参数填充"),
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUnLuauNovaTest_OutParamPartial, TEXT("UnLuauNova.API.OutParam.Partial 返回部分Out参数，剩余部分使用传入参数填充"),
                                  EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter);
 
-bool FUnLuaTest_OutParamPartial::RunTest(const FString& Parameters)
+bool FUnLuauNovaTest_OutParamPartial::RunTest(const FString& Parameters)
 {
     UnLuauNova::Startup();
 

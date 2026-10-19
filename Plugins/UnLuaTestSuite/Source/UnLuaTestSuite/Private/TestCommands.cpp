@@ -1,4 +1,4 @@
-﻿// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -24,7 +24,7 @@
 #endif
 #endif
 
-namespace UnLuaTestSuite
+namespace UnLuauNovaTestSuite
 {
     FOpenMapLatentCommand::FOpenMapLatentCommand(FString MapName, bool bForceReload)
         : MapName(MapName), bForceReload(bForceReload)

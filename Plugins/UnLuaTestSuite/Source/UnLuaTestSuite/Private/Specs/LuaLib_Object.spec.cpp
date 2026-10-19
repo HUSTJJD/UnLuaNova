@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,27 +12,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaBase.h"
-#include "UnLuaTemplate.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaTemplate.h"
 #include "Misc/AutomationTest.h"
 #include "Engine.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FUnLuaLibObjectSpec, "UnLua.API.UObject", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FUnLuauNovaLibObjectSpec, "UnLuauNova.API.UObject", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     lua_State* L;
     UWorld* World;
-END_DEFINE_SPEC(FUnLuaLibObjectSpec)
+END_DEFINE_SPEC(FUnLuauNovaLibObjectSpec)
 
-void FUnLuaLibObjectSpec::Define()
+void FUnLuauNovaLibObjectSpec::Define()
 {
     BeforeEach([this]
     {
         UnLuauNova::Startup();
         L = UnLuauNova::GetState();
 
-        World = UWorld::CreateWorld(EWorldType::Game, false, "UnLuaTest");
+        World = UWorld::CreateWorld(EWorldType::Game, false, "UnLuauNovaTest");
         FWorldContext& WorldContext = GEngine->CreateNewWorldContext(EWorldType::Game);
         WorldContext.SetCurrentWorld(World);
 
@@ -48,9 +48,9 @@ void FUnLuaLibObjectSpec::Define()
     {
         It(TEXT("加载一个对象"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UClass* Expected = LoadObject<UClass>(nullptr, TEXT("/UnLuaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C"));
+            UClass* Expected = LoadObject<UClass>(nullptr, TEXT("/UnLuauNovaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C"));
             const char* Chunk = R"(
-            local ActorClass = UE.UObject.Load('/UnLuaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C')
+            local ActorClass = UE.UObject.Load('/UnLuauNovaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C')
             return ActorClass
             )";
             UnLuauNova::RunChunk(L, Chunk);
@@ -85,7 +85,7 @@ void FUnLuaLibObjectSpec::Define()
         It(TEXT("获取对象的名称"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             const char* Chunk = R"(
-            local Outer = NewObject(UE.UUnLuaTestStub)
+            local Outer = NewObject(UE.UUnLuauNovaTestStub)
             local Actor = NewObject(UE.AActor, Outer, 'Test')
             return Actor:GetName()
             )";

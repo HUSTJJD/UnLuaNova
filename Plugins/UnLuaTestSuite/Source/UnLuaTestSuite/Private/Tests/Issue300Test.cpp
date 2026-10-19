@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,16 +13,16 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "TestCommands.h"
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_TESTSUITE(FIssue300Test, TEXT("UnLua.Regression.Issue300 LUA覆写的函数返回给蓝图的值错误"))
+BEGIN_TESTSUITE(FIssue300Test, TEXT("UnLuauNova.Regression.Issue300 LUA覆写的函数返回给蓝图的值错误"))
 
     bool FIssue300Test::RunTest(const FString& Parameters)
     {
-        const auto MapName = TEXT("/UnLuaTestSuite/Tests/Regression/Issue300/Issue300");
+        const auto MapName = TEXT("/UnLuauNovaTestSuite/Tests/Regression/Issue300/Issue300");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
             const auto L = UnLuauNova::GetState();

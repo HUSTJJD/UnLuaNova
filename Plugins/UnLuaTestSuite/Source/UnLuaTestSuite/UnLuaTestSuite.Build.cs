@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -14,9 +14,9 @@
 
 using UnrealBuildTool;
 
-public class UnLuaTestSuite : ModuleRules
+public class UnLuauNovaTestSuite : ModuleRules
 {
-	public UnLuaTestSuite(ReadOnlyTargetRules Target) : base(Target)
+	public UnLuauNovaTestSuite(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PublicIncludePaths.AddRange(
 			new string[]

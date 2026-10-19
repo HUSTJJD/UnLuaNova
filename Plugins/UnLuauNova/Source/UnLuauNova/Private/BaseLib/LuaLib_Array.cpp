@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "LowLevel.h"
-#include "UnLuaEx.h"
+#include "UnLuauNovaEx.h"
 #include "LuaCore.h"
 #include "Containers/LuaArray.h"
 
@@ -318,7 +318,7 @@ static int32 TArray_Get(lua_State* L)
     --Index;
     if (!Array->IsValidIndex(Index))
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: TArray Invalid Index!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: TArray Invalid Index!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
@@ -345,7 +345,7 @@ static int32 TArray_GetRef(lua_State* L)
     --Index;
     if (!Array->IsValidIndex(Index))
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: TArray Invalid Index!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: TArray Invalid Index!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
@@ -370,7 +370,7 @@ static int32 TArray_Set(lua_State* L)
     --Index;
     if (!Array->IsValidIndex(Index))
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: TArray Invalid Index!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Log, TEXT("%s: TArray Invalid Index!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 

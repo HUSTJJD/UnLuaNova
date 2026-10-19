@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -16,7 +16,7 @@
 #include "LuaCore.h"
 #include "Binding.h"
 #include "LuaDynamicBinding.h"
-#include "UnLua.h"
+#include "UnLuauNova.h"
 #include "LowLevel.h"
 #include "Containers/LuaSet.h"
 #include "Containers/LuaMap.h"
@@ -376,13 +376,13 @@ void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName
     if (Size < 1)
     {
         // userdata size must be greater than 0
-        UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid size!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid size!"), ANSI_TO_TCHAR(__FUNCTION__));
         return nullptr;
     }
     if ((PaddingSize & 0x07) != 0)          // 8 bytes padding at least..., 8, 24, 88
     {
         // padding size must be greater or equal to 8 bytes
-        UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid padding size!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid padding size!"), ANSI_TO_TCHAR(__FUNCTION__));
         return nullptr;
     }
 
@@ -392,7 +392,7 @@ void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName
         bool bSuccess = TryToSetMetatable(L, MetatableName);        // set metatable
         if (!bSuccess)
         {
-            UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
+            UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
             return nullptr;
         }
     }
@@ -447,7 +447,7 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
 {
     if (!Key)
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid key!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid key!"), ANSI_TO_TCHAR(__FUNCTION__));
         return nullptr;
     }
 
@@ -482,7 +482,7 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
 {
     if (!Key)
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid key!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid key!"), ANSI_TO_TCHAR(__FUNCTION__));
         return nullptr;
     }
 
@@ -561,7 +561,7 @@ void PushObjectCore(lua_State *L, UObjectBaseUtility *Object)
 		return;
     }
     
-#if UNLUA_ENABLE_DEBUG != 0
+#if UnLuauNovaNOVA_ENABLE_DEBUG != 0
 	UE_LOG(LogUnLuauNova, Log, TEXT("%s : %p,%s,%s"), ANSI_TO_TCHAR(__FUNCTION__), Object,*Object->GetName(), *MetatableName);
 #endif
 
@@ -569,7 +569,7 @@ void PushObjectCore(lua_State *L, UObjectBaseUtility *Object)
     bool bSuccess = TryToSetMetatable(L, TCHAR_TO_UTF8(*MetatableName), (UObject*)Object);
 	if (!bSuccess)
 	{
-        UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid metatable,Name %s, Object %s,%p!"), ANSI_TO_TCHAR(__FUNCTION__), *MetatableName, *Object->GetName(), Object);
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid metatable,Name %s, Object %s,%p!"), ANSI_TO_TCHAR(__FUNCTION__), *MetatableName, *Object->GetName(), Object);
     }
 }
 
@@ -713,14 +713,14 @@ static void PushPropertyArray(lua_State *L, T *Property, void *Value, void(*Push
 #if !UE_BUILD_SHIPPING
     if (!Property || !Value || Property->ArrayDim < 2 || Property->GetElementSize() < 1)
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
         return;
     }
 #endif
 
     if (!TPropertyArrayPushPolicy<T, WithMetaTableName>::CheckMetaTable(MetatableName))
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid metatable name!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid metatable name!"), ANSI_TO_TCHAR(__FUNCTION__));
         return;
     }
 
@@ -845,11 +845,11 @@ bool GetObjectMapping(lua_State *L, UObjectBaseUtility *Object)
 {
     if (!Object)
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid object!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s, Invalid object!"), ANSI_TO_TCHAR(__FUNCTION__));
         return false;
     }
 
-    lua_getfield(L, LUA_REGISTRYINDEX, "UnLua_ObjectMap");
+    lua_getfield(L, LUA_REGISTRYINDEX, "UnLuauNovaNOVA_ObjectMap");
     lua_pushlightuserdata(L, Object);
     int32 Type = lua_rawget(L, -2);
     if (Type != LUA_TNIL)
@@ -1297,7 +1297,7 @@ int32 Class_CallLatentFunction(lua_State *L)
     auto ThreadRef = Env.FindOrAddThread(L);
     if (ThreadRef == LUA_REFNIL)
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s: Can't call latent action in main lua thread!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s: Can't call latent action in main lua thread!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
@@ -1349,7 +1349,7 @@ int32 Class_Cast(lua_State* L)
     int32 NumParams = lua_gettop(L);
     if (NumParams < 2)
     {
-        UNLUA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UnLuauNovaNOVA_LOGERROR(L, LogUnLuauNova, Warning, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 

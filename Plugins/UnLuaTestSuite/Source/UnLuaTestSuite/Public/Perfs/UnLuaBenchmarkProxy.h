@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -15,7 +15,7 @@
 #pragma once
 
 #include "GameFramework/Actor.h"
-#include "UnLuaBenchmarkProxy.generated.h"
+#include "UnLuauNovaBenchmarkProxy.generated.h"
 
 UCLASS()
 class AUnLuaBenchmarkProxy : public AActor

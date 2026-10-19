@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,14 +12,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Components/CapsuleComponent.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 #if ENABLE_TYPE_CHECK
 
-struct FUnLuaTest_Issue293 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue293 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -28,16 +28,16 @@ struct FUnLuaTest_Issue293 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         GetTestRunner().AddExpectedError(TEXT("Invalid parameter"), EAutomationExpectedErrorFlags::Contains);
         const char* Chunk1 = "\
-            return UE.UUnLuaTestFunctionLibrary.TestForIssue293('A', 1)\
+            return UE.UUnLuauNovaTestFunctionLibrary.TestForIssue293('A', 1)\
             ";
         UnLuauNova::RunChunk(L, Chunk1);
 
         const char* Chunk2 = "\
-            return UE.UUnLuaTestFunctionLibrary.TestForIssue293('A', 1, UE.TArray(UE.FColor))\
+            return UE.UUnLuauNovaTestFunctionLibrary.TestForIssue293('A', 1, UE.TArray(UE.FColor))\
             ";
         UnLuauNova::RunChunk(L, Chunk2);
         const auto Actual = (int32)lua_tointeger(L, -1);
@@ -47,7 +47,7 @@ struct FUnLuaTest_Issue293 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue293, TEXT("UnLua.Regression.Issue293 关闭RPC会导致部分函数在非Editor模式下crash"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue293, TEXT("UnLuauNova.Regression.Issue293 关闭RPC会导致部分函数在非Editor模式下crash"))
 
 #endif
 #endif //WITH_DEV_AUTOMATION_TESTS

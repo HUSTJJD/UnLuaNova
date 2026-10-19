@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,8 +12,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaCompatibility.h"
-#include "UnLuaEx.h"
+#include "UnLuauNovaCompatibility.h"
+#include "UnLuauNovaEx.h"
 #include "LuaLib_Math.h"
 
 static int32 FVector_New(lua_State* L)
@@ -30,15 +30,15 @@ static int32 FVector_New(lua_State* L)
         }
     case 2:
         {
-            const unluaReal& XYZ = lua_tonumber(L, 2);
+            const UnLuauNovaReal& XYZ = lua_tonumber(L, 2);
             new(Userdata) FVector(XYZ);
             break;
         }
     case 4:
         {
-            const unluaReal& X = lua_tonumber(L, 2);
-            const unluaReal& Y = lua_tonumber(L, 3);
-            const unluaReal& Z = lua_tonumber(L, 4);
+            const UnLuauNovaReal& X = lua_tonumber(L, 2);
+            const UnLuauNovaReal& Y = lua_tonumber(L, 3);
+            const UnLuauNovaReal& Z = lua_tonumber(L, 4);
             new(Userdata) FVector(X, Y, Z);
             break;
         }
@@ -60,7 +60,7 @@ static int32 FVector_Set(lua_State* L)
     if (!V)
         return luaL_error(L, "invalid FVector");
 
-    UnLuauNova::TFieldSetter3<unluaReal>::Set(L, NumParams, &V->X);
+    UnLuauNova::TFieldSetter3<UnLuauNovaReal>::Set(L, NumParams, &V->X);
     return 0;
 }
 
@@ -106,14 +106,14 @@ static const luaL_Reg FVectorLib[] =
 {
     {"Set", FVector_Set},
     {"Normalize", FVector_Normalize},
-    {"Add", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TAdd<unluaReal>, true>::Calculate},
-    {"Sub", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TSub<unluaReal>, true>::Calculate},
-    {"Mul", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TMul<unluaReal>, true>::Calculate},
-    {"Div", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TDiv<unluaReal>, true>::Calculate},
-    {"__add", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TAdd<unluaReal>>::Calculate},
-    {"__sub", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TSub<unluaReal>>::Calculate},
-    {"__mul", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TMul<unluaReal>>::Calculate},
-    {"__div", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TDiv<unluaReal>>::Calculate},
+    {"Add", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TAdd<UnLuauNovaReal>, true>::Calculate},
+    {"Sub", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TSub<UnLuauNovaReal>, true>::Calculate},
+    {"Mul", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TMul<UnLuauNovaReal>, true>::Calculate},
+    {"Div", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TDiv<UnLuauNovaReal>, true>::Calculate},
+    {"__add", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TAdd<UnLuauNovaReal>>::Calculate},
+    {"__sub", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TSub<UnLuauNovaReal>>::Calculate},
+    {"__mul", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TMul<UnLuauNovaReal>>::Calculate},
+    {"__div", UnLuauNova::TMathCalculation<FVector, UnLuauNova::TDiv<UnLuauNovaReal>>::Calculate},
     {"__tostring", UnLuauNova::TMathUtils<FVector>::ToString},
     {"__unm", FVector_UNM},
     {"__call", FVector_New},
@@ -121,7 +121,7 @@ static const luaL_Reg FVectorLib[] =
 };
 
 BEGIN_EXPORT_REFLECTED_CLASS(FVector)
-    ADD_CONST_FUNCTION_EX("Dot", unluaReal, operator|, const FVector&)
+    ADD_CONST_FUNCTION_EX("Dot", UnLuauNovaReal, operator|, const FVector&)
     ADD_CONST_FUNCTION_EX("Cross", FVector, operator^, const FVector&)
     ADD_FUNCTION(Size)
     ADD_FUNCTION(Size2D)

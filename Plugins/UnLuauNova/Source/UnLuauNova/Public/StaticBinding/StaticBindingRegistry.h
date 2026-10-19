@@ -7,10 +7,10 @@
  * Registry of pre-resolved (static) bindings.
  *
  * Reflective access stays the default: the registry is consulted first and, on a miss,
- * UnLua falls back to its existing FPropertyDesc / FFunctionDesc machinery. A declared
+ * UnLuauNova falls back to its existing FPropertyDesc / FFunctionDesc machinery. A declared
  * type therefore gets the fast path while every other type keeps working exactly as before.
  */
-class UNLUAUNOVA_API FStaticBindingRegistry
+class UNLUANOVA_API FStaticBindingRegistry
 {
 public:
 	static FStaticBindingRegistry& Get();
@@ -23,7 +23,7 @@ public:
 
 	void Unregister(const FStaticTypeBinding* Type);
 
-	/** Look up a declared type by its UnLua metatable name. */
+	/** Look up a declared type by its UnLuauNova metatable name. */
 	const FStaticTypeBinding* Find(const FName TypeName) const;
 
 	/** Look up a declared type by UObject class (walks the super chain). */
@@ -37,7 +37,7 @@ public:
 
 	int32 NumRegisteredTypes() const { return Types.Num(); }
 
-	/** Called by FUnLuaModule on shutdown. */
+	/** Called by FUnLuauNovaModule on shutdown. */
 	void Clear();
 
 private:

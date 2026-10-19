@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,12 +12,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue284 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue284 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -26,7 +26,7 @@ struct FUnLuaTest_Issue284 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         GetTestRunner().AddExpectedError(TEXT("module 'test.test' not found"), EAutomationExpectedErrorFlags::Contains);
 
@@ -36,6 +36,6 @@ struct FUnLuaTest_Issue284 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue284, TEXT("UnLua.Regression.Issue284 require不存在的lib会崩"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue284, TEXT("UnLuauNova.Regression.Issue284 require不存在的lib会崩"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

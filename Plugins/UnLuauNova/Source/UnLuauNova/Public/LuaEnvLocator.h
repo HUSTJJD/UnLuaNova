@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -20,7 +20,7 @@
 #include "LuaEnvLocator.generated.h"
 
 UCLASS()
-class UNLUAUNOVA_API ULuaEnvLocator : public UObject
+class UNLUANOVA_API ULuaEnvLocator : public UObject
 {
     GENERATED_BODY()
 public:
@@ -34,7 +34,7 @@ public:
 };
 
 UCLASS()
-class UNLUAUNOVA_API ULuaEnvLocator_ByGameInstance : public ULuaEnvLocator
+class UNLUANOVA_API ULuaEnvLocator_ByGameInstance : public ULuaEnvLocator
 {
     GENERATED_BODY()
 public:

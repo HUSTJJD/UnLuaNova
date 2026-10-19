@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,18 +12,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Tests/AutomationCommon.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-bool FUnLuaTestCommand_WaitSeconds::Update()
+bool FUnLuauNovaTestCommand_WaitSeconds::Update()
 {
     const float NewTime = FPlatformTime::Seconds();
     return NewTime - StartTime >= Duration;
 }
 
-bool FUnLuaTestCommand_WaitOneTick::Update()
+bool FUnLuauNovaTestCommand_WaitOneTick::Update()
 {
     if (bAlreadyRun == false)
     {
@@ -33,31 +33,31 @@ bool FUnLuaTestCommand_WaitOneTick::Update()
     return false;
 }
 
-bool FUnLuaTestCommand_SetUpTest::Update()
+bool FUnLuauNovaTestCommand_SetUpTest::Update()
 {
-    return UnLuaTest && UnLuaTest->SetUp();
+    return UnLuauNovaTest && UnLuauNovaTest->SetUp();
 }
 
-bool FUnLuaTestCommand_PerformTest::Update()
+bool FUnLuauNovaTestCommand_PerformTest::Update()
 {
-    return UnLuaTest == nullptr || UnLuaTest->Update();
+    return UnLuauNovaTest == nullptr || UnLuauNovaTest->Update();
 }
 
-bool FUnLuaTestCommand_TearDownTest::Update()
+bool FUnLuauNovaTestCommand_TearDownTest::Update()
 {
-    if (!UnLuaTest)
+    if (!UnLuauNovaTest)
         return false;
 
-    UnLuaTest->AddLatent([this]
+    UnLuauNovaTest->AddLatent([this]
     {
-        UnLuaTest->TearDown();
-        delete UnLuaTest;
-        UnLuaTest = nullptr;
+        UnLuauNovaTest->TearDown();
+        delete UnLuauNovaTest;
+        UnLuauNovaTest = nullptr;
     });
     return true;
 }
 
-bool FUnLuaTestBase::SetUp()
+bool FUnLuauNovaTestBase::SetUp()
 {
     UnLuauNova::Startup();
     L = UnLuauNova::GetState();
@@ -71,7 +71,7 @@ bool FUnLuaTestBase::SetUp()
     {
         if (!WorldContext->World())
         {
-            const auto World = UWorld::CreateWorld(EWorldType::Game, false, "UnLuaTest");
+            const auto World = UWorld::CreateWorld(EWorldType::Game, false, "UnLuauNovaTest");
             World->SetGameInstance(GameInstance);
             WorldContext->SetCurrentWorld(World);
         }
@@ -97,7 +97,7 @@ bool FUnLuaTestBase::SetUp()
     return true;
 }
 
-void FUnLuaTestBase::TearDown()
+void FUnLuauNovaTestBase::TearDown()
 {
     GameInstance->Shutdown();
     if (InstantTest())
@@ -116,17 +116,17 @@ void FUnLuaTestBase::TearDown()
     }
 }
 
-void FUnLuaTestBase::AddLatent(TFunction<void()>&& Func, float Delay) const
+void FUnLuauNovaTestBase::AddLatent(TFunction<void()>&& Func, float Delay) const
 {
-    ADD_LATENT_AUTOMATION_COMMAND(FUnLuaTestDelayedCallbackLatentCommand(MoveTemp(Func), Delay));
+    ADD_LATENT_AUTOMATION_COMMAND(FUnLuauNovaTestDelayedCallbackLatentCommand(MoveTemp(Func), Delay));
 }
 
-UWorld* FUnLuaTestBase::GetWorld() const
+UWorld* FUnLuauNovaTestBase::GetWorld() const
 {
     return WorldContext->World();
 }
 
-void FUnLuaTestBase::SimulateTick(float Seconds, ELevelTick TickType) const
+void FUnLuauNovaTestBase::SimulateTick(float Seconds, ELevelTick TickType) const
 {
     constexpr auto Step = 1.0f / 60.0f;
     const auto World = GetWorld();
@@ -137,7 +137,7 @@ void FUnLuaTestBase::SimulateTick(float Seconds, ELevelTick TickType) const
     }
 }
 
-void FUnLuaTestBase::LoadMap(FString MapName) const
+void FUnLuauNovaTestBase::LoadMap(FString MapName) const
 {
     const auto OldWorld = GWorld;
     const FURL URL(*MapName);
@@ -148,7 +148,7 @@ void FUnLuaTestBase::LoadMap(FString MapName) const
     GWorld = OldWorld;
 }
 
-void UnLuaTestSuite::PrintReferenceChain(UObject* Target)
+void UnLuauNovaTestSuite::PrintReferenceChain(UObject* Target)
 {
 #if ENGINE_MAJOR_VERSION > 4 || (ENGINE_MAJOR_VERSION == 4 && ENGINE_MINOR_VERSION >= 26)
     FReferenceChainSearch Search(Target, EReferenceChainSearchMode::PrintAllResults | EReferenceChainSearchMode::FullChain);

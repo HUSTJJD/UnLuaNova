@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include "UnLuaInterface.h"
+#include "UnLuauNovaInterface.h"
 #include "Issue595TestInterface.h"
 #include "Issue595Test.generated.h"
 
@@ -22,7 +22,7 @@ UCLASS()
 class UIssue595Object
     : public UObject,
       public IIssue595Interface,
-      public IUnLuaInterface
+      public IUnLuauNovaInterface
 {
     GENERATED_BODY()
 

@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,26 +12,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaBase.h"
-#include "UnLuaTemplate.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaTemplate.h"
 #include "Misc/AutomationTest.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FUnLuaLibDelegateSpec, "UnLua.API.FScriptDelegate", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FUnLuauNovaLibDelegateSpec, "UnLuauNova.API.FScriptDelegate", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     TSharedPtr<UnLuauNova::FLuaEnv> Env;
     lua_State* L;
-    UUnLuaTestStub* Stub;
-END_DEFINE_SPEC(FUnLuaLibDelegateSpec)
+    UUnLuauNovaTestStub* Stub;
+END_DEFINE_SPEC(FUnLuauNovaLibDelegateSpec)
 
-void FUnLuaLibDelegateSpec::Define()
+void FUnLuauNovaLibDelegateSpec::Define()
 {
     BeforeEach([this]
     {
         Env = MakeShared<UnLuauNova::FLuaEnv>();
         L = Env->GetMainState();
-        Stub = NewObject<UUnLuaTestStub>();
+        Stub = NewObject<UUnLuauNovaTestStub>();
         UnLuauNova::PushUObject(L, Stub);
         lua_setglobal(L, "Stub");
     });

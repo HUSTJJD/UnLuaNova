@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,12 +12,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue375 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue375 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -26,17 +26,17 @@ struct FUnLuaTest_Issue375 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
         UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "World");
 
         const auto Chunk = R"(
-        local ParentClass = UE.UClass.Load("/UnLuaTestSuite/Tests/Regression/Issue375/BP_ParentActor.BP_ParentActor_C")
+        local ParentClass = UE.UClass.Load("/UnLuauNovaTestSuite/Tests/Regression/Issue375/BP_ParentActor.BP_ParentActor_C")
         ParentActor = World:SpawnActor(ParentClass)
         
-        local ChildClass = UE.UClass.Load("/UnLuaTestSuite/Tests/Regression/Issue375/BP_ChildActor.BP_ChildActor_C")
+        local ChildClass = UE.UClass.Load("/UnLuauNovaTestSuite/Tests/Regression/Issue375/BP_ChildActor.BP_ChildActor_C")
         local ChildActor = World:SpawnActor(ChildClass)
         ChildActor:K2_DestroyActor()
         return ParentActor
@@ -59,6 +59,6 @@ struct FUnLuaTest_Issue375 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue375, TEXT("UnLua.Regression.Issue375 子类被销毁时，可能会令父类的Lua绑定失效"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue375, TEXT("UnLuauNova.Regression.Issue375 子类被销毁时，可能会令父类的Lua绑定失效"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

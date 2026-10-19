@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,15 +12,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaBase.h"
-#include "UnLuaTemplate.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaTemplate.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 
-BEGIN_DEFINE_SPEC(FLuaEnvSpec, "UnLua.API.FLuaEnv", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FLuaEnvSpec, "UnLuauNova.API.FLuaEnv", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     TSharedPtr<UnLuauNova::FLuaEnv> Env;
 END_DEFINE_SPEC(FLuaEnvSpec)
 

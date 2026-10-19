@@ -1,5 +1,5 @@
 #include "Misc/EngineVersionComparison.h"
-#include "UnLuaCompatibility.h"
+#include "UnLuauNovaCompatibility.h"
 #include "PropertyRegistry.h"
 #include "Binding.h"
 #include "ClassRegistry.h"

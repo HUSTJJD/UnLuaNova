@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,18 +12,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaBase.h"
-#include "UnLuaTemplate.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaTemplate.h"
 #include "Misc/AutomationTest.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FUnLuaBaseSpec, "UnLua.API.Base", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FUnLuauNovaBaseSpec, "UnLuauNova.API.Base", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     lua_State* L;
-END_DEFINE_SPEC(FUnLuaBaseSpec)
+END_DEFINE_SPEC(FUnLuauNovaBaseSpec)
 
-void FUnLuaBaseSpec::Define()
+void FUnLuauNovaBaseSpec::Define()
 {
     BeforeEach([this]
     {
@@ -240,7 +240,7 @@ void FUnLuaBaseSpec::Define()
             B = 20 -- int32&
             C = 30 -- const int32&
             D = 'Test' -- FString&
-            B, D = UE.UUnLuaTestFunctionLibrary.TestForBaseSpec1(A, B, C, D)
+            B, D = UE.UUnLuauNovaTestFunctionLibrary.TestForBaseSpec1(A, B, C, D)
             )";
             UnLuauNova::RunChunk(L, Chunk);
             lua_getglobal(L, "B");
@@ -252,14 +252,14 @@ void FUnLuaBaseSpec::Define()
             TEST_EQUAL(D, FString("TestFlag"));
         });
 
-#if UNLUA_LEGACY_RETURN_ORDER
-        It(TEXT("蓝图：调用的函数本身有返回值，先依次返回参数再返回返回值（UNLUA_LEGACY_RETURN_ORDER）"), EAsyncExecution::TaskGraphMainThread, [this]()
+#if UnLuauNovaNOVA_LEGACY_RETURN_ORDER
+        It(TEXT("蓝图：调用的函数本身有返回值，先依次返回参数再返回返回值（UnLuauNovaNOVA_LEGACY_RETURN_ORDER）"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             const auto Chunk = R"(
                     A = 10 -- int32
                     B = 20 -- int32&
                     C = 30 -- int32&
-                    B, C, Ret = UE.UUnLuaTestFunctionLibrary.TestForBaseSpec2(A, B, C)
+                    B, C, Ret = UE.UUnLuauNovaTestFunctionLibrary.TestForBaseSpec2(A, B, C)
                     )";
             UnLuauNova::RunChunk(L, Chunk);
             lua_getglobal(L, "Ret");
@@ -281,7 +281,7 @@ void FUnLuaBaseSpec::Define()
             A = 10 -- int32
             B = 20 -- int32&
             C = 30 -- int32&
-            Ret, B, C = UE.UUnLuaTestFunctionLibrary.TestForBaseSpec2(A, B, C)
+            Ret, B, C = UE.UUnLuauNovaTestFunctionLibrary.TestForBaseSpec2(A, B, C)
             )";
             UnLuauNova::RunChunk(L, Chunk);
             lua_getglobal(L, "Ret");
@@ -305,7 +305,7 @@ void FUnLuaBaseSpec::Define()
             B = 20 -- int32&
             C = 30 -- const int32&
             D = 'Test' -- FString&
-            B, D = UE.FUnLuaTestLib.TestForBaseSpec1(A, B, C, D)
+            B, D = UE.FUnLuauNovaTestLib.TestForBaseSpec1(A, B, C, D)
             )";
             UnLuauNova::RunChunk(L, Chunk);
             lua_getglobal(L, "B");
@@ -317,14 +317,14 @@ void FUnLuaBaseSpec::Define()
             TEST_EQUAL(D, FString("TestFlag"));
         });
 
-#if UNLUA_LEGACY_RETURN_ORDER
-        It(TEXT("原生：调用的函数本身有返回值，先依次返回参数再返回返回值（UNLUA_LEGACY_RETURN_ORDER）"), EAsyncExecution::TaskGraphMainThread, [this]()
+#if UnLuauNovaNOVA_LEGACY_RETURN_ORDER
+        It(TEXT("原生：调用的函数本身有返回值，先依次返回参数再返回返回值（UnLuauNovaNOVA_LEGACY_RETURN_ORDER）"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             const auto Chunk = R"(
             A = 10 -- int32
             B = 20 -- int32&
             C = 30 -- int32&
-            B, C, Ret = UE.FUnLuaTestLib.TestForBaseSpec2(A, B, C)
+            B, C, Ret = UE.FUnLuauNovaTestLib.TestForBaseSpec2(A, B, C)
             )";
             UnLuauNova::RunChunk(L, Chunk);
             lua_getglobal(L, "Ret");
@@ -346,7 +346,7 @@ void FUnLuaBaseSpec::Define()
             A = 10 -- int32
             B = 20 -- int32&
             C = 30 -- int32&
-            Ret, B, C = UE.FUnLuaTestLib.TestForBaseSpec2(A, B, C)
+            Ret, B, C = UE.FUnLuauNovaTestLib.TestForBaseSpec2(A, B, C)
             )";
             UnLuauNova::RunChunk(L, Chunk);
             lua_getglobal(L, "Ret");

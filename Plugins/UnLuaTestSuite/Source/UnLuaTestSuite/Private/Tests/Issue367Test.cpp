@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,12 +12,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue367 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue367 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -26,14 +26,14 @@ struct FUnLuaTest_Issue367 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
         UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "World");
         
         const auto Chunk1 = R"(
-                local ActorClass = UE.UObject.Load('/UnLuaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C')
+                local ActorClass = UE.UObject.Load('/UnLuauNovaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C')
                 _G.MT = getmetatable(ActorClass) 
                 local Actor = World:SpawnActor(ActorClass)
                 Actor:K2_DestroyActor()
@@ -43,7 +43,7 @@ struct FUnLuaTest_Issue367 : FUnLuaTestBase
         CollectGarbage(RF_NoFlags, true); // UEGC了ActorClass，此时lua里ActorClass的元表还没有被luagc，但元表里对应的FClassDesc已经在FReflectionRegistry::NotifyUObjectDeleted中析构了
 
         const auto Chunk2 = R"(
-                _G.ActorClass = UE.UObject.Load('/UnLuaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C')
+                _G.ActorClass = UE.UObject.Load('/UnLuauNovaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C')
                 _G.Actor = World:SpawnActor(ActorClass)
                 _G.MT = nil
             )";
@@ -62,6 +62,6 @@ struct FUnLuaTest_Issue367 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue367, TEXT("UnLua.Regression.Issue367 类型元表被LuaGC时，可能意外导致正在使用的FClassDesc被错误delete"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue367, TEXT("UnLuauNova.Regression.Issue367 类型元表被LuaGC时，可能意外导致正在使用的FClassDesc被错误delete"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

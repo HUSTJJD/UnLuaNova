@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,13 +12,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaTestCommon.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestCommon.h"
+#include "UnLuauNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue322 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue322 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -27,11 +27,11 @@ struct FUnLuaTest_Issue322 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
 
-        const auto ActorClass = LoadClass<AActor>(nullptr, TEXT("/UnLuaTestSuite/Tests/Regression/Issue322/测试中文蓝图.测试中文蓝图_C"));
+        const auto ActorClass = LoadClass<AActor>(nullptr, TEXT("/UnLuauNovaTestSuite/Tests/Regression/Issue322/测试中文蓝图.测试中文蓝图_C"));
         World->SpawnActor(ActorClass);
 
         const char* Chunk = "\
@@ -44,6 +44,6 @@ struct FUnLuaTest_Issue322 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue322, TEXT("UnLua.Regression.Issue322 绑定中文名字的蓝图会报错"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue322, TEXT("UnLuauNova.Regression.Issue322 绑定中文名字的蓝图会报错"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

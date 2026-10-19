@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -14,18 +14,18 @@
 
 #pragma once
 
-#include "UnLua.h"
+#include "UnLuauNova.h"
 #include "Engine.h"
 #include "GameFramework/GameStateBase.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-DEFINE_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(FUnLuaTestCommand_WaitSeconds, float, Duration);
+DEFINE_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(FUnLuauNovaTestCommand_WaitSeconds, float, Duration);
 
-class FUnLuaTestCommand_WaitOneTick : public IAutomationLatentCommand
+class FUnLuauNovaTestCommand_WaitOneTick : public IAutomationLatentCommand
 {
 public:
-    FUnLuaTestCommand_WaitOneTick()
+    FUnLuauNovaTestCommand_WaitOneTick()
         : bAlreadyRun(false)
     {
     }
@@ -35,10 +35,10 @@ private:
     bool bAlreadyRun;
 };
 
-class FUnLuaTestDelayedCallbackLatentCommand : public IAutomationLatentCommand
+class FUnLuauNovaTestDelayedCallbackLatentCommand : public IAutomationLatentCommand
 {
 public:
-    FUnLuaTestDelayedCallbackLatentCommand(TFunction<void()>&& InCallback, float InDelay = 0.1f)
+    FUnLuauNovaTestDelayedCallbackLatentCommand(TFunction<void()>&& InCallback, float InDelay = 0.1f)
         : Callback(MoveTemp(InCallback)), Delay(InDelay)
     {
         //Set the start time
@@ -61,10 +61,10 @@ private:
     float Delay;
 };
 
-class UNLUATESTSUITE_API FUnLuaTestCommand_LoadMap : public IAutomationLatentCommand
+class UnLuauNovaTESTSUITE_API FUnLuauNovaTestCommand_LoadMap : public IAutomationLatentCommand
 {
 public:
-    FUnLuaTestCommand_LoadMap(FWorldContext* WorldContext, FString MapName)
+    FUnLuauNovaTestCommand_LoadMap(FWorldContext* WorldContext, FString MapName)
         : MapName(MapName), WorldContext(WorldContext), bMapLoadingStarted(false), bMapLoaded(false)
     {
     }
@@ -115,10 +115,10 @@ private:
     bool bMapLoaded;
 };
 
-struct UNLUATESTSUITE_API FUnLuaTestBase
+struct UnLuauNovaTESTSUITE_API FUnLuauNovaTestBase
 {
 public:
-    virtual ~FUnLuaTestBase()
+    virtual ~FUnLuauNovaTestBase()
     {
     }
 
@@ -135,7 +135,7 @@ public:
     void AddLatent(TFunction<void()>&& Func, float Delay = 0.1f) const;
 
 protected:
-    FUnLuaTestBase() : L(nullptr), TestRunner(nullptr), GameInstance(nullptr), WorldContext(nullptr)
+    FUnLuauNovaTestBase() : L(nullptr), TestRunner(nullptr), GameInstance(nullptr), WorldContext(nullptr)
     {
     }
 
@@ -159,11 +159,11 @@ protected:
     FWorldContext* WorldContext;
 };
 
-DEFINE_EXPORTED_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(UNLUATESTSUITE_API, FUnLuaTestCommand_SetUpTest, FUnLuaTestBase*, UnLuaTest);
+DEFINE_EXPORTED_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(UnLuauNovaTESTSUITE_API, FUnLuauNovaTestCommand_SetUpTest, FUnLuauNovaTestBase*, UnLuauNovaTest);
 
-DEFINE_EXPORTED_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(UNLUATESTSUITE_API, FUnLuaTestCommand_PerformTest, FUnLuaTestBase*, UnLuaTest);
+DEFINE_EXPORTED_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(UnLuauNovaTESTSUITE_API, FUnLuauNovaTestCommand_PerformTest, FUnLuauNovaTestBase*, UnLuauNovaTest);
 
-DEFINE_EXPORTED_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(UNLUATESTSUITE_API, FUnLuaTestCommand_TearDownTest, FUnLuaTestBase*, UnLuaTest);
+DEFINE_EXPORTED_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(UnLuauNovaTESTSUITE_API, FUnLuauNovaTestCommand_TearDownTest, FUnLuauNovaTestBase*, UnLuauNovaTest);
 
 /////////////////////////////////////////
 // TEST DEFINE MACROS
@@ -176,11 +176,11 @@ bool TestClass##_Runner::RunTest(const FString& Parameters) \
 TestClass* TestInstance = new TestClass(); \
 TestInstance->SetTestRunner(*this); \
 /* set up */ \
-ADD_LATENT_AUTOMATION_COMMAND(FUnLuaTestCommand_SetUpTest(TestInstance)); \
+ADD_LATENT_AUTOMATION_COMMAND(FUnLuauNovaTestCommand_SetUpTest(TestInstance)); \
 /* run latent command to update */ \
-ADD_LATENT_AUTOMATION_COMMAND(FUnLuaTestCommand_PerformTest(TestInstance)); \
+ADD_LATENT_AUTOMATION_COMMAND(FUnLuauNovaTestCommand_PerformTest(TestInstance)); \
 /* run latent command to tear down */ \
-ADD_LATENT_AUTOMATION_COMMAND(FUnLuaTestCommand_TearDownTest(TestInstance)); \
+ADD_LATENT_AUTOMATION_COMMAND(FUnLuauNovaTestCommand_TearDownTest(TestInstance)); \
 return true; \
 }
 
@@ -208,7 +208,7 @@ return bSuccess; \
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, PrettyName, (EAutomationTestFlags::ClientContext | EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter))
 
 #define BEGIN_TESTSUITE(TestClass, PrettyName) \
-namespace UnLuaTestSuite { \
+namespace UnLuauNovaTestSuite { \
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, PrettyName, (EAutomationTestFlags::ClientContext | EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter))
 
 #define END_TESTSUITE(TestClass) \
@@ -247,7 +247,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, PrettyName, (EAutomationTestFlags::C
     return true;\
     }
 
-namespace UnLuaTestSuite
+namespace UnLuauNovaTestSuite
 {
     void PrintReferenceChain(UObject* Target);
 }

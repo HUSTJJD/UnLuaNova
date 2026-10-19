@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Tests/Issue398Test.h"
-#include "UnLuaTestCommon.h"
+#include "UnLuauNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-struct FUnLuaTest_Issue398 : FUnLuaTestBase
+struct FUnLuauNovaTest_Issue398 : FUnLuauNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -27,13 +27,13 @@ struct FUnLuaTest_Issue398 : FUnLuaTestBase
 
     virtual bool SetUp() override
     {
-        FUnLuaTestBase::SetUp();
+        FUnLuauNovaTestBase::SetUp();
 
         const auto World = GetWorld();
         UnLuauNova::PushUObject(L, World);
         lua_setglobal(L, "G_World");
         const auto Chunk = R"(
-            local CharacterClass = UE.UClass.Load("/UnLuaTestSuite/Tests/Regression/Issue398/BP_Character.BP_Character_C")
+            local CharacterClass = UE.UClass.Load("/UnLuauNovaTestSuite/Tests/Regression/Issue398/BP_Character.BP_Character_C")
             local Character = G_World:SpawnActor(CharacterClass)
             local Array = UE.TArray(UE.AActor)
             Array:Add(Character)
@@ -41,7 +41,7 @@ struct FUnLuaTest_Issue398 : FUnLuaTestBase
             Array:Add(Character)
             Array:Add(Character)
             print("Array=", Array)
-            local FunctionLibrary = UE.UClass.Load('/UnLuaTestSuite/Tests/Regression/Issue398/BP_FunctionLibrary.BP_FunctionLibrary_C')
+            local FunctionLibrary = UE.UClass.Load('/UnLuauNovaTestSuite/Tests/Regression/Issue398/BP_FunctionLibrary.BP_FunctionLibrary_C')
             local ResultArray = FunctionLibrary.Test(Array)
             print("ResultArray=", ResultArray)
             Result = 0
@@ -60,6 +60,6 @@ struct FUnLuaTest_Issue398 : FUnLuaTestBase
     }
 };
 
-IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuaTest_Issue398, TEXT("UnLua.Regression.Issue398 接口列表从lua传到c++/蓝图层会丢失一半信息"))
+IMPLEMENT_UNLUA_INSTANT_TEST(FUnLuauNovaTest_Issue398, TEXT("UnLuauNova.Regression.Issue398 接口列表从lua传到c++/蓝图层会丢失一半信息"))
 
 #endif //WITH_DEV_AUTOMATION_TESTS

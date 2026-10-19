@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLua available.
+// Tencent is pleased to support the open source community by making UnLuauNova available.
 // 
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
@@ -12,18 +12,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "UnLuaBase.h"
-#include "UnLuaTemplate.h"
+#include "UnLuauNovaBase.h"
+#include "UnLuauNovaTemplate.h"
 #include "Misc/AutomationTest.h"
-#include "UnLuaTestHelpers.h"
+#include "UnLuauNovaTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FUnLuaLibDataTableSpec, "UnLua.API.DataTable", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FUnLuauNovaLibDataTableSpec, "UnLuauNova.API.DataTable", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     lua_State* L;
-END_DEFINE_SPEC(FUnLuaLibDataTableSpec)
+END_DEFINE_SPEC(FUnLuauNovaLibDataTableSpec)
 
-void FUnLuaLibDataTableSpec::Define()
+void FUnLuauNovaLibDataTableSpec::Define()
 {
     BeforeEach([this]
     {
@@ -36,8 +36,8 @@ void FUnLuaLibDataTableSpec::Define()
         It(TEXT("获取数据表中指定行的数据（蓝图）"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             const auto Chunk = R"(
-            local DataTable = UE.UObject.Load('/UnLuaTestSuite/Tests/Misc/DataTable_BPTest.DataTable_BPTest')
-            local RowStruct = UE.UObject.Load('/UnLuaTestSuite/Tests/Misc/Struct_TableRow.Struct_TableRow')
+            local DataTable = UE.UObject.Load('/UnLuauNovaTestSuite/Tests/Misc/DataTable_BPTest.DataTable_BPTest')
+            local RowStruct = UE.UObject.Load('/UnLuauNovaTestSuite/Tests/Misc/Struct_TableRow.Struct_TableRow')
             local Row = RowStruct()
             local Result = UE.UDataTableFunctionLibrary.GetDataTableRowFromName(DataTable, 'Row_1', Row)
             return Row.TestString
@@ -49,8 +49,8 @@ void FUnLuaLibDataTableSpec::Define()
         It(TEXT("获取数据表中指定行的数据（C++）"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             const auto Chunk = R"(
-            local DataTable = UE.UObject.Load('/UnLuaTestSuite/Tests/Misc/DataTable_CppTest.DataTable_CppTest')
-            local Row = UE.FUnLuaTestTableRow()
+            local DataTable = UE.UObject.Load('/UnLuauNovaTestSuite/Tests/Misc/DataTable_CppTest.DataTable_CppTest')
+            local Row = UE.FUnLuauNovaTestTableRow()
             local Result = UE.UDataTableFunctionLibrary.GetDataTableRowFromName(DataTable, 'Row_1', Row)
             return Row.Title
             )";
