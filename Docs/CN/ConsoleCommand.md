@@ -101,16 +101,21 @@ lua.dbg stack
 
 *注：不敲命令时不安装任何 Hook，常态零开销。断点与单步的原生能力（`lua_breakpoint` / `lua_singlestep`）仅 Luau 后端提供，Lua 5.5 后端退化为按行号匹配。*
 
-### lua.sandbox \[0\|1\]
+### lua.sandbox（启动期 CVar）
 
-加固 Lua 全局表（Luau 的 `luaL_sandbox`），开启后脚本无法意外改写引擎绑定。
+加固 Lua 全局表（Luau 的 `luaL_sandbox`）：开启后全局表只读，脚本无法意外改写引擎绑定。
 
-示例：
+它是一个**控制台变量，不是可执行命令** —— 每个 Lua 环境创建时读取一次，运行中修改不会影响已经存在的环境。
+要开启请写进 ini，让它在启动时生效：
+
+```ini
+; Config/DefaultEngine.ini
+[ConsoleVariables]
+lua.sandbox=1
 ```
-lua.sandbox 1
-```
 
-*注：默认关闭，因为这是对已有脚本的行为变更。该能力依赖 Luau 原生沙盒，Lua 5.5 后端不支持。*
+*注：默认关闭，因为这是对已有脚本的行为变更。该能力依赖 Luau 原生沙盒，Lua 5.5 后端不支持。
+详见[Luau 后端](Luau.md#沙盒)。*
 
 ---
 
@@ -118,4 +123,5 @@ lua.sandbox 1
 
 - [调试](Debugging.md) — 断点调试 Lua 脚本
 - [设置项](Settings.md) — 相关设置项（后端、看门狗等）
+- [Luau 后端](Luau.md) — 沙盒、原生断点、分配分类统计等 Luau 专属能力
 - [测试与自动化](Testing.md) — 自动化测试与报告

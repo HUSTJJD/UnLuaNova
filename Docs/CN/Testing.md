@@ -94,6 +94,9 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `screenshots/` | 测试期间产生的截图 |
 | `*.json` | UE 导出的原始结果 |
 
+`-Publish` 写到 `Docs/test-report.md` 的那份是**要提交进 git** 的，所以它不写本机路径、也不写这一次的时间戳目录名
+（那两个每次跑都变，会让同一份结论在 git 里反复产生无意义 diff）。本机那份 `report.md` 仍然指向原始 JSON 目录，方便回溯。
+
 失败明细会直接列出错误消息和 `文件:行号`，打开报告就能定位，不用回头翻日志。
 如果一条用例被标成 success 但带了 error 记录，报告会按失败处理——那是伪装成通过的失败。
 

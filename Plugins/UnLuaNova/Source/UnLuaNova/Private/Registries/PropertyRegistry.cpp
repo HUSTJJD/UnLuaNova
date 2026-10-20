@@ -34,7 +34,14 @@ namespace UnLuaNova
             TypeInterface = GetBoolProperty();
             break;
         case LUA_TNUMBER:
-            TypeInterface = lua_isinteger(L, Index) > 0 ? GetInt64Property() : GetFloatProperty();
+            // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+            // tag, so `UE.TArray(0)` - and every other literal a script writes - was
+            // inferred as float, and TArray<int32> came back holding 1.0f bit patterns.
+            //
+            // int32, not int64: an integer literal means a UE int32, and callers (and the
+            // specs) read the array back as TArray<int32>. Widening it to int64 during the
+            // Luau port misaligned every element past the first.
+            TypeInterface = UnLuaNovaIsIntegralNumber(L, Index) ? GetIntProperty() : GetFloatProperty();
             break;
         case LUA_TSTRING:
             TypeInterface = GetStringProperty();

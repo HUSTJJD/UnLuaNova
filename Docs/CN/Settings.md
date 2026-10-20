@@ -115,7 +115,7 @@ description: "运行时与编辑器全部设置项的含义，含 Lua 后端切�
 
 ### Lua后端
 
-在 `Config/DefaultUnLuaNovaEditor.ini` 中设置：
+在 `Config/DefaultUnLuaNovaEditor.ini` 中设置（改完需要**重新编译**，后端是编译期选择）：
 
 ```ini
 [/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]

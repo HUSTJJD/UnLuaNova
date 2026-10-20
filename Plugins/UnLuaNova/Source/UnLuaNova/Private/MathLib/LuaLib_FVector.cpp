@@ -14,6 +14,7 @@
 
 #include "UnLuaNovaCompatibility.h"
 #include "UnLuaNovaEx.h"
+#include "LuaBackend.h"
 #include "LuaLib_Math.h"
 
 static int32 FVector_New(lua_State* L)
@@ -30,6 +31,17 @@ static int32 FVector_New(lua_State* L)
         }
     case 2:
         {
+#if UNLUANOVA_HAS_NATIVE_VECTOR
+            // A Luau vector arrives as three floats already sitting in the TValue, so
+            // UE.FVector(v) can build the FVector without going through three
+            // lua_tonumber calls and without allocating anything for the argument.
+            if (UNLUANOVA_ISVECTOR(L, 2))
+            {
+                const LUA_VECTOR_TYPE* Components = UNLUANOVA_TOVECTOR(L, 2);
+                new(Userdata) FVector((UnLuaNovaReal)Components[0], (UnLuaNovaReal)Components[1], (UnLuaNovaReal)Components[2]);
+                break;
+            }
+#endif
             const UnLuaNovaReal& XYZ = lua_tonumber(L, 2);
             new(Userdata) FVector(XYZ);
             break;
@@ -59,6 +71,17 @@ static int32 FVector_Set(lua_State* L)
     FVector* V = (FVector*)GetCppInstanceFast(L, 1);
     if (!V)
         return luaL_error(L, "invalid FVector");
+
+#if UNLUANOVA_HAS_NATIVE_VECTOR
+    if (NumParams == 2 && UNLUANOVA_ISVECTOR(L, 2))
+    {
+        const LUA_VECTOR_TYPE* Components = UNLUANOVA_TOVECTOR(L, 2);
+        V->X = (UnLuaNovaReal)Components[0];
+        V->Y = (UnLuaNovaReal)Components[1];
+        V->Z = (UnLuaNovaReal)Components[2];
+        return 0;
+    }
+#endif
 
     UnLuaNova::TFieldSetter3<UnLuaNovaReal>::Set(L, NumParams, &V->X);
     return 0;
@@ -102,10 +125,30 @@ static int32 FVector_UNM(lua_State* L)
     return 1;
 }
 
+// Luau only: hand the value back as a native vector. That is the whole point of the
+// type - arithmetic on it allocates nothing, where every FVector operation on the
+// userdata path pays for a new userdata. On other backends there is no such type, so
+// this answers nil and callers keep using the userdata.
+static int32 FVector_ToVector(lua_State* L)
+{
+    FVector* V = (FVector*)GetCppInstanceFast(L, 1);
+    if (!V)
+        return luaL_error(L, "invalid FVector");
+
+#if UNLUANOVA_HAS_NATIVE_VECTOR
+    UNLUANOVA_PUSHVECTOR3(L, V->X, V->Y, V->Z);
+    return 1;
+#else
+    lua_pushnil(L);
+    return 1;
+#endif
+}
+
 static const luaL_Reg FVectorLib[] =
 {
     {"Set", FVector_Set},
     {"Normalize", FVector_Normalize},
+    {"ToVector", FVector_ToVector},
     {"Add", UnLuaNova::TMathCalculation<FVector, UnLuaNova::TAdd<UnLuaNovaReal>, true>::Calculate},
     {"Sub", UnLuaNova::TMathCalculation<FVector, UnLuaNova::TSub<UnLuaNovaReal>, true>::Calculate},
     {"Mul", UnLuaNova::TMathCalculation<FVector, UnLuaNova::TMul<UnLuaNovaReal>, true>::Calculate},

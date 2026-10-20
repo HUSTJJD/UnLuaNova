@@ -69,7 +69,7 @@ description: UnLuaNova —— 面向 Unreal Engine 的 Lua 脚本方案，Tencen
 
 - :material-book-open-variant: **编程指南**
 
-    [编程指南](CN/UnLuaNova_Programming_Guide.md) · [如何实现覆写](CN/How_To_Implement_Overriding.md)
+    [Luau 后端](CN/Luau.md) · [编程指南](CN/UnLuaNova_Programming_Guide.md) · [如何实现覆写](CN/How_To_Implement_Overriding.md)
 
 - :material-code-braces: **API 参考**
 
@@ -96,6 +96,10 @@ description: UnLuaNova —— 面向 Unreal Engine 的 Lua 脚本方案，Tencen
 - :material-book-open-variant: **[Programming Guide](EN/UnLuaNova_Programming_Guide.md)**
 
     Core concepts: binding, calling the engine from Lua, calling Lua from the engine, GC.
+
+- :material-language-lua: **[Luau Backend](EN/Luau.md)**
+
+    Language features, sandboxing, native breakpoints and luau-analyze on the Luau backend.
 
 - :material-api: **[API Reference](EN/API.md)**
 

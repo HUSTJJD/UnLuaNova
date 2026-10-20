@@ -13,6 +13,10 @@ Start with the Programming Guide, or jump straight to the reference you need.
 
     Binding, calling the engine from Lua, calling Lua from the engine, garbage collection.
 
+- :material-language-lua: **[Luau Backend](Luau.md)**
+
+    Language features available today, sandboxing, native breakpoints and luau-analyze.
+
 - :material-api: **[API Reference](API.md)**
 
     C++ API, Lua API and the build-time macros.

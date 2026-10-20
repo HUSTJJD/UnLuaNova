@@ -56,6 +56,7 @@ description: "UnLuaNova 的能力总览，以及相对 UnLua v2.3.6 的增量"
 * 支持 **Lua 5.5** 与 **Luau** 两个后端，默认 Luau，通过配置切换（见[设置](Settings.md#lua后端)）
 * 两者均以 git 子模块引入，克隆后需执行 `git submodule update --init --recursive`
 * 后端差异全部收敛在 `LuaBackend.h`；上层功能定义在抽象层，由各后端提供实现
+* Luau 后端能用上哪些语言特性、哪些还没打通：见[Luau 后端](Luau.md)
 
 ### 可观测性
 
@@ -77,7 +78,7 @@ description: "UnLuaNova 的能力总览，以及相对 UnLua v2.3.6 的增量"
 ### 脚本侧类型检查
 
 * 可生成 Luau `.d.lua` 类型声明，交由 `luau-analyze` 做静态检查，把一部分 UE API 误用提前到编译期
-* 见[智能提示](IntelliSense.md)
+* 见[智能提示](IntelliSense.md)与[Luau 后端](Luau.md#三类型声明与-luau-analyze)
 
 ### 字符串扩展
 

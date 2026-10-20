@@ -15,6 +15,7 @@
 #include "PropertyDesc.h"
 #include "ClassDesc.h"
 #include "LowLevel.h"
+#include "LuaBackend.h"
 #include "LuaCore.h"
 #include "LuaEnv.h"
 #include "Containers/LuaSet.h"
@@ -1239,6 +1240,21 @@ public:
 
     virtual bool SetValueInternal(lua_State *L, void *ValuePtr, int32 IndexInStack, bool bCopyValue) const override
     {
+#if UNLUANOVA_HAS_NATIVE_VECTOR
+        // A Luau vector stands in for FVector: its three components are already in the
+        // TValue, so write them straight into the parameter slot. Allocating a userdata
+        // only to copy it out again is exactly the cost this type exists to avoid.
+        if (UNLUANOVA_ISVECTOR(L, IndexInStack) && StructProperty->Struct == TBaseStructure<FVector>::Get())
+        {
+            const LUA_VECTOR_TYPE* Components = UNLUANOVA_TOVECTOR(L, IndexInStack);
+            FVector* Dest = static_cast<FVector*>(ValuePtr);
+            Dest->X = (FVector::FReal)Components[0];
+            Dest->Y = (FVector::FReal)Components[1];
+            Dest->Z = (FVector::FReal)Components[2];
+            return true;
+        }
+#endif
+
         void *Value = GetCppInstanceFast(L, IndexInStack);
         if (Value)
         {
@@ -1262,6 +1278,19 @@ public:
         int32 Type = lua_type(L, IndexInStack);
         if (Type != LUA_TNIL)
         {
+#if UNLUANOVA_HAS_NATIVE_VECTOR
+            // A Luau vector is a valid FVector. It has no metatable, so the userdata
+            // checks below would reject it without ever looking at the value.
+            if (UNLUANOVA_ISVECTOR(L, IndexInStack))
+            {
+                if (StructProperty->Struct != TBaseStructure<FVector>::Get())
+                {
+                    ErrorMsg = FString::Printf(TEXT("struct %s needed but got a vector"), *StructProperty->Struct->GetName());
+                    return false;
+                }
+                return true;
+            }
+#endif
             if (Type != LUA_TUSERDATA)
             {
                 ErrorMsg = FString::Printf(TEXT("userdata needed but got %s"), UTF8_TO_TCHAR(lua_typename(L, Type)));

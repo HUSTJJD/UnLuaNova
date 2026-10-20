@@ -519,6 +519,42 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #define UNLUANOVA_HAS_HOOK_EVENT 1
 #endif
 
+// --- native vector type -------------------------------------------------------
+// Luau carries a vector directly in a TValue: three (or four) floats, no allocation,
+// no indirection. That is the whole point - a hot loop over FVector values allocates
+// nothing on Luau, where the userdata path pays a GC-tracked allocation per result.
+//
+// Plain Lua has no such type, so a "vector" there is a table or a userdata and the
+// macros below are inert. Call sites must go through UNLUANOVA_HAS_NATIVE_VECTOR
+// rather than assuming the type exists.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_HAS_NATIVE_VECTOR 1
+#define UNLUANOVA_ISVECTOR(L, Idx) lua_isvector(L, Idx)
+/**
+ * Components as a raw array. Its length is LUA_VECTOR_SIZE (3 or 4, depending on how
+ * Luau was built), so read only the components you need and never index past 2.
+ * The pointer belongs to the value on the stack - do not hold on to it.
+ */
+#define UNLUANOVA_TOVECTOR(L, Idx) lua_tovector(L, Idx)
+// Luau's lua_pushvector takes a fourth (w) component when the value is 4-wide.
+#if defined(LUA_VECTOR_SIZE) && LUA_VECTOR_SIZE == 4
+#define UNLUANOVA_PUSHVECTOR3(L, X, Y, Z) lua_pushvector(L, (LUA_VECTOR_TYPE)(X), (LUA_VECTOR_TYPE)(Y), (LUA_VECTOR_TYPE)(Z), 0)
+#else
+#define UNLUANOVA_PUSHVECTOR3(L, X, Y, Z) lua_pushvector(L, (LUA_VECTOR_TYPE)(X), (LUA_VECTOR_TYPE)(Y), (LUA_VECTOR_TYPE)(Z))
+#endif
+// Luau's buffer type: a fixed-size, typed byte block, again without a per-object
+// allocation for the common sizes. Plain Lua has no equivalent.
+#define UNLUANOVA_HAS_NATIVE_BUFFER 1
+#define UNLUANOVA_ISBUFFER(L, Idx) lua_isbuffer(L, Idx)
+#else
+#define UNLUANOVA_HAS_NATIVE_VECTOR 0
+#define UNLUANOVA_ISVECTOR(L, Idx) false
+#define UNLUANOVA_TOVECTOR(L, Idx) nullptr
+#define UNLUANOVA_PUSHVECTOR3(L, X, Y, Z) ((void)0)
+#define UNLUANOVA_HAS_NATIVE_BUFFER 0
+#define UNLUANOVA_ISBUFFER(L, Idx) false
+#endif
+
 // --- sandboxing ---------------------------------------------------------------
 // Luau hardens the global table in a single call: after luaL_sandbox the globals are
 // read-only and the env is flagged safe, so a hotfixed / downloaded script can no

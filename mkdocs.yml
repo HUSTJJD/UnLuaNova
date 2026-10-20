@@ -59,6 +59,7 @@ nav:
           - 功能清单: CN/Features.md
       - 编程:
           - 编程指南: CN/UnLuaNova_Programming_Guide.md
+          - Luau 后端: CN/Luau.md
           - API 参考: CN/API.md
           - 如何实现覆写: CN/How_To_Implement_Overriding.md
           - 静态导出绑定: CN/StaticExportBinding.md
@@ -79,6 +80,7 @@ nav:
   - English Docs:
       - EN/index.md
       - Programming Guide: EN/UnLuaNova_Programming_Guide.md
+      - Luau Backend: EN/Luau.md
       - API Reference: EN/API.md
       - How To Implement Overriding: EN/How_To_Implement_Overriding.md
       - FAQ: EN/FAQ.md

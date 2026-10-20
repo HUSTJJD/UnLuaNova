@@ -106,6 +106,7 @@ Lua 函数名对上（`AnimNotify_xxx`）即完成替换，不需要任何辅助
 |:---|:---|
 | [UE 新手快速上手](Docs/CN/Quickstart_For_UE_Newbie.md) | [Programming Guide](Docs/EN/UnLuaNova_Programming_Guide.md) |
 | [功能清单](Docs/CN/Features.md) | [API Reference](Docs/EN/API.md) |
+| [Luau 鍚庣](Docs/CN/Luau.md) | [Luau Backend](Docs/EN/Luau.md) |
 | [编程指南](Docs/CN/UnLuaNova_Programming_Guide.md) | [How To Implement Overriding](Docs/EN/How_To_Implement_Overriding.md) |
 | [API 参考](Docs/CN/API.md) | [FAQ](Docs/EN/FAQ.md) |
 | [设置项](Docs/CN/Settings.md) | [在线文档站](https://hustjjd.github.io/UnLuaNova/) |

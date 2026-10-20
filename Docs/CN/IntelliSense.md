@@ -23,10 +23,27 @@ description: "生成引擎类型符号，让 VSCode 等 IDE 对 UE API 提供补
 
 如果没有出现提示，可以检查下IDE的智能提示插件是否存在或启用。
 
+## 4. Luau 类型声明（给 luau-analyze 用）
+
+同一次导出还会额外生成一个 `UnLuaNova.d.lua`：
+
+```
+Plugins/UnLuaNova/Intermediate/IntelliSense/
+├── *.lua                EmmyLua 注解，给 IDE 补全用（上面三步讲的就是这个）
+└── UnLuaNova.d.lua      Luau 声明，给 luau-analyze 做静态检查用
+```
+
+前者是给 IDE 看的类型注解，后者是给静态检查器看的 `declare class` / `declare function` 声明 ——
+**不要 `require` 它**，它只在检查阶段被引用。把 `.d.lua` 放进脚本工程、脚本头部写 `--!strict`，
+就可以用 `luau-analyze` 把 UE API 误用提前暴露出来。
+
+详见[Luau 后端](Luau.md#三类型声明与-luau-analyze)。
+
 ---
 
 ## 延伸阅读
 
 - [调试](Debugging.md) — 调试 Lua 脚本
+- [Luau 后端](Luau.md) — 类型声明与 luau-analyze 静态检查
 - [常见问题 FAQ](FAQ.md) — 智能提示相关问题
 - [设置项](Settings.md) — 「生成智能提示信息」设置项

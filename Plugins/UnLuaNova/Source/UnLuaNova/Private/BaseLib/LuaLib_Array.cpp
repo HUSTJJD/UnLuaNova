@@ -541,7 +541,10 @@ static int32 TArray_ToTable(lua_State* L)
 
 static int32 TArray_Index(lua_State* L)
 {
-    if (lua_isinteger(L, 2))
+    // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER tag,
+    // so `Array[1]` written in a script - every literal is a double there - fell through
+    // to the metatable lookup and returned nil, which crashed the caller on `nil:Set(..)`.
+    if (UnLuaNovaIsIntegralNumber(L, 2))
     {
         return TArray_Get(L);
     }

@@ -12,6 +12,11 @@ Outputs, next to --reports unless --out says otherwise:
     report.md      the conclusions: totals, failures with their messages, slowest tests,
                    and a gallery of whatever the tests screenshotted
 
+With --publish the same conclusions are written to Docs/test-report.md, which is what gets
+committed and rendered by MkDocs. That copy deliberately points at no local path: the run
+directory is timestamped and Saved/ is gitignored, so naming it here would make the file
+change on every single run.
+
 Usage:
     python GenerateTestReport.py --reports <dir> [--out <dir>] [--publish]
 """
@@ -185,7 +190,7 @@ def load_tests(reports_dir: Path):
     return tests
 
 
-def render(tests, screenshots, image_prefix, generated, reports_dir):
+def render(tests, screenshots, image_prefix, generated, reports_dir, published=False):
     total = len(tests)
     failed = [t for t in tests if not t["passed"]]
     skipped = [t for t in tests if t["skipped"]]
@@ -273,7 +278,16 @@ def render(tests, screenshots, image_prefix, generated, reports_dir):
 
     lines.append("---")
     lines.append("")
-    lines.append(f"原始 JSON 目录：`{reports_dir}`")
+    if published:
+        # This copy is committed and rendered by MkDocs, so it must not carry a machine
+        # specific path or a run timestamp: either one makes the file diff on every run
+        # even when the results did not change.
+        lines.append(
+            "原始 JSON 留在本机 `Saved/TestReports/<时间戳>/`（`Saved/` 不入库），"
+            "这里只提交结论。重新生成：`Tools/RunTests.ps1 -Publish`。"
+        )
+    else:
+        lines.append(f"原始 JSON 目录：`{reports_dir}`")
     lines.append("")
     return "\n".join(lines) + "\n"
 
@@ -282,7 +296,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--reports", required=True, help="directory holding the automation JSON")
     parser.add_argument("--out", default=None, help="where to write report.md / summary.json (default: --reports)")
-    parser.add_argument("--publish", action="store_true", help="also copy the report and screenshots into Docs/")
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="also write Docs/test-report.md; that copy is committed, so it carries no "
+        "machine specific path and no per-run directory name",
+    )
     args = parser.parse_args()
 
     reports_dir = Path(args.reports).resolve()
@@ -330,7 +349,7 @@ def main() -> None:
             for name in screenshots:
                 shutil.copy2(shot_dir / name, images_dir / name)
         (docs_dir / "test-report.md").write_text(
-            render(tests, screenshots, "Images/tests/", generated, reports_dir),
+            render(tests, screenshots, "Images/tests/", generated, reports_dir, published=True),
             encoding="utf-8",
             newline="\n",
         )

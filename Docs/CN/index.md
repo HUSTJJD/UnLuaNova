@@ -19,6 +19,8 @@ description: UnLuaNova 中文文档导航 —— 从新手上手到进阶配置�
 
     [编程指南](UnLuaNova_Programming_Guide.md) —— 绑定、双向调用、GC 的核心概念
 
+    [Luau 后端](Luau.md) —— Luau 语言特性、沙盒、原生断点与类型检查
+
     [API 参考](API.md) · [如何实现覆写](How_To_Implement_Overriding.md)
 
 - :material-cog: **配置与工具**

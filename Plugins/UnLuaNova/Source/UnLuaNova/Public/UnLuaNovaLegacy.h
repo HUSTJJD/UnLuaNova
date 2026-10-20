@@ -371,52 +371,72 @@ namespace UnLuaNova
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<int8>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<int16>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<int32>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<int64>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<long>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<uint8>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<uint16>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<uint32>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<uint64>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<unsigned long>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<float>)

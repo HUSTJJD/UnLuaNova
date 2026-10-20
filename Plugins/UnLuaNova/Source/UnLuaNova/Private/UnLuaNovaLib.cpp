@@ -1,5 +1,6 @@
 #include "UnLuaNovaLib.h"
 #include "LowLevel.h"
+#include "LuaBackend.h"
 #include "LuaEnv.h"
 #include "UnLuaNovaBase.h"
 
@@ -81,6 +82,46 @@ namespace UnLuaNova
             return 0;
         }
 
+        // Which backend this build is running on. Scripts use it to gate Luau-only syntax
+        // (continue, compound assignment, type annotations) behind a runtime check, so one
+        // file can live in a project that is built either way: the Luau-only modules are
+        // only required when the answer is "Luau", and on Lua 5.5 they are never compiled.
+        static int GetBackend(lua_State* L)
+        {
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+            lua_pushstring(L, "Luau");
+#else
+            lua_pushstring(L, "Lua");
+#endif
+            return 1;
+        }
+
+        // Ask for a capability instead of inferring it from the backend name: the whole
+        // point of the capability flags in LuaBackend.h is that call sites branch on what
+        // is actually available. Unknown names answer false rather than raising, so a
+        // script written against a newer build degrades instead of dying.
+        static int HasFeature(lua_State* L)
+        {
+            const char* Name = lua_tostring(L, 1);
+            bool bAvailable = false;
+            if (Name)
+            {
+                if (strcmp(Name, "sandbox") == 0)
+                    bAvailable = UNLUANOVA_HAS_SANDBOX != 0;
+                else if (strcmp(Name, "breakpoint") == 0)
+                    bAvailable = UNLUANOVA_HAS_BREAKPOINT != 0;
+                else if (strcmp(Name, "allocCallbacks") == 0)
+                    bAvailable = UNLUANOVA_HAS_ALLOC_CALLBACKS != 0;
+                else if (strcmp(Name, "vector") == 0)
+                    bAvailable = UNLUANOVA_HAS_NATIVE_VECTOR != 0;
+                else if (strcmp(Name, "buffer") == 0)
+                    bAvailable = UNLUANOVA_HAS_NATIVE_BUFFER != 0;
+            }
+
+            lua_pushboolean(L, bAvailable ? 1 : 0);
+            return 1;
+        }
+
         static constexpr luaL_Reg UNLUANOVA_Functions[] = {
             {"Log", LogInfo},
             {"LogWarn", LogWarn},
@@ -88,6 +129,8 @@ namespace UnLuaNova
             {"HotReload", HotReload},
             {"Ref", Ref},
             {"Unref", Unref},
+            {"GetBackend", GetBackend},
+            {"HasFeature", HasFeature},
             {"FTextEnabled", nullptr},
             {NULL, NULL}
         };

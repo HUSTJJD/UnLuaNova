@@ -1,21 +1,17 @@
----
-title: "测试报告"
-description: "自动化测试产出的通过率、失败明细与截图"
----
-
-> 由 `Tools/GenerateTestReport.py` 自动生成于 — 。请勿手工编辑。
-
 # 测试报告
 
-**还没有生成过报告。**
+> 由 `Tools/GenerateTestReport.py` 自动生成于 2026-10-20 21:58:32。请勿手工编辑。
 
-在本机跑一次测试即可生成这一页：
+## 结论
 
-```powershell
-.\Tools\RunTests.ps1 -Publish
-```
+**没有找到任何自动化测试结果。**
 
-`-Publish` 会把 `report.md` 和截图复制到 `Docs/`（就是这一页和 `Images/tests/`），
-提交后 GitHub Pages 会自动发布。详见 [测试与自动化](CN/Testing.md)。
+这通常是测试进程没跑起来（引擎启动失败、过滤器没匹配到任何用例），而不是"全部通过"。先看同目录下的 `Editor.log`。
+## 截图
 
-之所以不放在 CI 里跑：UnLuaNova 依赖本地 UE 源码构建，GitHub 托管 runner 拿不到。
+没有截图。截图需要真实视口，跑的时候加 `-Screenshots`（脚本会关掉 `-NullRHI` 并把 `Saved/Screenshots` 收进报告目录）。
+
+---
+
+原始 JSON 留在本机 `Saved/TestReports/<时间戳>/`（`Saved/` 不入库），这里只提交结论。重新生成：`Tools/RunTests.ps1 -Publish`。
+
