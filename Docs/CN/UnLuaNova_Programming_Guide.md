@@ -31,13 +31,13 @@ UnLuaNova提供了两种绑定Lua和引擎层的方式，分别是静态绑定�
 ```cpp
 local Proj = World:SpawnActor(ProjClass, Transform, ESpawnActorCollisionHandlingMethod.AlwaysSpawn, self, self.Instigator, "Weapon.BP_DefaultProjectile_C")
 ```
-`Weapon.BP_DefaultProjectile_C` 是一个 [Lua模块路径](#Lua模块路径)。
+`Weapon.BP_DefaultProjectile_C` 是一个 [Lua模块路径](#lua模块路径)。
 
 #### Object
 ```lua
 local ProxyObj = NewObject(ObjClass, nil, nil, "Objects.ProxyObject")
 ```
-`Objects.ProxyObject` 是一个 [Lua模块路径](#Lua模块路径)。
+`Objects.ProxyObject` 是一个 [Lua模块路径](#lua模块路径)。
 
 ## Lua模块路径
 无论是静态绑定还是动态绑定，他们都需要指定Lua模块路径。它是一个相对于 **{工程目录}/Content/Script** 下Lua文件的 **相对路径**，使用半角点号 **.** 分隔。
@@ -271,10 +271,10 @@ Lua函数的名字必须为：**'AnimNotify_'** + **{事件名}**
 ## 替换输入事件
 ![ACTION_AXIS_INPUTS](../Images/action_axis_inputs.png)
 
-参考示例：[03_BindInputs](../../Content/Script/Tutorials/03_BindInputs.lua)
+参考示例：[03_BindInputs](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tutorials/03_BindInputs.lua)
 
 ## 替换Replication事件
-参考示例：[10_Replications](../../Content/Script/Tutorials/10_Replications.lua)
+参考示例：[10_Replications](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tutorials/10_Replications.lua)
 
 ## 调用被替换的函数
 如果你用Lua覆盖了原来的实现，仍然可以通过 `Overridden` 访问原来的函数。

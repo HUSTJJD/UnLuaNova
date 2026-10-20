@@ -139,6 +139,6 @@ UnLuaNova 依赖**本地 UE 源码构建**（UE 5.8.3）。GitHub 托管 runner 
 
 ## 延伸阅读
 
-- [测试报告](..\test-report.md) — 最新一次测试报告
+- [测试报告](../test-report.md) — 最新一次测试报告
 - [Showcase 示例](Showcase.md) — 由测试产出的示例截图
 - [调试](Debugging.md) — 调试 Lua 脚本

@@ -38,4 +38,4 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 - UCLASS 改名需要 resave 资产与迁移 `Config/*.ini`
 - Luau 后端未接线：`UNLUANOVA_LUA_BACKEND` 默认 0，`LuaCore` 仍依赖 Lua 5.4 内部头
 
-[Unreleased]: https://github.com/HUSTJJD/UnLua/commits/master
+[Unreleased]: https://github.com/HUSTJJD/UnLuaNova/commits/master

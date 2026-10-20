@@ -7,7 +7,7 @@ description: "跟着截图走一遍：新建蓝图、绑定 Lua、生成模板�
 
 本文站在UE新手视角，以Actor为父类作为用例，说明如何通过Lua来编写/覆盖蓝图逻辑。其他类型同样可以依此类推。
 
-如果你是已经是UE的老手了，建议直接 [开始UnLuaNova之旅](../../README.md#快速开始)
+如果你是已经是UE的老手了，建议直接 [开始 UnLuaNova 之旅](https://github.com/HUSTJJD/UnLuaNova#快速开始)
 
 ## 1. 新建蓝图
 ![新建蓝图1](../Images/create_new_actor_bp_1.png)

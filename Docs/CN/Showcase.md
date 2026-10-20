@@ -70,5 +70,5 @@ Lua 侧的函数如何被 C++ 调回去。
 ## 延伸阅读
 
 - [测试与自动化](Testing.md) — 示例截图由自动化测试产出
-- [测试报告](..\test-report.md) — 最新一次测试报告
+- [测试报告](../test-report.md) — 最新一次测试报告
 - [编程指南](UnLuaNova_Programming_Guide.md) — 编程指南

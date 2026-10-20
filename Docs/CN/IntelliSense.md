@@ -13,7 +13,7 @@ description: "生成引擎类型符号，让 VSCode 等 IDE 对 UE API 提供补
 
 ![VSCode工作区](../Images/vscode_workspace.png)
 
-以VSCode为例，参考示例工程的[UnLuaNovaDemo.code-workspace](../../UnLuaNovaDemo.code-workspace)。一个工作区中分别添加了`Script`和`IntelliSense`，这样每次生成智能提示信息后会自动刷新，就不需要再手动拷贝了。
+以VSCode为例，参考示例工程的[UnLuaNovaDemo.code-workspace](https://github.com/HUSTJJD/UnLuaNova/blob/master/UnLuaNovaDemo.code-workspace)。一个工作区中分别添加了`Script`和`IntelliSense`，这样每次生成智能提示信息后会自动刷新，就不需要再手动拷贝了。
 
 ## 3. 完成
 
