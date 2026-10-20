@@ -92,7 +92,12 @@ namespace UnLuaNova
             lua_newtable(L);                     // the module cache
             lua_pushcclosure(L, &FLuaEnv::Require, 1);
             lua_setglobal(L, "require");
-            lua_pop(L, 1);                       // drop the cache; require keeps it as an upvalue
+            // Nothing to pop here. lua_pushcclosure already took the cache as its upvalue
+            // and lua_setglobal already took the closure, so the stack is back where it
+            // started. The extra lua_pop that used to sit here pushed the stack top below
+            // the frame base: on Luau lua_gettop() is frame-relative (L->top - L->base), so
+            // the depth stayed -1 for the rest of the env's life and the first
+            // UnLuaNova::Call() computed MessageHandlerIdx = gettop - 1 = 0.
         }
 
         lua_getglobal(L, "package");
@@ -208,6 +213,19 @@ namespace UnLuaNova
         // it on with `lua.profiler on`, which keeps the default build untouched and leaves
         // the hook slot free for FDeadLoopCheck.
         FLuaProfiler::Get().Attach(L);
+
+        // Everything above runs straight from C++ at the top level of the main thread, so
+        // the stack has to come back empty. It is not cosmetic: on Luau lua_gettop() is
+        // frame-relative (L->top - L->base), so a stack that ends up below its own base
+        // stays negative for the life of the env, and every later top-level call computes
+        // its message handler index one slot too low - which is how
+        // CallFunctionInternal() ends up asserting on MessageHandlerIdx > 0. Warn rather
+        // than check: a leak here is worth knowing about, but it must not stop the editor
+        // from opening.
+        if (const int LeftOver = lua_gettop(L))
+        {
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Lua stack is not balanced after the env was created: %d value(s) left on the stack. Check for a missing lua_pop / an extra one in FLuaEnv::FLuaEnv()."), LeftOver);
+        }
     }
 
     FLuaEnv::~FLuaEnv()

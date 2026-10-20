@@ -51,7 +51,15 @@
 			"Enabled": true
 		},
 		{
-			"Name": "AllToolsets",
+			"Name": "EditorToolset",
+			"Enabled": true
+		},
+		{
+			"Name": "AutomationTestToolset",
+			"Enabled": true
+		},
+		{
+			"Name": "ConfigSettingsToolset",
 			"Enabled": true
 		}
 	]

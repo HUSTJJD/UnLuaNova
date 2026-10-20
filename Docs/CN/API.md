@@ -1,3 +1,8 @@
+---
+title: "API 参考"
+description: "UnLuaNova 的 C++ API、Lua API 与构建期宏定义速查"
+---
+
 # UnLuaNova API
 
 ## C++ API
@@ -138,3 +143,11 @@ FUnLuaNovaDelegates
 * `ENABLE_TYPE_CHECK` 是否启用类型检测，帮助在 `UFunction` 调用时进行参数类型合法性检测，默认**启用**。
 
 * `UnLuaNova_ENABLE_DEBUG` 是否输出UnLuaNova详细的调试日志，默认**禁用**。
+
+---
+
+## 延伸阅读
+
+- [编程指南](UnLuaNova_Programming_Guide.md) — 绑定方式、双向调用与垃圾回收的核心概念
+- [静态导出与静态绑定](StaticExportBinding.md) — 静态导出与构建期绑定代码生成
+- [设置项](Settings.md) — 运行时与编辑器的全部设置项

@@ -1,3 +1,8 @@
+---
+title: "测试报告"
+description: "自动化测试产出的通过率、失败明细与截图"
+---
+
 > 由 `Tools/GenerateTestReport.py` 自动生成于 — 。请勿手工编辑。
 
 # 测试报告

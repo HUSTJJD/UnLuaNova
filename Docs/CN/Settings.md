@@ -1,3 +1,8 @@
+---
+title: "设置项"
+description: "运行时与编辑器全部设置项的含义，含 Lua 后端切换"
+---
+
 # 设置
 
 通过 `UnLuaNova工具栏->设置` 打开，或者从 `项目设置-> 插件` 界面找到对应的选项卡。
@@ -175,3 +180,11 @@ git submodule update --init --recursive
 ### 检查新版本
 
 当发现新版本时，会在控制台输出新版本信息。
+
+---
+
+## 延伸阅读
+
+- [控制台命令](ConsoleCommand.md) — 运行时调试命令
+- [调试](Debugging.md) — 调试 Lua 脚本
+- [插件与模块](Plugins_And_Modules.md) — 插件与模块开关

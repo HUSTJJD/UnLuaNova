@@ -1,3 +1,8 @@
+---
+title: "控制台命令"
+description: "lua.do / lua.profiler / lua.memstats / lua.dbg / lua.sandbox 等运行时调试命令"
+---
+
 # 控制台命令
 
 ## 概述
@@ -106,3 +111,11 @@ lua.sandbox 1
 ```
 
 *注：默认关闭，因为这是对已有脚本的行为变更。该能力依赖 Luau 原生沙盒，Lua 5.5 后端不支持。*
+
+---
+
+## 延伸阅读
+
+- [调试](Debugging.md) — 断点调试 Lua 脚本
+- [设置项](Settings.md) — 相关设置项（后端、看门狗等）
+- [测试与自动化](Testing.md) — 自动化测试与报告

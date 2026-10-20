@@ -1,8 +1,13 @@
+---
+title: "UE 新手快速上手"
+description: "跟着截图走一遍：新建蓝图、绑定 Lua、生成模板、开写"
+---
+
 # 快速入门示例
 
 本文站在UE新手视角，以Actor为父类作为用例，说明如何通过Lua来编写/覆盖蓝图逻辑。其他类型同样可以依此类推。
 
-如果你是已经是UE的老手了，建议直接 [开始UnLuaNova之旅](../../README.md#开始UnLuaNova之旅)
+如果你是已经是UE的老手了，建议直接 [开始UnLuaNova之旅](../../README.md#快速开始)
 
 ## 1. 新建蓝图
 ![新建蓝图1](../Images/create_new_actor_bp_1.png)
@@ -28,3 +33,11 @@
 最后，用你喜欢的编辑器打开生成的文件，开始编写你的代码吧。
 
 **注意**：在引擎的内容浏览器中是无法看到目录下的Lua脚本的，请使用系统的文件浏览器来查看，推荐将`Content/Script`加入到你的IDE工程中，这样就不需要每次都手动浏览了。
+
+---
+
+## 延伸阅读
+
+- [功能清单](Features.md) — UnLuaNova 能做什么
+- [编程指南](UnLuaNova_Programming_Guide.md) — 开始写真正的逻辑
+- [自定义 Lua 模板](CustomTemplate.md) — 自定义生成的 Lua 模板

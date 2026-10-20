@@ -292,6 +292,13 @@ void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName
         return nullptr;
     }
 
+    // NewUserdataWithPaddingTag() already hands back the payload, i.e. it has skipped
+    // [FUserdataDesc][Padding] - which is exactly the address every reader gets from
+    // GetUserdataFast()/GetUserdataPayload(). Adding PaddingSize once more here is what
+    // every caller used to do, and it is wrong twice over: the value is written one
+    // padding past where anyone reads it, and that address is no longer the aligned one
+    // the padding was computed for - a script struct then trips UE's
+    // IsAligned(PropertyDest, GetAlignment()) check inside FProperty::InitializeValue().
     void* Userdata = NewUserdataWithPaddingTag(L, Size, PaddingSize); // userdata size must add padding size
     if (MetatableName)
     {
@@ -302,7 +309,7 @@ void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName
             return nullptr;
         }
     }
-    return (uint8*)Userdata + PaddingSize;                          // return 'valid' address (userdata memory address + padding size)
+    return Userdata;                                                 // the aligned payload
 }
 
 /**

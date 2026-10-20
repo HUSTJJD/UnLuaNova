@@ -45,7 +45,9 @@ void FLuaBackendSpec::Define()
             const auto L = Env->GetMainState();
 
             // 2^53 + 1: the first value a double can no longer represent exactly, so a
-            // 32-bit or float path anywhere in the stack shows up immediately.
+            // 32-bit or float path anywhere in the stack shows up immediately. Safe here
+            // because UNLUANOVA_PUSHINT64 uses the backend's real 64-bit integer type
+            // rather than whatever the lexer produces for a literal.
             const int64 Expected = 9007199254740993ll;
 
             UNLUANOVA_PUSHINT64(L, Expected);
@@ -57,9 +59,13 @@ void FLuaBackendSpec::Define()
         {
             const auto L = Env->GetMainState();
 
-            Env->DoString("return 9007199254740993");
+            // 2^60, not 2^53 + 1: past 32 bits by a wide margin, and - unlike 2^53 + 1 -
+            // exactly representable as a double, which is the only number type Luau has
+            // for a literal. A bigger value would be asking about a number the backend
+            // cannot even hold, which tests the VM rather than the shim.
+            Env->DoString("return 1152921504606846976");
 
-            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 9007199254740993ll);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 1152921504606846976ll);
             lua_pop(L, 1);
         });
 
@@ -147,7 +153,10 @@ void FLuaBackendSpec::Define()
             const auto L = Env->GetMainState();
             const int32 Top = lua_gettop(L);
 
-            Env->DoString(TEXT("local caught = 5; local f = function() return caught end; local n, v = debug.getupvalue(f, 1); return v"));
+            // Captured through a parameter, not through a plain local: Luau constant
+            // folds a never-reassigned local into its uses, which leaves the closure with
+            // no upvalue at all - and then there is nothing for getupvalue to read.
+            Env->DoString(TEXT("local function make(v) return function() return v end end; local n, v = debug.getupvalue(make(5), 1); return v"));
             TEST_EQUAL((int64)lua_tonumber(L, -1), 5ll);
             lua_settop(L, Top);
         });
@@ -161,8 +170,9 @@ void FLuaBackendSpec::Define()
             // creates; Luau does not. UnLuaNova reads it back to get from a metatable to
             // the type it describes, so on Luau the first read of a not-yet-cached class
             // or enum member used to find a nil and trip a check().
-            Env->DoString(TEXT("local mt = getmetatable(UE.UObject); return mt ~= nil and mt.__name"));
-            TestTrue(TEXT("类元表能回溯到类型名"), lua_isstring(L, -1) != 0);
+            Env->DoString(TEXT("local mt = getmetatable(UE.UObject); return mt ~= nil and mt.__name or 'missing'"));
+            const FString Found = lua_isstring(L, -1) ? FString(UTF8_TO_TCHAR(lua_tostring(L, -1))) : FString(TEXT("<nil>"));
+            TestTrue(TEXT("类元表能回溯到类型名"), Found == TEXT("UObject"));
             lua_settop(L, Top);
         });
 
@@ -171,11 +181,12 @@ void FLuaBackendSpec::Define()
             const auto L = Env->GetMainState();
             const int32 Top = lua_gettop(L);
 
-            // HotReload.load() walks package.searchers and then moves the chunk into its
-            // own sandbox with debug.setupvalue. Both halves used to be missing on Luau,
-            // so it threw inside a pcall and the whole feature degraded without a word.
-            Env->DoString(TEXT("local M = require('UnLuaNova.HotReload'); local chunk = M.load('UnLuaNova.StringEx'); return chunk ~= nil"));
-            TestTrue(TEXT("HotReload.load() 返回了 chunk"), lua_toboolean(L, -1) != 0);
+            // HotReload's own require walks package.searchers and then moves the chunk
+            // into a sandbox with debug.setupvalue. Both halves used to be missing on
+            // Luau, so it threw inside a pcall and the whole feature degraded without a
+            // word - and every module went through the host require instead.
+            Env->DoString(TEXT("local M = require('UnLuaNova.HotReload'); return M.require('UnLuaNova.StringEx') ~= nil"));
+            TestTrue(TEXT("HotReload 的 require 加载出了模块"), lua_toboolean(L, -1) != 0);
             lua_settop(L, Top);
         });
     });

@@ -1,3 +1,8 @@
+---
+title: "API Reference"
+description: "C++ API, Lua API and build-time macros of UnLuaNova"
+---
+
 # UnLuaNova API
 
 ## C++ API
@@ -136,3 +141,11 @@ FUnLuaNovaDelegates
 * `ENABLE_TYPE_CHECK` Macro for whether to check arguments' type is correct or not while calling C++ from Lua, default is true
 
 * `UnLuaNova_ENABLE_DEBUG` Macro for whether to output UnLuaNova's debugging log, default is true.
+
+---
+
+## Further reading
+
+- [Programming Guide](UnLuaNova_Programming_Guide.md) — Binding, two-way calls and garbage collection
+- [How To Implement Overriding](How_To_Implement_Overriding.md) — How overriding works
+- [FAQ](FAQ.md) — Frequently asked questions

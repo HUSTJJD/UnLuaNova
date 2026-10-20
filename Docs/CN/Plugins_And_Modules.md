@@ -1,3 +1,8 @@
+---
+title: "插件与模块"
+description: "UnLuaNova / UnLuaNovaExtensions / UnLuaNovaTestSuite 的组成与开关"
+---
+
 # 插件与模块说明
 
 ## UnLuaNova
@@ -32,3 +37,11 @@ Luau 没有的 lauxlib 拼写，所以切换 Lua/Luau 后端不需要改这些�
 ## UnLuaNovaTestSuite
 
 自动化测试插件，覆盖了UnLuaNova提供的API的规范测试以及一些Issue对应的回归测试。
+
+---
+
+## 延伸阅读
+
+- [测试与自动化](Testing.md) — 测试插件的组织与运行
+- [设置项](Settings.md) — 设置项一览
+- [常见问题 FAQ](FAQ.md) — 常见问题

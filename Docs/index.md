@@ -1,39 +1,144 @@
+---
+title: 首页
+description: UnLuaNova —— 面向 Unreal Engine 的 Lua 脚本方案，Tencent/UnLua 的社区续作
+---
+
 # UnLuaNova
 
-**UnLuaNova** 是面向 Unreal Engine 的 Lua 脚本方案，是 [Tencent/UnLua](https://github.com/Tencent/UnLua) 的社区续作。
+<p style="font-size:1.15rem;opacity:.85">
+面向 Unreal Engine 的 Lua 脚本方案 —— <a href="https://github.com/Tencent/UnLua">Tencent/UnLua</a> 的社区续作。
+保留 UnLua 的编程手感，补上它缺失的<b>维护</b>、<b>性能</b>与<b>可观测性</b>。
+</p>
 
-UnLua 的官方发布线终结在 v2.3.6（2023-11），`develop` 分支虽仍有零星修复但无版本、无维护者。UnLuaNova 把这些散落的社区成果收敛成一条有人维护的发布线，并在此基础上做三件事：
+[在线文档](https://hustjjd.github.io/UnLuaNova/) · [GitHub 仓库](https://github.com/HUSTJJD/UnLuaNova) · [English](#english-docs)
 
-1. **静态绑定** —— 为声明类型生成绑定表，绕开反射热路径与运行时查找开销
-2. **可换 Lua 后端** —— [Lua 5.5](https://www.lua.org/) 与 [Luau](https://luau.org)（默认），均以 git 子模块引入
-3. **Lua 可观测性** —— CPU Profiler（写入 Unreal Insights）、headless 调试服务、沙箱、死循环看门狗
+---
+
+## 三个关键增量
+
+<div class="grid cards" markdown>
+
+- :material-table-cog: **静态绑定**
+
+    构建期为声明类型生成绑定表，绕开反射热路径与运行时查找开销。类型选择是 opt-out：默认全导出。
+
+    [静态导出与静态绑定 →](CN/StaticExportBinding.md)
+
+- :material-swap-horizontal: **双 Lua 后端**
+
+    [Lua 5.5](https://www.lua.org/) 与 [Luau](https://luau.org)（默认）均以子模块引入，差异收敛在 `LuaBackend.h`。
+
+    [后端设置 →](CN/Settings.md#lua后端)
+
+- :material-chart-timeline-variant: **Lua 可观测性**
+
+    CPU Profiler 写入 Unreal Insights、内存统计、headless 调试服务、沙盒、死循环看门狗。
+
+    [控制台命令 →](CN/ConsoleCommand.md)
+
+</div>
+
+## 五分钟跑起来
+
+<div class="grid" markdown>
+
+1. 把 `Plugins` 目录复制到你的 UE 工程根目录
+2. 初始化子模块 —— 不初始化会缺 VM 源码：
+
+    ```bash
+    git submodule update --init --recursive
+    ```
+
+3. 重启工程，新建蓝图
+4. UnLuaNova 工具栏 → `绑定` → 填入 Lua 模块路径（如 `GameModes.BP_MyGameMode`）
+5. `创建 Lua 模版文件` → 在 `Content/Script/GameModes/BP_MyGameMode.lua` 里写代码
+
+</div>
+
+第一次接触？[UE 新手快速上手](CN/Quickstart_For_UE_Newbie.md) 有每一步的截图。
+
+---
+
+## 中文文档
+
+<div class="grid cards" markdown>
+
+- :material-school: **新手上手**
+
+    [UE 新手快速上手](CN/Quickstart_For_UE_Newbie.md) · [功能清单](CN/Features.md)
+
+- :material-book-open-variant: **编程指南**
+
+    [编程指南](CN/UnLuaNova_Programming_Guide.md) · [如何实现覆写](CN/How_To_Implement_Overriding.md)
+
+- :material-code-braces: **API 参考**
+
+    [API](CN/API.md) · [静态导出绑定](CN/StaticExportBinding.md) · [自定义碰撞枚举](CN/CollisionEnum.md)
+
+- :material-cog: **配置与工具**
+
+    [设置项](CN/Settings.md) · [控制台命令](CN/ConsoleCommand.md) · [插件与模块](CN/Plugins_And_Modules.md)
+
+- :material-bug: **调试与诊断**
+
+    [调试](CN/Debugging.md) · [智能提示](CN/IntelliSense.md) · [测试与自动化](CN/Testing.md)
+
+- :material-palette: **进阶**
+
+    [自定义模板](CN/CustomTemplate.md) · [Showcase 示例](CN/Showcase.md) · [FAQ](CN/FAQ.md)
+
+</div>
+
+## English Docs
+
+<div class="grid cards" markdown>
+
+- :material-book-open-variant: **[Programming Guide](EN/UnLuaNova_Programming_Guide.md)**
+
+    Core concepts: binding, calling the engine from Lua, calling Lua from the engine, GC.
+
+- :material-api: **[API Reference](EN/API.md)**
+
+    C++ API, Lua API and the build-time macros.
+
+- :material-call-split: **[How To Implement Overriding](EN/How_To_Implement_Overriding.md)**
+
+    How Blueprint events get replaced by Lua implementations.
+
+- :material-help-circle: **[FAQ](EN/FAQ.md)**
+
+    Frequently asked questions.
+
+</div>
+
+---
 
 ## 状态
-
-⚠️ **当前代码尚未在 UE 5.8 上编译验证**，属于早期重构阶段，请勿用于生产。
 
 | 项 | 值 |
 |---|---|
 | 引擎基线 | **UE 5.8.3**（源码版） |
-| Lua 后端 | **Luau（默认）** + Lua 5.5 —— 均以子模块引入 |
+| Lua 后端 | **Luau（默认）** ／ Lua 5.5 —— 均以子模块引入 |
 | 上游基线 | Tencent/UnLua v2.3.6 + `develop`(2026-04) |
+| 许可 | MIT |
 
-## 快速开始
+!!! warning "早期阶段"
+    项目仍在早期重构阶段，改动会比较频繁：适合尝鲜、提 issue、一起 push，暂不建议直接上生产。
+    已知事项见仓库根目录的 `CHANGELOG.md`。
 
-1. 复制 `Plugins` 目录到你的 UE 工程根目录
-2. 初始化子模块（Lua 5.5 与 Luau 均以 git 子模块引入，不初始化会缺 VM 源码）：
-   ```bash
-   git submodule update --init --recursive
-   ```
-3. 重新启动工程
-4. 新建蓝图 → UnLuaNova 工具栏选择 `绑定` → 填入 Lua 模块路径（如 `GameModes.BP_MyGameMode`）
-5. 选择 `创建 Lua 模板文件`，在 `Content/Script/GameModes/BP_MyGameMode.lua` 里写代码
+## 从 UnLua 迁移
 
-## 文档导航
+Lua 全局名 `UnLua` → **`UnLuaNova`**，UCLASS 与 ini section 同步改名（需 resave 资产）：
 
-- **中文文档** —— 从 [UE 新手快速上手](CN/Quickstart_For_UE_Newbie.md) 开始，或查看[功能清单](CN/Features.md)、[编程指南](CN/UnLuaNova_Programming_Guide.md)
-- **English Docs** —— [Programming Guide](EN/UnLuaNova_Programming_Guide.md) / [API Reference](EN/API.md)
+```lua
+local M = UnLua.Class()       -- UnLua
+local M = UnLuaNova.Class()   -- UnLuaNova
+```
 
-## 仓库
+上游 2019–2023 年的历史变更见 `Archive/UnLua_CHANGELOG.md`（本站导航未收录，请从仓库查看）。
 
-- GitHub：[HUSTJJD/UnLuaNova](https://github.com/HUSTJJD/UnLuaNova)
+---
+
+<p align="center">
+觉得有用？给 <a href="https://github.com/HUSTJJD/UnLuaNova">HUSTJJD/UnLuaNova</a> 点个 Star ⭐
+</p>

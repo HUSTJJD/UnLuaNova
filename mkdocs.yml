@@ -11,52 +11,73 @@ exclude_docs: |
 theme:
   name: material
   language: zh
+  logo: Images/UnLuaNova.png
+  favicon: Images/UnLuaNova.png
   features:
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.top
     - navigation.tracking
+    - navigation.indexes
     - search.highlight
     - search.suggest
+    - search.share
     - content.code.copy
     - content.code.annotate
+    - content.tabs.link
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: teal
-      accent: teal
+      accent: cyan
       toggle:
         icon: material/weather-night
         name: 切换到暗色模式
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: teal
-      accent: teal
+      accent: cyan
       toggle:
         icon: material/weather-sunny
         name: 切换到亮色模式
 
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/HUSTJJD/UnLuaNova
+      name: GitHub
+    - icon: material/book-open-variant
+      link: https://github.com/Tencent/UnLua
+      name: Upstream Tencent/UnLua
+
 nav:
   - 首页: index.md
   - 中文文档:
-      - UE 新手快速上手: CN/Quickstart_For_UE_Newbie.md
-      - 功能清单: CN/Features.md
-      - 编程指南: CN/UnLuaNova_Programming_Guide.md
-      - API 参考: CN/API.md
-      - 设置项: CN/Settings.md
-      - 调试: CN/Debugging.md
-      - IntelliSense: CN/IntelliSense.md
-      - 静态导出绑定: CN/StaticExportBinding.md
-      - 如何实现覆写: CN/How_To_Implement_Overriding.md
-      - 自定义模板: CN/CustomTemplate.md
-      - 插件与模块: CN/Plugins_And_Modules.md
-      - 控制台命令: CN/ConsoleCommand.md
-      - 自定义碰撞枚举: CN/CollisionEnum.md
-      - 常见问题 FAQ: CN/FAQ.md
-      - 测试与自动化: CN/Testing.md
-      - Showcase 示例: CN/Showcase.md
-  - 测试报告: test-report.md
+      - CN/index.md
+      - 入门:
+          - UE 新手快速上手: CN/Quickstart_For_UE_Newbie.md
+          - 功能清单: CN/Features.md
+      - 编程:
+          - 编程指南: CN/UnLuaNova_Programming_Guide.md
+          - API 参考: CN/API.md
+          - 如何实现覆写: CN/How_To_Implement_Overriding.md
+          - 静态导出绑定: CN/StaticExportBinding.md
+      - 配置与工具:
+          - 设置项: CN/Settings.md
+          - 控制台命令: CN/ConsoleCommand.md
+          - 自定义模板: CN/CustomTemplate.md
+          - 自定义碰撞枚举: CN/CollisionEnum.md
+          - 插件与模块: CN/Plugins_And_Modules.md
+      - 诊断与质量:
+          - 调试: CN/Debugging.md
+          - 智能提示: CN/IntelliSense.md
+          - 测试与自动化: CN/Testing.md
+          - 测试报告: test-report.md
+      - 参考:
+          - Showcase 示例: CN/Showcase.md
+          - 常见问题 FAQ: CN/FAQ.md
   - English Docs:
+      - EN/index.md
       - Programming Guide: EN/UnLuaNova_Programming_Guide.md
       - API Reference: EN/API.md
       - How To Implement Overriding: EN/How_To_Implement_Overriding.md
@@ -66,13 +87,22 @@ markdown_extensions:
   - admonition
   - attr_list
   - md_in_html
+  - meta
   - tables
+  - footnotes
   - toc:
       permalink: true
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.tasklist:
       custom_checkbox: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 plugins:
   - search
+
+copyright: Copyright &copy; UnLuaNova contributors · 基于 MIT 许可发布

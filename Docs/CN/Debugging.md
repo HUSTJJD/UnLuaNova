@@ -1,3 +1,8 @@
+---
+title: "调试"
+description: "用 LuaPanda / LuaHelper 在 VSCode 里断点调试 UnLuaNova 脚本"
+---
+
 # 调试
 ## 使用 LuaPanda / LuaHelper 调试
 
@@ -16,3 +21,11 @@ VSCode环境请参考各插件的配置文档，这里不再赘述。
 ## 使用 LuaBooster 调试
 
 TODO:
+
+---
+
+## 延伸阅读
+
+- [智能提示 IntelliSense](IntelliSense.md) — 让 IDE 认识 UE API
+- [控制台命令](ConsoleCommand.md) — lua.dbg 等运行时命令
+- [测试与自动化](Testing.md) — 自动化测试与截图

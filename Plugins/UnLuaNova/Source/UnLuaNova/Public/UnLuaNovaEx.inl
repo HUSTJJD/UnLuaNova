@@ -313,7 +313,11 @@ namespace UnLuaNova
         }
         if (Type == LUA_TUSERDATA)
         {
-            TSharedPtr<IExportedProperty> Property = *(TSharedPtr<IExportedProperty>*)lua_touserdata(L, -1);
+            // The property is held in a userdata created by NewSmartPointer(), whose layout
+            // is [FUserdataDesc][padding][payload]: lua_touserdata() hands back the
+            // descriptor, so reading the TSharedPtr from there yields the descriptor bytes
+            // (magic 0x1688 + tag) instead of the property.
+            TSharedPtr<IExportedProperty> Property = *(TSharedPtr<IExportedProperty>*)UnLuaNova::GetSmartPointer(L, -1);
             void *ContainerPtr = UnLuaNova::GetPointer(L, 1);
             if (ContainerPtr)
             {
@@ -334,7 +338,8 @@ namespace UnLuaNova
         }
         if (Type == LUA_TUSERDATA)
         {
-            TSharedPtr<IExportedProperty> Property = *(TSharedPtr<IExportedProperty>*)lua_touserdata(L, -1);
+            // Same as Index(): the payload, not the block start - see the note there.
+            TSharedPtr<IExportedProperty> Property = *(TSharedPtr<IExportedProperty>*)UnLuaNova::GetSmartPointer(L, -1);
             void *ContainerPtr = UnLuaNova::GetPointer(L, 1);
             if (ContainerPtr)
             {
@@ -460,7 +465,9 @@ namespace UnLuaNova
     template <typename SmartPtrType, typename ClassType, typename... ArgType>
     int32 TSmartPtrConstructor<SmartPtrType, ClassType, ArgType...>::GarbageCollect(lua_State *L)
     {
-        SmartPtrType *Instance = (SmartPtrType*)lua_touserdata(L, 1);
+        // Construct() placement-news the smart pointer into the payload, so the destructor
+        // has to run on the payload too - lua_touserdata() is the descriptor.
+        SmartPtrType *Instance = (SmartPtrType*)UnLuaNova::GetSmartPointer(L, 1);
         if (Instance)
         {
             Instance->~SmartPtrType();

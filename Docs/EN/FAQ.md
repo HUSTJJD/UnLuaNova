@@ -1,3 +1,8 @@
+---
+title: "FAQ"
+description: "Frequently asked questions about UnLuaNova"
+---
+
 # FAQ
 
 ## Q: Overwritten RecieveTick but unuseful
@@ -35,3 +40,11 @@ A: There more than 20 projects using UnLuaNova in Tencent, but unavailable to co
 ## Q: Is there any info of G6IDE?
 
 A: At present, G6IDE has been switched to VSCode plug-in development, and the new version will be released later.
+
+---
+
+## Further reading
+
+- [Programming Guide](UnLuaNova_Programming_Guide.md) — Programming guide
+- [API Reference](API.md) — API reference
+- [How To Implement Overriding](How_To_Implement_Overriding.md) — How overriding works

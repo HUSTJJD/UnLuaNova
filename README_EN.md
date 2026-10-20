@@ -1,72 +1,145 @@
-![LOGO](./Docs/Images/UnLuaNova.png)
+<div align="center">
 
-# Overview
-**UnLuaNova** is a **feature-rich**, **easy-learning** and **highly optimized** scripting solution for UE. UnLuaNova follows the programming pattern of UE. UE programmers can use it at zero learning cost.
+<img src="Docs/Images/UnLuaNova.png" alt="UnLuaNova" width="160" />
 
+# UnLuaNova
 
-# Main features
-* Access all **UCLASS**, **UPROPERTY**, **UFUNCTION**, **USTRUCT**, **UENUM** without glue codes.
-* Override **'BlueprintEvent'** (UFUNCTIONs tagged with **'BlueprintImplementableEvent'** or **'BlueprintNativeEvent'**, **All** Events/Functions defined in Blueprints) without helper codes.
-* Override **Replication Notify** without helper codes.
-* Override **Animation Notify** without helper codes.
-* Override **Input Event** without helper codes.
-* Simple solution to export classes, member variables, member functions, global functions and enums outside the reflection system statically.
-* Highly optimized **UFUNCTION** invoking (including persistent parameters buffer, optimized local function invoking, optimized parameters passing, optimized output values handling).
-* Optimized containers (**TArray**, **TSet**, **TMap**) accessing. There is no conversion between Lua table and containers.
-* Optimized structure accessing.
+**A Lua scripting solution for Unreal Engine — the community continuation of [Tencent/UnLua](https://github.com/Tencent/UnLua)**
 
+[![CI](https://github.com/HUSTJJD/UnLuaNova/actions/workflows/ci.yml/badge.svg)](https://github.com/HUSTJJD/UnLuaNova/actions/workflows/ci.yml)
+[![Docs](https://github.com/HUSTJJD/UnLuaNova/actions/workflows/docs.yml/badge.svg)](https://hustjjd.github.io/UnLuaNova/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.TXT)
+[![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.8-blueviolet.svg)](https://www.unrealengine.com/)
+[![Lua](https://img.shields.io/badge/Lua-5.5%20%2F%20Luau-blue.svg)](https://www.lua.org/)
+[![GitHub stars](https://img.shields.io/github/stars/HUSTJJD/UnLuaNova?style=social)](https://github.com/HUSTJJD/UnLuaNova/stargazers)
 
-# More features
-* Support default parameters of **UFUNCTION** (tagged with **'BlueprintCallable'** or **'Exec'**) parameters.
-* Support **customized collision enums**.
-* Support **server/clients** simulation in editor.
-* Support exporting Lua template file for blueprints.
-* Support calling **Latent** functions in Lua coroutines.
+[Documentation](https://hustjjd.github.io/UnLuaNova/) · [Quick Start](#quick-start) · [Docs Index](#docs-index) · [中文](README.md)
 
+</div>
 
-# Modules
-* **UnLuaNova**. Main **'Runtime'** module.
-* **UnLuaNovaEditor**. **'Editor'** module includes editor extention (Lua template exporting) and a commandlet.
-* **UnLuaNovaDefaultParamCollector**. **'Program'** module to collect default parameters for UFUNCTION.
-* **UnLuaNovaIntelliSense**. **'Program'** module to generate **IntelliSense** (**symbols**) of all **UCLASS**, **UPROPERTY**, **UFUNCTION**, **USTRUCT**, **UENUM** for a **private** IDE (which will be **PUBLIC** soon). It's **disabled** by default.
+---
 
+## What is this
 
-# Supported engine versions
-Unreal Engine 4.17.x - Unreal Engine 5.x
+The official UnLua release line froze at **v2.3.6 (2023-11)** — its `develop` branch still gets
+occasional fixes, but there is no release and no maintainer. UnLuaNova pulls those scattered
+community contributions into **one maintained release line**, and adds three things on top:
 
-**NOTE**: build.cs files need tiny modifications under 4.17.x and 4.18.x.
+| | What | Why it matters |
+|---|---|---|
+| **Static binding** | Binding tables are generated at build time for declared types | Skips the reflection hot path and runtime lookups |
+| **Two Lua backends** | [Lua 5.5](https://www.lua.org/) and [Luau](https://luau.org) (default), both as git submodules | Backend differences live behind a single abstraction layer |
+| **Lua observability** | CPU profiler (into Unreal Insights), headless debug service, sandbox, infinite-loop watchdog | Lua stops being a black box: performance and failures are traceable |
 
+In short: **keep UnLua's programming feel, add the maintenance, performance and debugging it never had.**
 
-# Quick start
-* Create a new Blueprint.
+## Why UnLuaNova
 
-![CREATE_BLUEPRINT](Docs/Images/create_blueprint.png)
+| | Tencent/UnLua v2.3.6 | UnLuaNova |
+|:---|:---|:---|
+| Maintained | No (since 2023-11) | Yes |
+| Engine | UE 4.17 – 5.x (newer versions need porting) | Baseline **UE 5.8.3**, community UE 5.4 / 5.6 fixes merged |
+| Lua backend | One single Lua version | **Lua 5.5 / Luau**, switchable |
+| Binding | Runtime reflection | Build-time **static binding** (opt-out type selection) |
+| Performance | — | `CallUEFast` skips redundant lookups, persistent parameter buffers |
+| Observability | Minimal | CPU profiler / memory stats / debug service / sandbox / watchdog |
+| Type checking | None | Generated Luau `.d.lua`, checked by `luau-analyze` |
 
-* Implement **'UnLuaNovaInterface'**.
+## Quick start
 
-![IMPLEMENT_UnLuaNovaInterface](Docs/Images/implement_UnLuaNovaInterface.png)
+```bash
+# 1. Copy the Plugins directory into your UE project root
+# 2. Initialize submodules (Lua 5.5 and Luau are submodules - without them the VM sources are missing)
+git submodule update --init --recursive
+```
 
-* Return a Lua file path (**relative** to **'Content/Script'**) in **'GetModuleName'**.
+3. Restart the project
+4. Create a Blueprint → `Bind` in the UnLuaNova toolbar → fill in the Lua module path (e.g. `GameModes.BP_MyGameMode`)
+5. Pick `Create Lua Template File` and write code in `Content/Script/GameModes/BP_MyGameMode.lua`
 
-![IMPLEMENT_GetModuleName](Docs/Images/implement_GetModuleName.png)
+## What the code looks like
 
-* Create Lua template.
+Access `UCLASS` / `UPROPERTY` / `UFUNCTION` / `USTRUCT` / `UENUM` directly with no glue code,
+and replace Blueprint implementations outright:
 
-![CREATE_LUA_TEMPLATE](Docs/Images/lua_template.png)
+```lua
+local BP_PlayerController_C = UnLuaNova.Class()
 
-* Generated Lua template.
+function BP_PlayerController_C:ReceiveBeginPlay()
+    -- call engine APIs directly
+    local Widget = UE.UWidgetBlueprintLibrary.Create(
+        self, UE.UClass.Load("/Game/Core/UI/UMG_Main_C"))
+    Widget:AddToViewport()
 
-![GENERATED_LUA_TEMPLATE](Docs/Images/generated_lua_template.png)
+    -- keep the original Blueprint implementation by calling it explicitly
+    self.Overridden.ReceiveBeginPlay(self)
+end
 
-* Add Lua codes to Lua template.
+-- override a Blueprint event with return values
+function BP_PlayerController_C:GetCharacterInfo(HP, Position, Name)
+    return true, 99, UE.FVector(128.0, 128.0, 0.0), "Marcus"
+end
 
-![FINAL_LUA_FILE](Docs/Images/final_lua_file.png)
+return BP_PlayerController_C
+```
 
+The same pattern covers **Replication Notify**, **Animation Notify** and **Input Event**:
+match the Lua function name (`AnimNotify_xxx`) and the replacement is done — no helper code.
 
-# Documentation
-* [Programming Guide](Docs/EN/UnLuaNova_Programming_Guide.md)
-* [How to Implement Overriding](Docs/EN/How_To_Implement_Overriding.md)
+## Status
 
+| Item | Value |
+|---|---|
+| Engine baseline | **UE 5.8.3** (source build) |
+| Lua backend | **Luau (default)** / Lua 5.5 — both as submodules |
+| Upstream baseline | Tencent/UnLua v2.3.6 + `develop` (2026-04) |
+| License | MIT |
 
-# License
-* UnLuaNova is distributed under the terms of [the MIT license](LICENSE.TXT)
+> ⚠️ Early stage, expect churn. Great for trying out, opening issues and pushing fixes — not yet recommended for production.
+> Known issues: see [CHANGELOG](CHANGELOG.md#known-issues).
+
+## Docs index
+
+<div align="center">
+
+| Chinese | English |
+|:---|:---|
+| [UE 新手快速上手](Docs/CN/Quickstart_For_UE_Newbie.md) | [Programming Guide](Docs/EN/UnLuaNova_Programming_Guide.md) |
+| [功能清单](Docs/CN/Features.md) | [API Reference](Docs/EN/API.md) |
+| [编程指南](Docs/CN/UnLuaNova_Programming_Guide.md) | [How To Implement Overriding](Docs/EN/How_To_Implement_Overriding.md) |
+| [API 参考](Docs/CN/API.md) | [FAQ](Docs/EN/FAQ.md) |
+| [设置项](Docs/CN/Settings.md) | [Docs site](https://hustjjd.github.io/UnLuaNova/) |
+| [调试](Docs/CN/Debugging.md) · [IntelliSense](Docs/CN/IntelliSense.md) | |
+| [静态导出绑定](Docs/CN/StaticExportBinding.md) · [控制台命令](Docs/CN/ConsoleCommand.md) | |
+| [测试与自动化](Docs/CN/Testing.md) · [FAQ](Docs/CN/FAQ.md) | |
+
+</div>
+
+Upstream changelog for 2019–2023: [`Docs/Archive/UnLua_CHANGELOG.md`](Docs/Archive/UnLua_CHANGELOG.md).
+
+## Migrating from UnLua
+
+The Lua global was renamed from `UnLua` to **`UnLuaNova`** — a bulk rename is enough:
+
+```lua
+local M = UnLua.Class()       -- UnLua
+local M = UnLuaNova.Class()   -- UnLuaNova
+```
+
+UCLASS names changed too (`UUnLuaSettings` → `UUnLuaNovaSettings`, etc.), so assets need a
+resave and `Config/*.ini` section names need migrating.
+
+## Contributing
+
+A star is the cheapest way to help ⭐ — also welcome:
+
+- Issues: build problems, engine version porting, API questions
+- PRs: docs fixes, new tests, merging unmerged community fixes from upstream
+- Tests: `.\Tools\RunTests.ps1`, see [测试与自动化](Docs/CN/Testing.md)
+
+## License
+
+MIT, based on Tencent/UnLua (MIT) — see [LICENSE](LICENSE.TXT).
+
+Lua VM: [Lua 5.5](https://www.lua.org/) (MIT); Luau: [luau-lang/luau](https://github.com/luau-lang/luau) (MIT).
+Both are git submodules — run `git submodule update --init --recursive` after cloning.

@@ -109,18 +109,13 @@ public:
         int32 Type = lua_type(L, IndexInStack);
         if (Type != LUA_TNIL)
         {
-            if (Type != LUA_TNUMBER)
+            // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+            // tag, so every literal a script writes - all of which are doubles there - was
+            // rejected, and so was LUA_TNUMBER vs LUA_TINTEGER confusion the other way.
+            if (!UnLuaNovaIsIntegralNumber(L, IndexInStack))
             {
                 ErrorMsg = FString::Printf(TEXT("integer needed but got %s"), UTF8_TO_TCHAR(lua_typename(L, Type)));
                 return false;
-            }
-            else
-            {
-                if (!lua_isinteger(L, IndexInStack))
-                {
-                    ErrorMsg = FString::Printf(TEXT("integer needed but got float or double"));
-                    return false;
-                }
             }
         }
 
@@ -210,18 +205,12 @@ public:
         int32 Type = lua_type(L, IndexInStack);
         if (Type != LUA_TNIL)
         {
-            if (Type != LUA_TNUMBER)
+            // Same as the integer property above: an enum value arrives as a double when a
+            // script writes it, and as LUA_TINTEGER when UnLuaNova pushed it.
+            if (!UnLuaNovaIsIntegralNumber(L, IndexInStack))
             {
                 ErrorMsg = FString::Printf(TEXT("integer needed but got %s"), UTF8_TO_TCHAR(lua_typename(L, Type)));
                 return false;
-            }
-            else
-            {
-                if (!lua_isinteger(L, IndexInStack))
-                {
-                    ErrorMsg = FString::Printf(TEXT("integer needed but got float or double"));
-                    return false;
-                }
             }
         }
 

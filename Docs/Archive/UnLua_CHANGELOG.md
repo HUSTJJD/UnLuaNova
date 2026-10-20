@@ -26,8 +26,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [2.3.5] - 2023-5-29
 ### Added
 - 对UE5.2的支持
-- 增加配置选项[自定义Lua版本](./Docs/CN/Settings.md#自定义Lua版本)
-- 增加配置选项[启用FText支持](./Docs/CN/Settings.md#启用FText支持)
+- 增加配置选项[自定义Lua版本](../CN/Settings.md#lua后端)
+- 增加配置选项[启用FText支持](../CN/Settings.md#启用FText支持)
 - 适配UE5.1的UHT [#600](https://github.com/Tencent/UnLuaNova/issue/600) [#607](https://github.com/Tencent/UnLuaNova/pull/607)
 - 禁止在Lua的`Initialize`函数中访问当前`UObject`上的`UFunction`
 - 在Lua中`loadstring`失败时的全路径错误信息输出
@@ -47,7 +47,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [2.3.3] - 2023-2-2
 ### Added
 - 增加对`EnhancedInput`输入绑定的支持
-- 增加 [启用Insights分析支持](./Docs/CN/Settings.md#启用Insights分析支持) 和 [传参方式](./Docs/CN/Settings.md#默认传参)  配置选项
+- 增加 [启用Insights分析支持](../CN/Settings.md#启用Insights分析支持) 和 [传参方式](../CN/Settings.md#传参方式)  配置选项
 - 热重载失败时输出错误日志 [#581](https://github.com/Tencent/UnLuaNova/pull/581)
 - 自动将启用的`UnLuaNovaExtensions`的脚本加入打包设置
 - 支持按需重新加载蓝图枚举，也支持用UnLuaNova.Ref来保持引用 [#585](https://github.com/Tencent/UnLuaNova/issues/585)
@@ -65,8 +65,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [2.3.2] - 2022-12-9
 
 ### Added
-- 增加配置选项[崩溃时输出Lua堆栈到日志](./Docs/CN/Settings.md#崩溃时输出lua堆栈到日志)
-- 针对自`2.2.0`版本以来调整的垃圾回收机制的[说明文档](./Docs/CN/UnLuaNova_Programming_Guide.md#五垃圾回收)
+- 增加配置选项[崩溃时输出Lua堆栈到日志](../CN/Settings.md#崩溃时输出Lua堆栈到日志)
+- 针对自`2.2.0`版本以来调整的垃圾回收机制的[说明文档](../CN/UnLuaNova_Programming_Guide.md#五、垃圾回收)
 
 ### Fixed
 - UObject绑定后的元表和其他表相等判断时结果错误 [#281](https://github.com/Tencent/UnLuaNova/issues/281) [#567](https://github.com/Tencent/UnLuaNova/issues/567)
@@ -78,7 +78,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `UObject.Load`传入中文路径时乱码
 
 ### Changed
-- 在[热重载模式](./Docs/CN/Settings.md#热重载模式)为禁用时，不再加载`HotReload.lua`，不会替换全局的`require`
+- 在[热重载模式](../CN/Settings.md#热重载模式)为禁用时，不再加载`HotReload.lua`，不会替换全局的`require`
 - 在使用`LoadObject`加载不到对象时不再输出加载失败的日志，而是直接返回`nil`
 
 ## [2.3.1] - 2022-11-11
@@ -87,7 +87,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - 支持UE5.1
 - 支持PS5
 - 增加 `UnLuaNova::PrintCallStack(L)` 的接口来方便在IDE里断点直接执行输出lua堆栈
-- 更多容器和结构体相关的访问保护，增加[悬垂指针检查](./Docs/CN/Settings.md#启用类型检查)选项
+- 更多容器和结构体相关的访问保护，增加[悬垂指针检查](../CN/Settings.md#启用类型检查)选项
 - `UnLuaNovaExtensions` 新增可选集成 [lua-protobuf](https://github.com/starwing/lua-protobuf) 和 [lua-rapidjson](https://github.com/xpol/lua-rapidjson)
 - 增加 `FLuaEnv` 的 `OnDestroyed` 事件
 
@@ -106,18 +106,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - mac打包找不到libLua.dylib问题 [#557](https://github.com/Tencent/UnLuaNova/pull/557)
 
 ### Changed
-- 在[启用类型检查](./Docs/CN/Settings.md#启用类型检查)时，需要依次返回返回值和Out参数，而不能像旧版本一样忽略不返回
+- 在[启用类型检查](../CN/Settings.md#启用类型检查)时，需要依次返回返回值和Out参数，而不能像旧版本一样忽略不返回
 
 ## [2.3.0] - 2022-10-8
 
 ### Added
 - 支持使用 `UnLuaNova.PackagePath` 的方式来搜索Lua文件，也支持从插件Content目录加载
 - 支持Android下的x86_64
-- 支持自定义预绑定类型，参考[预绑定类型列表](./Docs/CN/Settings.md#预绑定类型列表)配置选项
+- 支持自定义预绑定类型，参考[预绑定类型列表](../CN/Settings.md#预绑定类型列表)配置选项
 - 支持UE5下的蓝图UMG输入绑定，使用新增的 `UnLuaNova.Input` 模块，可以做到更细节的输入绑定
 - `UnLuaNova.Ref` 和 `UnLuaNova.Unref` 接口，提供将 `UObject` 生命周期和Lua侧同步的管理机制
 - 提升Lua访问UE函数和属性的性能
-- [自定义生成Lua模版](./Docs/CN/CustomTemplate.md)
+- [自定义生成Lua模版](../CN/CustomTemplate.md)
 
 ### Fixed
 - Mac下编辑器的dylib无法加载
@@ -128,7 +128,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - UE5下打包后UnLuaNova配置没有正确加载
 
 ### Changed
-- 默认关闭运行时对`UTF-8 BOM`文件头的加载支持，需要兼容请开启[兼容UTF-8 BOM文件头](./Docs/CN/Settings.md#兼容UTF-8%20BOM文件头)选项
+- 默认关闭运行时对`UTF-8 BOM`文件头的加载支持，需要兼容请开启[兼容UTF-8 BOM文件头](../CN/Settings.md#兼容UTF-8%20BOM文件头)选项
 
 ### Removed
 - 移除 `AddPackagePath` 接口
@@ -174,7 +174,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - 支持蓝图的`BlueprintFunctionLibrary`绑定到Lua与覆写
 - 支持CDO绑定
-- 支持自定义[Lua模块定位](./Docs/CN/Settings.md#Lua模块定位器)设置
+- 支持自定义[Lua模块定位](../CN/Settings.md#lua模块定位器)设置
 - 生成Lua模版文件时增加`@class`注解
 - UnLuaNova内置API的智能提示
 - 生成智能提示时显示更详细的进度条
@@ -252,7 +252,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - 官方交流QQ群：936285107
 - 编辑器主界面工具栏的菜单项入口
-- 内置一些基础的[控制台命令](Docs/CN/ConsoleCommand.md)
+- 内置一些基础的[控制台命令](../CN/ConsoleCommand.md)
 - 配置支持，通过引擎菜单 `项目设置 -> 插件 -> UnLuaNova` 修改运行时和编辑器环境的配置
 - 编辑器界面多语言支持，现在可以看到中文菜单了
 - 多虚拟机环境支持

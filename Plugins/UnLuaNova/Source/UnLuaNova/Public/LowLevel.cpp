@@ -191,7 +191,14 @@ namespace UnLuaNova
                     Type = lua_rawget(L, Index);
                     if (Type == LUA_TUSERDATA)
                     {
-                        Userdata = lua_touserdata(L, -1); // get the raw UObject
+                        // Not lua_touserdata(): that hands back the start of the block,
+                        // which is the FUserdataDesc ([desc][padding][payload]), while
+                        // every caller dereferences this as a two level pointer. Reading
+                        // the block start instead of the payload made the "UObject" be
+                        // the descriptor bytes themselves - magic 0x1688 plus the
+                        // variant/two-level tag 0xA0 - and the first dereference of that
+                        // pointer crashed. GetUserdataFast() walks past the descriptor.
+                        Userdata = ::GetUserdataFast(L, -1, &bTwoLvlPtr); // get the raw UObject
                     }
                     else
                     {

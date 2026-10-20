@@ -208,7 +208,12 @@ namespace UnLuaNova
 
         lua_pushstring(L, "Object");
         lua_rawget(L, -2);
-        void* Userdata = lua_touserdata(L, -1);
+        // Same rule as the branch above: lua_touserdata() is the FUserdataDesc, not the
+        // payload. Writing ReleasedPtr there would overwrite the descriptor - the userdata
+        // would stop being recognized as ours - instead of releasing the UObject slot.
+        bool bTwoLvlPtr;
+        void* Userdata = GetUserdataFast(L, -1, &bTwoLvlPtr);
+        check(bTwoLvlPtr)
         *((void**)Userdata) = (void*)LowLevel::ReleasedPtr;
 
         lua_settop(L, Top);

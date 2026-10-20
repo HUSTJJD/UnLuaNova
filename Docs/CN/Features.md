@@ -1,3 +1,8 @@
+---
+title: "功能清单"
+description: "UnLuaNova 的能力总览，以及相对 UnLua v2.3.6 的增量"
+---
+
 # 功能清单
 
 ## 概览
@@ -79,3 +84,11 @@
 * 纯 Lua 实现的常用字符串函数（`split` / `strip` / `startswith` / `endswith` / `count` / `join`）
 * `local StringEx = require("UnLuaNova.StringEx")`
 * 以模块形式提供而非写入全局 `string` 表，因此与沙盒模式不冲突
+
+---
+
+## 延伸阅读
+
+- [编程指南](UnLuaNova_Programming_Guide.md) — 编程指南
+- [静态导出与静态绑定](StaticExportBinding.md) — 静态绑定如何工作
+- [Showcase 示例](Showcase.md) — 可运行示例

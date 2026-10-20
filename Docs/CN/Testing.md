@@ -1,3 +1,8 @@
+---
+title: "测试与自动化"
+description: "用 UE Automation 框架跑测试、生成报告与截图"
+---
+
 # 测试与自动化
 
 UnLuaNova 用 **UE 原生 Automation 框架**做测试，没有引入第三方框架。所有测试集中在插件
@@ -129,3 +134,11 @@ UnLuaNova 依赖**本地 UE 源码构建**（UE 5.8.3）。GitHub 托管 runner 
 - **单元测试**放 `Private/Specs/`，用 `BEGIN_DEFINE_SPEC`；**场景/实例测试**放 `Private/Tests/`。
 - 全部包在 `#if WITH_DEV_AUTOMATION_TESTS` 里，保证打包版本不含测试代码。
 - 需要 World 的用例走 `FOpenMapLatentCommand`，不要自己 `LoadMap`。
+
+---
+
+## 延伸阅读
+
+- [测试报告](..\test-report.md) — 最新一次测试报告
+- [Showcase 示例](Showcase.md) — 由测试产出的示例截图
+- [调试](Debugging.md) — 调试 Lua 脚本

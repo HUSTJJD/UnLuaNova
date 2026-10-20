@@ -1,3 +1,8 @@
+---
+title: "静态导出与静态绑定"
+description: "手动静态导出、构建期静态绑定代码生成与 opt-out 类型选择"
+---
+
 鉴于定制化和性能方面的考虑，UnLuaNova 默认导出了以下引擎常用的类（详细的可以查阅代码）：
 
 #### 基础类型
@@ -199,3 +204,11 @@ BEGIN_EXPORT_ENUM(EEye)
 	ADD_SCOPED_ENUM_VALUE(RightEye)
 END_EXPORT_ENUM(EEye)
 ```
+
+---
+
+## 延伸阅读
+
+- [API 参考](API.md) — C++ 侧的导出接口
+- [编程指南](UnLuaNova_Programming_Guide.md) — 从 Lua 访问引擎类型
+- [设置项](Settings.md) — 设置项一览

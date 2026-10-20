@@ -21,6 +21,9 @@
 #pragma once
 
 #include <cstdarg> // va_list, for the luaL_error shim below
+#include <cmath>   // floor, for UnLuaNovaIsIntegralNumber below
+#include <cstdint> // int64_t - this header is also included by the vendored extension
+                   // modules, where Unreal's own `int64` typedef is not in scope
 #include <cstdlib> // free, for the luaL_loadbufferx shim below
 #include <cstring> // strlen, for the luaL_loadstring shim below
 
@@ -364,10 +367,10 @@ inline void lua_register(lua_State* L, const char* Name, lua_CFunction Fn)
 // Read the double when the value is not already an integer, under the same rule plain
 // Lua's lua_tointeger applies: a number without an exact integer representation is not
 // an answer, so 1.5 yields 0 rather than 1.
-inline int64 UnLuaNovaToInt64(lua_State* L, int Idx)
+inline int64_t UnLuaNovaToInt64(lua_State* L, int Idx)
 {
     int IsInteger = 0;
-    const int64 AsInteger = (int64)lua_tointeger64(L, Idx, &IsInteger);
+    const int64_t AsInteger = (int64_t)lua_tointeger64(L, Idx, &IsInteger);
     if (IsInteger)
         return AsInteger;
 
@@ -378,7 +381,7 @@ inline int64 UnLuaNovaToInt64(lua_State* L, int Idx)
     if (AsDouble != AsDouble) // NaN
         return 0;
 
-    const int64 Truncated = (int64)AsDouble;
+    const int64_t Truncated = (int64_t)AsDouble;
     return (double)Truncated == AsDouble ? Truncated : 0;
 }
 
@@ -387,6 +390,37 @@ inline int64 UnLuaNovaToInt64(lua_State* L, int Idx)
 #define UNLUANOVA_PUSHINT64(L, V) lua_pushinteger(L, (lua_Integer)(V))
 #define UNLUANOVA_TOINT64(L, Idx) ((int64)lua_tointeger(L, Idx))
 #endif
+
+// --- can this value be read as an integer? -----------------------------------
+// Plain Lua has one numeric type and lua_isinteger() separates 1 from 1.5. Luau has a
+// second type tag for integers (LUA_TINTEGER) *and* compiles every literal to a double,
+// so neither half of that works there: `SetCollisionEnabled(0)` written in a script
+// arrives as a double, while a value UnLuaNova pushed with UNLUANOVA_PUSHINT64 arrives as
+// LUA_TINTEGER - and lua_isinteger() answers false for both, which is how every integer
+// argument of every UFunction started being rejected.
+//
+// lua_isnumber() is true for either tag, so it is the question that means the same thing
+// on both backends. A double still has to actually hold an integer, because that is the
+// only case UNLUANOVA_TOINT64 can read back: 1.5 would silently become 0, and saying so
+// is better than that.
+inline bool UnLuaNovaIsIntegralNumber(lua_State* L, int Idx)
+{
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+    // Already an integer, and it may not even survive a round trip through a double.
+    if (lua_isinteger64(L, Idx))
+        return true;
+#endif
+
+    if (!lua_isnumber(L, Idx))
+        return false;
+
+    const double Value = lua_tonumber(L, Idx);
+    if (Value != Value) // NaN
+        return false;
+
+    const double Truncated = (Value < 0.0) ? -std::floor(-Value) : std::floor(Value);
+    return Truncated == Value;
+}
 
 // --- userdata allocation ----------------------------------------------------
 // Lua 5.5: lua_newuserdatauv(L, size, nuvalue)

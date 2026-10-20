@@ -1,4 +1,7 @@
-[TOC]
+---
+title: "编程指南"
+description: "绑定方式、Lua 与引擎双向调用、覆写与垃圾回收的核心概念"
+---
 
 # 一、概述
 UnLuaNova是一个功能丰富、高度优化的UE脚本解决方案。开发者可以使用Lua来进行游戏逻辑编写，借助于Lua的热重载特性，可以获得快得多的游戏逻辑迭代速度。本文将会介绍UnLuaNova的主要功能和基础编程模式。
@@ -360,3 +363,11 @@ MyWidget:RemoveFromViewport()
 
 [静态导出](./StaticExportBinding.md)
 [自定义生成Lua模版](./CustomTemplate.md)
+
+---
+
+## 延伸阅读
+
+- [如何实现覆写](How_To_Implement_Overriding.md) — 覆写机制的实现原理
+- [API 参考](API.md) — 接口速查
+- [静态导出与静态绑定](StaticExportBinding.md) — 静态导出与静态绑定
