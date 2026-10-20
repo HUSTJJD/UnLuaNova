@@ -103,9 +103,13 @@ namespace UnLuaNova
             // reads it to tell whether a module is already in, and scripts that inspect
             // package.loaded work unchanged. On plain Lua the standard library owns this
             // table; here ours does, and it stays the single source of truth.
-            lua_newtable(L);                     // package
-            lua_pushvalue(L, -3);                // the cache
-            lua_setfield(L, -2, "loaded");
+            lua_newtable(L);                     // [cache, package]
+            lua_pushvalue(L, -2);                // [cache, package, cache] - the cache sits
+                                                 // at -2 now that require has been popped,
+                                                 // not at -3; pushing index -3 here would
+                                                 // push nothing and silently publish
+                                                 // package.loaded = nil
+            lua_setfield(L, -2, "loaded");       // package.loaded = cache
             lua_setglobal(L, "package");
             lua_pop(L, 1);                       // drop the cache reference
         }

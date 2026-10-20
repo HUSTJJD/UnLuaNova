@@ -3,6 +3,10 @@
 UnLuaNova 用 **UE 原生 Automation 框架**做测试，没有引入第三方框架。所有测试集中在插件
 `UnLuaNovaTestSuite` 里，跑一次就能得到通过率、失败原因和截图。
 
+> 本工程（UnLuaNovaDemo）在 `.uproject` 里把它打开了，自动化测试随时可跑。
+> 它是**开发期工具、不是运行期依赖**，所以插件本身 `EnabledByDefault: false` ——
+> 把 UnLuaNova 用到别的工程时不会被默认带进去，需要跑测试再手动开。
+
 ## 目录
 
 ```
