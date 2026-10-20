@@ -1,3 +1,8 @@
+---
+title: "如何实现覆写"
+description: "零胶水代码替换蓝图事件的原理：Thunk 函数替换与 Opcode 注入"
+---
+
 # 概述
 零胶水代码替换各种蓝图和通知事件是 `UnLuaNova` 的主要功能之一。本文主要介绍这套机制的原理，以及其对应的两种方案。
 
@@ -42,3 +47,11 @@
 ![OPCODE_INJECTION](../Images/opcode_injection.png)
 
 ![CUSTOMIZED_THUNK_FUNC](../Images/customized_thunk_func.png)
+
+---
+
+## 延伸阅读
+
+- [编程指南](UnLuaNova_Programming_Guide.md) — 覆写在 Lua 侧的用法
+- [API 参考](API.md) — 接口速查
+- [常见问题 FAQ](FAQ.md) — 覆写相关的常见疑问

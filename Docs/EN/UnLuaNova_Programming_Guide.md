@@ -1,4 +1,7 @@
-[TOC]
+---
+title: "Programming Guide"
+description: "Binding, calling the engine from Lua, calling Lua from the engine, and garbage collection"
+---
 
 # Overview
 UnLuaNova is a feature-rich and high optimized scripting solution for UE. Developes can develop game logic using Lua with it, and it's possible to iterate game logic much more faster with Lua's hotload feature. This document will introduce the major features and basic programming pattern of UnLuaNova.
@@ -569,3 +572,10 @@ The template file:
 
 ![TEMPLATE_CODES](../Images/generated_lua_template.png)
 
+---
+
+## Further reading
+
+- [API Reference](API.md) — API reference
+- [How To Implement Overriding](How_To_Implement_Overriding.md) — How overriding works
+- [FAQ](FAQ.md) — Frequently asked questions

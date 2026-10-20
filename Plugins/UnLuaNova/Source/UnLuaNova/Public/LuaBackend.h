@@ -20,7 +20,16 @@
 
 #pragma once
 
+// UNLUANOVA_API below expands to DLLEXPORT / DLLIMPORT, which UBT injects and which only
+// the platform header defines. The vendored extension modules (LuaProtobuf and friends)
+// reach this header through lua.hpp with no Unreal header in front of it, so the platform
+// header has to come from here rather than be assumed to be already included.
+#include "HAL/Platform.h"
+
 #include <cstdarg> // va_list, for the luaL_error shim below
+#include <cmath>   // floor, for UnLuaNovaIsIntegralNumber below
+#include <cstdint> // int64_t - this header is also included by the vendored extension
+                   // modules, where Unreal's own `int64` typedef is not in scope
 #include <cstdlib> // free, for the luaL_loadbufferx shim below
 #include <cstring> // strlen, for the luaL_loadstring shim below
 
@@ -87,6 +96,41 @@ static_assert(sizeof(lua_Integer) == 4, "Luau's lua_Integer is 32-bit; these hea
 #endif
 static_assert(sizeof(lua_Integer) == 8, "Plain Lua's lua_Integer is 64-bit; these headers are not Lua's, or LUA_INT_TYPE was changed in luaconf.h - UNLUANOVA_PUSHINT64/TOINT64 need rechecking.");
 #endif
+
+// --- creating a state ---------------------------------------------------------
+// Both backends build a lua_State, but not with the same argument list: plain Lua takes a
+// third one, a seed for the string hash (it randomises string hashing so a script cannot
+// force collisions), Luau has no such parameter. The spelling that produces a seed the same
+// way the reference lauxlib does is luaL_makeseed, which is why this is not simply
+// "pass 0" - a fixed seed would undo exactly what the parameter is for.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_NEWSTATE(ALLOC, UD) lua_newstate(ALLOC, UD)
+#else
+#define UNLUANOVA_NEWSTATE(ALLOC, UD) lua_newstate(ALLOC, UD, luaL_makeseed(nullptr))
+#endif
+
+// --- giving a loaded chunk its own environment --------------------------------
+// Plain Lua keeps a chunk's environment in upvalue 1 (_ENV); Luau keeps it on the
+// LClosure itself - `luaF_newLclosure(L, 0, envt, main)` in lvmload.cpp gives the main
+// chunk *zero* upvalues. So `lua_setupvalue(L, Idx, 1)` on Luau is a no-op, and worse, a
+// silent one: lapi.cpp only pops the value when it found the upvalue, so the env table
+// stays on the stack. Anything that then expects the chunk on top of the stack calls the
+// table instead, and the resulting error text ends up being indexed as if it were a
+// table - which, outside a protected call, is an abort().
+//
+// Both calls take the chunk at Idx (negative) and the env table on top of the stack, and
+// both pop it on success; plain Lua does not pop when it refuses, so this does.
+inline bool UnLuaNovaSetChunkEnv(lua_State* L, int Idx)
+{
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+    return lua_setfenv(L, Idx) != 0; // always pops
+#else
+    const bool Ok = lua_setupvalue(L, Idx, 1) != nullptr; // pops only on success
+    if (!Ok)
+        lua_pop(L, 1);
+    return Ok;
+#endif
+}
 
 // --- plain-Lua spellings Luau does not provide -------------------------------
 //
@@ -179,14 +223,60 @@ inline void luaL_setmetatable(lua_State* L, const char* TableName)
     lua_setmetatable(L, -2);
 }
 
+// Plain Lua's luaL_newmetatable does two things: it files the new table in the registry
+// under TypeName, and it stamps that same name onto the table as __name. Luau's only
+// does the first - see laux.cpp, where the whole function is four stack operations and
+// no __name anywhere.
+//
+// UnLuaNova reads __name to get from a metatable back to the type it describes:
+// Class_Index, Enum_Index, PropertyRegistry and the container checks all start there.
+// On Luau the field was simply absent, so every *first* read of a class or enum member -
+// the one that is not cached in the metatable yet - reached GetFieldInternal, looked up
+// a nil __name and tripped its check(). Nothing noticed while hot reload was broken,
+// because that was the only path reaching an uncached member this early: HotReload.lua
+// reads UE.UUnLuaNovaFunctionLibrary.GetScriptRootPath() while it is being required.
+//
+// Teach Luau the plain-Lua spelling rather than patching each reader. Same contract:
+// 1 and the new table on the stack, or 0 and the existing one.
+inline int UnLuaNovaNewMetatable(lua_State* L, const char* TypeName)
+{
+    lua_getfield(L, LUA_REGISTRYINDEX, TypeName);
+    if (!lua_isnil(L, -1))
+        return 0; // already registered - leave the previous table on top, as plain Lua does
+    lua_pop(L, 1);
+
+    lua_newtable(L);
+    lua_pushstring(L, TypeName);
+    lua_setfield(L, -2, "__name");
+    lua_pushvalue(L, -1);
+    lua_setfield(L, LUA_REGISTRYINDEX, TypeName);
+    return 1;
+}
+#define luaL_newmetatable(L, TypeName) UnLuaNovaNewMetatable(L, TypeName)
+
+// Compiler options for luau_compile, from CVars (luau.optimize / luau.debuglevel /
+// luau.coverage). Defined in Private/LuaBackend.cpp rather than inline here: registering
+// console variables from a header would happen once per translation unit that includes
+// it, and IConsoleManager refuses a duplicate name.
+//
+// Level 2 is the one worth knowing about. It enables function inlining and loop
+// unrolling, which is real speed, and it also means a call or a loop is no longer
+// observable: debug.traceback stops showing inlined frames and lua_getlocal cannot see
+// unrolled iterations. That is a good trade for a shipping build and a bad one while a
+// breakpoint is attached, which is why the default stays at 1.
+namespace UnLuaNova
+{
+    UNLUANOVA_API lua_CompileOptions GetLuauCompileOptions();
+}
+
 // Luau has no text loader: source is compiled to bytecode up front and then handed to
 // luau_load. These are the lauxlib spellings the rest of the plugin is written against.
 inline int luaL_loadbufferx(lua_State* L, const char* Buff, size_t Size, const char* Name, const char* Mode)
 {
     (void)Mode; // Luau always compiles source; there is no "binary chunk" mode to honour
-    lua_CompileOptions Options = {};
-    Options.optimizationLevel = 1; // baseline - keeps line info, unlike level 2
-    Options.debugLevel = 1;        // line info + function names: enough for backtraces
+    // Not const: luau_compile takes a lua_CompileOptions* even though it only reads it,
+    // so a const local cannot be handed over. Nothing here mutates it afterwards.
+    lua_CompileOptions Options = UnLuaNova::GetLuauCompileOptions();
 
     size_t BytecodeSize = 0;
     char* Bytecode = luau_compile(Buff, Size, &Options, &BytecodeSize);
@@ -298,13 +388,133 @@ inline void lua_register(lua_State* L, const char* Name, lua_CFunction Fn)
 // lua_pushinteger pushes a double (LUA_TNUMBER), so lua_isinteger answers false for a
 // value Lua 5.5 reports as an integer. lua_pushinteger64 pushes LUA_TINTEGER instead,
 // which is what plain Lua does.
+//
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
-#define UNLUANOVA_PUSHINT64(L, V) lua_pushinteger64(L, (int64_t)(V))
-#define UNLUANOVA_TOINT64(L, Idx) ((int64)lua_tointeger64(L, Idx, nullptr))
+
+// Luau compares by tag first: equalobj() is `ttype(o1) == ttype(o2) && luaV_equalval(...)`
+// (lvm.h), so an LUA_TINTEGER is never equal to an LUA_TNUMBER - and every literal a script
+// writes is a number. An int64 property pushed as an integer is therefore unequal to the
+// constant it is compared against, and arithmetic on it raises "attempt to perform
+// arithmetic (add) on integer and number"; `self.Integer64Property ~= 3` is true for a
+// property that holds 3, which is how the binding tests failed.
+//
+// A double holds every integer up to 2^53 exactly, so those go out as numbers and stay
+// comparable; only what a double cannot hold keeps the integer tag, where being exact beats
+// being usable in a script.
+inline void UnLuaNovaPushInt64(lua_State* L, int64_t V)
+{
+    const int64_t ExactInDouble = int64_t(1) << 53;
+    if (V > ExactInDouble || V < -ExactInDouble)
+        lua_pushinteger64(L, V);
+    else
+        lua_pushnumber(L, (lua_Number)V);
+}
+
+#define UNLUANOVA_PUSHINT64(L, V) UnLuaNovaPushInt64(L, (int64_t)(V))
+
+// --- integers that fit in 32 bits -------------------------------------------
+// LUA_TINTEGER is the right tag for a genuine 64-bit value and the wrong one for
+// everything smaller. Luau's compiler emits a double (LUA_TNUMBER) for every literal, so a
+// LUA_TINTEGER handed to a script makes `Value + 1` an integer plus a double - a hard
+// runtime error, "attempt to perform arithmetic (add) on integer and number". Scripts read
+// int32 properties and enum values constantly and do arithmetic on them, so those go out as
+// doubles and stay usable; only real 64-bit values keep the integer tag, where keeping the
+// value exact matters more than being able to add 1 to it in a script.
+#define UNLUANOVA_PUSHINT(L, V) lua_pushnumber(L, (lua_Number)(V))
+
+// Luau's lua_tointeger64 reads *only* the 64-bit integer type (LUA_TINTEGER) and hands
+// back 0 for anything else - see lapi.cpp: it tests ttisinteger() and returns 0 from the
+// else branch. Every ordinary Lua number is a double there, and the compiler emits
+// doubles for every literal, so `return 1` read through it gave 0. Anything round-tripped
+// through a script - enum values, int64 properties, indices - was silently zero.
+//
+// Read the double when the value is not already an integer, under the same rule plain
+// Lua's lua_tointeger applies: a number without an exact integer representation is not
+// an answer, so 1.5 yields 0 rather than 1.
+inline int64_t UnLuaNovaToInt64(lua_State* L, int Idx)
+{
+    int IsInteger = 0;
+    const int64_t AsInteger = (int64_t)lua_tointeger64(L, Idx, &IsInteger);
+    if (IsInteger)
+        return AsInteger;
+
+    if (!lua_isnumber(L, Idx))
+        return 0;
+
+    const double AsDouble = lua_tonumber(L, Idx);
+    if (!std::isfinite(AsDouble) || AsDouble < -9223372036854775808.0 || AsDouble >= 9223372036854775808.0)
+        return 0;
+
+    const int64_t Truncated = (int64_t)AsDouble;
+    return (double)Truncated == AsDouble ? Truncated : 0;
+}
+
+#define UNLUANOVA_TOINT64(L, Idx) UnLuaNovaToInt64(L, Idx)
 #else
 #define UNLUANOVA_PUSHINT64(L, V) lua_pushinteger(L, (lua_Integer)(V))
+// Plain Lua already pushes integers of every width as one numeric type, so both macros
+// collapse to the same thing here.
+#define UNLUANOVA_PUSHINT(L, V) lua_pushinteger(L, (lua_Integer)(V))
 #define UNLUANOVA_TOINT64(L, Idx) ((int64)lua_tointeger(L, Idx))
 #endif
+
+// Strict conversion for protocols and other inputs where failure must differ from zero.
+// Numeric strings and fractional/out-of-range doubles are rejected on both backends.
+inline bool UnLuaNovaTryToInt64(lua_State* L, int Idx, int64& Out)
+{
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+    if (lua_isinteger64(L, Idx))
+    {
+        Out = static_cast<int64>(lua_tointeger64(L, Idx, nullptr));
+        return true;
+    }
+#else
+    if (lua_isinteger(L, Idx))
+    {
+        Out = static_cast<int64>(lua_tointeger(L, Idx));
+        return true;
+    }
+#endif
+    if (lua_type(L, Idx) != LUA_TNUMBER)
+        return false;
+    const double Value = lua_tonumber(L, Idx);
+    if (!std::isfinite(Value) || Value < -9223372036854775808.0 || Value >= 9223372036854775808.0
+        || std::floor(Value) != Value)
+        return false;
+    Out = static_cast<int64>(Value);
+    return true;
+}
+
+// --- can this value be read as an integer? -----------------------------------
+// Plain Lua has one numeric type and lua_isinteger() separates 1 from 1.5. Luau has a
+// second type tag for integers (LUA_TINTEGER) *and* compiles every literal to a double,
+// so neither half of that works there: `SetCollisionEnabled(0)` written in a script
+// arrives as a double, while a value UnLuaNova pushed with UNLUANOVA_PUSHINT64 arrives as
+// LUA_TINTEGER - and lua_isinteger() answers false for both, which is how every integer
+// argument of every UFunction started being rejected.
+//
+// lua_isnumber() is true for either tag, so it is the question that means the same thing
+// on both backends. A double still has to actually hold an integer, because that is the
+// only case UNLUANOVA_TOINT64 can read back: 1.5 would silently become 0, and saying so
+// is better than that.
+inline bool UnLuaNovaIsIntegralNumber(lua_State* L, int Idx)
+{
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+    // Already an integer, and it may not even survive a round trip through a double.
+    if (lua_isinteger64(L, Idx))
+        return true;
+#endif
+
+    if (!lua_isnumber(L, Idx))
+        return false;
+
+    const double Value = lua_tonumber(L, Idx);
+    if (Value != Value) // NaN
+        return false;
+
+    const double Truncated = (Value < 0.0) ? -std::floor(-Value) : std::floor(Value);
+    return Truncated == Value;
+}
 
 // --- userdata allocation ----------------------------------------------------
 // Lua 5.5: lua_newuserdatauv(L, size, nuvalue)
@@ -316,6 +526,31 @@ inline void lua_register(lua_State* L, const char* Name, lua_CFunction Fn)
 #define UNLUANOVA_NEWDATA(L, Size) lua_newuserdatauv(L, Size, 0)
 #endif
 
+// --- userdata allocation, with a finalizer ----------------------------------
+// Allocate a userdata whose payload has a real C++ destructor that must run when the VM
+// collects it: script containers (they own the FScriptArray and the element cache),
+// FText (owns a refcount on shared text data), exported non-POD classes such as the file
+// wrapper (owns an FArchive).
+//
+//   Lua 5.5: plain userdata; 'Dtor' is ignored and the __gc metamethod on the metatable
+//            does the work, as it always did.
+//   Luau:    lua_newuserdatadtor(), which has no __gc to fall back on. The callback may
+//            not touch the Lua stack - it runs inside the collector - so it is only ever
+//            allowed to destroy C++ state.
+//
+// Either way the callback is handed the address this macro returns, i.e. the start of the
+// [FUserdataDesc][padding][payload] block, so it reaches the payload the same way
+// GetUserdataFast() does.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_NEWDATA_DTOR(L, Size, Dtor) lua_newuserdatadtor(L, Size, Dtor)
+#else
+#define UNLUANOVA_NEWDATA_DTOR(L, Size, Dtor) UNLUANOVA_NEWDATA(L, Size)
+#endif
+
+// The signature Luau's lua_Destructor uses. Named here so call sites can declare a
+// finalizer without branching on the backend - plain Lua never sees it run.
+typedef void (*FUnLuaNovaUserdataDtor)(lua_State* L, void* Block);
+
 // --- size of a userdata payload ---------------------------------------------
 // Lua 5.3+ replaced lua_objlen with lua_rawlen; Luau kept the 5.1 name.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
@@ -325,9 +560,13 @@ inline void lua_register(lua_State* L, const char* Name, lua_CFunction Fn)
 #endif
 
 // --- compiling a chunk -------------------------------------------------------
-// Luau exposes luau_load() and has no bytecode loader/dumper at all.
+// Source goes in, a chunk comes out - the same on both backends.
+//
+// Luau's luau_load() takes *bytecode*, not source, which is why it cannot stand in here:
+// the call sites hand over script text. luaL_loadbufferx is the shim above that compiles
+// first, so this backend gets the plain-Lua spelling after all.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
-#define UNLUANOVA_LOAD(L, ChunkName, Data, Size) luau_load(L, ChunkName, Data, Size, 0)
+#define UNLUANOVA_LOAD(L, ChunkName, Data, Size) luaL_loadbufferx(L, Data, Size, ChunkName, nullptr)
 #else
 #define UNLUANOVA_LOAD(L, ChunkName, Data, Size) luaL_loadbuffer(L, Data, Size, ChunkName)
 #endif
@@ -344,11 +583,24 @@ inline int lua_gc(lua_State* L, int What)
 // --- garbage collector --------------------------------------------------------
 // Lua 5.5 has a generational mode (LUA_GCGEN). Luau does not - it tunes the
 // incremental collector through the goal / step multiplier instead.
+//
+// G (goal) is a percentage: the heap is allowed to grow to G% of the live data.
+// S (step multiplier) is how much collector work is done per byte allocated.
+// luaconf's own numbers are G=200 / S=200 (see LUAI_GCGOAL / LUAI_GCSTEPMUL), and
+// Expressed as integer percentages, S should sit in [10000/(G-100), 100+10000/(G-100)]
+// with a floor of 150% - i.e. [150,200] when G=200.
+//
+// These used to be 100/100, which is not a stricter setting but a broken one: with
+// G=100 the heap goal collapses to `totalbytes / 100 * 100 == totalbytes`, so the
+// collector is asked to keep the heap exactly at the live size, and the post-cycle
+// threshold in luaC_fullgc works out to `totalbytes * (G*S/100 - 100) / S`, which is
+// 0 for G=S=100. The VM clamps it to totalbytes, so the effect is a collector that
+// restarts a cycle the moment it finishes one.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
 #define UNLUANOVA_SETUP_GC(L)              \
 	do {                                   \
-		lua_gc(L, LUA_GCSETGOAL, 100);      \
-		lua_gc(L, LUA_GCSETSTEPMUL, 100);   \
+		lua_gc(L, LUA_GCSETGOAL, 200);      \
+		lua_gc(L, LUA_GCSETSTEPMUL, 200);   \
 	} while (false)
 #else
 #define UNLUANOVA_SETUP_GC(L)              \
@@ -356,6 +608,26 @@ inline int lua_gc(lua_State* L, int What)
 		lua_gc(L, LUA_GCGEN, 0, 0);         \
 	} while (false)
 #endif
+
+// One explicit incremental step, asked for in BYTES.
+//
+// Neither VM promises byte accuracy - plain Lua documents LUA_GCSTEP's data argument as
+// controlling the amount of work "in a non-specific way", and Luau reads it as kilobytes -
+// so callers pass bytes and this converts. FLuaGcScheduler is the only place that has to
+// know which backend it is talking to.
+//
+// Returns non-zero when the step finished a collection cycle, on both backends.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_GC_STEP_BYTES(L, Bytes) lua_gc(L, LUA_GCSTEP, FMath::Max<int32>(1, int32(int64(Bytes) >> 10)))
+#else
+#define UNLUANOVA_GC_STEP_BYTES(L, Bytes) lua_gc(L, LUA_GCSTEP, int32(Bytes))
+#endif
+
+// Heap size in bytes. LUA_GCCOUNT is whole Kbytes and LUA_GCCOUNTB the remainder below
+// 1K, which is the only way to see small heaps move at all - a 600-byte heap is 0 Kbytes
+// and would look frozen.
+#define UNLUANOVA_GC_HEAP_BYTES(L) \
+	((int64(lua_gc(L, LUA_GCCOUNT, 0)) << 10) + int64(lua_gc(L, LUA_GCCOUNTB, 0)))
 
 // --- coroutine resume ---------------------------------------------------------
 // Lua 5.4/5.5 report the number of results through an out param; Luau's lua_resume
@@ -399,6 +671,56 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #define UNLUANOVA_HAS_HOOK_EVENT 1
 #endif
 
+// --- native vector type -------------------------------------------------------
+// Luau carries a vector directly in a TValue: three (or four) floats, no allocation,
+// no indirection. That is the whole point - a hot loop over FVector values allocates
+// nothing on Luau, where the userdata path pays a GC-tracked allocation per result.
+//
+// Plain Lua has no such type, so a "vector" there is a table or a userdata and the
+// macros below are inert. Call sites must go through UNLUANOVA_HAS_NATIVE_VECTOR
+// rather than assuming the type exists.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_HAS_NATIVE_VECTOR 1
+#define UNLUANOVA_ISVECTOR(L, Idx) lua_isvector(L, Idx)
+/**
+ * Components as a raw array. Its length is LUA_VECTOR_SIZE (3 or 4, depending on how
+ * Luau was built), so read only the components you need and never index past 2.
+ * The pointer belongs to the value on the stack - do not hold on to it.
+ */
+#define UNLUANOVA_TOVECTOR(L, Idx) lua_tovector(L, Idx)
+// Luau's lua_pushvector takes a fourth (w) component when the value is 4-wide.
+#if defined(LUA_VECTOR_SIZE) && LUA_VECTOR_SIZE == 4
+#define UNLUANOVA_PUSHVECTOR3(L, X, Y, Z) lua_pushvector(L, (LUA_VECTOR_TYPE)(X), (LUA_VECTOR_TYPE)(Y), (LUA_VECTOR_TYPE)(Z), 0)
+#else
+#define UNLUANOVA_PUSHVECTOR3(L, X, Y, Z) lua_pushvector(L, (LUA_VECTOR_TYPE)(X), (LUA_VECTOR_TYPE)(Y), (LUA_VECTOR_TYPE)(Z))
+#endif
+// Luau's buffer type: a fixed-size, typed byte block, again without a per-object
+// allocation for the common sizes. Plain Lua has no equivalent.
+#define UNLUANOVA_HAS_NATIVE_BUFFER 1
+#define UNLUANOVA_ISBUFFER(L, Idx) lua_isbuffer(L, Idx)
+#else
+#define UNLUANOVA_HAS_NATIVE_VECTOR 0
+#define UNLUANOVA_ISVECTOR(L, Idx) false
+#define UNLUANOVA_TOVECTOR(L, Idx) nullptr
+#define UNLUANOVA_PUSHVECTOR3(L, X, Y, Z) ((void)0)
+#define UNLUANOVA_HAS_NATIVE_BUFFER 0
+#define UNLUANOVA_ISBUFFER(L, Idx) false
+#endif
+
+// --- read-only tables ---------------------------------------------------------
+// Luau can mark any table read-only; writes then fail instead of silently creating a
+// field. Plain Lua has no such flag, so the macros are inert there and callers have to
+// branch on UNLUANOVA_HAS_SANDBOX (or accept a no-op).
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_HAS_READONLY_TABLES 1
+#define UNLUANOVA_SET_READONLY(L, Idx, Enabled) lua_setreadonly(L, Idx, (Enabled) ? 1 : 0)
+#define UNLUANOVA_GET_READONLY(L, Idx) (lua_getreadonly(L, Idx) != 0)
+#else
+#define UNLUANOVA_HAS_READONLY_TABLES 0
+#define UNLUANOVA_SET_READONLY(L, Idx, Enabled) ((void)0)
+#define UNLUANOVA_GET_READONLY(L, Idx) false
+#endif
+
 // --- sandboxing ---------------------------------------------------------------
 // Luau hardens the global table in a single call: after luaL_sandbox the globals are
 // read-only and the env is flagged safe, so a hotfixed / downloaded script can no
@@ -416,9 +738,11 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #endif
 
 // --- debug channel ------------------------------------------------------------
-// Luau keeps the debug hook on a channel of its own (lua_callhook), completely
-// separate from the lua_Callbacks::interrupt slot the profiler and the dead-loop
-// watchdog share - so installing a debugger disturbs neither of them.
+// Luau has no lua_sethook. A debugger claims the two lua_Callbacks slots the VM
+// calls on its own: debugbreak (a BREAK instruction, i.e. a breakpoint) and
+// debugstep (single-step mode). Both are completely separate from the
+// lua_Callbacks::interrupt slot the profiler and the dead-loop watchdog share,
+// so installing a debugger disturbs neither of them.
 //
 // Plain Lua has no second channel: lua_sethook is the only hook and FLuaVmHooks
 // already owns it, so a debugger must register there as a listener rather than
@@ -429,7 +753,20 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 // line, but cannot make the VM stop on one. Those are Luau-only.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
 #define UNLUANOVA_HAS_BREAKPOINT 1
-#define UNLUANOVA_SET_DEBUG_HOOK(L, Hook, UserData) lua_callhook(L, Hook, UserData)
+// A null hook means "off", and that is the only way off the channel.
+//
+// lua_callhook() looks like the setter but is not one: it *invokes* a hook on the
+// spot, against the current call frame, so it installed nothing and - with a null
+// hook and no frame to speak of (L->ci == base_ci, hence L->ci->p == null) -
+// dereferenced a proto that does not exist. luau_callhook() dereferences it at
+// lvmexecute.cpp:181 before it ever reaches the callback.
+#define UNLUANOVA_SET_DEBUG_HOOK(L, Hook, UserData) \
+    do \
+    { \
+        lua_callbacks(L)->debugbreak = (Hook); \
+        lua_callbacks(L)->debugstep = (Hook); \
+        lua_callbacks(L)->userdata = (UserData); \
+    } while (0)
 #define UNLUANOVA_BREAKPOINT(L, FuncIndex, Line, Enabled) lua_breakpoint(L, FuncIndex, Line, Enabled)
 #define UNLUANOVA_SINGLESTEP(L, Enabled) lua_singlestep(L, Enabled)
 #define UNLUANOVA_ATBREAKPOINT(L) lua_atbreakpoint(L)
@@ -465,6 +802,87 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #define UNLUANOVA_SET_ALLOC_CALLBACKS(L, Alloc, Free) ((void)0)
 #endif
 
+// --- native code generation (optional JIT) -------------------------------------
+// Luau ships an optional native compiler for x64 and arm64. It is not a tracing JIT:
+// nothing is compiled unless the host asks, there is no runtime type profiling, and the
+// only hints it takes are the type annotations in the source. That is a good fit here,
+// because "compile the modules I know are hot" is a decision a project can make and
+// "guess which function got hot" is not one this VM makes for you.
+//
+// Two calls: luau_codegen_create once per VM, then luau_codegen_compile on a function at
+// a stack index - which also covers everything nested inside it, so compiling a module's
+// main chunk covers the module.
+//
+// Whether it can actually do anything is a runtime question, and it is
+// luau_codegen_supported() that answers it; the macros below only say whether the API is
+// linked in at all.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_HAS_NATIVE_CODEGEN 1
+#define UNLUANOVA_CODEGEN_SUPPORTED() (luau_codegen_supported() != 0)
+#define UNLUANOVA_CODEGEN_CREATE(L) luau_codegen_create(L)
+#define UNLUANOVA_CODEGEN_COMPILE(L, Idx) luau_codegen_compile(L, Idx)
+#else
+#define UNLUANOVA_HAS_NATIVE_CODEGEN 0
+#define UNLUANOVA_CODEGEN_SUPPORTED() false
+#define UNLUANOVA_CODEGEN_CREATE(L) ((void)0)
+#define UNLUANOVA_CODEGEN_COMPILE(L, Idx) ((void)0)
+#endif
+
+namespace UnLuaNova
+{
+    /** Whether this build can emit native code at all: linked in *and* a backend exists. */
+    UNLUANOVA_API bool IsNativeCodeGenAvailable();
+
+    /**
+     * Compile the chunk that was just loaded, if the project asked for it.
+     *
+     * Takes the chunk name so a project can name the modules it wants compiled rather
+     * than paying the compile cost on everything: lua.codegen.modules is a comma
+     * separated list, empty meaning "every chunk".
+     *
+     * Called right after a chunk loads, which is the only moment the function object
+     * exists and is not yet running - luau_codegen_compile refuses a function that is on
+     * the stack of a running thread.
+     */
+    UNLUANOVA_API void MaybeCompileNativeChunk(lua_State* L, const char* ChunkName);
+
+    /** Chunks handed to the native compiler so far, for `lua.codegen` to report. */
+    UNLUANOVA_API int32 GetNativeCodeGenChunkCount();
+
+    /**
+     * Whether class tables are frozen as they are registered (`lua.sandbox.freezeclasstables`).
+     *
+     * Read per registration rather than once per process, because registration is lazy: a
+     * class is only built the first time something looks at it, so a switch read at startup
+     * would almost always be read before there was anything to freeze.
+     *
+     * No-op on plain Lua, which has no read-only tables at all.
+     */
+    UNLUANOVA_API bool IsClassTableFreezeEnabled();
+}
+
+// --- thread callbacks ---------------------------------------------------------
+// Luau calls userthread whenever a (co)routine is created (LP = the parent) or destroyed
+// (LP = nullptr). Plain Lua has no equivalent - coroutine.create is just a library
+// function there and the VM never tells the host about it.
+//
+// This is the only place to hook thread creation: the plugin never calls lua_newthread
+// itself, every coroutine in a script comes out of coroutine.create, so a host-side
+// wrapper around the constructor would miss all of them. Two features want this slot -
+// sandboxing each new thread, and attributing profiler samples across coroutines - so
+// FLuaVmHooks owns it and fans out, exactly like it does for interrupt.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_HAS_THREAD_CALLBACK 1
+#define UNLUANOVA_SET_THREAD_CALLBACK(L, Cb) \
+    do \
+    { \
+        lua_callbacks(L)->userthread = (Cb); \
+    } while (0)
+#else
+#define UNLUANOVA_HAS_THREAD_CALLBACK 0
+#define UNLUANOVA_SET_THREAD_CALLBACK(L, Cb) ((void)0)
+#endif
+
 // --- per-function id, for profiler keys ----------------------------------------
 // Luau exposes a VM-wide unique proto id on lua_Debug, which makes an ideal cache key.
 // Plain Lua has no such field, so key on (source pointer, line the function was defined
@@ -482,19 +900,27 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
 
 /**
- * 0 on Luau: it has no __gc metamethod at all - "TM_GC" does not exist anywhere in
- * Luau/VM/src. Userdata finalizers there go through lua_newuserdatadtor() instead.
- *
- * Note this is about *userdata*: every __gc in this codebase is registered on a
- * userdata metatable (TArray/TMap/TSet/FText/file handles), which is why the flag used
- * to be called HAS_TABLE_GC - that name was wrong and made it look like an unused
- * corner. Luau's substitute, lua_newuserdatadtor(), is NOT wired in yet: every __gc
- * here ends in ContainerRegistry::Remove(), which goes back through FLuaEnv for the
- * main state and then touches the Lua stack, and that is not safe from a GC callback.
- * Closing the gap needs a different cleanup design - explicit release, or a sweep owned
- * by the env - not a rename. Until then Luau simply never finalizes these userdata.
+ * Whether a metatable may register "__gc". 0 on Luau: "TM_GC" does not exist anywhere in
+ * Luau/VM/src, so such an entry is silently dead. Guard registration sites with this.
  */
-#define UNLUANOVA_HAS_USERDATA_GC 0
+#define UNLUANOVA_HAS_GC_METAMETHOD 0
+/**
+ * Whether a userdata gets finalized at all. 1 on both, by two different mechanisms -
+ * __gc here, lua_newuserdatadtor() there. See UNLUANOVA_NEWDATA_DTOR.
+ *
+ * It used to be 0 on Luau, and that was a leak, not a missing feature: the finalizers
+ * here own real C++ state - the FScriptArray and element cache behind an owned container
+ * (FLuaArray::~FLuaArray), the shared-text refcount behind an FText, the FArchive behind
+ * a file - and none of it was ever released on the default backend.
+ *
+ * What made it look unfixable was that every finalizer ended in
+ * ContainerRegistry::Remove(), which goes back through FLuaEnv for the main state and
+ * then touches the Lua stack - illegal from inside the collector. That call is also
+ * unnecessary: 'ScriptContainerMap' is a weak-*value* table (FContainerRegistry's ctor),
+ * so its entry disappears on its own the moment the userdata dies. Dropping it leaves a
+ * finalizer that is pure C++, which is exactly what a Luau destructor may run.
+ */
+#define UNLUANOVA_HAS_USERDATA_FINALIZER 1
 /**
  * 0 on Luau: it is recognized by the iteration protocol only through __iter (TM_ITER).
  * __pairs/__ipairs do not exist there, and Luau's own pairs() even insists on a real
@@ -504,7 +930,8 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #define UNLUANOVA_HAS_ITER_METAMETHOD 1
 #else
 
-#define UNLUANOVA_HAS_USERDATA_GC 1
+#define UNLUANOVA_HAS_GC_METAMETHOD 1
+#define UNLUANOVA_HAS_USERDATA_FINALIZER 1
 #define UNLUANOVA_HAS_ITER_METAMETHOD 0
 
 #endif
@@ -531,3 +958,32 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 // started inside an engine callback does not. Ask before yielding so the failure names
 // the real constraint instead of surfacing a VM error.
 #define UNLUANOVA_IS_YIELDABLE(L) lua_isyieldable(L)
+
+// --- filling in what Luau leaves out -----------------------------------------
+// Luau is a deliberately smaller language than the plain Lua this plugin was written
+// against, and two of its omissions change behaviour rather than merely failing to
+// compile:
+//
+//   * its debug library is traceback, info and the profiler hooks and nothing else,
+//     while plain Lua 5.5 also answers getupvalue / setupvalue / upvalueid / getlocal /
+//     setlocal / getregistry / getuservalue. Anything that hot-reloads Lua - UnLuaNova's
+//     own HotReload.lua among them - needs those to move a live closure's state onto a
+//     freshly loaded one.
+//   * it has no load(), so there is no way for a script to compile source at all.
+//
+// Both are patched in from the C API Luau does have, so the two backends answer the same
+// questions. Where Luau genuinely has no answer - a registry table, uservalues - the
+// shim returns nothing instead of raising, which is what lets a script degrade instead
+// of dying.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_SETUP_SCRIPT_COMPAT(L) UnLuaNova::SetupScriptCompat(L)
+#else
+#define UNLUANOVA_SETUP_SCRIPT_COMPAT(L) ((void)0)
+#endif
+
+namespace UnLuaNova
+{
+    // Adds the missing debug functions to a Luau state's debug table and installs load().
+    // Existing entries are left alone, so this only ever adds.
+    void SetupScriptCompat(lua_State* L);
+}

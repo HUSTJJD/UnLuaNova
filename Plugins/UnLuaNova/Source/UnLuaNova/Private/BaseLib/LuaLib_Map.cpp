@@ -146,6 +146,30 @@ static int32 TMap_Add(lua_State* L)
 }
 
 /**
+ * Whether a key is in the map. TArray and TSet both answer this, and a script walking a
+ * map otherwise has to call Find and compare against nil - which is not the same thing
+ * when the value legitimately is nil.
+ *
+ * @see FLuaMap::Find(...)
+ */
+static int32 TMap_Contains(lua_State* L)
+{
+    int32 NumParams = lua_gettop(L);
+    if (NumParams != 2)
+        return luaL_error(L, "invalid parameters");
+
+    FLuaMap* Map = (FLuaMap*)(GetCppInstanceFast(L, 1));
+    TMap_Guard(L, Map);
+
+    Map->KeyInterface->Initialize(Map->ElementCache);
+    Map->KeyInterface->WriteValue_InContainer(L, Map->ElementCache, 2);
+    const bool bExists = Map->Find(Map->ElementCache) != nullptr;
+    Map->KeyInterface->Destruct(Map->ElementCache);
+    lua_pushboolean(L, bExists);
+    return 1;
+}
+
+/**
  * @see FLuaMap::Remove(...)
  */
 static int32 TMap_Remove(lua_State* L)
@@ -250,8 +274,14 @@ static int32 TMap_Keys(lua_State* L)
     FLuaMap* Map = (FLuaMap*)(GetCppInstanceFast(L, 1));
     TMap_Guard(L, Map);
 
-    void* Userdata = NewUserdataWithPadding(L, sizeof(FLuaArray), "TArray");
+    void* Userdata = NewUserdataWithPaddingDtor(L, sizeof(FLuaArray), "TArray", CalcUserdataPadding<FLuaArray>(),
+        UnLuaNova::DestroyUserdataPayload<FLuaArray>);
     FLuaArray* Array = Map->Keys(Userdata);
+    if (!Array)
+    {
+        SetUserdataFlags(L, -1, BIT_RELEASED_TAG | BIT_DESTROYED_TAG);
+        return luaL_error(L, "could not construct key array");
+    }
     return 1;
 }
 
@@ -267,8 +297,14 @@ static int32 TMap_Values(lua_State* L)
     FLuaMap* Map = (FLuaMap*)(GetCppInstanceFast(L, 1));
     TMap_Guard(L, Map);
 
-    void* Userdata = NewUserdataWithPadding(L, sizeof(FLuaArray), "TArray");
+    void* Userdata = NewUserdataWithPaddingDtor(L, sizeof(FLuaArray), "TArray", CalcUserdataPadding<FLuaArray>(),
+        UnLuaNova::DestroyUserdataPayload<FLuaArray>);
     FLuaArray* Array = Map->Values(Userdata);
+    if (!Array)
+    {
+        SetUserdataFlags(L, -1, BIT_RELEASED_TAG | BIT_DESTROYED_TAG);
+        return luaL_error(L, "could not construct value array");
+    }
     return 1;
 }
 
@@ -281,14 +317,14 @@ static int32 TMap_Delete(lua_State* L)
     if (NumParams != 1)
         return luaL_error(L, "invalid parameters");
 
-    FLuaMap* Map = (FLuaMap*)(GetCppInstanceFast(L, 1));
+    FLuaMap* Map = static_cast<FLuaMap*>(UnLuaNova::GetUserdataPayloadFromBlock(lua_touserdata(L, 1)));
     if (!Map)
         return 0;
 
     auto Registry = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetContainerRegistry();
     Registry->Remove(Map);
 
-    Map->~FLuaMap();
+    UnLuaNova::DestroyUserdataPayload<FLuaMap>(L, lua_touserdata(L, 1));
     return 0;
 }
 
@@ -306,6 +342,12 @@ static int32 TMap_ToTable(lua_State* L)
 
     void* MemData = FMemory::Malloc(sizeof(FLuaArray), alignof(FLuaArray));
     FLuaArray* Keys = Map->Keys(MemData);
+    if (!Keys)
+    {
+        FMemory::Free(MemData);
+        return luaL_error(L, "invalid map");
+    }
+
     Keys->Inner->Initialize(Keys->ElementCache);
     lua_newtable(L);
     for (int32 i = 0; i < Keys->Num(); ++i)
@@ -330,6 +372,11 @@ static int32 TMap_ToTable(lua_State* L)
         Map->ValueInterface->Destruct(ValueCache);
     }
     Keys->Inner->Destruct(Keys->ElementCache);
+
+    // Keys() placement-constructs an owned FLuaArray over MemData (its own FScriptArray
+    // plus an element cache), so the destructor has to run before the block is freed -
+    // TArray_Delete is the other place that does this pairing.
+    Keys->~FLuaArray();
     FMemory::Free(MemData);
     return 1;
 }
@@ -338,6 +385,7 @@ static const luaL_Reg TMapLib[] =
 {
     {"Length", TMap_Length},
     {"Num", TMap_Length},
+    {"Contains", TMap_Contains},
     {"Add", TMap_Add},
     {"Remove", TMap_Remove},
     {"Find", TMap_Find},
@@ -346,7 +394,7 @@ static const luaL_Reg TMapLib[] =
     {"Keys", TMap_Keys},
     {"Values", TMap_Values},
     {"ToTable", TMap_ToTable},
-#if UNLUANOVA_HAS_USERDATA_GC
+#if UNLUANOVA_HAS_GC_METAMETHOD
     {"__gc", TMap_Delete},
 #endif
     {"__call", TMap_New},

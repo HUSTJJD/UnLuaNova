@@ -1,0 +1,403 @@
+#!/usr/bin/env python3
+"""Check source evidence and local documentation without building or running UE."""
+
+import argparse
+import json
+import re
+from datetime import date
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
+
+ROOT = Path(__file__).resolve().parent.parent
+MATRIX = Path("Tools/feature-matrix.json")
+PAGE = Path("Docs/feature-matrix.md")
+EVIDENCE_DIR = Path("Tools/evidence")
+STATUSES = {"implemented", "partial", "experimental", "planned"}
+LINK = re.compile(r"\[[^\]\n]*\]\(\s*(<[^>]+>|[^\s)]+)(?:\s+[^)]*)?\)")
+FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+
+
+def local_path(root, base, value):
+    """Return a confined repository path, rejecting absolute and escaping paths."""
+    relative = Path(value)
+    if relative.is_absolute() or re.match(r"^[A-Za-z]:", value):
+        raise ValueError("absolute path")
+    target = (base / relative).resolve()
+    # Path.is_relative_to() is 3.9+, and this script advertises "standard library only",
+    # which has to include the 3.7/3.8 interpreters still common on build machines. Same
+    # containment question, spelled with .parents.
+    resolved_root = root.resolve()
+    if target != resolved_root and resolved_root not in target.parents:
+        raise ValueError("path escapes repository")
+    return target
+
+
+def validate_matrix(data, root):
+    errors = []
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        return ["matrix: unsupported schema"]
+    try:
+        date.fromisoformat(data.get("audit_date", ""))
+    except (ValueError, TypeError):
+        errors.append("matrix: invalid audit_date")
+    if not isinstance(data.get("scope"), str) or not data["scope"].strip():
+        errors.append("matrix: missing scope")
+    features = data.get("features")
+    upstreams = data.get("upstreams")
+    if not isinstance(features, list) or not features:
+        return ["matrix: features must be a nonempty list"]
+    if not isinstance(upstreams, dict) or not upstreams:
+        return ["matrix: missing upstream pins"]
+    for name, pin in upstreams.items():
+        if not isinstance(pin, dict):
+            errors.append(f"matrix: invalid pin for {name}")
+            continue
+        revision = pin.get("revision")
+        if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+            errors.append(f"matrix: invalid revision for {name}")
+        if not isinstance(pin.get("url"), str) or not pin["url"].startswith("https://"):
+            errors.append(f"matrix: invalid URL for {name}")
+    seen = set()
+    for row in features:
+        if not isinstance(row, dict):
+            errors.append("matrix: feature must be an object")
+            continue
+        key = row.get("id")
+        if not isinstance(key, str) or not re.fullmatch(r"[A-Z][A-Z0-9-]+", key):
+            errors.append("matrix: invalid feature id")
+            continue
+        if key in seen:
+            errors.append(f"{key}: duplicate id")
+        seen.add(key)
+        if not isinstance(row.get("status"), str) or row["status"] not in STATUSES:
+            errors.append(f"{key}: invalid status")
+        if not isinstance(row.get("priority"), str) or row["priority"] not in {"P0", "P1", "P2"}:
+            errors.append(f"{key}: invalid priority")
+        if row.get("verification") != "pending-runtime":
+            errors.append(f"{key}: execution claims require an evidence schema, not a status edit")
+        for field in ("area", "title", "gap", "acceptance"):
+            if not isinstance(row.get(field), str) or not row[field].strip():
+                errors.append(f"{key}: missing {field}")
+        refs = row.get("upstream")
+        if not isinstance(refs, list) or not refs or any(not isinstance(ref, str) or ref not in upstreams for ref in refs):
+            errors.append(f"{key}: invalid upstream references")
+        for field in ("source", "tests", "examples"):
+            paths = row.get(field)
+            if not isinstance(paths, list):
+                errors.append(f"{key}: {field} must be a list")
+                continue
+            if field in {"source", "tests"} and row.get("status") == "implemented" and not paths:
+                errors.append(f"{key}: implemented needs {field} evidence")
+            for value in paths:
+                try:
+                    if not isinstance(value, str):
+                        raise ValueError("path must be a string")
+                    target = local_path(root, root, value)
+                    if not target.is_file():
+                        raise ValueError("file does not exist")
+                except (ValueError, OSError) as exc:
+                    errors.append(f"{key}: {field} {value!r}: {exc}")
+    return errors
+
+
+def markdown_links(text):
+    # Only inline file/image links are checked. Anchors and remote URLs are not verified.
+    fence = None
+    for line in text.splitlines():
+        match = FENCE.match(line)
+        if match:
+            marker = match.group(1)
+            if fence is None:
+                fence = marker
+            elif marker[0] == fence[0] and len(marker) >= len(fence):
+                fence = None
+            continue
+        if fence is None:
+            for match in LINK.finditer(line):
+                yield match.group(1).strip("<>")
+
+
+def validate_docs(root):
+    errors = []
+    docs = (root / "Docs").resolve()
+    pages = sorted((root / "Docs").rglob("*.md")) + sorted(root.glob("*.md"))
+    for page in pages:
+        # Pages under Docs/ are the ones MkDocs publishes; the ones at the repository root are
+        # rendered by GitHub, where a link into the source tree is perfectly fine.
+        published = docs in page.resolve().parents
+        for href in markdown_links(page.read_text(encoding="utf-8-sig")):
+            url = urlsplit(href)
+            if url.scheme or url.netloc or not url.path:
+                continue
+            try:
+                target = local_path(root, page.parent, unquote(url.path))
+                if not target.exists():
+                    raise ValueError("target does not exist")
+                # A published page can only link to a file MkDocs publishes. `mkdocs build
+                # --strict` fails a link that leaves docs_dir even when the file exists,
+                # because it is never copied into the site - which is a warning on CI and an
+                # error there, while a plain "does the file exist" check says nothing.
+                if published and target != docs and docs not in target.parents:
+                    raise ValueError("link leaves Docs/, which mkdocs --strict rejects")
+            except (ValueError, OSError) as exc:
+                errors.append(f"{page.relative_to(root)}: {href}: {exc}")
+    nav = root / "mkdocs.yml"
+    if nav.exists():
+        # The repository's nav uses one plain .md path per line; no YAML execution.
+        for name in re.findall(r"(?:^|\s)([A-Za-z0-9_./-]+\.md)\s*$", nav.read_text(encoding="utf-8"), re.M):
+            try:
+                if not local_path(root, root / "Docs", name).is_file():
+                    raise ValueError("missing nav page")
+            except ValueError as exc:
+                errors.append(f"mkdocs.yml: {name}: {exc}")
+    return errors
+
+
+EVIDENCE_SCHEMA = "unluanova-evidence/1"
+
+
+def load_evidence(root):
+    """Read Tools/evidence/. Returns (by_capability, runs, problems).
+
+    Execution results live here, never in feature-matrix.json: the matrix's `verification`
+    field stays `pending-runtime` on purpose, so the only way to say "this ran" is to
+    produce a record this function can read.
+    """
+    by_capability = {}
+    runs = []
+    problems = []
+
+    index_file = root / EVIDENCE_DIR / "index.json"
+    if not index_file.is_file():
+        return by_capability, runs, problems
+
+    try:
+        index = json.loads(index_file.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        return by_capability, runs, [f"evidence index: {exc}"]
+
+    for entry in index:
+        name = entry.get("file") or ""
+        path = root / EVIDENCE_DIR / name
+        if not path.is_file():
+            problems.append(f"evidence: {name}: missing file")
+            continue
+        try:
+            record = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError) as exc:
+            problems.append(f"evidence: {name}: {exc}")
+            continue
+
+        if record.get("schema") != EVIDENCE_SCHEMA:
+            problems.append(f"evidence: {name}: unknown schema {record.get('schema')!r}")
+            continue
+        if record.get("run_id") != entry.get("run_id"):
+            problems.append(f"evidence: {name}: run_id does not match the index")
+            continue
+        for field in ("commit", "backend", "carrier", "engine", "machine"):
+            if not record.get(field):
+                problems.append(f"evidence: {name}: missing {field}")
+
+        runs.append(record)
+        label = "%s/%s" % (record.get("backend"), record.get("carrier"))
+        for cap_id, stats in (record.get("capabilities") or {}).items():
+            by_capability.setdefault(cap_id, []).append(
+                (record.get("run_id"), label, stats.get("passed", 0),
+                 stats.get("failed", 0), stats.get("tests", 0)))
+
+    return by_capability, runs, problems
+
+
+def render_matrix(data, evidence=None):
+    by_capability, runs, _problems = evidence or ({}, [], [])
+
+    if runs:
+        covered = len([r for r in data["features"] if r["id"] in by_capability])
+        intro = ("Execution evidence is recorded per capability under `Tools/evidence/` "
+                 f"({len(runs)} run(s), covering {covered} of {len(data['features'])} capabilities). "
+                 "`feature-matrix.json` itself never claims execution: its `verification` field "
+                 "stays `pending-runtime`, and a status edit there is rejected by this audit.")
+    else:
+        intro = ("All runtime verification is pending: no records under `Tools/evidence/`. "
+                 "Record a run with `python Tools/RecordEvidence.py`.")
+
+    lines = ["# Capability and Evidence Matrix", "",
+             "Generated from `Tools/feature-matrix.json`; edit that file and run "
+             "`python Tools/AuditRepository.py --write-matrix`.", "",
+             "Audit: " + data["audit_date"] + ". " + data["scope"], "",
+             intro, "",
+             "`implemented` means source exists within the stated boundary; it does not mean "
+             "tested, complete parity or platform acceptance. "
+             "`partial` has known gaps; `experimental` is not a release guarantee; `planned` is not delivered.", "",
+             "[Chinese audit](CN/Benchmark_Review.md) | [English audit](EN/Benchmark_Review.md)", "",
+             "## Upstream Pins", ""]
+    for name, pin in data["upstreams"].items():
+        lines.append(f"- [{name}]({pin['url']}/tree/{pin['revision']}): `{pin['revision']}`")
+        if "integrated_revision" in pin:
+            lines.append(f"  Integrated revision: `{pin['integrated_revision']}`.")
+    area = None
+    for row in data["features"]:
+        if row["area"] != area:
+            area = row["area"]
+            lines.extend(["", f"## {area}"])
+        lines.extend(["", f"### {row['id']}: {row['title']}", "",
+                      f"Status: **{row['status']}**; priority: {row['priority']}; "
+                      f"references: {', '.join(row['upstream'])}.", ""])
+        evidence_rows = by_capability.get(row["id"], [])
+        if evidence_rows:
+            shown = "; ".join(
+                f"`{run_id}` {label}: {passed}/{total} passed, {failed} failed"
+                for run_id, label, passed, failed, total in evidence_rows)
+            lines.append(f"Evidence: {shown}.")
+        else:
+            lines.append("Evidence: no execution recorded yet.")
+        lines.append("")
+        for field in ("source", "tests", "examples"):
+            refs = [f"[{Path(path).name}](https://github.com/HUSTJJD/UnLuaNova/blob/master/{path})" for path in row[field]]
+            lines.append(f"- {field.title()}: " + (", ".join(refs) if refs else "Missing dedicated evidence."))
+        lines.extend(["", "Boundary: " + row["gap"], "", "Acceptance: " + row["acceptance"]])
+    return "\n".join(lines) + "\n"
+
+
+RELEASE_PAGES = (
+    Path("README.md"),
+    Path("README_EN.md"),
+    Path("CHANGELOG.md"),
+    Path("Docs/index.md"),
+    Path("Docs/CN/ReleaseNotes.md"),
+    Path("Docs/EN/ReleaseNotes.md"),
+    Path("Docs/CN/Testing.md"),
+    Path("Docs/EN/Testing.md"),
+    Path("Docs/CN/Benchmark_Review.md"),
+    Path("Docs/EN/Benchmark_Review.md"),
+    Path("Docs/CN/Performance_Parity_slua.md"),
+    Path("Docs/EN/Performance_Parity_slua.md"),
+)
+STATUS_MARK = re.compile(r"<!--\s*release-status:\s*(passed|not-passed)\s*-->")
+PROVENANCE_MARK = re.compile(r"<!--\s*release-provenance:\s*([0-9a-f]{7,40})\s*-->")
+
+
+def load_release_summary(root, kind):
+    """Return a local release summary, or None when this machine has no such run."""
+    path = root / "Saved" / "ReleaseTests" / kind / "release-summary.json"
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {"error": f"{kind}: unreadable release summary"}
+
+
+def validate_release_docs(root):
+    """Published release claims must name one run and agree across languages and evidence."""
+    errors = []
+    texts = {}
+    for page in RELEASE_PAGES:
+        path = root / page
+        if not path.is_file():
+            errors.append(f"{page}: release status page is missing")
+            continue
+        texts[page] = path.read_text(encoding="utf-8-sig")
+    statuses = {}
+    commits = {}
+    for page, text in texts.items():
+        status = STATUS_MARK.findall(text)
+        commit = PROVENANCE_MARK.findall(text)
+        if len(status) != 1:
+            errors.append(f"{page}: expected exactly one release-status marker")
+        else:
+            statuses[page] = status[0]
+        if len(commit) != 1:
+            errors.append(f"{page}: expected exactly one release-provenance marker")
+        else:
+            commits[page] = commit[0]
+    if len(set(statuses.values())) > 1:
+        errors.append("release status markers disagree between published pages")
+    if len(set(value[:8] for value in commits.values())) > 1:
+        errors.append("release provenance markers disagree between published pages")
+
+    cn_perf = texts.get(Path("Docs/CN/Performance_Parity_slua.md"), "")
+    en_perf = texts.get(Path("Docs/EN/Performance_Parity_slua.md"), "")
+    for page, text in ((Path("Docs/CN/Performance_Parity_slua.md"), cn_perf),
+                       (Path("Docs/EN/Performance_Parity_slua.md"), en_perf)):
+        if "25%" not in text:
+            errors.append(f"{page}: the 25% regression gate is not stated")
+    if "已提交" not in cn_perf:
+        errors.append("Docs/CN/Performance_Parity_slua.md: committed baseline status is missing")
+    if "are committed" not in en_perf or "not committed" in en_perf:
+        errors.append("Docs/EN/Performance_Parity_slua.md: baseline status conflicts with the CN page")
+    for page in (Path("Docs/CN/ReleaseNotes.md"), Path("Docs/EN/ReleaseNotes.md")):
+        for figure in ("33/33", "2482/2482", "25%"):
+            if figure not in texts.get(page, ""):
+                errors.append(f"{page}: missing validated run figure {figure}")
+
+    baseline = load_release_summary(root, "baseline")
+    if baseline and "error" not in baseline:
+        commit = str(baseline.get("provenance", {}).get("commit", ""))[:8]
+        stages = baseline.get("stages")
+        automation = baseline.get("automation")
+        if commit and commits and any(value[:8] != commit for value in commits.values()):
+            errors.append(f"release provenance markers do not match baseline commit {commit}")
+        if isinstance(stages, list) and isinstance(automation, list):
+            total = sum(int(item.get("total", 0)) for item in automation if isinstance(item, dict))
+            for page, text in texts.items():
+                if "33/33" in text and len(stages) != 33:
+                    errors.append(f"{page}: 33/33 claim disagrees with {len(stages)} baseline stages")
+                if "2482/2482" in text and total != 2482:
+                    errors.append(f"{page}: 2482/2482 claim disagrees with {total} baseline executions")
+
+    latest = load_release_summary(root, "test")
+    if latest and "error" not in latest and latest.get("complete") is True:
+        expected = "passed" if latest.get("passed") is True else "not-passed"
+        for page, status in statuses.items():
+            if status != expected:
+                errors.append(f"{page}: release-status {status} disagrees with the latest run ({expected})")
+    return errors
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--write-matrix", action="store_true", help="refresh the generated documentation page")
+    args = parser.parse_args()
+    try:
+        data = json.loads((ROOT / MATRIX).read_text(encoding="utf-8"))
+        errors = validate_matrix(data, ROOT)
+    except (OSError, ValueError) as exc:
+        print(f"matrix: {exc}")
+        return 1
+    evidence = load_evidence(ROOT)
+    errors.extend(evidence[2])
+
+    if not errors:
+        expected = render_matrix(data, evidence)
+        if args.write_matrix:
+            # Path.write_text(newline=) is 3.10+; keep this script usable on older
+            # interpreters, the same reason is_relative_to() is spelled out above.
+            with open(str(ROOT / PAGE), "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(expected)
+        elif not (ROOT / PAGE).is_file() or (ROOT / PAGE).read_text(encoding="utf-8") != expected:
+            errors.append("generated matrix is stale; run with --write-matrix")
+    errors.extend(validate_docs(ROOT))
+    errors.extend(validate_release_docs(ROOT))
+    for error in errors:
+        print(error)
+    if errors:
+        return 1
+
+    by_capability, runs, _ = evidence
+    covered = len([r for r in data["features"] if r["id"] in by_capability])
+    if runs:
+        print(f"Repository audit passed: {len(data['features'])} capability groups; "
+              f"{covered} have execution evidence from {len(runs)} recorded run(s).")
+    else:
+        print(f"Repository audit passed: {len(data['features'])} capability groups; "
+              f"runtime verification pending (no evidence recorded).")
+    print("Checked evidence paths, generated matrix, inline local Markdown links and plain MkDocs nav paths.")
+    print("Checked release status/provenance markers, CN/EN release figures and local release summaries.")
+    print("Not checked: runtime behavior, code coverage, remote URLs, Markdown anchors or HTML links.")
+    print("Not checked: local release evidence when Saved/ReleaseTests/ is absent (as on CI).")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

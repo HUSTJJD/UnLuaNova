@@ -1,7 +1,7 @@
 local M = UnLuaNova.Class()
 
 local function run(self)
-    local action = NewObject(UE.UUnLuaLatentAction, self)
+    local action = NewObject(UE.UUnLuaNovaLatentAction, self)
     action:SetTickableWhenPaused(true)
     local info = action:CreateInfo()
     UE.UKismetSystemLibrary.Delay(self, 0.5, info)

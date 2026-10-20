@@ -1,4 +1,7 @@
-[TOC]
+---
+title: "编程指南"
+description: "绑定方式、Lua 与引擎双向调用、覆写与垃圾回收的核心概念"
+---
 
 # 一、概述
 UnLuaNova是一个功能丰富、高度优化的UE脚本解决方案。开发者可以使用Lua来进行游戏逻辑编写，借助于Lua的热重载特性，可以获得快得多的游戏逻辑迭代速度。本文将会介绍UnLuaNova的主要功能和基础编程模式。
@@ -9,6 +12,22 @@ UnLuaNova是一个功能丰富、高度优化的UE脚本解决方案。开发者
 UnLuaNova提供了两种绑定Lua和引擎层的方式，分别是静态绑定和动态绑定：
 
 ## 静态绑定
+
+静态绑定有三种写法，**都不要求在 UE 侧写 C++**，按需选一种：
+
+| 方式 | 怎么写 | 适合 |
+|---|---|---|
+| 配置映射（推荐） | `DefaultUnLuaNova.ini` 的 `ClassModuleBindings`，见[设置项](Settings.md#类模块绑定表) | 改配置就生效，连蓝图都不用开；基类能覆盖蓝图子类 |
+| 绑定组件 | 蓝图 Actor 上加 `UnLuaNova Binding` 组件，填模块名 | 纯蓝图团队，按资产逐个配 |
+| 实现接口 | C++ 或蓝图里实现 `IUnLuaNovaInterface`，覆写 `GetModuleName()` | 老项目迁移、模块名要按实例算 |
+
+优先级就是上表的顺序。前两种（配置映射 / 绑定组件）都是"给没实现接口的对象也找得到模块名"，
+但**找得到不等于会绑**：还要在 `DefaultUnLuaNova.ini` 里打开
+`bDataDrivenBinding`（默认关，见[设置项](Settings.md#特性开关统一格式)）。
+关着的时候，绑定只发生在实现了接口或走动态绑定的对象上 —— 不会在你不知情时把脚本挂上去。
+
+"实现接口"这种写法分 C++ 与蓝图两种（"绑定组件"就是在蓝图里 Add Component 搜
+`UnLuaNova Binding`，填 `Lua Module`，不需要下面这些）：
 
 #### C++
 你的 UCLASS 只需要实现 `IUnLuaNovaInterface` 接口，在 `GetModuleName_Implementation()` 里返回Lua文件路径即可。
@@ -28,13 +47,13 @@ UnLuaNova提供了两种绑定Lua和引擎层的方式，分别是静态绑定�
 ```cpp
 local Proj = World:SpawnActor(ProjClass, Transform, ESpawnActorCollisionHandlingMethod.AlwaysSpawn, self, self.Instigator, "Weapon.BP_DefaultProjectile_C")
 ```
-`Weapon.BP_DefaultProjectile_C` 是一个 [Lua模块路径](#Lua模块路径)。
+`Weapon.BP_DefaultProjectile_C` 是一个 [Lua模块路径](#lua模块路径)。
 
 #### Object
 ```lua
 local ProxyObj = NewObject(ObjClass, nil, nil, "Objects.ProxyObject")
 ```
-`Objects.ProxyObject` 是一个 [Lua模块路径](#Lua模块路径)。
+`Objects.ProxyObject` 是一个 [Lua模块路径](#lua模块路径)。
 
 ## Lua模块路径
 无论是静态绑定还是动态绑定，他们都需要指定Lua模块路径。它是一个相对于 **{工程目录}/Content/Script** 下Lua文件的 **相对路径**，使用半角点号 **.** 分隔。
@@ -268,10 +287,10 @@ Lua函数的名字必须为：**'AnimNotify_'** + **{事件名}**
 ## 替换输入事件
 ![ACTION_AXIS_INPUTS](../Images/action_axis_inputs.png)
 
-参考示例：[03_BindInputs](../../Content/Script/Tutorials/03_BindInputs.lua)
+参考示例：[03_BindInputs](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tutorials/03_BindInputs.lua)
 
 ## 替换Replication事件
-参考示例：[10_Replications](../../Content/Script/Tutorials/10_Replications.lua)
+参考示例：[10_Replications](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tutorials/10_Replications.lua)
 
 ## 调用被替换的函数
 如果你用Lua覆盖了原来的实现，仍然可以通过 `Overridden` 访问原来的函数。
@@ -302,7 +321,7 @@ FLuaRetValues CallTableFunc(lua_State *L, const char *TableName, const char *Fun
 
 # 五、垃圾回收
 
-从UnLuaNova 2.2 版本开始，Lua环境不会再对`UObject`加引用，因此也不用再担心对象在Lua侧被引用着，导致一直无法释放的内存泄漏问题了。
+Lua 侧的普通 `UObject` 包装不会自动阻止 UE GC。显式 `Ref`、委托、Timer 及业务容器仍可能延长对象寿命，需要在生命周期结束时解除引用；这项引用规则不代表整个系统不存在内存泄漏。发布时的检查范围见[测试与自动化](Testing.md#内存泄漏门禁)。
 
 如果在Lua侧访问了某个被UEGC回收的对象，会提示类似 `attempt to read property on released object` 的错误。
 
@@ -360,3 +379,11 @@ MyWidget:RemoveFromViewport()
 
 [静态导出](./StaticExportBinding.md)
 [自定义生成Lua模版](./CustomTemplate.md)
+
+---
+
+## 延伸阅读
+
+- [如何实现覆写](How_To_Implement_Overriding.md) — 覆写机制的实现原理
+- [API 参考](API.md) — 接口速查
+- [静态导出与静态绑定](StaticExportBinding.md) — 静态导出与静态绑定

@@ -1,0 +1,25 @@
+diff --git a/test/tclient/tests/load-relative-library.lua b/test/tclient/tests/load-relative-library.lua
+--- a/test/tclient/tests/load-relative-library.lua
++++ b/test/tclient/tests/load-relative-library.lua
+@@ -13,10 +13,6 @@
+ lclient():start(function (client)
+     client:registerFakers()
+ 
+-    client:initialize {
+-        rootUri = furi.encode(workspacePath),
+-    }
+-
+     client:register('workspace/configuration', function ()
+         return {
+             {
+@@ -31,7 +27,9 @@
+         util.saveFile(libraryFilePath, 'LIBRARY_FILE = true')
+     end
+ 
+-    client:initialize()
++    client:initialize {
++        rootUri = furi.encode(workspacePath),
++    }
+ 
+     client:notify('textDocument/didOpen', {
+         textDocument = {

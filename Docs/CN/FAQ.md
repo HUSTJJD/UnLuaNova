@@ -1,3 +1,8 @@
+---
+title: "常见问题 FAQ"
+description: "覆写失效、打包加载不到、热更新、自定义 require 路径等高频问题"
+---
+
 # FAQ 常见问题解答
 
 ## 覆写RecieveTick无效？
@@ -84,3 +89,11 @@ PS：默认值是`Content/Script/?.lua;Plugins/UnLuaNova/Content/Script/?.lua`�
 ## 有哪些产品正在使用UnLuaNova？
 
 腾讯内部已知的有四十款左右项目在使用UnLuaNova，外部项目暂时无法统计。
+
+---
+
+## 延伸阅读
+
+- [调试](Debugging.md) — 调试 Lua 脚本
+- [智能提示 IntelliSense](IntelliSense.md) — 智能提示配置
+- [设置项](Settings.md) — 设置项一览

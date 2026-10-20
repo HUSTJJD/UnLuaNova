@@ -1,9 +1,9 @@
 local M = UnLuaNova.Class()
 
-local Start = UE.UUnLuaBenchmarkFunctionLibrary.Start
-local Stop = UE.UUnLuaBenchmarkFunctionLibrary.Stop
-local StartTimer = UE.UUnLuaBenchmarkFunctionLibrary.StartTimer
-local StopTimer = UE.UUnLuaBenchmarkFunctionLibrary.StopTimer
+local Start = UE.UUnLuaNovaBenchmarkFunctionLibrary.Start
+local Stop = UE.UUnLuaNovaBenchmarkFunctionLibrary.Stop
+local StartTimer = UE.UUnLuaNovaBenchmarkFunctionLibrary.StartTimer
+local StopTimer = UE.UUnLuaNovaBenchmarkFunctionLibrary.StopTimer
 
 function M:Run(N)
 	local SpawnClass = UE.UUnLuaBenchmarkProxy
@@ -178,6 +178,39 @@ function M:Run(N)
 	local FHitResult = UE.FHitResult
 	for i=1, N do
 		local HitResult = FHitResult()
+	end
+	StopTimer()
+
+	-- ── 容器 + 整包传参 ────────────────────────────────────────────
+	-- 与 BP_UnLuaNovaBenchmark 里同名两行的用例完全一致：这一段走的是纯 UE API，
+	-- 不碰 Proxy，所以两份脚本的数字可以直接互相对照。
+	local MathLibrary = UE.UKismetMathLibrary
+	StartTimer("UE.TArray(UE.FVector) + Add x8")
+	for i=1, N do
+		local TestVec = UE.TArray(UE.FVector)
+		TestVec:Add(UE.FVector(0, 0, 0))
+		TestVec:Add(UE.FVector(0, 0, 1))
+		TestVec:Add(UE.FVector(0, 1, 0))
+		TestVec:Add(UE.FVector(1, 0, 0))
+		TestVec:Add(UE.FVector(1, 1, 0))
+		TestVec:Add(UE.FVector(1, 0, 1))
+		TestVec:Add(UE.FVector(0, 1, 1))
+		TestVec:Add(UE.FVector(1, 1, 1))
+	end
+	StopTimer()
+
+	StartTimer("TArray<FVector> x8 + PointsAreCoplanar(const TArray<FVector>&, float)")
+	for i=1, N do
+		local TestVec = UE.TArray(UE.FVector)
+		TestVec:Add(UE.FVector(0, 0, 0))
+		TestVec:Add(UE.FVector(0, 0, 1))
+		TestVec:Add(UE.FVector(0, 1, 0))
+		TestVec:Add(UE.FVector(1, 0, 0))
+		TestVec:Add(UE.FVector(1, 1, 0))
+		TestVec:Add(UE.FVector(1, 0, 1))
+		TestVec:Add(UE.FVector(0, 1, 1))
+		TestVec:Add(UE.FVector(1, 1, 1))
+		MathLibrary.PointsAreCoplanar(TestVec, 0.1)
 	end
 	StopTimer()
 end

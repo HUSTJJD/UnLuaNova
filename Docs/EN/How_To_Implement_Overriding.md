@@ -1,3 +1,8 @@
+---
+title: "How To Implement Overriding"
+description: "How Blueprint events get replaced by Lua implementations"
+---
+
 # Overview
 The main feature of UnLuaNova is overriding 'BlueprintEvent', 'AnimNotify', 'RepNotify', 'InputEvent' without helper codes. This document will introduce the two methods to implement overriding.
 
@@ -42,3 +47,11 @@ Replacing thunk function is useless in this case, and we can inject special Opco
 ![OPCODE_INJECTION](../Images/opcode_injection.png)
 
 ![CUSTOMIZED_THUNK_FUNC](../Images/customized_thunk_func.png)
+
+---
+
+## Further reading
+
+- [Programming Guide](UnLuaNova_Programming_Guide.md) — Overriding from the Lua side
+- [API Reference](API.md) — API reference
+- [FAQ](FAQ.md) — Frequently asked questions

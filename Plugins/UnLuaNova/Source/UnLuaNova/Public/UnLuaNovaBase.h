@@ -16,6 +16,13 @@
 
 #include "CoreUObject.h"
 #include "Runtime/Launch/Resources/Version.h"
+#include "LuaBackend.h"      // FUnLuaNovaUserdataDtor, for NewUserdataDtor()
+
+// --- 内置库开关（编译期） ---------------------------------------------------
+// UNLUANOVA_HAS_STDLIB_TIMER / _EVENT / _OOP 只有一个来源：UnLuaNova.Build.cs
+// 读 Config/DefaultUnLuaNova.ini 的 bTimer / bEvent / bOOP（见 Build.cs 的 loadFeature）。
+// 这里刻意不写 #ifndef 默认值 —— 那样等于"同一件事两个答案"，
+// 而且宏没定义时会静默变成"库被打开"，与本意相反。没定义就是构建脚本没跑。
 
 UNLUANOVA_API DECLARE_LOG_CATEGORY_EXTERN(LogUnLuaNova, Log, All);
 UNLUANOVA_API DECLARE_LOG_CATEGORY_EXTERN(UnLuaNovaDelegate, Log, All);
@@ -250,9 +257,10 @@ namespace UnLuaNova
      *
      * @param Size - user data size (in bytes)
      * @param MetatableName - name of the meta table
+     * @param Dtor - native finalizer for owned smart pointers on Luau; use DestroyUserdataPayload<SmartPtrType>
      * @return - the address of new created user data
      */
-    UNLUANOVA_API void* NewSmartPointer(lua_State *L, int32 Size, const char *MetatableName);
+    UNLUANOVA_API void* NewSmartPointer(lua_State *L, int32 Size, const char *MetatableName, FUnLuaNovaUserdataDtor Dtor = nullptr);
 
     /**
      * Get the address of smart pointer at the given stack index
@@ -271,6 +279,40 @@ namespace UnLuaNova
      * @return - the address of new created user data
      */
     UNLUANOVA_API void* NewUserdata(lua_State *L, int32 Size, const char *MetatableName, int32 Alignment);
+
+    /**
+     * Same, for a payload whose C++ destructor has to run when the VM collects it.
+     *
+     * Plain Lua reaches that destructor through the metatable's __gc; Luau has no __gc and
+     * needs the finalizer handed to the VM at allocation time. 'Dtor' is ignored on the
+     * former, so passing it unconditionally is correct on both - see UNLUANOVA_NEWDATA_DTOR
+     * in LuaBackend.h.
+     */
+    UNLUANOVA_API void* NewUserdataDtor(lua_State *L, int32 Size, const char *MetatableName, int32 Alignment, FUnLuaNovaUserdataDtor Dtor);
+
+    /**
+     * Payload address of a userdata block, or null if UnLuaNova did not create the block.
+     *
+     * 'Block' is what lua_touserdata() returns - and what a Lua finalizer receives. The
+     * payload sits behind [FUserdataDesc][padding], so handing the block straight to a C++
+     * destructor would run it over the descriptor bytes instead of the object.
+     *
+     * Declared here as well as in LuaCore.h so public headers can build finalizers without
+     * reaching into the private tree; both declarations are the same function.
+     */
+    UNLUANOVA_API void* GetUserdataPayloadFromBlock(void* Block);
+    /** Mark the payload destroyed and return it once. Invalidated borrowed views still need destruction. */
+    UNLUANOVA_API void* ReleaseUserdataPayloadFromBlock(void* Block);
+
+    /** Finalizer for a payload of type T - hand it to NewUserdataDtor. */
+    template <typename T>
+    void DestroyUserdataPayload(lua_State*, void* Block)
+    {
+        if (void* Payload = ReleaseUserdataPayloadFromBlock(Block))
+        {
+            static_cast<T*>(Payload)->~T();
+        }
+    }
 
     /**
      * Push an untyped dynamic array (same memory layout with TArray)

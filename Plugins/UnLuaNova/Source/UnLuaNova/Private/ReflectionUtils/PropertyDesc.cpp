@@ -12,9 +12,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "PropertyDesc.h"
-#include "ClassDesc.h"
+#include "ReflectionUtils/PropertyDesc.h"
+#include "ReflectionUtils/ClassDesc.h"
 #include "LowLevel.h"
+#include "LuaBackend.h"
 #include "LuaCore.h"
 #include "LuaEnv.h"
 #include "Containers/LuaSet.h"
@@ -89,9 +90,14 @@ public:
         {
             PushIntegerArray(L, NumericProperty, (void*)ValuePtr);
         }
+        else if (Property->IsA<FInt64Property>() || Property->IsA<FUInt64Property>())
+        {
+            // Only a genuine 64-bit property keeps the integer tag; see PushIntegerElement.
+            UNLUANOVA_PUSHINT64(L, NumericProperty->GetUnsignedIntPropertyValue(ValuePtr));
+        }
         else
         {
-            UNLUANOVA_PUSHINT64(L, NumericProperty->GetUnsignedIntPropertyValue(ValuePtr));
+            UNLUANOVA_PUSHINT(L, (int32)NumericProperty->GetUnsignedIntPropertyValue(ValuePtr));
         }
     }
 
@@ -109,18 +115,13 @@ public:
         int32 Type = lua_type(L, IndexInStack);
         if (Type != LUA_TNIL)
         {
-            if (Type != LUA_TNUMBER)
+            // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+            // tag, so every literal a script writes - all of which are doubles there - was
+            // rejected, and so was LUA_TNUMBER vs LUA_TINTEGER confusion the other way.
+            if (!UnLuaNovaIsIntegralNumber(L, IndexInStack))
             {
                 ErrorMsg = FString::Printf(TEXT("integer needed but got %s"), UTF8_TO_TCHAR(lua_typename(L, Type)));
                 return false;
-            }
-            else
-            {
-                if (!lua_isinteger(L, IndexInStack))
-                {
-                    ErrorMsg = FString::Printf(TEXT("integer needed but got float or double"));
-                    return false;
-                }
             }
         }
 
@@ -192,7 +193,8 @@ public:
         }
         else
         {
-            UNLUANOVA_PUSHINT64(L, EnumProperty->GetUnderlyingProperty()->GetSignedIntPropertyValue(ValuePtr));
+            // As in PushEnumElement: enum values are small and scripts do arithmetic on them.
+            UNLUANOVA_PUSHINT(L, EnumProperty->GetUnderlyingProperty()->GetSignedIntPropertyValue(ValuePtr));
         }
     }
 
@@ -210,18 +212,12 @@ public:
         int32 Type = lua_type(L, IndexInStack);
         if (Type != LUA_TNIL)
         {
-            if (Type != LUA_TNUMBER)
+            // Same as the integer property above: an enum value arrives as a double when a
+            // script writes it, and as LUA_TINTEGER when UnLuaNova pushed it.
+            if (!UnLuaNovaIsIntegralNumber(L, IndexInStack))
             {
                 ErrorMsg = FString::Printf(TEXT("integer needed but got %s"), UTF8_TO_TCHAR(lua_typename(L, Type)));
                 return false;
-            }
-            else
-            {
-                if (!lua_isinteger(L, IndexInStack))
-                {
-                    ErrorMsg = FString::Printf(TEXT("integer needed but got float or double"));
-                    return false;
-                }
             }
         }
 
@@ -695,7 +691,7 @@ public:
         {
 #if UNLUANOVA_ENABLE_FTEXT
             const auto Text = TextProperty->GetPropertyValue(ValuePtr);
-            const auto Userdata = NewTypedUserdata(L, FText);
+            const auto Userdata = NewTypedUserdataDtor(L, FText, DestroyUserdataPayload<FText>);
             const auto NewTextPtr = new(Userdata) FText;
             *NewTextPtr = Text;
 #else
@@ -797,7 +793,10 @@ public:
         }
         else if (Type == LUA_TUSERDATA)
         {
-            FLuaArray* Src = (FLuaArray*)lua_touserdata(L, IndexInStack);
+            // Not lua_touserdata(): a script container is UnLuaNova userdata, so the block
+            // start is a FUserdataDesc and the FLuaArray lives behind it. Reading the
+            // descriptor as the array made Src->ScriptArray -1 and the memcpy crash.
+            FLuaArray* Src = (FLuaArray*)GetUserdataFast(L, IndexInStack);
             if (Src)
             {
                 if (!bCopyValue && Property->HasAnyPropertyFlags(CPF_OutParm))
@@ -1195,14 +1194,26 @@ public:
         : FStructPropertyDesc(InProperty), StructName(*UnLuaNova::LowLevel::GetMetatableName(StructProperty->Struct))
     {
         const auto ScriptStruct = CastChecked<UScriptStruct>(StructProperty->Struct);
+        // Lua-owned values can outlive both the declaring property and a map unload.
+        StructType = ScriptStruct;
+        StructArrayDim = InProperty->ArrayDim;
+        StructReference.Add(ScriptStruct);
         const auto CppStructOps = ScriptStruct->GetCppStructOps();
         StructSize = CppStructOps ? CppStructOps->GetSize() : ScriptStruct->GetStructureSize();
-        UserdataPadding = UnLuaNova::LowLevel::CalculateUserdataPadding(StructProperty->Struct);
+        // A copy is destroyed by the finalizer NewScriptStructUserdata() attaches, which
+        // means the block carries the struct's type pointer and the padding has to reserve
+        // room for it.
+        UserdataPadding = CalcUserdataPaddingWithTypeHeader(CppStructOps ? CppStructOps->GetAlignment() : ScriptStruct->GetMinAlignment());
     }
 
     virtual int32 GetSize() const override
     {
         return StructSize;
+    }
+
+    virtual void Destruct(void* Dest) const override
+    {
+        StructType->DestroyStruct(Dest, StructArrayDim);
     }
 
     virtual bool CopyBack(lua_State *L, int32 SrcIndexInStack, void *DestContainerPtr) override
@@ -1231,7 +1242,7 @@ public:
     {
         if (bCreateCopy)
         {
-            void *Userdata = NewUserdataWithPadding(L, StructSize, StructName.Get(), UserdataPadding);
+            void *Userdata = NewScriptStructUserdata(L, StructSize, StructName.Get(), UserdataPadding, StructType);
             StructProperty->InitializeValue(Userdata);
             StructProperty->CopySingleValue(Userdata, ValuePtr);
         }
@@ -1250,6 +1261,21 @@ public:
 
     virtual bool SetValueInternal(lua_State *L, void *ValuePtr, int32 IndexInStack, bool bCopyValue) const override
     {
+#if UNLUANOVA_HAS_NATIVE_VECTOR
+        // A Luau vector stands in for FVector: its three components are already in the
+        // TValue, so write them straight into the parameter slot. Allocating a userdata
+        // only to copy it out again is exactly the cost this type exists to avoid.
+        if (UNLUANOVA_ISVECTOR(L, IndexInStack) && StructProperty->Struct == TBaseStructure<FVector>::Get())
+        {
+            const LUA_VECTOR_TYPE* Components = UNLUANOVA_TOVECTOR(L, IndexInStack);
+            FVector* Dest = static_cast<FVector*>(ValuePtr);
+            Dest->X = (FVector::FReal)Components[0];
+            Dest->Y = (FVector::FReal)Components[1];
+            Dest->Z = (FVector::FReal)Components[2];
+            return true;
+        }
+#endif
+
         void *Value = GetCppInstanceFast(L, IndexInStack);
         if (Value)
         {
@@ -1273,6 +1299,19 @@ public:
         int32 Type = lua_type(L, IndexInStack);
         if (Type != LUA_TNIL)
         {
+#if UNLUANOVA_HAS_NATIVE_VECTOR
+            // A Luau vector is a valid FVector. It has no metatable, so the userdata
+            // checks below would reject it without ever looking at the value.
+            if (UNLUANOVA_ISVECTOR(L, IndexInStack))
+            {
+                if (StructProperty->Struct != TBaseStructure<FVector>::Get())
+                {
+                    ErrorMsg = FString::Printf(TEXT("struct %s needed but got a vector"), *StructProperty->Struct->GetName());
+                    return false;
+                }
+                return true;
+            }
+#endif
             if (Type != LUA_TUSERDATA)
             {
                 ErrorMsg = FString::Printf(TEXT("userdata needed but got %s"), UTF8_TO_TCHAR(lua_typename(L, Type)));
@@ -1294,7 +1333,7 @@ public:
                 return false;
             }
 
-            FClassDesc* CurrentClassDesc = UnLuaNova::FLuaEnv::FindEnv(L)->GetClassRegistry()->Find(MetatableName);
+            FClassDesc* CurrentClassDesc = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetClassRegistry()->Find(MetatableName);
             if (!CurrentClassDesc)
             {
                 ErrorMsg = FString::Printf(TEXT("metatable of userdata needed in registry but got no found"));
@@ -1315,6 +1354,9 @@ public:
 
 private:
     FTCHARToUTF8 StructName;
+    UnLuaNova::FObjectReferencer StructReference;
+    UScriptStruct* StructType;
+    int32 StructArrayDim;
     int32 StructSize;
     uint8 UserdataPadding;
 };

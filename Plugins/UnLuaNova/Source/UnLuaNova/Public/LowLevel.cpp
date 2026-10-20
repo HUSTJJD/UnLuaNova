@@ -125,7 +125,24 @@ namespace UnLuaNova
             }
 
             lua_getglobal(L, "package");
+
+            // Luau ships no package library, so "package" is nil here. Indexing nil raises
+            // an index error, and this runs straight from C++ - with no errorJmp to unwind
+            // to, Luau aborts the process. Bail out before touching it; the answer is
+            // simply "module not loaded" on that backend.
+            if (!lua_istable(L, -1))
+            {
+                lua_pop(L, 1);
+                return LUA_TNIL;
+            }
+
             lua_getfield(L, -1, "loaded");
+            if (!lua_istable(L, -1))
+            {
+                lua_pop(L, 2);
+                return LUA_TNIL;
+            }
+
             int32 Type = lua_getfield(L, -1, ModuleName);
             lua_remove(L, -2);
             lua_remove(L, -2);
@@ -148,8 +165,28 @@ namespace UnLuaNova
             if (!OwnerClass)
                 return true;
 
-            if (Object->IsA(OwnerClass))
+            // UObject::IsA() walks the super chain, and this runs on every property read
+            // and write. The answer is a pure function of (object class, property), and a
+            // script touching the same field on the same class - a loop, a Tick, a
+            // per-frame update - asks the identical question every time. Keeping the last
+            // one turns that walk into two comparisons.
+            //
+            // thread_local, not static: several environments can run the check, and a
+            // torn read across them would let a wrong entry answer "true" for a pair that
+            // was never checked.
+            static thread_local UClass* LastObjectClass = nullptr;
+            static thread_local FProperty* LastProperty = nullptr;
+
+            UClass* ObjectClass = Object->GetClass();
+            if (LastObjectClass == ObjectClass && LastProperty == Property)
                 return true;
+
+            if (Object->IsA(OwnerClass))
+            {
+                LastObjectClass = ObjectClass;
+                LastProperty = Property;
+                return true;
+            }
 
             luaL_error(L, TCHAR_TO_UTF8(*FString::Printf(TEXT("Access property from invalid owner. %s should be a %s."), *Object->GetName(), *OwnerClass->GetName())));
             return false;
@@ -174,7 +211,14 @@ namespace UnLuaNova
                     Type = lua_rawget(L, Index);
                     if (Type == LUA_TUSERDATA)
                     {
-                        Userdata = lua_touserdata(L, -1); // get the raw UObject
+                        // Not lua_touserdata(): that hands back the start of the block,
+                        // which is the FUserdataDesc ([desc][padding][payload]), while
+                        // every caller dereferences this as a two level pointer. Reading
+                        // the block start instead of the payload made the "UObject" be
+                        // the descriptor bytes themselves - magic 0x1688 plus the
+                        // variant/two-level tag 0xA0 - and the first dereference of that
+                        // pointer crashed. GetUserdataFast() walks past the descriptor.
+                        Userdata = ::GetUserdataFast(L, -1, &bTwoLvlPtr); // get the raw UObject
                     }
                     else
                     {

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 
-#include "Issue583Test.h"
+#include "Tests/Issue583Test.h"
 #include "LowLevel.h"
 #include "UnLuaNovaSettings.h"
 #include "UnLuaNovaTestCommon.h"

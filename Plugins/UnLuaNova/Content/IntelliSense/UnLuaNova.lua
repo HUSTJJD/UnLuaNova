@@ -8,12 +8,13 @@ Lua.PackagePath = "Content/Script/?.lua;Plugins/UnLuaNova/Content/Script/?.lua"
 Lua.FTextEnabled = false
 
 ---Define a lua class for binding.
----@param SuperClass string @[opt]
+---@param SuperClass? string
+---@return table
 function Lua.Class(SuperClass)
 end
 
 ---Hot reload lua modules
----@param ModuleNames table @[opt]Specify a list of module names that need hot reloading. If this parameter is not passed, it will be obtained by default according to the file modification timestamp
+---@param ModuleNames? table Specify a list of module names that need hot reloading. If omitted, use file modification timestamps.
 function Lua.HotReload(ModuleNames)
 end
 
@@ -174,6 +175,14 @@ end
 function TMap:Num()
 end
 
+---Returns true if the map contains the provided key. Unlike Find, the answer does not
+---depend on the value: Find returns nil both for a missing key and for a key whose
+---value is nil.
+---@param Key any @The key that will be used to look the value up
+---@return boolean @True if the key is present in the map
+function TMap:Contains(Key)
+end
+
 ---Adds a key and value to the map. If something already uses the provided key it will be overwritten with the new value.
 ---After calling Key is guaranteed to be associated with Value until a subsequent mutation of the Map.
 ---@param Key TKey @The key that will be used to look the value up
@@ -317,3 +326,13 @@ end
 ---@return boolean
 function MulticastDelegate:IsBound()
 end
+
+---Native module returned by require('UnLuaNova.Timer'). Callbacks cannot yield.
+---@class UnLuaNovaTimer
+---@field Set fun(Callback:fun(), Interval?:number, bLoop?:boolean, Delay?:number, bUnscaled?:boolean, WorldContext?:UObject):integer
+---@field Clear fun(Handle:integer):boolean
+---@field Pause fun(Handle:integer, bPaused:boolean):boolean
+---@field IsValid fun(Handle:integer):boolean
+---@field ClearAll fun(WorldContext?:UObject)
+---@field Count fun(WorldContext?:UObject):integer
+---@field Time fun(bUnscaled?:boolean, WorldContext?:UObject):number

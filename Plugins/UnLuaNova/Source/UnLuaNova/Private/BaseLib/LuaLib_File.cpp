@@ -1,4 +1,5 @@
 #include "UnLuaNovaEx.h"
+#include "LuaCore.h"
 #include "HAL/FileManager.h"
 
 class UE4File
@@ -253,7 +254,9 @@ private:
 	bool HelperCheckFileMode(const FString& Mode, uint32& OutFlags, bool& OutIsWrite)
 	{
 		bool Ret = false;
-		//skip 'b' flag default is binary mode@TODO check me :see file history
+		// 'b' is accepted and then ignored: files are opened in binary mode whatever the
+		// mode string says, so "r" and "rb" mean the same thing here - which is why both
+		// spellings are listed. Only r / w / a / + decide the flags below.
 		static const FString OpenModeNames[] = 
 		{ 
 			TEXT("r"), TEXT("w"), TEXT("r+"),
@@ -322,7 +325,11 @@ static int32 UE4File_ReadFile(lua_State *L)
 	int32 arg = 2;
 	int32 first = arg;
 	int32 nargs = lua_gettop(L) - 1;
-	UE4File *File = (UE4File*)lua_touserdata(L, 1);
+	// Payload, not block start: TConstructor hands the instance to NewUserdata(), which lays
+	// the userdata out as [FUserdataDesc][padding][UE4File]. lua_touserdata() would hand back
+	// the descriptor, and every method below - including __gc - would then run over the
+	// descriptor bytes instead of the file.
+	UE4File *File = (UE4File*)GetCppInstanceFast(L, 1);
 	if (!File || !File->IsValid() || !File->IsReadable())
 	{
 		return 0;
@@ -411,7 +418,7 @@ static int32 UE4File_WriteFile(lua_State *L)
 	int32 nargs = lua_gettop(L) - 1;
 	int32 status = 1;
 	int32 bytesWrite = 0;
-	UE4File *File = (UE4File*)lua_touserdata(L, 1);
+	UE4File *File = (UE4File*)GetCppInstanceFast(L, 1);
 	if (!File || !File->IsValid() || !File->IsWriteable())
 	{
 		return 0;
@@ -459,7 +466,11 @@ static int32 UE4File_Delete(lua_State *L)
 		return 0;
 	}
 
-	UE4File *File = (UE4File*)lua_touserdata(L, 1);
+	// Same address question as the two methods above, and the one that matters most on the
+	// plain-Lua backend: __gc only ever runs there (Luau has none), so running the destructor
+	// over the descriptor instead of the file corrupted the heap at the first collection
+	// rather than failing here.
+	UE4File *File = (UE4File*)GetCppInstanceFast(L, 1);
 	if (!File)
 	{
 		return 0;
@@ -472,7 +483,7 @@ static const luaL_Reg UE4FileLib[] =
 {
 	{"Read", UE4File_ReadFile },
 	{"Write",UE4File_WriteFile},
-#if UNLUANOVA_HAS_USERDATA_GC
+#if UNLUANOVA_HAS_GC_METAMETHOD
 	{"__gc",UE4File_Delete},
 #endif
 	{ nullptr, nullptr }

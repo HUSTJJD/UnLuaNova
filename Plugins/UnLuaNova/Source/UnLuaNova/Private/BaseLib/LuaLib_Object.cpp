@@ -16,6 +16,8 @@
 #include "LowLevel.h"
 #include "UnLuaNovaEx.h"
 #include "LuaCore.h"
+#include "LuaEnv.h"
+#include "Registries/ObjectRegistry.h"
 
 /**
  * Load an object. for example: UObject.Load("/Game/Core/Blueprints/AI/BehaviorTree_Enemy.BehaviorTree_Enemy")
@@ -187,8 +189,26 @@ static int32 UObject_IsA(lua_State* L)
     return 1;
 }
 
+/**
+ * Drop the binding's own reference to the instance table and mark the UObject slot inside
+ * the userdata released.
+ *
+ * This is the first half of releasing a bound object: the second half is the Lua table
+ * actually being collected, which is what lets the UObject go afterwards. Scripts call it
+ * from Destruct() (Content/Script/Tutorials/11_ReleaseUMG.lua) - it is the only way a
+ * script can give its half of the binding back before the object itself is destroyed.
+ */
 static int32 UObject_Release(lua_State* L)
 {
+    const int32 NumParams = lua_gettop(L);
+    if (NumParams != 1)
+        return luaL_error(L, "invalid parameters");
+
+    UObject* Object = UnLuaNova::GetUObject(L, 1);
+    if (!Object)
+        return luaL_error(L, "invalid object");
+
+    UnLuaNova::FLuaEnv::FindEnvChecked(L).GetObjectRegistry()->Unbind(Object);
     return 0;
 }
 
@@ -303,7 +323,18 @@ BEGIN_EXPORT_CLASS(FSoftObjectPtr, const UObject*)
     ADD_FUNCTION_EX("GetAssetName", FString, GetAssetName)
     ADD_FUNCTION_EX("GetLongPackageName", FString, GetLongPackageName)
     ADD_CONST_FUNCTION_EX("Get", UObject*, Get)
+    // 引擎给 FSoftObjectPtr::LoadSynchronous 加了 ELoadFlags 形参（有默认值），
+    // 而 UnLua 只能按"注册时的签名"去调：写成无参就得把
+    // `UObject*(FSoftObjectPtr::*)(ELoadFlags) const` 强转成无参版本（C4191）。
+    // 改成带参注册会让 Lua 侧的 obj:LoadSynchronous() 少一个实参而报错
+    // （UnLua 没有 C++ 默认参数机制），所以这里保留无参形态并关掉该诊断。
+    //
+    // TODO(上游)：彻底修法是注册一个 lua_CFunction 转发（AddStaticCFunction），
+    // 在函数体里显式传 LOAD_None，避免成员函数指针转换。
+    MSVC_PRAGMA(warning(push))
+    MSVC_PRAGMA(warning(disable: 4191))  // 函数指针强制转换
     ADD_CONST_FUNCTION_EX("LoadSynchronous", UObject*, LoadSynchronous)
+    MSVC_PRAGMA(warning(pop))
     ADD_LIB(FSoftObjectPtrLib)
 END_EXPORT_CLASS()
 

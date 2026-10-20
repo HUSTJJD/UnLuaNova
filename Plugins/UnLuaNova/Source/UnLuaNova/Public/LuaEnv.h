@@ -28,6 +28,7 @@
 #include "HAL/Platform.h"
 #include "LuaDanglingCheck.h"
 #include "LuaDeadLoopCheck.h"
+#include "LuaGcScheduler.h"
 #include "LuaModuleLocator.h"
 
 namespace UnLuaNova
@@ -52,9 +53,22 @@ namespace UnLuaNova
 
         FLuaEnv();
 
+        /** Allocator userdata must outlive the environment, including lua_close. */
+        FLuaEnv(lua_Alloc Allocator, void* AllocatorUserdata);
+
         virtual ~FLuaEnv() override;
 
         static TMap<lua_State*, FLuaEnv*>& GetAll();
+
+        // GetAll() keyed by main state is the wrong shape for anything that has to be
+        // addressed from outside the process: TMap iteration order follows the key hash,
+        // so "the second env" means nothing from one call to the next. The default
+        // ULuaEnvLocator_ByGameInstance already makes more than one env the normal case
+        // (a listen server plus two clients is three), which makes "the env" an
+        // assumption worth removing. This returns them in a stable order - by main state
+        // address, which never changes while an env lives - so `lua.dbg env 1` and a DAP
+        // attach with {"env":1} both mean the same env for as long as it exists.
+        static TArray<FLuaEnv*> GetAllEnvs();
 
         static FLuaEnv* FindEnv(const lua_State* L);
 
@@ -78,11 +92,39 @@ namespace UnLuaNova
 
         bool DoString(const FString& Chunk, const FString& ChunkName = "chunk");
 
+        /**
+         * Full, synchronous collection. Unchanged in behaviour - it is still two
+         * LUA_GCCOLLECT passes on the calling thread and it still costs a frame spike.
+         * Reach for SetGCMode(TimeSliced) instead when the point is to avoid that spike.
+         */
         virtual void GC();
+
+        /** Hand the heap to the per-frame scheduler (see FLuaGcScheduler). */
+        void SetGCMode(ELuaGcMode InMode);
+        ELuaGcMode GetGCMode() const;
+
+        /** Cap on collector work per frame, in bytes. 0 = uncapped. */
+        void SetGCStepBudget(int64 BytesPerFrame);
+
+        /** How fast the collector chases the allocator, in percent (100 = keep pace). */
+        void SetGCStepMultiplier(int32 Percent);
+
+        /** Heap size above which the scheduler takes a full collect. 0 = disabled. */
+        void SetGCHardLimit(int64 Bytes);
+
+        /**
+         * One frame of scheduled collection. Driven from FCoreDelegates::OnEndFrame, so
+         * there is normally nothing to call - it is exposed for commandlets and tests,
+         * where no frame runs.
+         */
+        void TickGC(float DeltaSeconds = 0.0f);
+
+        const FLuaGcScheduler::FStats& GetGCStats() const;
 
         virtual void HotReload();
 
         FORCEINLINE lua_State* GetMainState() const { return L; }
+        bool IsClosing() const { return bClosing; }
 
         void AddThread(lua_State* Thread, int32 ThreadRef);
 
@@ -123,11 +165,21 @@ namespace UnLuaNova
     protected:
         lua_State* L;
 
+        // The preloader goes at index 1, which is where plain Lua keeps it: it is
+        // consulted before any file is looked at, and it is how a host hands a module
+        // over without there being a file for it at all.
+        static int LoadFromPreload(lua_State* L);
+
         static int LoadFromBuiltinLibs(lua_State* L);
 
         static int LoadFromCustomLoader(lua_State* L);
 
         static int LoadFromFileSystem(lua_State* L);
+
+        // require() for backends with no package library (Luau has neither package nor
+        // require). Upvalues: 1 = module cache, 2 = this FLuaEnv. Registered from the
+        // constructor; see the comment there.
+        static int Require(lua_State* L);
 
         static void* DefaultLuaAllocator(void* ud, void* ptr, size_t osize, size_t nsize);
 
@@ -154,6 +206,8 @@ namespace UnLuaNova
 
         void OnWorldTickStart(UWorld* World, ELevelTick TickType, float DeltaTime);
 
+        void OnEndFrame();
+
         void RegisterDelegates();
 
         void UnRegisterDelegates();
@@ -176,13 +230,16 @@ namespace UnLuaNova
         FEnumRegistry* EnumRegistry;
         FDanglingCheck* DanglingCheck;
         FDeadLoopCheck* DeadLoopCheck;
+        FLuaGcScheduler* GcScheduler;
         TMap<lua_State*, int32> ThreadToRef;
         TMap<int32, lua_State*> RefToThread;
         FDelegateHandle OnAsyncLoadingFlushUpdateHandle;
+        FDelegateHandle OnEndFrameHandle;
         TArray<UInputComponent*> CandidateInputComponents;
         FDelegateHandle OnWorldTickStartHandle;
         FString Name = TEXT("Env_0");
         bool bObjectArrayListenerRegistered;
         bool bStarted;
+        bool bClosing = false;
     };
 }

@@ -1,9 +1,9 @@
 local M = UnLuaNova.Class()
 
-local Start = UE.UUnLuaBenchmarkFunctionLibrary.Start
-local Stop = UE.UUnLuaBenchmarkFunctionLibrary.Stop
-local StartTimer = UE.UUnLuaBenchmarkFunctionLibrary.StartTimer
-local StopTimer = UE.UUnLuaBenchmarkFunctionLibrary.StopTimer
+local Start = UE.UUnLuaNovaBenchmarkFunctionLibrary.Start
+local Stop = UE.UUnLuaNovaBenchmarkFunctionLibrary.Stop
+local StartTimer = UE.UUnLuaNovaBenchmarkFunctionLibrary.StartTimer
+local StopTimer = UE.UUnLuaNovaBenchmarkFunctionLibrary.StopTimer
 
 function M:Run(N)
 	local SpawnClass = UE.AUnLuaBenchmarkProxy
@@ -176,6 +176,40 @@ function M:Run(N)
 	local FHitResult = UE.FHitResult
 	for i=1, N do
 		local HitResult = FHitResult()
+	end
+	StopTimer()
+
+	-- ── 容器 + 整包传参 ────────────────────────────────────────────
+	-- 一条迭代里同时压两条路径：Lua 侧容器构造（TArray + 8 个 FVector），
+	-- 以及把 TArray<FVector> 整个作为参数回传给 UFunction。
+	-- 拆成两行是为了报告里能看出贵的是"建"还是"传"（第二行减第一行 ≈ 调用成本）。
+	local MathLibrary = UE.UKismetMathLibrary
+	StartTimer("UE.TArray(UE.FVector) + Add x8")
+	for i=1, N do
+		local TestVec = UE.TArray(UE.FVector)
+		TestVec:Add(UE.FVector(0, 0, 0))
+		TestVec:Add(UE.FVector(0, 0, 1))
+		TestVec:Add(UE.FVector(0, 1, 0))
+		TestVec:Add(UE.FVector(1, 0, 0))
+		TestVec:Add(UE.FVector(1, 1, 0))
+		TestVec:Add(UE.FVector(1, 0, 1))
+		TestVec:Add(UE.FVector(0, 1, 1))
+		TestVec:Add(UE.FVector(1, 1, 1))
+	end
+	StopTimer()
+
+	StartTimer("TArray<FVector> x8 + PointsAreCoplanar(const TArray<FVector>&, float)")
+	for i=1, N do
+		local TestVec = UE.TArray(UE.FVector)
+		TestVec:Add(UE.FVector(0, 0, 0))
+		TestVec:Add(UE.FVector(0, 0, 1))
+		TestVec:Add(UE.FVector(0, 1, 0))
+		TestVec:Add(UE.FVector(1, 0, 0))
+		TestVec:Add(UE.FVector(1, 1, 0))
+		TestVec:Add(UE.FVector(1, 0, 1))
+		TestVec:Add(UE.FVector(0, 1, 1))
+		TestVec:Add(UE.FVector(1, 1, 1))
+		MathLibrary.PointsAreCoplanar(TestVec, 0.1)
 	end
 	StopTimer()
 end

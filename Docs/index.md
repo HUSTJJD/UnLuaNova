@@ -1,39 +1,49 @@
 # UnLuaNova
 
-**UnLuaNova** 是面向 Unreal Engine 的 Lua 脚本方案，是 [Tencent/UnLua](https://github.com/Tencent/UnLua) 的社区续作。
+基于 Tencent/UnLua 的 Unreal Engine Lua / Luau 脚本集成。不 fork 引擎、能运营期热更、性能可测。
 
-UnLua 的官方发布线终结在 v2.3.6（2023-11），`develop` 分支虽仍有零星修复但无版本、无维护者。UnLuaNova 把这些散落的社区成果收敛成一条有人维护的发布线，并在此基础上做三件事：
+[中文入口](CN/index.md) · [English](EN/index.md) · [GitHub](https://github.com/HUSTJJD/UnLuaNova)
 
-1. **静态绑定** —— 为声明类型生成绑定表，绕开反射热路径与运行时查找开销
-2. **可换 Lua 后端** —— [Lua 5.5](https://www.lua.org/) 与 [Luau](https://luau.org)（默认），均以 git 子模块引入
-3. **Lua 可观测性** —— CPU Profiler（写入 Unreal Insights）、headless 调试服务、沙箱、死循环看门狗
+## 当前状态
 
-## 状态
+<!-- release-status: not-passed -->
+<!-- release-provenance: 347bb8c5 -->
 
-⚠️ **当前代码尚未在 UE 5.8 上编译验证**，属于早期重构阶段，请勿用于生产。
+源码包含双后端、UE 绑定与覆写、容器与委托、静态导出与生成 thunk、调试与 Profiler、
+类型声明导出、运行时库和实验性声明式网络。许可是 **MIT**。
 
-| 项 | 值 |
-|---|---|
-| 引擎基线 | **UE 5.8.3**（源码版） |
-| Lua 后端 | **Luau（默认）** + Lua 5.5 —— 均以子模块引入 |
-| 上游基线 | Tencent/UnLua v2.3.6 + `develop`(2026-04) |
+**当前发布状态：未通过** —— 最近一次常规验证（`Saved/ReleaseTests/test`）因 Luau Editor
+5 项性能超过 25% 门禁而失败；结论与证据见[版本说明](CN/ReleaseNotes.md)。
 
-## 快速开始
+**2026-11-03 基线轮完整 Release 验证通过**（`.\Tools\RunTests.ps1 -Baseline`、
+`Saved/ReleaseTests/baseline`、commit `347bb8c5`；下列数字只对该轮成立。
+UE 5.8.3 源码引擎 / Win64 / Visual Studio 2026 18.10）：
 
-1. 复制 `Plugins` 目录到你的 UE 工程根目录
-2. 初始化子模块（Lua 5.5 与 Luau 均以 git 子模块引入，不初始化会缺 VM 源码）：
-   ```bash
-   git submodule update --init --recursive
-   ```
-3. 重新启动工程
-4. 新建蓝图 → UnLuaNova 工具栏选择 `绑定` → 填入 Lua 模块路径（如 `GameModes.BP_MyGameMode`）
-5. 选择 `创建 Lua 模板文件`，在 `Content/Script/GameModes/BP_MyGameMode.lua` 里写代码
+| 后端 | 载体 | 用例 | 结果 |
+|---|---|---:|---|
+| Luau（默认） | Editor | 641 | 641 通过 / 0 失败 / 0 跳过 |
+| Luau（默认） | cooked `-game` | 615 | 615 通过 / 0 失败 / 0 跳过 |
+| Lua 5.5.1 | Editor | 626 | 626 通过 / 0 失败 / 0 跳过 |
+| Lua 5.5.1 | cooked `-game` | 600 | 600 通过 / 0 失败 / 0 跳过 |
 
-## 文档导航
+33/33 阶段通过，含真实 Dedicated Server + 两客户端联网、两个后端各自的类型检查（0 错误）、
+性能 25% 门禁，以及 Development / Server / Shipping 三种打包。覆盖 `UnLuaNova.API.*`、
+`UnLuaNova.Regression.*`、`UnLuaNova.Binding`、`UnLuaNova.Memory`、`UnLuaNova.Editor`、
+`UnLuaNova.Settings`、`UnLuaNova.Lua`、`UnLuaNova.Extensions`、`UnLuaNova.Perf`、
+`UnLuaNova.Net.*` 与 `UnLuaNova.Showcase`。
 
-- **中文文档** —— 从 [UE 新手快速上手](CN/Quickstart_For_UE_Newbie.md) 开始，或查看[功能清单](CN/Features.md)、[编程指南](CN/UnLuaNova_Programming_Guide.md)
-- **English Docs** —— [Programming Guide](EN/UnLuaNova_Programming_Guide.md) / [API Reference](EN/API.md)
+性能基线已提交（`Tools/baseline/perf-lua.json`、`perf-luau.json`），并作为 Release 的 25% 回退门禁。
+同机同构建下 Luau 比 Lua 5.5.1 更快，容器工作负载上为 **2.08×**（22.570 → 10.868 µs/op）。
+**这仍不是与 slua-unreal / FUnLua 的同机对照**，跨项目速度结论尚未建立。
 
-## 仓库
+本轮没有覆盖的范围（范围声明，不是遗漏）：非 Win64 平台、Iris / push model、条件复制
+（实验特性，非 `None` 条件会被显式拒绝）、第三方 notice 清单，以及与 slua-unreal / FUnLua 的
+同机对照。诊断历史与更早轮次见 [回归报告](CN/Regression_20261024.md)。
 
-- GitHub：[HUSTJJD/UnLuaNova](https://github.com/HUSTJJD/UnLuaNova)
+- [现状、风险与路线图](CN/Benchmark_Review.md)
+- [能力与证据矩阵](feature-matrix.md)
+- [slua / FUnLua 对照](CN/Comparison_sluaunreal.md)
+- [Luau 支持边界](CN/Luau.md)
+- [性能验收方法](CN/Performance_Parity_slua.md)
+- [测试框架与验收](CN/Testing_Architecture.md)
+- [Lua 验证状态](test-lua-report.md) / [Luau 验证状态](test-luau-report.md)

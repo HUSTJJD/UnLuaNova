@@ -43,7 +43,10 @@ public class UnLuaNovaTestSuite : ModuleRules
 				"Core",
 				"CoreUObject",
 				"Engine",
-				"Slate"
+				"Slate",
+				// Json: UnLuaNovaTestCommon.h carries DescribeRpcs(), which reads the peers'
+				// JSON reports, so every translation unit that includes it needs the DOM.
+				"Json"
 			}
 		);
 
@@ -58,7 +61,8 @@ public class UnLuaNovaTestSuite : ModuleRules
 		// Read the same key UnLuaNova does so the choice can never disagree with it; naming
 		// the other backend would put both on the include path and trip LuaBackend.h's
 		// check for two backend modules in one build.
-		var configFile = new FileReference(Path.Combine(Target.ProjectFile.Directory.FullName, "Config", "DefaultUnLuaNovaEditor.ini"));
+		// 全插件只有一个配置文件：Config/DefaultUnLuaNova.ini
+		var configFile = new FileReference(Path.Combine(Target.ProjectFile.Directory.FullName, "Config", "DefaultUnLuaNova.ini"));
 		var config = new ConfigHierarchy(new[] { FileReference.Exists(configFile) ? new ConfigFile(configFile) : new ConfigFile() });
 		const string section = "/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings";
 
@@ -71,13 +75,33 @@ public class UnLuaNovaTestSuite : ModuleRules
 			{
 				"UnLuaNova",
 				"UMG",
+				// Showcase 截图的黑图检测要解码 PNG（TestCommands.cpp 的 DescribeUniformScreenshot）
+				"ImageWrapper",
+				// Sockets: DebugAdapter.spec.cpp probes the DAP port with ISocketSubsystem
+				// instead of guessing a free one. Not a public dependency - no header here
+				// exposes a socket type to a consumer.
+				"Sockets",
 				string.Equals(backend, "Lua", StringComparison.OrdinalIgnoreCase) ? "Lua" : "Luau"
 			}
 		);
 
 		if (Target.bBuildEditor)
 		{
+			// UnrealEd: the tests open levels and start PIE through the editor
+			// (FEditorFileUtils::LoadMap, GEditor->RequestPlaySession), and the showcase
+			// tests need the level viewport to take their screenshots from.
+			// (It used to also pull AssetRegistry + BlueprintGraph for the one-off asset
+			// repair test; that test is gone - the assets are fixed and committed.)
 			PrivateDependencyModuleNames.Add("UnrealEd");
+
+			// UnLuaNovaEditor: drives UnLuaNovaStaticBindingGenerator end to end
+			// (Private/Specs/StaticBindingGenerator.spec.cpp). Editor-only, like the module.
+			PrivateDependencyModuleNames.Add("UnLuaNovaEditor");
+
+			// Nothing else to add: LuaDebugAdapter.h lives in UnLuaNovaEditor's Public/
+			// folder, so the dependency above already puts it on the include path. It used
+			// to be a private header the test reached for by path, which is not a thing a
+			// consumer may do to another module - the header moved instead.
 		}
 
 		DynamicallyLoadedModuleNames.AddRange(

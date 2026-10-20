@@ -2,7 +2,8 @@
 #define __LUA_RAPIDJSION_LUACOMPAT_H__
 
 #include <cmath>
-#include <lua.hpp>
+#include <limits>
+#include "lua.hpp"
 
 namespace luax {
 	inline void setfuncs(lua_State* L, const luaL_Reg* funcs) {

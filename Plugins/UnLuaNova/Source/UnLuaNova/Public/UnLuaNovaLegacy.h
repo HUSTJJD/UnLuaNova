@@ -46,21 +46,24 @@ namespace UnLuaNova
     template <typename T>
     TSharedPtr<ITypeInterface> GetTypeInterface();
 
+    // Widths up to 32 bits go out through UNLUANOVA_PUSHINT: on Luau that is a double, and
+    // a script can do arithmetic on the result. Only the two 64-bit overloads keep
+    // UNLUANOVA_PUSHINT64, where staying exact matters more - see the note on the macros.
     FORCEINLINE int32 Push(lua_State* L, int8 V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, int16 V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, int32 V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
@@ -72,25 +75,25 @@ namespace UnLuaNova
 
     FORCEINLINE int32 Push(lua_State* L, long V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, uint8 V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, uint16 V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, uint32 V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
@@ -102,7 +105,7 @@ namespace UnLuaNova
 
     FORCEINLINE int32 Push(lua_State* L, unsigned long V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
@@ -175,7 +178,9 @@ namespace UnLuaNova
     FORCEINLINE int32 Push(lua_State* L, FText& V, bool bCopy = false)
     {
 #if UNLUANOVA_ENABLE_FTEXT
-        const auto Userdata = NewTypedUserdata(L, FText);
+        // FText holds a refcount on shared text data, so it has to be destroyed - not just
+        // have its bytes reclaimed. On Luau that only happens through the VM-level finalizer.
+        const auto Userdata = NewTypedUserdataDtor(L, FText, DestroyUserdataPayload<FText>);
         new(Userdata) FText(V);
 #else
         lua_pushstring(L, TCHAR_TO_UTF8(*V.ToString()));
@@ -186,7 +191,9 @@ namespace UnLuaNova
     FORCEINLINE int32 Push(lua_State* L, const FText& V, bool bCopy = false)
     {
 #if UNLUANOVA_ENABLE_FTEXT
-        const auto Userdata = NewTypedUserdata(L, FText);
+        // FText holds a refcount on shared text data, so it has to be destroyed - not just
+        // have its bytes reclaimed. On Luau that only happens through the VM-level finalizer.
+        const auto Userdata = NewTypedUserdataDtor(L, FText, DestroyUserdataPayload<FText>);
 #else
         lua_pushstring(L, TCHAR_TO_UTF8(*V.ToString()));
 #endif
@@ -196,7 +203,9 @@ namespace UnLuaNova
     FORCEINLINE int32 Push(lua_State* L, FText&& V, bool bCopy = false)
     {
 #if UNLUANOVA_ENABLE_FTEXT
-        const auto Userdata = NewTypedUserdata(L, FText);
+        // FText holds a refcount on shared text data, so it has to be destroyed - not just
+        // have its bytes reclaimed. On Luau that only happens through the VM-level finalizer.
+        const auto Userdata = NewTypedUserdataDtor(L, FText, DestroyUserdataPayload<FText>);
 #else
         lua_pushstring(L, TCHAR_TO_UTF8(*V.ToString()));
 #endif
@@ -371,52 +380,72 @@ namespace UnLuaNova
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<int8>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<int16>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<int32>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<int64>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<long>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<uint8>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<uint16>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<uint32>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<uint64>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<unsigned long>)
     {
-        return lua_isinteger(L, Index) != 0;
+        // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+        // tag, so every integer a script writes (all doubles there) failed the check.
+        return UnLuaNovaIsIntegralNumber(L, Index);
     }
 
     FORCEINLINE bool IsType(lua_State* L, int32 Index, TType<float>)
@@ -669,10 +698,12 @@ namespace UnLuaNova
     template <typename... T>
     FLuaRetValues Call(lua_State* L, const char* FuncName, T&&... Args)
     {
-        const auto Env = FLuaEnv::FindEnv(L);
+        // The env overload cannot be used here: it dereferences the env, and on this path
+        // L may be null, which is exactly what makes FindEnv answer null. The lua_State
+        // overload with INDEX_NONE touches nothing, so it is safe on the way out.
         if (!L || !FuncName)
         {
-            return FLuaRetValues(Env, INDEX_NONE);
+            return FLuaRetValues(L, INDEX_NONE);
         }
 
         lua_pushcfunction(L, ReportLuaCallError);
@@ -694,10 +725,9 @@ namespace UnLuaNova
     template <typename... T>
     FORCEINLINE_DEBUGGABLE FLuaRetValues CallTableFunc(lua_State* L, const char* TableName, const char* FuncName, T&&... Args)
     {
-        const auto Env = FLuaEnv::FindEnv(L);
         if (!L || !TableName || !FuncName)
         {
-            return FLuaRetValues(Env, INDEX_NONE);
+            return FLuaRetValues(L, INDEX_NONE);
         }
 
         lua_pushcfunction(L, ReportLuaCallError);
@@ -707,14 +737,14 @@ namespace UnLuaNova
         {
             UE_LOG(LogUnLuaNova, Warning, TEXT("Global table %s doesn't exist!"), UTF8_TO_TCHAR(TableName));
             lua_pop(L, 2);
-            return FLuaRetValues(Env, INDEX_NONE);
+            return FLuaRetValues(L, INDEX_NONE);
         }
         Type = lua_getfield(L, -1, FuncName);
         if (Type != LUA_TFUNCTION)
         {
             UE_LOG(LogUnLuaNova, Warning, TEXT("Function %s of global table %s doesn't exist!"), UTF8_TO_TCHAR(FuncName), UTF8_TO_TCHAR(TableName));
             lua_pop(L, 3);
-            return FLuaRetValues(Env, INDEX_NONE);
+            return FLuaRetValues(L, INDEX_NONE);
         }
         lua_remove(L, -2);
 
@@ -730,7 +760,7 @@ namespace UnLuaNova
         const auto Env = FLuaEnv::FindEnv(L);
         if (!Env || !FuncName)
         {
-            return FLuaRetValues(Env, INDEX_NONE);
+            return FLuaRetValues(L, INDEX_NONE);
         }
 
         lua_pushcfunction(L, ReportLuaCallError);
@@ -1032,7 +1062,21 @@ namespace UnLuaNova
     {
         static int32 Push(lua_State* L, T&& V, bool bCopy)
         {
-            UNLUANOVA_PUSHINT64(L, V);
+            // Same width split as the Push() overloads. This is the path enums and the
+            // narrower integer types actually take, so pushing the 64-bit tag here handed a
+            // script a LUA_TINTEGER for every enum value and int32 property - which on Luau
+            // cannot be added to a literal, cannot be compared to one, and is rejected by
+            // string.format's %s ("string expected, got integer"). Keep the tag only when
+            // the type really is 64-bit and needs to round-trip exactly.
+            using TValue = typename TRemoveReference<T>::Type;
+            if constexpr (sizeof(TValue) > 4)
+            {
+                UNLUANOVA_PUSHINT64(L, V);
+            }
+            else
+            {
+                UNLUANOVA_PUSHINT(L, V);
+            }
             return 1;
         }
 
@@ -1069,8 +1113,10 @@ namespace UnLuaNova
             char MetatableName[256];
             memset(MetatableName, 0, sizeof(MetatableName));
             FCStringAnsi::Snprintf(MetatableName, sizeof(MetatableName), "%s%s", TType<SmartPtrType<T, Mode>>::GetName(), TType<T>::GetName());
-            void* Userdata = UnLuaNova::NewSmartPointer(L, sizeof(SmartPtrType<T, Mode>), MetatableName);
-            new(Userdata) SmartPtrType<T, Mode>(V);
+            void* Userdata = UnLuaNova::NewSmartPointer(L, sizeof(SmartPtrType<T, Mode>), MetatableName,
+                UnLuaNova::DestroyUserdataPayload<SmartPtrType<T, Mode>>);
+            if (Userdata)
+                new(Userdata) SmartPtrType<T, Mode>(V);
         }
         else
         {

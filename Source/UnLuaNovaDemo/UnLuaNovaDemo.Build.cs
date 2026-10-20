@@ -50,7 +50,8 @@ public class UnLuaNovaDemo : ModuleRules
         // the two can never disagree. Naming the other backend here would put both on the
         // include path (both ship lua.h / lualib.h under those names), and would trip
         // LuaBackend.h's check for two backend modules in one build.
-        var configFile = new FileReference(Path.Combine(Target.ProjectFile.Directory.FullName, "Config", "DefaultUnLuaNovaEditor.ini"));
+        // 全插件只有一个配置文件：Config/DefaultUnLuaNova.ini
+        var configFile = new FileReference(Path.Combine(Target.ProjectFile.Directory.FullName, "Config", "DefaultUnLuaNova.ini"));
         var config = new ConfigHierarchy(new[] { FileReference.Exists(configFile) ? new ConfigFile(configFile) : new ConfigFile() });
         const string section = "/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings";
 

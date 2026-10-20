@@ -38,7 +38,7 @@ int32 Enum_Index(lua_State *L)
     lua_rawget(L, 1);
     check(lua_isstring(L, -1));
 
-    const auto Enum = UnLuaNova::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(lua_tostring(L, -1));
+    const auto Enum = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetEnumRegistry()->Find(lua_tostring(L, -1));
     if (!Enum)
     {
         lua_pop(L, 1);
@@ -70,7 +70,7 @@ int32 Enum_GetMaxValue(lua_State* L)
 		if (Type == LUA_TSTRING)
 		{
 			const char* EnumName = lua_tostring(L, -1);
-            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(EnumName);
+            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetEnumRegistry()->Find(EnumName);
 			if (EnumDesc)
 			{
 				UEnum* Enum = EnumDesc->GetEnum();
@@ -84,7 +84,7 @@ int32 Enum_GetMaxValue(lua_State* L)
     }
     lua_pop(L, 1);
 
-    UNLUANOVA_PUSHINT64(L, MaxValue);
+    UNLUANOVA_PUSHINT(L, MaxValue);
     return 1;
 }
 
@@ -108,7 +108,7 @@ int32 Enum_GetNameStringByValue(lua_State* L)
         if (Type == LUA_TSTRING)
         {
             const char* EnumName = lua_tostring(L, -1);
-            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(EnumName);
+            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetEnumRegistry()->Find(EnumName);
             if (EnumDesc)
             {
                 UEnum* Enum = EnumDesc->GetEnum();
@@ -147,7 +147,7 @@ int32 Enum_GetDisplayNameTextByValue(lua_State* L)
         if (Type == LUA_TSTRING)
         {
             const char* EnumName = lua_tostring(L, -1);
-            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(EnumName);
+            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetEnumRegistry()->Find(EnumName);
             if (EnumDesc)
             {
                 UEnum* Enum = EnumDesc->GetEnum();
@@ -180,9 +180,9 @@ int32 CollisionEnum_Index(lua_State* L, int32 (*Converter)(FName))
             UNLUANOVA_LOGWARNING(L, TEXT("%s: Cann't find enum %s!"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(Name));
         }
         lua_pushvalue(L, 2);
-        UNLUANOVA_PUSHINT64(L, Value);
+        UNLUANOVA_PUSHINT(L, Value);
         lua_rawset(L, 1);
-        UNLUANOVA_PUSHINT64(L, Value);
+        UNLUANOVA_PUSHINT(L, Value);
     }
     else
     {

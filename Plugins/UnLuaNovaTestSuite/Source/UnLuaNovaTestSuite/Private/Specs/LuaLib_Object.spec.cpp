@@ -48,9 +48,9 @@ void FUnLuaNovaLibObjectSpec::Define()
     {
         It(TEXT("加载一个对象"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UClass* Expected = LoadObject<UClass>(nullptr, TEXT("/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C"));
+            UClass* Expected = LoadObject<UClass>(nullptr, TEXT("/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaNovaTestStubActor.BP_UnLuaTestStubActor_C"));
             const char* Chunk = R"(
-            local ActorClass = UE.UObject.Load('/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C')
+            local ActorClass = UE.UObject.Load('/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaNovaTestStubActor.BP_UnLuaTestStubActor_C')
             return ActorClass
             )";
             UnLuaNova::RunChunk(L, Chunk);
@@ -154,11 +154,26 @@ void FUnLuaNovaLibObjectSpec::Define()
         });
     });
 
-    xDescribe(TEXT("Release"), [this]()
+    Describe(TEXT("Release"), [this]()
     {
         It(TEXT("释放对象在LuaVM的引用"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            check(false);
+            // Release drops the binding's own reference to the instance table, so the
+            // userdata the script is still holding reads back as nothing afterwards. That
+            // is step one of the UMG release flow in Tutorials/11_ReleaseUMG.lua: without
+            // it the Lua table keeps the object alive for as long as it lives.
+            UnLuaNova::RunChunk(L, R"(
+            G_Actor = World:SpawnActor(UE.AActor)
+            return G_Actor
+            )");
+            TEST_TRUE(UnLuaNova::GetUObject(L, -1) != nullptr);
+            lua_pop(L, 1);
+
+            UnLuaNova::RunChunk(L, R"(
+            G_Actor:Release()
+            return G_Actor
+            )");
+            TEST_TRUE(UnLuaNova::GetUObject(L, -1) == nullptr);
         });
     });
 

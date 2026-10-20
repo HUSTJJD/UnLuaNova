@@ -1,41 +1,44 @@
 # Changelog
 
-UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
-版本遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
+<!-- release-status: not-passed -->
+<!-- release-provenance: 347bb8c5 -->
 
-> 本项目源自 [Tencent/UnLua](https://github.com/Tencent/UnLua)（MIT）。
-> 上游 2019–2023 年的历史变更请见 `Docs/Archive/UnLua_CHANGELOG.md`，或查阅本仓库的 git 历史。
+Entries follow the acceptance runs recorded under `Saved/ReleaseTests/` and the
+[capability matrix](Docs/feature-matrix.md). Historical detail lives in Git; current scope and
+outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
 
-## [Unreleased]
+## Current release status: not passed
 
-### Added
-- **静态绑定层** `StaticBinding/`：POD 描述符 + 注册表（延迟解析）+ 自动注册器
-- **`UnLuaStaticBindingGenerator`** Commandlet：构建期为声明类型生成静态绑定表
-- `CallUEFast`：对已解析函数跳过 `GetFunctionCallspace` / 覆写重定向查找 / 接口函数查找
-- **Lua 后端抽象** `LuaBackend.h`：吸收 Lua 5.4 与 Luau 的 API 差异（`UNLUANOVA_LUA_BACKEND` 开关）
-- Luau 以 git submodule 引入（`Source/ThirdParty/Luau`，0.743）+ `Luau.Build.cs`
-- 改名脚本 `Tools/Rename-To-UnLuaNova.ps1`
+The latest regular Release validation (2026-11-03, `Saved/ReleaseTests/test`) completed with
+`passed=false`: `Luau-editor-tests` failed and `Luau-editor-evidence` was blocked because five
+Luau Editor benchmark cases exceeded the 25% regression gate (+43.8% to +55.8%). Product sources
+are unchanged from the validated baseline run; the manifests, backend flags and process priority
+match, so measurement-environment interference is the leading explanation. The committed
+performance baseline is not replaced and the gate is not relaxed. A full Release re-run on an idle
+machine is required.
 
-### Changed
-- 引擎基线升到 **UE 5.8.3**：`BuildSettingsVersion.V6` + `IncludeOrderVersion.Latest`
-- `LuaOverridesClass` 的 UField 链遍历适配 UE 5.7+（`UField::Next` 已是 `TObjectPtr`）
-- 项目全面改名 `UnLua` → `UnLuaNova`（模块、UCLASS、宏、文件名、Lua 全局名、ini section）
-- `EInternalObjectFlags::AsyncLoading` → `EInternalObjectFlags_AsyncLoading`（UE 5.8 已移除该枚举项）
-- `FSoftObjectPtr::operator=` 导出返回类型修正为 `FSoftObjectPtr&`
-- `UNLUA_LOGERROR` 格式串缺参修正（原为未定义行为）
+## 2026-11-03 — baseline run, validated
 
-### Fixed
-- 合并上游 `develop`：PR #700（UE5.4）、#707、#758（UE5.6）、#761、#765
-- 合入社区 PR：#767 #756 #748 #711 #639 #643 #684 #705 #704 #672
-- 合入 PR #771 的测试套件修复（`UnLua::Shutdown()` 前置、`GetUObject` 回读等）
+The numbers below belong only to `.\Tools\RunTests.ps1 -Baseline` (`Saved/ReleaseTests/baseline`,
+2026-11-03 03:32:11–04:20:26 UTC, commit `347bb8c5`, 8 uncommitted worktree changes recorded in
+that run's provenance). They do not describe later commits or the current tree.
 
-### Reverted
-- **PR #719**：其守卫会在子类实例上跳过 Lua 覆写（详见 `Docs/Archive/` 说明），
-  需先补「子类实例仍能执行 Lua 覆写」的测试再评估
+Complete Release validation on UE 5.8.3 / Win64 (Visual Studio 2026 18.10): 33/33 stages passed,
+2482/2482 UE executions with zero failures and zero skips — Lua Editor 626, Lua cooked 600,
+Luau Editor 641, Luau cooked 615.
 
-### Known Issues
-- 尚未在 UE 5.8 上编译验证
-- UCLASS 改名需要 resave 资产与迁移 `Config/*.ini`
-- Luau 后端未接线：`UNLUANOVA_LUA_BACKEND` 默认 0，`LuaCore` 仍依赖 Lua 5.4 内部头
+- Both backends built from source: reflection, template exports and generated marshal thunks.
+- Real dedicated-server plus two-client RPC and replication evidence on both backends
+  (DedicatedServer and multicast sessions), with their runtime manifests and memory reports.
+- Static analysis on both backends: 0 errors (298 Lua warnings and 7 Luau warnings retained,
+  both a known analyzer limitation on `package.path`-style requires).
+- Development, Server and Shipping packaging for both backends.
+- 41 Python tooling tests and the PowerShell support checks passed.
+- Source audit covers slua-unreal, FUnLua and Luau, with explicit gaps and acceptance criteria.
+- Performance in this run: every benchmark case stayed inside the 25% gate against the committed
+  reference; Luau leads Lua 5.5.1 on the container case (self-comparison, not a third-party comparison).
 
-[Unreleased]: https://github.com/HUSTJJD/UnLua/commits/master
+Boundaries this run does not close, recorded rather than waived: conditional replication stays
+experimental and rejects non-`None` conditions explicitly; third-party notices are still being
+completed; non-Win64 platforms, Iris/push model and a same-machine comparison against
+slua-unreal / FUnLua need their own acceptance runs.

@@ -49,7 +49,7 @@ EStaticPropKind FStaticBindingRegistry::GetPropertyKind(const FProperty* Propert
 // be stored in StructToType. It is still looked up so that a known enum does not get
 // reported as unresolved; the caller casts and leaves enum binding to the reflective
 // path.
-static UField* ResolveFieldByName(const FString& Name)
+static UField* FindFieldInMemory(const FString& Name)
 {
 	if (UClass* Class = FindFirstObject<UClass>(*Name))
 		return Class;
@@ -58,6 +58,11 @@ static UField* ResolveFieldByName(const FString& Name)
 	if (UEnum* Enum = FindFirstObject<UEnum>(*Name))
 		return Enum;
 
+	return nullptr;
+}
+
+static UField* LoadFieldByName(const FString& Name)
+{
 	if (UClass* Class = LoadObject<UClass>(nullptr, *Name))
 		return Class;
 	if (UScriptStruct* Struct = LoadObject<UScriptStruct>(nullptr, *Name))
@@ -68,7 +73,37 @@ static UField* ResolveFieldByName(const FString& Name)
 	return nullptr;
 }
 
-void FStaticBindingRegistry::Resolve(const FStaticTypeBinding* Type, FEntry& Entry)
+// TypeName is a metatable name, and metatable names carry the C++ prefix - UObject,
+// AActor, FVector (see LowLevel::GetMetatableName) - while the UObject system stores the
+// bare name. Generated tables already emit the bare name; hand-written ones use whatever
+// Lua calls the type. The name as written is tried first so that a type which genuinely
+// starts with U/A/F (UnLuaNovaTestStub, ...) is not shadowed by its stripped form.
+// Enums keep their 'E' - same rule as FClassRegistry::RegisterReflectedType.
+static UField* ResolveFieldByName(const FString& Name)
+{
+	FString Candidates[2] = {Name, FString()};
+	int32 NumCandidates = 1;
+
+	if (Name.Len() > 1 && (Name[0] == TEXT('U') || Name[0] == TEXT('A') || Name[0] == TEXT('F')))
+	{
+		Candidates[1] = Name.Mid(1);
+		NumCandidates = 2;
+	}
+
+	// In-memory lookups are silent; loading warns and can pull in a package, so it only
+	// runs once every candidate has been tried against what is already resident.
+	for (int32 i = 0; i < NumCandidates; ++i)
+		if (UField* Field = FindFieldInMemory(Candidates[i]))
+			return Field;
+
+	for (int32 i = 0; i < NumCandidates; ++i)
+		if (UField* Field = LoadFieldByName(Candidates[i]))
+			return Field;
+
+	return nullptr;
+}
+
+void FStaticBindingRegistry::Resolve(FStaticTypeBinding* Type, FEntry& Entry)
 {
 	const FString TypeName = Type->TypeName ? Type->TypeName : TEXT("");
 
@@ -91,7 +126,7 @@ void FStaticBindingRegistry::Resolve(const FStaticTypeBinding* Type, FEntry& Ent
 	// --- properties -------------------------------------------------------
 	for (int32 i = 0; i < Type->NumProps; ++i)
 	{
-		const FStaticPropBinding* Source = &Type->Props[i];
+		FStaticPropBinding* Source = &Type->Props[i];
 		if (!Source->Name)
 			continue;
 
@@ -104,10 +139,10 @@ void FStaticBindingRegistry::Resolve(const FStaticTypeBinding* Type, FEntry& Ent
 			continue;
 		}
 
-		const_cast<FStaticPropBinding*>(Source)->Property = Prop;
-		const_cast<FStaticPropBinding*>(Source)->Offset = Prop->GetOffset_ForGC();
+		Source->Property = Prop;
+		Source->Offset = Prop->GetOffset_ForGC();
 		if (Source->Kind == EStaticPropKind::Unknown)
-			const_cast<FStaticPropBinding*>(Source)->Kind = GetPropertyKind(Prop);
+			Source->Kind = GetPropertyKind(Prop);
 
 		Entry.Props.Add(PropName, Source);
 	}
@@ -116,7 +151,7 @@ void FStaticBindingRegistry::Resolve(const FStaticTypeBinding* Type, FEntry& Ent
 	const UClass* AsClass = Cast<UClass>(Struct);
 	for (int32 i = 0; i < Type->NumFuncs; ++i)
 	{
-		const FStaticFuncBinding* Source = &Type->Funcs[i];
+		FStaticFuncBinding* Source = &Type->Funcs[i];
 		if (!Source->Name)
 			continue;
 
@@ -129,33 +164,49 @@ void FStaticBindingRegistry::Resolve(const FStaticTypeBinding* Type, FEntry& Ent
 			continue;
 		}
 
-		const_cast<FStaticFuncBinding*>(Source)->Function = Function;
-		const_cast<FStaticFuncBinding*>(Source)->ParamsSize = Function->ParmsSize;
-		const_cast<FStaticFuncBinding*>(Source)->ReturnValueOffset = Function->ReturnValueOffset;
+		Source->Function = Function;
+		Source->ParamsSize = Function->ParmsSize;
+		Source->ReturnValueOffset = Function->ReturnValueOffset;
 
-		const_cast<FStaticFuncBinding*>(Source)->Flags.bIsNet = Function->HasAnyFunctionFlags(FUNC_Net) != 0;
-		const_cast<FStaticFuncBinding*>(Source)->Flags.bIsNative = Function->HasAnyFunctionFlags(FUNC_Native) != 0;
-		const_cast<FStaticFuncBinding*>(Source)->Flags.bStatic = Function->HasAnyFunctionFlags(FUNC_Static) != 0;
-		const_cast<FStaticFuncBinding*>(Source)->Flags.bInterface =
+		// A generated thunk bakes the *kinds* into a template instantiation while the
+		// offsets stay dynamic, so a stale generated file is safe in everything except the
+		// kinds. Verify those here and drop the thunk if the signature has since changed:
+		// a mismatched kind would read the wrong number of bytes out of the frame.
+		bool bThunkStillValid = Source->Thunk != nullptr;
+
+		Source->Flags.bIsNet = Function->HasAnyFunctionFlags(FUNC_Net) != 0;
+		Source->Flags.bIsNative = Function->HasAnyFunctionFlags(FUNC_Native) != 0;
+		Source->Flags.bStatic = Function->HasAnyFunctionFlags(FUNC_Static) != 0;
+		Source->Flags.bInterface =
 			Function->GetOwnerClass() != nullptr && Function->GetOwnerClass()->HasAnyClassFlags(CLASS_Interface);
 
 		// Mirrors ULuaFunction::IsOverridable() without pulling in the override machinery.
 		constexpr uint32 OverridableMask = FUNC_Native | FUNC_Event | FUNC_Net;
 		constexpr uint32 OverridableResult = FUNC_Native | FUNC_Event;
-		const_cast<FStaticFuncBinding*>(Source)->Flags.bOverridable =
+		bool bOverridable =
 			(Function->HasAnyFunctionFlags(FUNC_BlueprintEvent) != 0)
 			|| ((Function->FunctionFlags & OverridableMask) == OverridableResult);
 
+#if !ENABLE_CALL_OVERRIDDEN_FUNCTION
+		// Generated thunks are instantiated in the project's module, which cannot see this
+		// module's defines, so the redirect decision has to travel inside the flags rather
+		// than as a #if at the call site - otherwise one side does the redirect and the
+		// other does not.
+		bOverridable = false;
+#endif
+
+		Source->Flags.bOverridable = bOverridable;
+
 		for (int32 p = 0; p < Source->NumParams; ++p)
 		{
-			const FStaticParamBinding* ParamSource = &Source->Params[p];
+			FStaticParamBinding* ParamSource = &Source->Params[p];
 			if (!ParamSource->Name)
 				continue;
 
 			const FName ParamName = ParamSource->Name;
 
 			if (ParamName == TEXT("LatentInfo"))
-				const_cast<FStaticFuncBinding*>(Source)->Flags.bLatent = 1;
+				Source->Flags.bLatent = 1;
 
 			FProperty* Param = nullptr;
 			for (TFieldIterator<FProperty> It(Function); It; ++It)
@@ -171,19 +222,63 @@ void FStaticBindingRegistry::Resolve(const FStaticTypeBinding* Type, FEntry& Ent
 			{
 				UE_LOG(LogTemp, Verbose,
 					TEXT("[StaticBinding] %s.%s: parameter '%s' not found."), *TypeName, *FuncName.ToString(), *ParamName.ToString());
+				// An unresolved parameter keeps Offset 0, and a thunk writes every slot at
+				// its declared offset - two unresolved slots would land on top of each
+				// other. Signatures only shrink when the C++ side changed, which is exactly
+				// when the generated thunk stops matching, so drop it.
+				bThunkStillValid = false;
 				continue;
 			}
 
-			const_cast<FStaticParamBinding*>(ParamSource)->Property = Param;
-			const_cast<FStaticParamBinding*>(ParamSource)->Offset = Param->GetOffset_ForGC();
+			const EStaticPropKind RuntimeKind = GetPropertyKind(Param);
+			if (ParamSource->Kind != EStaticPropKind::Unknown && ParamSource->Kind != RuntimeKind)
+				bThunkStillValid = false;
+
+			ParamSource->Property = Param;
+			ParamSource->Offset = Param->GetOffset_ForGC();
 			if (ParamSource->Kind == EStaticPropKind::Unknown)
-				const_cast<FStaticParamBinding*>(ParamSource)->Kind = GetPropertyKind(Param);
+				ParamSource->Kind = RuntimeKind;
+		}
+
+		// --- return value -----------------------------------------------------
+		if (Function->ReturnValueOffset != MAX_uint16)
+		{
+			FProperty* ReturnProp = nullptr;
+			for (TFieldIterator<FProperty> It(Function); It; ++It)
+			{
+				if (It->HasAnyPropertyFlags(CPF_ReturnParm))
+				{
+					ReturnProp = *It;
+					break;
+				}
+			}
+
+			const EStaticPropKind RuntimeKind = ReturnProp ? GetPropertyKind(ReturnProp) : EStaticPropKind::Unknown;
+			if (Source->ReturnKind != EStaticPropKind::Unknown && Source->ReturnKind != RuntimeKind)
+				bThunkStillValid = false;
+
+			Source->ReturnProperty = ReturnProp;
+			Source->ReturnKind = RuntimeKind;
+		}
+		else if (Source->ReturnKind != EStaticPropKind::Unknown)
+		{
+			// The generator saw a return value that the resolved function no longer has.
+			bThunkStillValid = false;
+			Source->ReturnKind = EStaticPropKind::Unknown;
+		}
+
+		if (!bThunkStillValid && Source->Thunk)
+		{
+			UE_LOG(LogTemp, Verbose,
+				TEXT("[StaticBinding] %s.%s: signature changed since generation, thunk disabled."),
+				*TypeName, *FuncName.ToString());
+			Source->Thunk = nullptr;
 		}
 
 		Entry.Funcs.Add(FuncName, Source);
 	}
 
-	const_cast<FStaticTypeBinding*>(Type)->bResolved = true;
+	Type->bResolved = true;
 }
 
 /**
@@ -203,7 +298,7 @@ void FStaticBindingRegistry::ResolvePending()
 	if (Pending.Num() == 0)
 		return;
 
-	for (const FStaticTypeBinding* Type : Pending)
+	for (FStaticTypeBinding* Type : Pending)
 	{
 		const FName Key = Type->TypeName;
 		FEntry& Entry = Types.FindOrAdd(Key);
@@ -215,7 +310,7 @@ void FStaticBindingRegistry::ResolvePending()
 	PendingCount.store(0, std::memory_order_release);
 }
 
-void FStaticBindingRegistry::Register(const FStaticTypeBinding* Type)
+void FStaticBindingRegistry::Register(FStaticTypeBinding* Type)
 {
 	if (!Type || !Type->TypeName)
 		return;
@@ -252,7 +347,7 @@ void FStaticBindingRegistry::Unregister(const FStaticTypeBinding* Type)
 		StructToType.Remove(KeyToRemove);
 
 	Types.Remove(Key);
-	Pending.Remove(Type);
+	Pending.RemoveAll([Type](FStaticTypeBinding* PendingType) { return PendingType == Type; });
 }
 
 const FStaticTypeBinding* FStaticBindingRegistry::Find(const FName TypeName) const
@@ -317,6 +412,35 @@ const FStaticFuncBinding* FStaticBindingRegistry::FindFunc(const FStaticTypeBind
 			return *Found;
 
 	return nullptr;
+}
+
+void FStaticBindingRegistry::GetThunkCoverage(int32& OutTypes, int32& OutFuncs, int32& OutThunks) const
+{
+	OutTypes = 0;
+	OutFuncs = 0;
+	OutThunks = 0;
+
+	// No resolve here on purpose: this is a report of what is registered, and forcing a
+	// resolve from a benchmark would make the first call look slower than the rest.
+	FRWScopeLock Read(RwLock, SLT_ReadOnly);
+
+	for (const TPair<FName, FEntry>& Pair : Types)
+	{
+		const FStaticTypeBinding* Type = Pair.Value.Type;
+		if (!Type)
+			continue;
+
+		++OutTypes;
+		for (int32 i = 0; i < Type->NumFuncs; ++i)
+		{
+			if (!Type->Funcs[i].Name)
+				continue;
+
+			++OutFuncs;
+			if (Type->Funcs[i].Thunk)
+				++OutThunks;
+		}
+	}
 }
 
 void FStaticBindingRegistry::Clear()

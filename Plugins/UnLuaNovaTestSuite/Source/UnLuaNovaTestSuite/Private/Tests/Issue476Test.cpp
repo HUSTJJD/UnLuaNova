@@ -32,7 +32,7 @@ struct FUnLuaNovaTest_Issue476 : FUnLuaNovaTestBase
 
         const auto Chunk = R"(
             local Outer = NewObject(UE.UUnLuaNovaTestStub)
-            local StubClass = UE.UClass.Load("/UnLuaNovaTestSuite/Tests/Regression/Issue476/BP_UnLuaTestStub_Issue476.BP_UnLuaTestStub_Issue476_C")
+            local StubClass = UE.UClass.Load("/UnLuaNovaTestSuite/Tests/Regression/Issue476/BP_UnLuaNovaTestStub_Issue476.BP_UnLuaTestStub_Issue476_C")
             G_Stub = NewObject(StubClass, Outer, "Tests.Regression.Issue476.TestStub")
             return G_Stub
         )";

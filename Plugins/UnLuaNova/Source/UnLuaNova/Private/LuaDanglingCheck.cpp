@@ -14,6 +14,7 @@
 
 #include "LuaDanglingCheck.h"
 #include "LowLevel.h"
+#include "LuaCore.h"
 #include "LuaEnv.h"
 #include "UnLuaNovaDebugBase.h"
 
@@ -78,7 +79,11 @@ namespace UnLuaNova
 
                 bool TwoLevelPtr;
                 GetUserdataFast(L, -1, &TwoLevelPtr);
-                SetUserdataFlags(L, -1, 1 << 6);    // TODO:BIT_RELEASED_TAG
+                // Tagged rather than removed, because the script can still be holding the
+                // userdata. Every later read goes through GetUserdata(), which answers null
+                // for a released container - that is what turns the dangling access into a
+                // clean error instead of a read of freed memory.
+                SetUserdataFlags(L, -1, BIT_RELEASED_TAG);
                 check(!TwoLevelPtr)
 
                 lua_pop(L, 1);

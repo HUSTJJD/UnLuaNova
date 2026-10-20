@@ -313,7 +313,11 @@ namespace UnLuaNova
         }
         if (Type == LUA_TUSERDATA)
         {
-            TSharedPtr<IExportedProperty> Property = *(TSharedPtr<IExportedProperty>*)lua_touserdata(L, -1);
+            // The property is held in a userdata created by NewSmartPointer(), whose layout
+            // is [FUserdataDesc][padding][payload]: lua_touserdata() hands back the
+            // descriptor, so reading the TSharedPtr from there yields the descriptor bytes
+            // (magic 0x1688 + tag) instead of the property.
+            TSharedPtr<IExportedProperty> Property = *(TSharedPtr<IExportedProperty>*)UnLuaNova::GetSmartPointer(L, -1);
             void *ContainerPtr = UnLuaNova::GetPointer(L, 1);
             if (ContainerPtr)
             {
@@ -334,7 +338,8 @@ namespace UnLuaNova
         }
         if (Type == LUA_TUSERDATA)
         {
-            TSharedPtr<IExportedProperty> Property = *(TSharedPtr<IExportedProperty>*)lua_touserdata(L, -1);
+            // Same as Index(): the payload, not the block start - see the note there.
+            TSharedPtr<IExportedProperty> Property = *(TSharedPtr<IExportedProperty>*)UnLuaNova::GetSmartPointer(L, -1);
             void *ContainerPtr = UnLuaNova::GetPointer(L, 1);
             if (ContainerPtr)
             {
@@ -383,7 +388,18 @@ namespace UnLuaNova
     template <typename ClassType, typename... ArgType>
     template <uint32... N> void TConstructor<ClassType, ArgType...>::Construct(lua_State *L, TTuple<typename TArgTypeTraits<ArgType>::Type...> &Args, TIndices<N...>)
     {
-        void *Userdata = UnLuaNova::NewUserdata(L, sizeof(ClassType), TCHAR_TO_UTF8(*ClassName), alignof(ClassType));
+        // A non-trivial destructor has to run when the VM collects the userdata, and on Luau
+        // that only happens if the finalizer is handed over here - Luau has no __gc to fall
+        // back on. The file wrapper is the case that matters: it owns an FArchive.
+        void *Userdata;
+        if constexpr (std::is_trivially_destructible_v<ClassType>)
+        {
+            Userdata = UnLuaNova::NewUserdata(L, sizeof(ClassType), TCHAR_TO_UTF8(*ClassName), alignof(ClassType));
+        }
+        else
+        {
+            Userdata = UnLuaNova::NewUserdataDtor(L, sizeof(ClassType), TCHAR_TO_UTF8(*ClassName), alignof(ClassType), UnLuaNova::DestroyUserdataPayload<ClassType>);
+        }
         if (Userdata)
         {
             new(Userdata) ClassType(Args.template Get<N>()...);
@@ -460,11 +476,9 @@ namespace UnLuaNova
     template <typename SmartPtrType, typename ClassType, typename... ArgType>
     int32 TSmartPtrConstructor<SmartPtrType, ClassType, ArgType...>::GarbageCollect(lua_State *L)
     {
-        SmartPtrType *Instance = (SmartPtrType*)lua_touserdata(L, 1);
-        if (Instance)
-        {
-            Instance->~SmartPtrType();
-        }
+        // Construct() placement-news the smart pointer into the payload, so the destructor
+        // has to run on the payload too - lua_touserdata() is the descriptor.
+        UnLuaNova::DestroyUserdataPayload<SmartPtrType>(L, lua_touserdata(L, 1));
         return 0;
     }
 
@@ -475,7 +489,8 @@ namespace UnLuaNova
         memset(MetatableName, 0, sizeof(MetatableName));
         FCStringAnsi::Snprintf(MetatableName, sizeof(MetatableName), "%hs%hs", TType<SmartPtrType>::GetName(), TType<ClassType>::GetName());
         SmartPtrType SharedPtr = SmartPtrType(new ClassType(Args.template Get<N>()...));
-        void *Userdata = UnLuaNova::NewSmartPointer(L, sizeof(SmartPtrType), MetatableName);
+        void *Userdata = UnLuaNova::NewSmartPointer(L, sizeof(SmartPtrType), MetatableName,
+            UnLuaNova::DestroyUserdataPayload<SmartPtrType>);
         if (Userdata)
         {
             new(Userdata) SmartPtrType(SharedPtr);

@@ -19,10 +19,11 @@ public:
 	static FStaticBindingRegistry& Get();
 
 	/**
-	 * Resolve every FProperty and UFunction pointer inside the descriptor.
+	 * Queue a writable descriptor for resolution on first lookup.
+	 * The descriptor and its nested tables must outlive the registration and Lua users.
 	 * Safe to call repeatedly; a type is only resolved once.
 	 */
-	void Register(const FStaticTypeBinding* Type);
+	void Register(FStaticTypeBinding* Type);
 
 	void Unregister(const FStaticTypeBinding* Type);
 
@@ -40,6 +41,16 @@ public:
 
 	int32 NumRegisteredTypes() const { return Types.Num(); }
 
+	/**
+	 * How much of the registered surface actually got a generated thunk.
+	 *
+	 * A thunk is what removes the reflective call entirely, so this - not the number of
+	 * registered types - is the figure that says whether running the generator bought
+	 * anything. Reported by the benchmark spec so it lands next to the timings instead of
+	 * only in the generator's log.
+	 */
+	void GetThunkCoverage(int32& OutTypes, int32& OutFuncs, int32& OutThunks) const;
+
 	/** Called by FUnLuaNovaModule on shutdown. */
 	void Clear();
 
@@ -53,14 +64,14 @@ private:
 		TMap<FName, const FStaticFuncBinding*> Funcs;
 	};
 
-	void Resolve(const FStaticTypeBinding* Type, FEntry& Entry);
+	void Resolve(FStaticTypeBinding* Type, FEntry& Entry);
 
 	/** Resolves everything queued by Register(). Deferred until the UObject system is up. */
 	void ResolvePending();
 
 	TMap<FName, FEntry> Types;
 	TMap<const UStruct*, const FStaticTypeBinding*> StructToType;
-	TArray<const FStaticTypeBinding*> Pending;
+	TArray<FStaticTypeBinding*> Pending;
 
 	// Large projects register thousands of types and then hit the read path from Lua on
 	// every property and function access. An exclusive lock serialised all of that, so

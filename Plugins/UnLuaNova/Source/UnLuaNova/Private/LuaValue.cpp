@@ -270,8 +270,10 @@ namespace UnLuaNova
     }
 
     FLuaRetValues::FLuaRetValues(FLuaEnv* Env, int32 NumResults)
-        : L(Env->GetMainState()), bValid(NumResults > -1)
+        : FLuaRetValues(Env ? Env->GetMainState() : nullptr, NumResults)
     {
+        // Delegates rather than duplicating: the two overloads used to disagree, this one
+        // recording no values at all, so Num() was always 0 and Pop() never popped.
     }
 
     // move constructor, and disable copy constructor

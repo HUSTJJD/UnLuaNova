@@ -4,10 +4,14 @@
 // cross-boundary access (reflection lookups, virtual dispatch, flag tests) into a
 // pre-resolved, POD, generator-friendly table.
 //
-// They are POD on purpose: the build-time generator emits them as `static constexpr`
-// tables, so there is zero start-up parsing cost and the compiler can keep them in
-// read-only memory. Fields that can only be known at runtime (FProperty*/UFunction*)
-// are filled in once by FStaticBindingRegistry::Register().
+// They are POD on purpose: the build-time generator emits them as plain static tables,
+// so there is zero start-up parsing cost.
+//
+// They are deliberately NOT const. Fields that can only be known at runtime
+// (FProperty*/UFunction*, offsets, flags, bResolved) are filled in *in place* by
+// FStaticBindingRegistry::Resolve() at the first lookup. A const table is placed in a
+// read-only section, and the first resolve then writes into it - an access violation.
+// Registration and nested descriptor pointers require writable tables at compile time.
 
 #pragma once
 
@@ -16,6 +20,13 @@
 class FProperty;
 class UFunction;
 class UClass;
+
+struct lua_State;
+
+// Declared here rather than pulling LuaBackend.h into every generated binding file: the
+// generator emits these tables into the project's own module, and this header is the only
+// thing it has to include. Identical to lua.h's own typedef, so including both is fine.
+typedef int (*lua_CFunction)(lua_State* L);
 
 /** Coarse property category. Mirrors what FPropertyDesc dispatches on at runtime. */
 enum class EStaticPropKind : uint8
@@ -116,10 +127,28 @@ struct FStaticFuncBinding
 
 	FStaticFuncFlags Flags;
 
-	const FStaticParamBinding* Params = nullptr;
+	FStaticParamBinding* Params = nullptr;
 
 	/** Resolved on first registration. */
 	UFunction* Function = nullptr;
+
+	/** Category of the return value, or Unknown when the function returns nothing. */
+	EStaticPropKind ReturnKind = EStaticPropKind::Unknown;
+
+	/** Resolved on first registration. Null for a void function. */
+	FProperty* ReturnProperty = nullptr;
+
+	/**
+	 * Generated compile-time marshaller, or null when the signature is not eligible.
+	 *
+	 * Non-null means the metatable gets this C function directly: no FFunctionDesc is
+	 * built, no FPropertyDesc is consulted, and the whole reflective call path is
+	 * skipped. The generator only fills this in for signatures it can marshal without
+	 * reflection, so a null here costs nothing and simply keeps the existing path.
+	 *
+	 * @see UnLuaNova::StaticFuncThunk in StaticBinding/StaticBindingThunk.h
+	 */
+	lua_CFunction Thunk = nullptr;
 };
 
 /** A pre-resolved UCLASS / UScriptStruct. `TypeName` matches UnLuaNova's metatable name. */
@@ -128,10 +157,10 @@ struct FStaticTypeBinding
 	/** Metatable name as UnLuaNova sees it, e.g. TEXT("Actor"), TEXT("Vector"), TEXT("MyEnum"). */
 	const TCHAR* TypeName = nullptr;
 
-	const FStaticPropBinding* Props = nullptr;
+	FStaticPropBinding* Props = nullptr;
 	int32 NumProps = 0;
 
-	const FStaticFuncBinding* Funcs = nullptr;
+	FStaticFuncBinding* Funcs = nullptr;
 	int32 NumFuncs = 0;
 
 	/** Resolved on first registration. */

@@ -21,6 +21,9 @@
 #include "GameFramework/Character.h"
 #include "UnLuaNova.h"
 #include "UnLuaNovaInterface.h"
+#include "LuaEnvLocator.h"
+#include "LuaModuleLocator.h"
+#include "UnLuaNovaReplicationComponent.h"
 #include "UnLuaNovaTestHelpers.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FUnLuaNovaTestSimpleEvent);
@@ -115,6 +118,77 @@ public:
 
     UFUNCTION(BlueprintCallable)
     int32 TestForIssue407(TArray<int32> Array);
+
+    // Two identical functions for UnLuaNova.API.CallUEFast: only the first one ever gets a
+    // static binding registered, so the pre-resolved fast path and the reflective path can
+    // be exercised separately and compared. They exist as two functions rather than one
+    // because FFunctionDesc captures whether a binding exists when *it* is first built -
+    // one function cannot be called through both paths in the same process.
+    UFUNCTION(BlueprintCallable)
+    int32 ProbeWithStaticBinding(int32 In) { return In + 1; }
+
+    UFUNCTION(BlueprintCallable)
+    int32 ProbeWithoutStaticBinding(int32 In) { return In + 1; }
+};
+
+/**
+ * Actor for the networked tests: replicated, and carrying the Lua replication component.
+ *
+ * It exists because a C/S test needs an actor the engine will actually replicate, and a
+ * spec .cpp cannot declare a UCLASS - UHT only reads headers. So it lives here next to the
+ * other stubs.
+ *
+ * bReplicates in the constructor rather than in a blueprint: the C/S spec spawns this in a
+ * bare PIE world, with no level and no blueprint to set the flag on.
+ *
+ * It implements IUnLuaNovaInterface because nothing else would bind it: ULuaModuleLocator
+ * returns an empty module name for a class that does not, and an unbound actor has no Lua
+ * side for an RPC to arrive in.
+ */
+UCLASS()
+class UNLUANOVATESTSUITE_API AUnLuaNovaTestNetActor : public AActor, public IUnLuaNovaInterface
+{
+    GENERATED_BODY()
+
+public:
+    AUnLuaNovaTestNetActor();
+
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+    virtual FString GetModuleName_Implementation() const override
+    {
+        return TEXT("Tests.Net.NetActor");
+    }
+
+    /** Replicated by the engine, not by Lua - the control in a C/S test. If this does not
+     *  arrive on the client, the session is broken and nothing Lua does can be judged. */
+    UPROPERTY(Replicated)
+    int32 EngineReplicatedInt = 0;
+
+    // Set only by the dedicated server; clients learn session/actor identity over replication.
+    UPROPERTY(Replicated)
+    FString NetTestSessionId;
+
+    UPROPERTY(Replicated)
+    int32 NetTestActorId = 0;
+
+    /**
+     * "<RpcName>:<Arg>|" per handler invocation, appended by the Lua side.
+     *
+     * A log rather than a "last call" field because a multicast runs on both peers and a
+     * server RPC does not: one slot would be overwritten by whichever arrived last and
+     * "did the client RPC run on the server?" (it must not) would be unanswerable.
+     * A UPROPERTY rather than a Lua table so the test can read it straight off each peer's
+     * actor, which is what makes "ran on the server and not on the client" measurable.
+     */
+    UPROPERTY()
+    FString CallLog;
+
+    UPROPERTY()
+    int32 CallCount = 0;
+
+    UPROPERTY()
+    TObjectPtr<UUnLuaNovaReplicationComponent> Replication;
 };
 
 UCLASS()
@@ -142,6 +216,44 @@ public:
     }
 };
 
+// A dedicated stub for the override spec.
+//
+// Overriding needs an object that actually binds: ULuaModuleLocator::Locate() returns an empty
+// module name for a class that does not implement IUnLuaNovaInterface, so neither
+// UUnLuaNovaTestStub nor AUnLuaTestActor can be bound and the dispatch behaviour - Lua
+// implementation, original implementation, suspend/resume - has nothing to observe.
+//
+// It is deliberately its own class rather than an extra member on UUnLuaNovaTestStub: adding
+// IUnLuaNovaInterface there would make roughly twenty existing NewObject calls try to bind,
+// which is a much larger blast radius than one new type.
+UCLASS()
+class UNLUANOVATESTSUITE_API UUnLuaNovaTestStubForOverrides : public UObject, public IUnLuaNovaInterface
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY()
+    int32 Counter;
+
+    UUnLuaNovaTestStubForOverrides()
+    {
+        Counter = 0;
+    }
+
+    virtual FString GetModuleName_Implementation() const override
+    {
+        return TEXT("Tests.Specs.Overrides.OverridesStub");
+    }
+
+    // An event: overridable from Lua.
+    UFUNCTION(BlueprintImplementableEvent)
+    int32 Overridable();
+
+    // A plain callable: not an event, so overriding must reject it.
+    UFUNCTION(BlueprintCallable)
+    int32 NotOverridable() { return 7; }
+};
+
 UCLASS()
 class UNLUANOVATESTSUITE_API AUnLuaTestActor : public AActor
 {
@@ -156,6 +268,41 @@ public:
 
     UFUNCTION(BlueprintImplementableEvent)
     TSubclassOf<UUserWidget> TestForIssue445(int32 Index);
+};
+
+// Locator subclasses for the locators spec. They have to live in a header: UHT does not
+// pick up a UCLASS declared inside a .cpp.
+// Opts out of static binding generation, so the generator spec can assert that the opt-out
+// tag is honoured. Without a type that actually carries the metadata, "excluded types are
+// excluded" is not observable.
+UCLASS(meta = (UnLuaNovaNoExport))
+class UNLUANOVATESTSUITE_API USpecNoExportType : public UObject
+{
+    GENERATED_BODY()
+};
+
+UCLASS()
+class UNLUANOVATESTSUITE_API USpecModuleLocator : public ULuaModuleLocator
+{
+    GENERATED_BODY()
+
+public:
+    virtual FString Locate(const UObject* Object) override
+    {
+        return TEXT("Spec.Module.FromCustomLocator");
+    }
+};
+
+UCLASS()
+class UNLUANOVATESTSUITE_API USpecEnvLocator : public ULuaEnvLocator
+{
+    GENERATED_BODY()
+
+public:
+    virtual UnLuaNova::FLuaEnv* Locate(const UObject* Object) override
+    {
+        return Env.Get();
+    }
 };
 
 USTRUCT(BlueprintType)

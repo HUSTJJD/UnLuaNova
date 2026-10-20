@@ -33,9 +33,9 @@ struct FUnLuaNovaTest_Issue314 : FUnLuaNovaTestBase
         lua_setglobal(L, "G_World");
 
         const auto Chunk = "\
-        local ParentClass = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue314/BP_UnLuaTestActor_Issue314_Parent.BP_UnLuaTestActor_Issue314_Parent_C')\
+        local ParentClass = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue314/BP_UnLuaNovaTestActor_Issue314_Parent.BP_UnLuaTestActor_Issue314_Parent_C')\
         local ParentActor = G_World:SpawnActor(ParentClass)\
-        local ChildClass = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue314/BP_UnLuaTestActor_Issue314_Child.BP_UnLuaTestActor_Issue314_Child_C')\
+        local ChildClass = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue314/BP_UnLuaNovaTestActor_Issue314_Child.BP_UnLuaTestActor_Issue314_Child_C')\
         local ChildActor = G_World:SpawnActor(ChildClass)\
         print('access ParentActor.Cube -> ', ParentActor.Cube)\
         Result = ChildActor.Cube ~= nil\

@@ -48,9 +48,12 @@ namespace UnLuaNova
             if (StructType != nullptr)
             {
                 FString Name = StructType->IsNative() ? FString("F" + StructType->GetName()) : StructType->GetStructPathName().ToString();
-                uint8 StructPadding = StructType->GetMinAlignment();
-                uint8 Padding = StructPadding < 8 ? 8 : StructPadding;
-                void* Userdata = NewUserdataWithPadding(L, StructType->GetStructureSize(), TCHAR_TO_UTF8(*Name), Padding);
+                // The row copy is Lua-owned, so it carries the finalizer that releases it -
+                // on Luau that is the only thing that ever runs, since there is no __gc.
+                const UScriptStruct::ICppStructOps* CppStructOps = StructType->GetCppStructOps();
+                const int32 Alignment = CppStructOps ? CppStructOps->GetAlignment() : StructType->GetMinAlignment();
+                void* Userdata = NewScriptStructUserdata(L, StructType->GetStructureSize(), TCHAR_TO_UTF8(*Name),
+                    CalcUserdataPaddingWithTypeHeader(Alignment), const_cast<UScriptStruct*>(StructType));
                 if (Userdata != nullptr)
                 {
                     if (StructType->StructFlags & STRUCT_CopyNative)

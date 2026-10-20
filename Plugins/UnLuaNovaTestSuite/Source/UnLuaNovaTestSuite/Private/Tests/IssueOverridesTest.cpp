@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 
-#include "IssueOverridesTest.h"
+#include "Tests/IssueOverridesTest.h"
 #include "TestCommands.h"
 #include "UnLuaNovaSettings.h"
 #include "UnLuaNovaTestCommon.h"

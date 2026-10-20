@@ -23,6 +23,9 @@
 #include "Containers/LuaMap.h"
 #include "ReflectionUtils/FieldDesc.h"
 #include "ReflectionUtils/PropertyDesc.h"
+#include "ReflectionUtils/StaticPropDesc.h"
+#include "StaticBinding/StaticBindingRegistry.h"
+#include "StaticBinding/StaticBindingThunk.h"
 
 #ifdef __cplusplus
 #if !LUA_COMPILE_AS_CPP
@@ -84,12 +87,6 @@ void SetTableForClass(lua_State *L, const char *Name)
     lua_pop(L, 2);
 }
 
-#define USERDATA_MAGIC  0x1688
-#define BIT_VARIANT_TAG            (1 << 7)         // variant tag for userdata
-#define BIT_RELEASED_TAG            (1 << 6)        // this userdata was released and should not use anywhere
-#define BIT_TWOLEVEL_PTR        (1 << 5)            // two level pointer flag
-#define BIT_SCRIPT_CONTAINER    (1 << 4)            // script container (TArray, TSet, TMap) flag
-
 // The descriptor is allocated immediately BEFORE the payload, so it is reachable from a
 // bare payload pointer as (Ptr - sizeof(FUserdataDesc)). That single property is what
 // lets this file stay on the public API: locating it used to require walking back to
@@ -101,6 +98,14 @@ struct alignas(8) FUserdataDesc
     uint8   tag;
     uint8   padding;
 };
+
+/**
+ * Bytes reserved directly behind FUserdataDesc for a UScriptStruct pointer, used only by
+ * NewScriptStructUserdata(). They are part of the padding field, so the payload offset
+ * every reader computes stays the single formula above. Must stay 8-aligned: it sits
+ * between an 8-byte descriptor and an aligned payload.
+ */
+static const uint32 USERDATA_TYPE_HEADER = 8;
 
 /**
  * Read the descriptor that sits at the very start of a userdata block.
@@ -136,11 +141,13 @@ static uint8* GetUserdataPayload(void* Block, const FUserdataDesc* UserdataDesc)
  * Measured once at runtime instead of derived from sizeof(UUdata): the old formula
  * hard-coded the 5.4 header size and needed lstate.h/lobject.h to read it back.
  */
-uint8 CalcUserdataPadding(int32 Alignment)
+/**
+ * Where a Lua userdata payload actually starts, relative to the widest alignment we care
+ * about. Lua keeps a fixed offset from the allocation, so one probe represents every later
+ * allocation. Measured once, behind an accessor so both padding flavours share it.
+ */
+static uint8 GetPayloadBaseOffset()
 {
-    // Where a Lua userdata payload actually starts, relative to the widest alignment we
-    // care about. Lua keeps a fixed offset from the allocation, so one probe represents
-    // every later allocation.
     static uint8 PayloadBaseOffset = 0xFF;
     if (0xFF == PayloadBaseOffset)
     {
@@ -149,26 +156,95 @@ uint8 CalcUserdataPadding(int32 Alignment)
         PayloadBaseOffset = (uint8)((uintptr_t)Probe % 16);
         lua_close(ProbeState);
     }
+    return PayloadBaseOffset;
+}
 
-    // payload starts at (block + Padding + sizeof(FUserdataDesc))
-    const uint32 Base = (uint32)PayloadBaseOffset + (uint32)sizeof(FUserdataDesc);
+/** Bytes of padding that move 'Base' up to the next multiple of 'Alignment'. */
+static uint8 CalcPaddingAt(uint32 Base, int32 Alignment)
+{
     const uint32 Aligned = ((Base + (uint32)Alignment - 1) / (uint32)Alignment) * (uint32)Alignment;
     return (uint8)(Aligned - Base);
 }
 
-static void* NewUserdataWithDesc(lua_State* L, int Size, uint8 Tag, uint8 Padding)
+uint8 CalcUserdataPadding(int32 Alignment)
+{
+    // payload starts at (block + Padding + sizeof(FUserdataDesc))
+    const uint32 Base = (uint32)GetPayloadBaseOffset() + (uint32)sizeof(FUserdataDesc);
+    return CalcPaddingAt(Base, Alignment);
+}
+
+uint8 CalcUserdataPaddingWithTypeHeader(int32 Alignment)
+{
+    // payload starts at (block + Padding + sizeof(FUserdataDesc) + TypeHeader), and the
+    // header is part of what the padding field has to cover.
+    const uint32 Base = (uint32)GetPayloadBaseOffset() + (uint32)sizeof(FUserdataDesc) + USERDATA_TYPE_HEADER;
+    return (uint8)(USERDATA_TYPE_HEADER + CalcPaddingAt(Base, Alignment));
+}
+
+/**
+ * Finalizer for a UScriptStruct copy. Runs inside the collector, so it may touch C++ state
+ * only - never the Lua stack. Plain Lua never reaches it (UNLUANOVA_NEWDATA_DTOR drops the
+ * argument there and __gc does the work instead).
+ */
+static void DestroyScriptStructUserdata(lua_State*, void* Block)
+{
+    FUserdataDesc* UserdataDesc = GetUserdataDesc(Block);
+    if (!UserdataDesc)
+        return;
+
+    // Released: the metatable lookup failed, so no C++ object was ever constructed.
+    // Destroyed: already finalized. Two-level pointer: the payload is a pointer into
+    // memory a UObject owns, not memory this block owns.
+    if (UserdataDesc->tag & (BIT_RELEASED_TAG | BIT_DESTROYED_TAG | BIT_TWOLEVEL_PTR))
+        return;
+
+    UScriptStruct* ScriptStruct = *reinterpret_cast<UScriptStruct**>((uint8*)Block + sizeof(FUserdataDesc));
+    if (ScriptStruct && !(ScriptStruct->StructFlags & (STRUCT_IsPlainOldData | STRUCT_NoDestructor)))
+        ScriptStruct->DestroyStruct(GetUserdataPayload(Block, UserdataDesc));
+
+    UserdataDesc->tag |= BIT_DESTROYED_TAG;
+}
+
+static void* NewUserdataWithDesc(lua_State* L, int Size, uint8 Tag, uint8 Padding, FUnLuaNovaUserdataDtor Dtor = nullptr, UScriptStruct* StructType = nullptr)
 {
     const uint32 DescSize = (uint32)sizeof(FUserdataDesc);
 
     // layout: [FUserdataDesc][Padding][payload]
-    uint8* Block = (uint8*)UNLUANOVA_NEWDATA(L, DescSize + Padding + Size);
+    //         [FUserdataDesc][UScriptStruct*][Padding][payload]   when StructType is set
+    //
+    // With a finalizer, Luau allocates through lua_newuserdatadtor() so it can run that
+    // finalizer during collection. Plain Lua expands the same macro to a normal userdata -
+    // it has no such hook and reaches the destructor through __gc instead.
+    uint8* Block = Dtor
+        ? (uint8*)UNLUANOVA_NEWDATA_DTOR(L, DescSize + Padding + Size, Dtor)
+        : (uint8*)UNLUANOVA_NEWDATA(L, DescSize + Padding + Size);
 
     FUserdataDesc* UserdataDesc = (FUserdataDesc*)Block;
     UserdataDesc->magic = USERDATA_MAGIC;
     UserdataDesc->tag = Tag;
     UserdataDesc->padding = Padding;
 
+    if (StructType)
+        *reinterpret_cast<UScriptStruct**>(Block + DescSize) = StructType;
+
     return GetUserdataPayload(Block, UserdataDesc);
+}
+
+void* UnLuaNova::GetUserdataPayloadFromBlock(void* Block)
+{
+    FUserdataDesc* UserdataDesc = GetUserdataDesc(Block);
+    return UserdataDesc && !(UserdataDesc->tag & BIT_DESTROYED_TAG) ? GetUserdataPayload(Block, UserdataDesc) : nullptr;
+}
+
+namespace UnLuaNova
+{
+    void* ReleaseUserdataPayloadFromBlock(void* Block)
+    {
+        void* Payload = GetUserdataPayloadFromBlock(Block);
+        if (Payload)
+            GetUserdataDesc(Block)->tag |= BIT_RELEASED_TAG | BIT_DESTROYED_TAG;
+        return Payload;
+    }
 }
 
 void* NewUserdataWithTwoLvPtrTag(lua_State* L, int Size, void* Object)
@@ -183,9 +259,14 @@ void* NewUserdataWithContainerTag(lua_State* L, int Size)
     return NewUserdataWithDesc(L, Size, (BIT_VARIANT_TAG | BIT_SCRIPT_CONTAINER), 0);
 }
 
-void* NewUserdataWithPaddingTag(lua_State* L, int Size, uint8 Padding)
+void* NewUserdataWithContainerTagDtor(lua_State* L, int Size, FUnLuaNovaUserdataDtor Dtor)
 {
-    return NewUserdataWithDesc(L, Size, BIT_VARIANT_TAG, Padding);
+    return NewUserdataWithDesc(L, Size, (BIT_VARIANT_TAG | BIT_SCRIPT_CONTAINER), 0, Dtor);
+}
+
+void* NewUserdataWithPaddingTag(lua_State* L, int Size, uint8 Padding, FUnLuaNovaUserdataDtor Dtor)
+{
+    return NewUserdataWithDesc(L, Size, BIT_VARIANT_TAG, Padding, Dtor);
 }
 
 void MarkUserdataTwoLvPtrTag(lua_State* L, int32 Index)
@@ -267,17 +348,24 @@ void* GetUserdataFast(lua_State *L, int32 Index, bool *OutTwoLvlPtr)
  */
 bool TryToSetMetatable(lua_State* L, const char* MetatableName, UObject* Object)
 {
-    const auto Registry = UnLuaNova::FLuaEnv::FindEnv(L)->GetClassRegistry();
-    if (!Registry)
+    // The guard has to sit on FindEnv's result: FindEnv answers null for a state that
+    // belongs to no known environment, and GetClassRegistry() cannot be reached through it.
+    const auto Env = UnLuaNova::FLuaEnv::FindEnv(L);
+    if (!Env)
         return false;
 
-    return Registry->TrySetMetatable(L, MetatableName);
+    return Env->GetClassRegistry()->TrySetMetatable(L, MetatableName);
 }
 
 /**
  * Create a new userdata with padding size
  */
 void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName, uint8 PaddingSize)
+{
+    return NewUserdataWithPaddingDtor(L, Size, MetatableName, PaddingSize, nullptr);
+}
+
+void* NewUserdataWithPaddingDtor(lua_State *L, int32 Size, const char *MetatableName, uint8 PaddingSize, FUnLuaNovaUserdataDtor Dtor)
 {
     if (Size < 1)
     {
@@ -292,17 +380,59 @@ void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName
         return nullptr;
     }
 
-    void* Userdata = NewUserdataWithPaddingTag(L, Size, PaddingSize); // userdata size must add padding size
+    // NewUserdataWithPaddingTag() already hands back the payload, i.e. it has skipped
+    // [FUserdataDesc][Padding] - which is exactly the address every reader gets from
+    // GetUserdataFast()/GetUserdataPayload(). Adding PaddingSize once more here is what
+    // every caller used to do, and it is wrong twice over: the value is written one
+    // padding past where anyone reads it, and that address is no longer the aligned one
+    // the padding was computed for - a script struct then trips UE's
+    // IsAligned(PropertyDest, GetAlignment()) check inside FProperty::InitializeValue().
+    void* Userdata = NewUserdataWithPaddingTag(L, Size, PaddingSize, Dtor); // userdata size must add padding size
     if (MetatableName)
     {
         bool bSuccess = TryToSetMetatable(L, MetatableName);        // set metatable
         if (!bSuccess)
         {
+            // No C++ object was constructed. A native finalizer must skip this payload.
+            SetUserdataFlags(L, -1, BIT_RELEASED_TAG | BIT_DESTROYED_TAG);
             UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
             return nullptr;
         }
     }
-    return (uint8*)Userdata + PaddingSize;                          // return 'valid' address (userdata memory address + padding size)
+    return Userdata;                                                 // the aligned payload
+}
+
+void* NewScriptStructUserdata(lua_State *L, int32 Size, const char *MetatableName, uint8 PaddingSize, UScriptStruct* Struct)
+{
+    if (Size < 1)
+    {
+        UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid size!"), ANSI_TO_TCHAR(__FUNCTION__));
+        return nullptr;
+    }
+    // The padding field has to cover the type header before it can cover alignment.
+    if (PaddingSize < USERDATA_TYPE_HEADER || (PaddingSize & 0x07) != 0)
+    {
+        UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid padding size!"), ANSI_TO_TCHAR(__FUNCTION__));
+        return nullptr;
+    }
+    if (!Struct)
+    {
+        UNLUANOVA_LOGERROR(L, TEXT("%s, Missing script struct!"), ANSI_TO_TCHAR(__FUNCTION__));
+        return nullptr;
+    }
+
+    void* Userdata = NewUserdataWithDesc(L, Size, BIT_VARIANT_TAG, PaddingSize, DestroyScriptStructUserdata, Struct);
+    if (MetatableName)
+    {
+        if (!TryToSetMetatable(L, MetatableName))
+        {
+            // No C++ object was constructed. The finalizer must skip this payload.
+            SetUserdataFlags(L, -1, BIT_RELEASED_TAG | BIT_DESTROYED_TAG);
+            UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
+            return nullptr;
+        }
+    }
+    return Userdata;                                                 // the aligned payload
 }
 
 /**
@@ -349,7 +479,7 @@ void* NewScriptContainer(lua_State *L, const FScriptContainerDesc &Desc)
  *
  * @return - null if container is already cached, or the new created userdata otherwise
  */
-void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &Desc)
+void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &Desc, FUnLuaNovaUserdataDtor Dtor)
 {
     if (!Key)
     {
@@ -366,12 +496,13 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
     {
         lua_pop(L, 1);
 
-        Userdata = NewUserdataWithContainerTag(L, Desc.GetSize());      // create new userdata
+        Userdata = NewUserdataWithContainerTagDtor(L, Desc.GetSize(), Dtor);      // create new userdata
         luaL_setmetatable(L, Desc.GetName());               // set metatable
         lua_pushlightuserdata(L, Key);
         lua_pushvalue(L, -2);
         lua_rawset(L, -4);                                  // cache it in 'ScriptContainerMap'
-        UnLuaNova::FLuaEnv::FindEnv(L)->GetDanglingCheck()->CaptureContainer(L, Key);
+        if (const auto Env = UnLuaNova::FLuaEnv::FindEnv(L))
+            Env->GetDanglingCheck()->CaptureContainer(L, Key);
     }
 #if UE_BUILD_DEBUG
     else
@@ -384,7 +515,7 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
 }
 
 
-void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &Desc, const TFunctionRef<bool (void*)>& Validator)
+void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &Desc, const TFunctionRef<bool (void*)>& Validator, FUnLuaNovaUserdataDtor Dtor)
 {
     if (!Key)
     {
@@ -401,12 +532,13 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
     {
         lua_pop(L, 1);
 
-        Userdata = NewUserdataWithContainerTag(L, Desc.GetSize());      // create new userdata
+        Userdata = NewUserdataWithContainerTagDtor(L, Desc.GetSize(), Dtor);      // create new userdata
         luaL_setmetatable(L, Desc.GetName());               // set metatable
         lua_pushlightuserdata(L, Key);
         lua_pushvalue(L, -2);
         lua_rawset(L, -4);                                  // cache it in 'ScriptContainerMap'
-        UnLuaNova::FLuaEnv::FindEnv(L)->GetDanglingCheck()->CaptureContainer(L, Key);
+        if (const auto Env = UnLuaNova::FLuaEnv::FindEnv(L))
+            Env->GetDanglingCheck()->CaptureContainer(L, Key);
     }
 
     lua_remove(L, -2);
@@ -484,7 +616,18 @@ void PushObjectCore(lua_State *L, UObjectBaseUtility *Object)
  */
 static void PushIntegerElement(lua_State *L, FNumericProperty *Property, void *Value)
 {
-    UNLUANOVA_PUSHINT64(L, Property->GetUnsignedIntPropertyValue(Value));
+    const uint64 V = Property->GetUnsignedIntPropertyValue(Value);
+
+    // Same split as the Push() overloads: only a genuine 64-bit property goes out with the
+    // integer tag, everything narrower goes out as a number a script can do arithmetic on.
+    if (Property->IsA<FInt64Property>() || Property->IsA<FUInt64Property>())
+    {
+        UNLUANOVA_PUSHINT64(L, (int64)V);
+    }
+    else
+    {
+        UNLUANOVA_PUSHINT(L, (int32)V);
+    }
 }
 
 /**
@@ -500,7 +643,9 @@ static void PushFloatElement(lua_State *L, FNumericProperty *Property, void *Val
  */
 static void PushEnumElement(lua_State *L, FNumericProperty *Property, void *Value)
 {
-    UNLUANOVA_PUSHINT64(L, Property->GetSignedIntPropertyValue(Value));
+    // An enum's underlying storage may be 64-bit, but its values never come close to 2^53,
+    // and scripts compare and add them constantly - so this goes out as a number.
+    UNLUANOVA_PUSHINT(L, Property->GetSignedIntPropertyValue(Value));
 }
 
 /**
@@ -533,7 +678,22 @@ static void PushFTextElement(lua_State *L, FTextProperty *Property, void *Value)
 static void PushObjectElement(lua_State *L, FObjectPropertyBase *Property, void *Value)
 {
     UObject *Object = Property->GetObjectPropertyValue(Value);
-    PushObjectCore(L, Object);
+
+    // Through the object registry, not PushObjectCore(): the registry keeps one userdata
+    // per UObject in a weak table, so reading the same object property twice yields the
+    // same Lua value (they compare equal, and a table used as a key stays one key).
+    // PushObjectCore() builds a fresh userdata every time, and it also rebuilt the
+    // metatable name - an FString::Printf or a GetPathName() - on every single read.
+    if (UNLIKELY(!UnLuaNova::IsUObjectValid(Object)))
+    {
+        // A released object used to be handed out as a fresh userdata wrapping the dead
+        // pointer. Keep doing that: only live objects go through the registry, which
+        // raises instead, and changing an error path is not what this change is for.
+        PushObjectCore(L, Object);
+        return;
+    }
+
+    UnLuaNova::PushUObject(L, Object, false);
 }
 
 /**
@@ -543,7 +703,14 @@ static void PushInterfaceElement(lua_State *L, FInterfaceProperty *Property, voi
 {
     const FScriptInterface &Interface = Property->GetPropertyValue(Value);
     UObject *Object = Interface.GetObject();
-    PushObjectCore(L, Object);
+
+    if (UNLIKELY(!UnLuaNova::IsUObjectValid(Object)))
+    {
+        PushObjectCore(L, Object);
+        return;
+    }
+
+    UnLuaNova::PushUObject(L, Object, false);
 }
 
 /**
@@ -773,7 +940,12 @@ int32 PushFunction(lua_State *L, UObjectBaseUtility *Object, const char *Functio
 {
     int32 N = lua_gettop(L);
     lua_pushcfunction(L, UnLuaNova::ReportLuaCallError);
-    const auto& Env = UnLuaNova::FLuaEnv::FindEnv(L);
+    const auto Env = UnLuaNova::FLuaEnv::FindEnv(L);
+    if (!Env)
+    {
+        lua_pop(L, 1);
+        return LUA_NOREF;
+    }
     const auto Ref = Env->GetObjectRegistry()->GetBoundRef((UObject*)Object);
     if (Ref != LUA_NOREF)
     {
@@ -877,6 +1049,84 @@ static void PushField(lua_State *L, TSharedPtr<FFieldDesc> Field)
     }
 }
 
+/**
+ * Try to serve a field from the build-time static binding instead of reflection.
+ *
+ * Returns false and leaves the stack untouched when there is nothing pre-resolved, so
+ * the caller falls through to FClassDesc::RegisterField() exactly as before. On success
+ * one value is pushed:
+ *
+ *   - an eligible function  -> the generated thunk as a closure over its FStaticFuncBinding.
+ *                              No FFunctionDesc is created and no FPropertyDesc is touched;
+ *                              the marshalling is compiled per signature.
+ *   - a property            -> a FStaticPropDesc, which reads by offset and pushes by type.
+ *
+ * This runs on the miss path only (GetField() consults the metatable first and the result
+ * is cached into it), so the cost of consulting the registry is paid once per class per
+ * field - the same deal as the reflective path, but what gets cached is cheaper to run.
+ */
+static bool TryPushStaticBindingField(lua_State* L, FClassDesc* ClassDesc, const char* FieldName)
+{
+    if (!ClassDesc || !FieldName)
+        return false;
+
+    const UStruct* Struct = ClassDesc->AsStruct();
+    if (!Struct)
+        return false;
+
+    const FStaticTypeBinding* TypeBinding = FStaticBindingRegistry::Get().Find(Struct);
+    if (!TypeBinding)
+        return false;
+
+    const FName Key(FieldName);
+
+    if (const FStaticFuncBinding* Func = FStaticBindingRegistry::Get().FindFunc(TypeBinding, Key))
+    {
+        // No thunk -> let FFunctionDesc handle it; it still picks up the pre-resolved
+        // descriptor and takes CallUEFast, which is the best reflective path we have.
+        if (!Func->Thunk)
+            return false;
+
+        lua_pushlightuserdata(L, (void*)Func);
+        lua_pushcclosure(L, Func->Thunk, 1);
+        return true;
+    }
+
+    if (const FStaticPropBinding* Prop = FStaticBindingRegistry::Get().FindProp(TypeBinding, Key))
+    {
+        // Complex properties need their specialized descriptors, including owner-aware delegates.
+        if (!Prop->Property || !FStaticPropDesc::Supports(Prop->Kind))
+            return false;
+
+        const auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
+        TSharedPtr<UnLuaNova::ITypeOps> Desc = MakeShared<FStaticPropDesc>(Prop->Property, Prop);
+        Env.GetObjectRegistry()->Push(L, Desc);
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Cache a resolved field into the class metatable, unless it is read-only.
+ *
+ * This is what makes freezing a class table survivable. The cache is a write on first
+ * access, so a frozen metatable used to raise the moment anything touched a property -
+ * which is why "sandbox the class tables" stayed on the not-done list. Skipping the write
+ * instead is the right answer: the read path does not care whether the field was cached,
+ * it only costs one more resolution the next time.
+ */
+static void CacheFieldIfWritable(lua_State* L, int TableIdx)
+{
+    if (UNLUANOVA_GET_READONLY(L, TableIdx))
+    {
+        lua_pop(L, 2); // key and value
+        return;
+    }
+
+    lua_rawset(L, TableIdx);
+}
+
 static void GetFieldInternal(lua_State* L) 
 {
     lua_pop(L, 1);
@@ -890,9 +1140,28 @@ static void GetFieldInternal(lua_State* L)
 
     lua_pop(L, 1);
 
-    // TODO: refactor
-    const auto Registry = UnLuaNova::FLuaEnv::FindEnv(L)->GetClassRegistry();
-    FClassDesc* ClassDesc = Registry->Register(ClassName);
+    const auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
+    FClassDesc* ClassDesc = Env.GetClassRegistry()->Register(ClassName);
+    if (!ClassDesc)
+    {
+        // The name came from a metatable that is already on the stack, so reaching here
+        // means the registry and the Lua registry disagree. Bail out rather than hand a
+        // null descriptor to RegisterField - a Lua error beats a null dereference.
+        luaL_error(L, "class %s is not registered", ClassName);
+        return;
+    }
+
+    // Pre-resolved descriptor wins over reflection. Whatever it pushes is cached into
+    // the metatable exactly like the reflective result, so GetField()'s rawget serves it
+    // from here on.
+    if (TryPushStaticBindingField(L, ClassDesc, FieldName))
+    {
+        lua_pushvalue(L, 2);                // key
+        lua_pushvalue(L, -2);               // Property / closure
+        CacheFieldIfWritable(L, -4);
+        return;
+    }
+
     TSharedPtr<FFieldDesc> Field = ClassDesc->RegisterField(FieldName, ClassDesc);
     if (Field && Field->IsValid())
     {
@@ -901,7 +1170,7 @@ static void GetFieldInternal(lua_State* L)
         if (bInherited)
         {
             FString SuperStructName = Field->GetOuterName();
-            const auto Pushed = Registry->PushMetatable(L, TCHAR_TO_UTF8(*SuperStructName));
+            const auto Pushed = Env.GetClassRegistry()->PushMetatable(L, TCHAR_TO_UTF8(*SuperStructName));
             check(Pushed);
             lua_pushvalue(L, 2);
             Type = lua_rawget(L, -2);
@@ -909,7 +1178,7 @@ static void GetFieldInternal(lua_State* L)
             // check cached property from non-native class
             if (bCached && !Field->OuterClass->IsNative())
             {
-                auto Ptr = lua_touserdata(L, -1);
+                auto Ptr = GetUserdataFast(L, -1);
                 if (Ptr)
                 {
                     auto Property = static_cast<TSharedPtr<UnLuaNova::ITypeOps>*>(Ptr);
@@ -934,14 +1203,14 @@ static void GetFieldInternal(lua_State* L)
             PushField(L, Field);                // Property / closure
             lua_pushvalue(L, 2);                // key
             lua_pushvalue(L, -2);               // Property / closure
-            lua_rawset(L, -4);
+            CacheFieldIfWritable(L, -4);
         }
         if (bInherited)
         {
             lua_remove(L, -2);
             lua_pushvalue(L, 2);                // key
             lua_pushvalue(L, -2);               // Property / closure
-            lua_rawset(L, -4);
+            CacheFieldIfWritable(L, -4);
         }
     }
     else
@@ -975,85 +1244,24 @@ FORCEINLINE static int32 GetField(lua_State* L)
 }
 
 /**
- * Debug only...
+ * Traverse worker: answers false for a value that is a native UStruct userdata.
+ *
+ * Debug only. The rest of the key/value type switch used to be filled with check(true)
+ * and locals nobody read - eight assertions that could never fire, kept only to silence
+ * unused-variable warnings. Removed: they asserted nothing, and the key branch also called
+ * lua_tostring on the key, which during a lua_next walk would convert the key in place and
+ * corrupt the iteration this worker is meant to participate in.
  */
 bool PeekTableElement(lua_State *L, void*)
 {
-    int32 KeyType = lua_type(L, -2);
-    switch (KeyType)
+    if (lua_type(L, -1) == LUA_TUSERDATA && lua_checkstack(L, 2))
     {
-    case LUA_TBOOLEAN:
+        UObject *p = UnLuaNova::GetUObject(L, -1);
+        UStruct *Struct = Cast<UStruct>(p);
+        if (Struct && Struct->IsNative())
         {
-            int32 b = lua_toboolean(L, -2);
-            check(b >= 0);
+            return false;
         }
-        break;
-    case LUA_TLIGHTUSERDATA:
-        {
-            const void *p = lua_topointer(L, -2);
-            check(true);
-        }
-        break;
-    case LUA_TNUMBER:
-        {
-            float f = lua_tonumber(L, -2);
-            check(true);
-        }
-        break;
-    case LUA_TSTRING:
-        {
-            const char *s = lua_tostring(L, -2);
-            check(true);
-        }
-        break;
-    case LUA_TUSERDATA:
-        {
-            const void *p = lua_topointer(L, -2);
-            check(true);
-        }
-        break;
-    }
-    int32 ValueType = lua_type(L, -1);
-    switch (ValueType)
-    {
-    case LUA_TBOOLEAN:
-        {
-            int32 b = lua_toboolean(L, -1);
-            check(b >= 0);
-        }
-        break;
-    case LUA_TLIGHTUSERDATA:
-        {
-            const void *p = lua_topointer(L, -1);
-            check(true);
-        }
-        break;
-    case LUA_TNUMBER:
-        {
-            float f = lua_tonumber(L, -1);
-            check(true);
-        }
-        break;
-    case LUA_TSTRING:
-        {
-            const char *s = lua_tostring(L, -1);
-            check(true);
-        }
-        break;
-    case LUA_TUSERDATA:
-        {
-            if (lua_checkstack(L, 2))
-            {
-                UObject *p = UnLuaNova::GetUObject(L, -1);
-                UStruct *Struct = Cast<UStruct>(p);
-                if (Struct && Struct->IsNative())
-                {
-                    return false;
-                }
-                check(true);
-            }
-        }
-        break;
     }
     return true;
 }
@@ -1102,7 +1310,11 @@ int32 Class_Index(lua_State *L)
 {
     GetField(L);
 
-    auto Ptr = lua_touserdata(L, -1);
+    // Not lua_touserdata(): userdata UnLuaNova allocated carries a FUserdataDesc header
+    // ([desc][padding][payload]), so the block start is not the TSharedPtr. Reading the
+    // descriptor bytes as the pointer gave a property whose object was -1, and the first
+    // virtual call on it crashed. Same rule as ScriptStruct_Index / GetUserdata().
+    auto Ptr = GetUserdataFast(L, -1);
     if (!Ptr)
         return 1;
 
@@ -1132,7 +1344,8 @@ int32 Class_NewIndex(lua_State *L)
 {
     GetField(L);
 
-    auto Ptr = lua_touserdata(L, -1);
+    // See Class_Index: the payload, not the block start.
+    auto Ptr = GetUserdataFast(L, -1);
     if (Ptr)
     {
         auto Property = static_cast<TSharedPtr<UnLuaNova::ITypeOps>*>(Ptr);
@@ -1330,6 +1543,26 @@ FClassDesc* ScriptStruct_CheckParam(lua_State *L)
 }
 
 /**
+ * Allocate an initialized struct copy that Lua owns.
+ *
+ * The copy carries its own finalizer (see DestroyScriptStructUserdata): on Luau that is the
+ * only thing that ever runs, because there is no __gc to fall back on.
+ */
+static void* NewScriptStructCopy(lua_State* L, FClassDesc* ClassDesc)
+{
+    UScriptStruct* ScriptStruct = ClassDesc->AsScriptStruct();
+    const auto CppStructOps = ScriptStruct->GetCppStructOps();
+    const int32 Size = CppStructOps ? CppStructOps->GetSize() : ScriptStruct->GetStructureSize();
+    const int32 Alignment = CppStructOps ? CppStructOps->GetAlignment() : ScriptStruct->GetMinAlignment();
+
+    void* Userdata = NewScriptStructUserdata(L, Size, TCHAR_TO_UTF8(*ClassDesc->GetName()),
+        CalcUserdataPaddingWithTypeHeader(Alignment), ScriptStruct);
+    if (Userdata)
+        ScriptStruct->InitializeStruct(Userdata);
+    return Userdata;
+}
+
+/**
  * Generic closure to create a UScriptStruct instance
  */
 int32 ScriptStruct_New(lua_State *L)
@@ -1340,9 +1573,7 @@ int32 ScriptStruct_New(lua_State *L)
         return 0;
     }
 
-    UScriptStruct *ScriptStruct = ClassDesc->AsScriptStruct();
-    void *Userdata = NewUserdataWithPadding(L, ClassDesc->GetSize(), TCHAR_TO_UTF8(*ClassDesc->GetName()), ClassDesc->GetUserdataPadding());
-    ScriptStruct->InitializeStruct(Userdata);
+    NewScriptStructCopy(L, ClassDesc);
 
     return 1;
 }
@@ -1398,8 +1629,7 @@ int32 ScriptStruct_CopyFrom(lua_State *L)
 	}
 	else
 	{
-		Userdata = NewUserdataWithPadding(L, ClassDesc->GetSize(), TCHAR_TO_UTF8(*ClassDesc->GetName()), ClassDesc->GetUserdataPadding());
-		ScriptStruct->InitializeStruct(Userdata);
+		Userdata = NewScriptStructCopy(L, ClassDesc);
 	}
 	ScriptStruct->CopyScriptStruct(Src,Userdata);
 	return 1;
@@ -1428,8 +1658,7 @@ int32 ScriptStruct_Copy(lua_State *L)
     }
     else
     {
-        Userdata = NewUserdataWithPadding(L, ClassDesc->GetSize(), TCHAR_TO_UTF8(*ClassDesc->GetName()), ClassDesc->GetUserdataPadding());
-        ScriptStruct->InitializeStruct(Userdata);
+        Userdata = NewScriptStructCopy(L, ClassDesc);
     }
     ScriptStruct->CopyScriptStruct(Userdata, Src);
     return 1;

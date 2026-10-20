@@ -32,15 +32,35 @@
 		},
 		{
 			"Name": "LuaSocket",
-			"Enabled": false
+			"Enabled": true
 		},
 		{
 			"Name": "LuaRapidjson",
-			"Enabled": false
+			"Enabled": true
 		},
 		{
 			"Name": "LuaProtobuf",
-			"Enabled": false
+			"Enabled": true
+		},
+		{
+			"Name": "ModelContextProtocol",
+			"Enabled": true
+		},
+		{
+			"Name": "ToolsetRegistry",
+			"Enabled": true
+		},
+		{
+			"Name": "EditorToolset",
+			"Enabled": true
+		},
+		{
+			"Name": "AutomationTestToolset",
+			"Enabled": true
+		},
+		{
+			"Name": "ConfigSettingsToolset",
+			"Enabled": true
 		}
 	]
 }

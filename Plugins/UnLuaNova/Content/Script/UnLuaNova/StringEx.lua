@@ -72,6 +72,19 @@ function StringEx.split(s, sep)
     return Result
 end
 
+--- Joins a list with a separator. Values are run through tostring.
+function StringEx.join(sep, list)
+    if type(list) ~= "table" then
+        return ""
+    end
+
+    local Parts = {}
+    for i = 1, #list do
+        Parts[i] = tostring(list[i])
+    end
+    return table.concat(Parts, sep or "")
+end
+
 --- Counts non-overlapping occurrences of a literal substring.
 function StringEx.count(s, sub)
     if type(s) ~= "string" or type(sub) ~= "string" or sub == "" then
@@ -101,5 +114,8 @@ string.strip = StringEx.strip
 string.trim = StringEx.strip
 string.split = StringEx.split
 string.count = StringEx.count
+-- Not installed as string.join: the name reads wrong as a method (".".join(...) is
+-- separator-first here) and it would shadow nothing on either backend. Use
+-- require("UnLuaNova.StringEx").join, or table.concat.
 
 return StringEx

@@ -32,7 +32,11 @@ BEGIN_TESTSUITE(FIssue295Test, TEXT("UnLuaNova.Regression.Issue295 动态绑定�
             lua_setglobal(L, "GWorld");
 
             const char* Chunk = R"(
-            local UMGClass = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue295/UnLuaNovaTestUMG_Issue295.UnLuaNovaTestUMG_Issue295_C') 
+            -- The file was renamed to UnLuaNovaTestUMG_Issue295, but the class *inside* the
+            -- asset is still UnLuaTestUMG_Issue295_C: renaming a .uasset on disk does not
+            -- rename the BlueprintGeneratedClass it holds, and that object is what Load()
+            -- has to find.
+            local UMGClass = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue295/UnLuaNovaTestUMG_Issue295.UnLuaTestUMG_Issue295_C') 
             local Outer = GWorld
             
             local UMG1 = NewObject(UMGClass, Outer, 'UMG1', 'Tests.Regression.Issue295.TestUMG')
@@ -54,7 +58,11 @@ BEGIN_TESTSUITE(FIssue295Test, TEXT("UnLuaNova.Regression.Issue295 动态绑定�
             lua_setglobal(L, "GWorld");
 
             const char* Chunk = R"(
-            local UMGClass = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue295/UnLuaNovaTestUMG_Issue295.UnLuaNovaTestUMG_Issue295_C') 
+            -- The file was renamed to UnLuaNovaTestUMG_Issue295, but the class *inside* the
+            -- asset is still UnLuaTestUMG_Issue295_C: renaming a .uasset on disk does not
+            -- rename the BlueprintGeneratedClass it holds, and that object is what Load()
+            -- has to find.
+            local UMGClass = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue295/UnLuaNovaTestUMG_Issue295.UnLuaTestUMG_Issue295_C') 
             local Outer = GWorld
             
             local UMG1 = NewObject(UMGClass, Outer, 'UMG1', 'Tests.Regression.Issue295.TestUMG')

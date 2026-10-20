@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Registries/ClassRegistry.h"
+#include "UnLuaNovaBase.h"
 #include "UnLuaNovaCompatibility.h"
 #include "LuaEnv.h"
 #include "Binding.h"
@@ -20,6 +21,7 @@
 #include "LuaCore.h"
 #include "UELib.h"
 #include "ReflectionUtils/ClassDesc.h"
+#include "Registries/EnumRegistry.h"
 
 extern int32 UObject_Identical(lua_State* L);
 extern int32 UObject_Delete(lua_State* L);
@@ -80,8 +82,14 @@ namespace UnLuaNova
         const auto EnumType = Cast<UEnum>(Type);
         if (EnumType)
         {
-            // TODO:
-            check(false);
+            // An enum is not a struct, so there is no FClassDesc to hand back - it belongs
+            // to the enum registry, which gives it its own metatable (Enum_Index). Publish
+            // it there and report nothing here: UE.EFoo already takes that route, and this
+            // is the same name reached the long way round (UE.UFoo, a container's enum
+            // entry), so failing loudly is the wrong answer where a working binding is.
+            UE_LOG(LogUnLuaNova, Verbose, TEXT("%s is an enum, registered with the enum registry."), UTF8_TO_TCHAR(MetatableName));
+            Env->GetEnumRegistry()->Register(EnumType);
+            return nullptr;
         }
 
         return nullptr;
@@ -105,12 +113,28 @@ namespace UnLuaNova
         return Ret;
     }
 
-    bool FClassRegistry::PushMetatable(lua_State* L, const char* MetatableName)
+    bool FClassRegistry::PushMetatable(lua_State* L, const char* MetatableName, FClassDesc** OutClassDesc)
     {
         int Type = luaL_getmetatable(L, MetatableName);
         if (Type == LUA_TTABLE)
         {
-            FClassDesc* Ret = Find(MetatableName);
+            // Read the descriptor straight off the metatable rather than re-deriving it
+            // from the name. Find(const char*) constructs an FName on every call - a
+            // UTF-8 -> TCHAR conversion plus a hash lookup - and this is reached on every
+            // UObject push. PushMetatable() stores the pointer when it builds a
+            // metatable, so the common case needs no string work at all.
+            FClassDesc* Ret = nullptr;
+            lua_pushstring(L, "ClassDesc");
+            if (lua_rawget(L, -2) == LUA_TLIGHTUSERDATA)
+                Ret = (FClassDesc*)lua_touserdata(L, -1);
+            lua_pop(L, 1);
+
+            // Metatables this registry did not build (FObjectRegistry registers plain
+            // ones for types with no UClass behind them) have no descriptor, so the name
+            // lookup stays as the fallback.
+            if (!Ret)
+                Ret = Find(MetatableName);
+
             if (Ret && Ret->IsClass() && !Ret->IsStructValid())
             {
                 // unregister invalid metatable
@@ -118,6 +142,21 @@ namespace UnLuaNova
             }
             else
             {
+                // An existing metatable is the answer whether or not a descriptor stands
+                // behind it. Not every metatable in the registry is a reflected type:
+                // FObjectRegistry registers plain ones - "TSharedPtr" notably - for types
+                // that have no UClass/UStruct/UEnum at all, and TrySetMetatable() only ever
+                // asks for the metatable.
+                //
+                // Falling through for that case instead would resolve the name as a
+                // UClass/UStruct/UEnum, fail, and return false - which NewUserdataWithPadding()
+                // turns into a null userdata that callers placement-new into unchecked
+                // (UnLuaNovaEx.h), i.e. an access violation rather than a Lua error.
+                //
+                // OutClassDesc stays null then, so a caller that needs a descriptor has to
+                // check it - FClassRegistry::Register()'s callers do.
+                if (OutClassDesc)
+                    *OutClassDesc = Ret;
                 return true;
             }
         }
@@ -172,10 +211,14 @@ namespace UnLuaNova
             lua_pushcclosure(L, ScriptStruct_Compare, 1);
             lua_rawset(L, -4);
 
+#if UNLUANOVA_HAS_GC_METAMETHOD
+            // Plain Lua only. Luau has no __gc at all, so the entry would be dead code -
+            // struct copies get their finalizer through NewScriptStructUserdata() instead.
             lua_pushstring(L, "__gc");
             lua_pushvalue(L, -2);
             lua_pushcclosure(L, ScriptStruct_Delete, 1);
             lua_rawset(L, -4);
+#endif
 
             lua_pushstring(L, "__call");
             lua_pushvalue(L, -2);
@@ -232,6 +275,9 @@ namespace UnLuaNova
 
         UELib::SetTableForClass(L, MetatableName);
 
+        if (OutClassDesc)
+            *OutClassDesc = ClassDesc;
+
         return true;
     }
 
@@ -247,13 +293,12 @@ namespace UnLuaNova
     FClassDesc* FClassRegistry::Register(const char* MetatableName)
     {
         const auto L = Env->GetMainState();
-        if (!PushMetatable(L, MetatableName))
+        FClassDesc* ClassDesc = nullptr;
+        if (!PushMetatable(L, MetatableName, &ClassDesc))
             return nullptr;
 
-        // TODO: refactor
         lua_pop(L, 1);
-        FName Key = FName(UTF8_TO_TCHAR(MetatableName));
-        return Name2Classes.FindChecked(Key);
+        return ClassDesc;
     }
 
     FClassDesc* FClassRegistry::Register(const UStruct* Class)

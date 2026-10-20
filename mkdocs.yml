@@ -11,65 +11,148 @@ exclude_docs: |
 theme:
   name: material
   language: zh
+  logo: Images/UnLuaNova.png
+  favicon: Images/UnLuaNova.png
   features:
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.top
     - navigation.tracking
+    - navigation.indexes
     - search.highlight
     - search.suggest
+    - search.share
     - content.code.copy
     - content.code.annotate
+    - content.tabs.link
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: teal
-      accent: teal
+      accent: cyan
       toggle:
         icon: material/weather-night
         name: 切换到暗色模式
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: teal
-      accent: teal
+      accent: cyan
       toggle:
         icon: material/weather-sunny
         name: 切换到亮色模式
 
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/HUSTJJD/UnLuaNova
+      name: GitHub
+    - icon: material/book-open-variant
+      link: https://github.com/Tencent/UnLua
+      name: Upstream Tencent/UnLua
+
 nav:
   - 首页: index.md
+  - 能力与证据矩阵: feature-matrix.md
   - 中文文档:
-      - UE 新手快速上手: CN/Quickstart_For_UE_Newbie.md
-      - 功能清单: CN/Features.md
-      - 编程指南: CN/UnLuaNova_Programming_Guide.md
-      - API 参考: CN/API.md
-      - 设置项: CN/Settings.md
-      - 调试: CN/Debugging.md
-      - IntelliSense: CN/IntelliSense.md
-      - 静态导出绑定: CN/StaticExportBinding.md
-      - 如何实现覆写: CN/How_To_Implement_Overriding.md
-      - 自定义模板: CN/CustomTemplate.md
-      - 插件与模块: CN/Plugins_And_Modules.md
-      - 控制台命令: CN/ConsoleCommand.md
-      - 自定义碰撞枚举: CN/CollisionEnum.md
-      - 常见问题 FAQ: CN/FAQ.md
+      - CN/index.md
+      - 入门:
+          - UE 新手快速上手: CN/Quickstart_For_UE_Newbie.md
+          - 功能清单: CN/Features.md
+          - 相对 UnLua：原理与优势: CN/WhyUnLuaNova.md
+          - slua / FUnLua 源码对照: CN/Comparison_sluaunreal.md
+          - 当前审计与路线图: CN/Benchmark_Review.md
+          - 性能验收: CN/Performance_Parity_slua.md
+      - 编程:
+          - 编程指南: CN/UnLuaNova_Programming_Guide.md
+          - Luau 后端: CN/Luau.md
+          - API 参考: CN/API.md
+          - C++ API 参考: CN/CxxApi.md
+          - Lua 驱动对象: CN/LuaDrivenObjects.md
+          - Lua 声明式网络: CN/LuaNetworking.md
+          - 架构: CN/Architecture.md
+          - 如何实现覆写: CN/How_To_Implement_Overriding.md
+          - 静态导出绑定: CN/StaticExportBinding.md
+      - 内置库: CN/StdLib.md
+      - 配置与工具:
+          - 设置项: CN/Settings.md
+          - 控制台命令: CN/ConsoleCommand.md
+          - 自定义模板: CN/CustomTemplate.md
+          - 自定义碰撞枚举: CN/CollisionEnum.md
+          - 插件与模块: CN/Plugins_And_Modules.md
+      - 诊断与质量:
+          - 调试: CN/Debugging.md
+          - 智能提示: CN/IntelliSense.md
+          - 测试与自动化: CN/Testing.md
+          - 测试架构与验收: CN/Testing_Architecture.md
+          - 2026-10-24 回归验证: CN/Regression_20261024.md
+          - 测试报告 Lua: test-lua-report.md
+          - 测试报告 Luau: test-luau-report.md
+      - 参考:
+          - Showcase 示例: CN/Showcase.md
+          - 版本说明: CN/ReleaseNotes.md
+          - 许可与来源: CN/License.md
+          - 常见问题 FAQ: CN/FAQ.md
   - English Docs:
-      - Programming Guide: EN/UnLuaNova_Programming_Guide.md
-      - API Reference: EN/API.md
-      - How To Implement Overriding: EN/How_To_Implement_Overriding.md
-      - FAQ: EN/FAQ.md
+      - EN/index.md
+      - Getting Started:
+          - Quickstart for UE Newcomers: EN/Quickstart_For_UE_Newbie.md
+          - Features: EN/Features.md
+          - Why UnLuaNova: EN/WhyUnLuaNova.md
+          - slua / FUnLua Source Comparison: EN/Comparison_sluaunreal.md
+          - Current Audit and Roadmap: EN/Benchmark_Review.md
+          - Performance Acceptance: EN/Performance_Parity_slua.md
+      - Programming:
+          - Programming Guide: EN/UnLuaNova_Programming_Guide.md
+          - Luau Backend: EN/Luau.md
+          - API Reference: EN/API.md
+          - C++ API Reference: EN/CxxApi.md
+          - Lua-driven Objects: EN/LuaDrivenObjects.md
+          - Lua-declared Networking: EN/LuaNetworking.md
+          - Architecture: EN/Architecture.md
+          - How To Implement Overriding: EN/How_To_Implement_Overriding.md
+          - Static Export and Binding: EN/StaticExportBinding.md
+      - Standard Library: EN/StdLib.md
+      - Configuration and Tools:
+          - Settings: EN/Settings.md
+          - Console Commands: EN/ConsoleCommand.md
+          - Custom Lua Templates: EN/CustomTemplate.md
+          - Custom Collision Enums: EN/CollisionEnum.md
+          - Plugins and Modules: EN/Plugins_And_Modules.md
+      - Diagnostics and Quality:
+          - Debugging: EN/Debugging.md
+          - IntelliSense: EN/IntelliSense.md
+          - Testing and Automation: EN/Testing.md
+          - 2026-10-24 Regression Validation: EN/Regression_20261024.md
+          - Test reports: EN/TestReports.md
+      - Reference:
+          - Showcase Samples: EN/Showcase.md
+          - Current Version Status: EN/ReleaseNotes.md
+          - License: EN/License.md
+          - FAQ: EN/FAQ.md
 
 markdown_extensions:
   - admonition
   - attr_list
   - md_in_html
+  - meta
   - tables
+  - footnotes
   - toc:
       permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.tasklist:
       custom_checkbox: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 plugins:
   - search
+
+copyright: Copyright &copy; Tencent and the UnLuaNova contributors · 基于 MIT 许可发布

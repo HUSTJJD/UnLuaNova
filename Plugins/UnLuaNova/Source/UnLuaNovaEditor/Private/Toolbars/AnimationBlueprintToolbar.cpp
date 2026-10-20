@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaBase.h"
-#include "AnimationBlueprintToolbar.h"
+#include "Toolbars/AnimationBlueprintToolbar.h"
 #include "IAnimationBlueprintEditorModule.h"
 #include "AnimationBlueprintEditorModule.h"
 #include "IPersonaToolkit.h"

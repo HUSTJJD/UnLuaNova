@@ -12,8 +12,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "FunctionDesc.h"
-#include "PropertyDesc.h"
+#include "ReflectionUtils/FunctionDesc.h"
+#include "ReflectionUtils/PropertyDesc.h"
 #include "LuaCore.h"
 #include "DefaultParamCollection.h"
 #include "LowLevel.h"
@@ -40,7 +40,8 @@ FFunctionDesc::FFunctionDesc(UFunction *InFunction, FParameterCollection *InDefa
     FuncName = InFunction->GetName();
     ParmsSize = InFunction->ParmsSize;
 
-    if (InFunction->HasAnyFunctionFlags(FUNC_Net))
+    const auto LuaFunction = Cast<ULuaFunction>(InFunction);
+    if (InFunction->HasAnyFunctionFlags(FUNC_Net) && !(LuaFunction && LuaFunction->IsLuaDeclaredRpc()))
         LuaFunctionName = MakeUnique<FTCHARToUTF8>(*FString::Printf(TEXT("%s_RPC"), *FuncName));
     else
         LuaFunctionName = MakeUnique<FTCHARToUTF8>(*FuncName);
@@ -231,7 +232,15 @@ int32 FFunctionDesc::CallUE(lua_State *L, int32 NumParams, void *Userdata)
 
     FFlagArray CleanupFlags;
     const auto Params = Buffer->Get(); 
-    PreCall(L, NumParams, FirstParamIndex, CleanupFlags, Params, Userdata);      // prepare values of properties
+    FString ParamError;
+    if (!PreCall(L, NumParams, FirstParamIndex, CleanupFlags, Params, Userdata, &ParamError))     // prepare values of properties
+    {
+        // Both of these have to happen before the raise: it does not return.
+        DestroyParams(Params, CleanupFlags);
+        Buffer->Pop(Params);
+        return luaL_error(L, "%s", TCHAR_TO_UTF8(*ParamError));
+    }
+
     auto FinalFunction = bInterfaceFunc
                              ? Object->GetClass()->FindFunctionByName(Function->GetFName())
                              : Function.Get();
@@ -283,7 +292,14 @@ int32 FFunctionDesc::CallUEFast(lua_State* L, int32 NumParams, int32 FirstParamI
 
     FFlagArray CleanupFlags;
     const auto Params = Buffer->Get();
-    PreCall(L, NumParams, FirstParamIndex, CleanupFlags, Params, Userdata);
+    FString ParamError;
+    if (!PreCall(L, NumParams, FirstParamIndex, CleanupFlags, Params, Userdata, &ParamError))
+    {
+        // Same as the reflective path: release first, raise second.
+        DestroyParams(Params, CleanupFlags);
+        Buffer->Pop(Params);
+        return luaL_error(L, "%s", TCHAR_TO_UTF8(*ParamError));
+    }
 
     UFunction* FinalFunction = Function.Get();
 
@@ -317,7 +333,14 @@ int32 FFunctionDesc::ExecuteDelegate(lua_State *L, int32 NumParams, int32 FirstP
 
     FFlagArray CleanupFlags;
     const auto Params = Buffer->Get();
-    PreCall(L, NumParams, FirstParamIndex, CleanupFlags, Params);
+    FString ParamError;
+    if (!PreCall(L, NumParams, FirstParamIndex, CleanupFlags, Params, nullptr, &ParamError))
+    {
+        DestroyParams(Params, CleanupFlags);
+        Buffer->Pop(Params);
+        return luaL_error(L, "%s", TCHAR_TO_UTF8(*ParamError));
+    }
+
     ScriptDelegate->ProcessDelegate<UObject>(Params);
     int32 NumReturnValues = PostCall(L, NumParams, FirstParamIndex, Params, CleanupFlags);
     Buffer->Pop(Params);
@@ -336,7 +359,15 @@ void FFunctionDesc::BroadcastMulticastDelegate(lua_State *L, int32 NumParams, in
 
     FFlagArray CleanupFlags;
     const auto Params = Buffer->Get();
-    PreCall(L, NumParams, FirstParamIndex, CleanupFlags, Params);
+    FString ParamError;
+    if (!PreCall(L, NumParams, FirstParamIndex, CleanupFlags, Params, nullptr, &ParamError))
+    {
+        DestroyParams(Params, CleanupFlags);
+        Buffer->Pop(Params);
+        luaL_error(L, "%s", TCHAR_TO_UTF8(*ParamError));
+        return;
+    }
+
     // ProcessMulticastDelegate was renamed to ProcessDelegate in UE 5.8. The deprecated
     // forwarder passes no template argument (ScriptDelegates.h), so UObjectTemplate
     // cannot be deduced there - call ProcessDelegate directly, template argument and all.
@@ -348,7 +379,7 @@ void FFunctionDesc::BroadcastMulticastDelegate(lua_State *L, int32 NumParams, in
 /**
  * Prepare values of properties for the UFunction
  */
-void FFunctionDesc::PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex, FFlagArray& CleanupFlags, void* Params, void* Userdata)
+bool FFunctionDesc::PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex, FFlagArray& CleanupFlags, void* Params, void* Userdata, FString* OutError)
 {
     int32 ParamIndex = 0;
     for (int32 i = 0; i < Properties.Num(); ++i)
@@ -382,13 +413,22 @@ void FFunctionDesc::PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex
         {   
 #if ENABLE_TYPE_CHECK == 1
             FString ErrorMsg = "";
-            if (Property->CheckPropertyType(L, FirstParamIndex + ParamIndex, ErrorMsg))
-                CleanupFlags[i] = Property->WriteValue_InContainer(L, Params, FirstParamIndex + ParamIndex, false);
-            else
-                UNLUANOVA_LOGERROR(L, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
-#else
-            CleanupFlags[i] = Property->WriteValue_InContainer(L, Params, FirstParamIndex + ParamIndex, false);
+            if (!Property->CheckPropertyType(L, FirstParamIndex + ParamIndex, ErrorMsg))
+            {
+                // Reporting is not enough: leaving the slot at its initialised value lets
+                // the call go through with a zero the script never passed, so the mistake
+                // surfaces later as a wrong number rather than here as a wrong argument.
+                //
+                // Raising - instead of logging - is what makes it a controlled error.
+                // pcall() sees it, and an uncaught one still reaches ReportLuaCallError,
+                // so the diagnostic is only deferred to whoever can decide whether the
+                // call was meant to fail.
+                if (OutError)
+                    *OutError = FString::Printf(TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
+                return false;
+            }
 #endif
+            CleanupFlags[i] = Property->WriteValue_InContainer(L, Params, FirstParamIndex + ParamIndex, false);
         }
         else if (!Property->IsOutParameter())
         {
@@ -406,6 +446,9 @@ void FFunctionDesc::PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex
             else
             {
 #if ENABLE_TYPE_CHECK == 1
+                // A missing argument is not raised: the stack slot is past the last one
+                // the caller supplied, so there is no argument to blame, and UE fills the
+                // gap itself for functions that declare defaults.
                 FString ErrorMsg = "";
                 if (!Property->CheckPropertyType(L, FirstParamIndex + ParamIndex, ErrorMsg))
                 {
@@ -415,6 +458,19 @@ void FFunctionDesc::PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex
             }
         }
         ++ParamIndex;
+    }
+
+    return true;
+}
+
+void FFunctionDesc::DestroyParams(void* Params, const FFlagArray& CleanupFlags) const
+{
+    for (int32 i = 0; i < Properties.Num(); ++i)
+    {
+        if (CleanupFlags[i])
+        {
+            Properties[i]->DestroyValue(Params);
+        }
     }
 }
 
@@ -470,13 +526,7 @@ int32 FFunctionDesc::PostCall(lua_State * L, int32 NumParams, int32 FirstParamIn
     }
 #endif
 
-    for (int32 i = 0; i < Properties.Num(); ++i)
-    {
-        if (CleanupFlags[i])
-        {
-            Properties[i]->DestroyValue(Params);
-        }
-    }
+    DestroyParams(Params, CleanupFlags);
 
     return NumReturnValues;
 }

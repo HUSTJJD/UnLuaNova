@@ -12,7 +12,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "ObjectRegistry.h"
+#include "Registries/ObjectRegistry.h"
 #include "LowLevel.h"
 #include "LuaEnv.h"
 #include "UnLuaNovaDelegates.h"
@@ -24,24 +24,48 @@ namespace UnLuaNova
 
     static int ReleaseSharedPtr(lua_State* L)
     {
-        const auto Ptr = (TSharedPtr<void>*)lua_touserdata(L, 1);
-        Ptr->Reset();
+        // The smart pointer lives in the payload, not at the block start. NewSmartPointer()
+        // lays the userdata out as [FUserdataDesc][padding][TSharedPtr], so lua_touserdata()
+        // hands back the descriptor - magic 0x1688 plus a tag - and Reset() would tear those
+        // bytes down instead of the smart pointer. FObjectRegistry::Push() uses a bare
+        // lua_newuserdata(), where block start and payload are the same address;
+        // GetSmartPointer() answers correctly for both, and for userdata already released.
+        //
+        // Only the plain-Lua backend ever reaches this: Luau has no __gc at all, so the
+        // wrong address went unnoticed for as long as the backend existed - the first
+        // lua_close() after static export ran Reset() over a descriptor instead of a
+        // TSharedPtr, which is what took the whole Lua run down.
+        const auto Ptr = (TSharedPtr<void>*)GetSmartPointer(L, 1);
+        if (Ptr)
+            Ptr->Reset();
         return 0;
     }
 
     static int ReleaseManualRef(lua_State* L)
     {
-        auto& Env = FLuaEnv::FindEnvChecked(L);
         const auto Proxy = (FManualRefProxy*)lua_touserdata(L, 1);
-        const auto Object = Proxy->Object.Get();
-        if (!Object)
-            return 0;
-
-        lua_getfield(L, LUA_REGISTRYINDEX, MANUAL_REF_PROXY_MAP);
-        lua_pushlightuserdata(L, Object);
-        if (lua_rawget(L, -2) == LUA_TNIL)
-            Env.RemoveManualObjectReference(Object);
+        if (Proxy)
+            Proxy->Release();
         return 0;
+    }
+
+    void FManualRefProxy::Release()
+    {
+        if (Registry)
+            Registry->ReleaseManualRefProxy(this);
+    }
+
+    void FObjectRegistry::ReleaseManualRefProxy(FManualRefProxy* Proxy)
+    {
+        // A weak-table entry may disappear before its finalizer runs. Only the current
+        // proxy owns the reference; collecting an older proxy must not release its successor.
+        if (ManualRefProxies.FindRef(Proxy->Object) == Proxy)
+        {
+            ManualRefProxies.Remove(Proxy->Object);
+            if (UObject* Object = Proxy->Object.Get())
+                Env->RemoveManualObjectReference(Object);
+        }
+        Proxy->Registry = nullptr;
     }
 
     FObjectRegistry::FObjectRegistry(FLuaEnv* Env)
@@ -72,6 +96,7 @@ namespace UnLuaNova
 
     void FObjectRegistry::NotifyUObjectDeleted(UObject* Object)
     {
+        RemoveManualRef(Object);
         Unbind(Object);
     }
 
@@ -208,7 +233,12 @@ namespace UnLuaNova
 
         lua_pushstring(L, "Object");
         lua_rawget(L, -2);
-        void* Userdata = lua_touserdata(L, -1);
+        // Same rule as the branch above: lua_touserdata() is the FUserdataDesc, not the
+        // payload. Writing ReleasedPtr there would overwrite the descriptor - the userdata
+        // would stop being recognized as ours - instead of releasing the UObject slot.
+        bool bTwoLvlPtr;
+        void* Userdata = GetUserdataFast(L, -1, &bTwoLvlPtr);
+        check(bTwoLvlPtr)
         *((void**)Userdata) = (void*)LowLevel::ReleasedPtr;
 
         lua_settop(L, Top);
@@ -218,13 +248,18 @@ namespace UnLuaNova
     {
         lua_getfield(L, LUA_REGISTRYINDEX, MANUAL_REF_PROXY_MAP);
         lua_pushlightuserdata(L, Object);
-        if (lua_rawget(L, -2) == LUA_TNIL)
+        lua_rawget(L, -2);
+        auto* Existing = static_cast<FManualRefProxy*>(lua_touserdata(L, -1));
+        if (!Existing || Existing->Registry != this || Existing->Object.Get() != Object)
         {
             lua_pop(L, 1);
-            Env->AddManualObjectReference(Object);
-            auto Ptr = lua_newuserdata(L, sizeof(FManualRefProxy));
+            auto Ptr = UNLUANOVA_NEWDATA_DTOR(L, sizeof(FManualRefProxy),
+                [](lua_State*, void* Block) { static_cast<FManualRefProxy*>(Block)->~FManualRefProxy(); });
             auto Proxy = new(Ptr)FManualRefProxy;
             Proxy->Object = Object;
+            Proxy->Registry = this;
+            ManualRefProxies.Add(Proxy->Object, Proxy);
+            Env->AddManualObjectReference(Object);
             luaL_getmetatable(L, "UnLuaNovaManualRefProxy");
             lua_setmetatable(L, -2);
             lua_pushlightuserdata(L, Object);
@@ -236,6 +271,9 @@ namespace UnLuaNova
 
     void FObjectRegistry::RemoveManualRef(UObject* Object)
     {
+        FManualRefProxy* Proxy = nullptr;
+        if (ManualRefProxies.RemoveAndCopyValue(TWeakObjectPtr<UObject>(Object), Proxy))
+            Proxy->Registry = nullptr;
         const auto L = Env->GetMainState();
         lua_getfield(L, LUA_REGISTRYINDEX, MANUAL_REF_PROXY_MAP);
         lua_pushlightuserdata(L, Object);

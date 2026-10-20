@@ -25,6 +25,7 @@
 #include "LuaCore.h"
 #include "LuaFunction.h"
 #include "ObjectReferencer.h"
+#include "UnLuaNovaNet.h"
 
 
 static const TCHAR* SReadableInputEvent[] = { TEXT("Pressed"), TEXT("Released"), TEXT("Repeat"), TEXT("DoubleClick"), TEXT("Axis"), TEXT("Max") };
@@ -133,6 +134,12 @@ void UUnLuaNovaManager::NotifyUObjectDeleted(const UObjectBase* Object)
  */
 void UUnLuaNovaManager::Cleanup()
 {
+    // Lua 声明的 RPC 由覆写系统持有（ULuaFunction 挂在 ULuaOverridesClass 上，
+    // RestoreOverrides 会一并撤掉）；复制属性声明是本模块自己记的，得自己清。
+    // 只清本 Env 声明的：每个 Env 各有自己的 Manager，销毁一个不能把别的 Env 正在用的
+    // schema 一起抹掉。
+    UnLuaNova::FUnLuaNovaNet::Cleanup(Env);
+
     Env = nullptr;
     Classes.Empty();
 }
@@ -261,7 +268,8 @@ bool UUnLuaNovaManager::BindClass(UClass* Class, const FString& InModuleName, FS
     {
 #if WITH_EDITOR
         // 兼容蓝图Recompile导致FuncMap被清空的情况
-        if (Class->FindFunctionByName("__UClassBindSucceeded", EIncludeSuperFlag::Type::ExcludeSuper))
+        if (Class->HasAnyClassFlags(CLASS_Native)
+            || Class->FindFunctionByName("__UClassBindSucceeded", EIncludeSuperFlag::Type::ExcludeSuper))
             return true;
         
         ULuaFunction::RestoreOverrides(Class);
@@ -315,6 +323,33 @@ bool UUnLuaNovaManager::BindClass(UClass* Class, const FString& InModuleName, FS
             ULuaFunction::Override(Function, Class, LuaFuncName);
         }
     }
+
+    // Lua 自己声明的 RPC 与复制属性。
+    // 位置很关键：必须早于下面那个 Num() == 0 的提前返回 —— 一个只声明了 RPC、
+    // 没有任何可覆写 UFunction 的模块（比如绑到原生类上）会正好走到那条分支。
+    // 用原模块表（不是复制出来的那份）读取声明：复制发生在上面，且复制表只给实例用，
+    // 声明属于类，读原表才不会因为实例表被改写而变。
+    {
+        const auto DeclType = UnLuaNova::LowLevel::GetLoadedModule(L, TCHAR_TO_UTF8(*InModuleName));
+        if (DeclType == LUA_TTABLE)
+        {
+            UnLuaNova::FUnLuaNovaNet::DeclareRPCs(L, -1, Class);
+            UnLuaNova::FUnLuaNovaNet::DeclareReplicatedProps(L, -1, Class);
+        }
+        lua_settop(L, Top);
+    }
+
+#if WITH_EDITOR
+    // Lua-declared RPCs are absent from UEFunctions, but must survive subsequent instance binds.
+    for (const FName& Name : BindInfo.LuaFunctions)
+    {
+        if (UFunction* Function = Class->FindFunctionByName(Name, EIncludeSuperFlag::ExcludeSuper))
+        {
+            Class->AddFunctionToFunctionMap(Function, "__UClassBindSucceeded");
+            break;
+        }
+    }
+#endif
 
     if (BindInfo.LuaFunctions.Num() == 0 || BindInfo.UEFunctions.Num() == 0)
         return true;

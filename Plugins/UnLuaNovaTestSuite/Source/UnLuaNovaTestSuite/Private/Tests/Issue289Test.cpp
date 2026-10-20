@@ -30,7 +30,7 @@ struct FUnLuaNovaTest_Issue289 : FUnLuaNovaTestBase
 
         const auto World = GetWorld();
 
-        const auto ActorClass = LoadClass<AActor>(nullptr, TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue289/BP_UnLuaTestActor_Issue289.BP_UnLuaTestActor_Issue289_C"));
+        const auto ActorClass = LoadClass<AActor>(nullptr, TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue289/BP_UnLuaNovaTestActor_Issue289.BP_UnLuaTestActor_Issue289_C"));
         const auto Actor = World->SpawnActor(ActorClass);
 
         auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);

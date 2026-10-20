@@ -37,8 +37,9 @@ public class UnLuaNovaEditor : ModuleRules
         PrivateIncludePaths.AddRange(
             new[]
             {
-                "UnLuaNovaEditor/Private",
-                "UnLuaNova/Private",
+                // The two engine folders below are the only Private/ paths here on purpose:
+                // they hold engine headers this module needs. This plugin's own headers are
+                // all in Public/ now, so neither module has to be reached into.
                 Path.Combine(EngineDir, "Source/Editor/AnimationBlueprintEditor/Private"),
                 Path.Combine(EngineDir, "Source/Runtime/Slate/Private"),
             }
@@ -79,7 +80,13 @@ public class UnLuaNovaEditor : ModuleRules
                 "Networking",
                 "Sockets",
                 "UnLuaNova",
-                "ToolMenus"
+                "ToolMenus",
+                // DAP 适配器的 JSON 编解码（LuaDebugAdapter）
+                "Json",
+                "JsonUtilities",
+                // The IntelliSense generator and its commandlet read blueprint assets out of
+                // the registry (and wait for its scan) instead of relying on the cache alone.
+                "AssetRegistry"
             }
         );
 

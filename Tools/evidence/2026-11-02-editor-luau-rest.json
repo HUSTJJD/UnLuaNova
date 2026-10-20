@@ -1,0 +1,27 @@
+{
+  "schema": "unluanova-evidence/1",
+  "run_id": "2026-11-02-editor-luau-rest",
+  "commit": "93b78167fe5501b8a88f0ff834d2366706ed8dff",
+  "worktree_dirty": true,
+  "engine": "5.8.3-0+UE5",
+  "platform": "Win64",
+  "config": "Development",
+  "carrier": "Editor",
+  "backend": "Luau",
+  "machine": "davidsjian-PC2",
+  "cpu": "AMD Ryzen 7 4700G with Radeon Graphics",
+  "report_created_on": "2026.11.02-10.06.33",
+  "report_totals": {
+    "succeeded": 10,
+    "succeeded_with_warnings": 1,
+    "failed": 0,
+    "not_run": 0
+  },
+  "totals": {
+    "tests": 11,
+    "passed": 11,
+    "failed": 0,
+    "not_run": 0
+  },
+  "capabilities": {}
+}

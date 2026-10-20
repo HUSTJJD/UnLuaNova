@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaCompatibility.h"
-#include "ClassDesc.h"
-#include "FieldDesc.h"
-#include "PropertyDesc.h"
-#include "FunctionDesc.h"
+#include "ReflectionUtils/ClassDesc.h"
+#include "ReflectionUtils/FieldDesc.h"
+#include "ReflectionUtils/PropertyDesc.h"
+#include "ReflectionUtils/FunctionDesc.h"
 #include "LuaCore.h"
 #include "DefaultParamCollection.h"
 #include "LowLevel.h"
@@ -27,9 +27,8 @@
  * Class descriptor constructor
  */
 FClassDesc::FClassDesc(UnLuaNova::FLuaEnv* Env, UStruct* InStruct, const FString& InName)
-    : Struct(InStruct), ClassName(InName), UserdataPadding(0), Size(0), Env(Env), FunctionCollection(nullptr)
+    : StructPtr(InStruct), Struct(InStruct), ClassName(InName), UserdataPadding(0), Size(0), Env(Env), FunctionCollection(nullptr)
 {
-    RawStructPtr = InStruct;
     bIsScriptStruct = InStruct->IsA(UScriptStruct::StaticClass());
     bIsClass = InStruct->IsA(UClass::StaticClass());
     bIsInterface = bIsClass && static_cast<UClass*>(InStruct)->HasAnyClassFlags(CLASS_Interface) && InStruct != UInterface::StaticClass();
@@ -169,7 +168,7 @@ void FClassDesc::Load()
         Found = LoadObject<UStruct>(nullptr, *Name);
 
     Struct = Found;
-    RawStructPtr = Found;
+    StructPtr = Found;
 }
 
 void FClassDesc::UnLoad()
@@ -179,5 +178,5 @@ void FClassDesc::UnLoad()
     Functions.Empty();
 
     Struct.Reset();
-    RawStructPtr = nullptr;
+    StructPtr = nullptr;
 }

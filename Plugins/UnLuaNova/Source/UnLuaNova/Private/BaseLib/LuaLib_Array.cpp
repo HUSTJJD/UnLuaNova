@@ -503,14 +503,14 @@ static int32 TArray_Delete(lua_State* L)
     if (NumParams != 1)
         return luaL_error(L, "invalid parameters");
 
-    FLuaArray* Array = (FLuaArray*)(GetCppInstanceFast(L, 1));
+    FLuaArray* Array = static_cast<FLuaArray*>(UnLuaNova::GetUserdataPayloadFromBlock(lua_touserdata(L, 1)));
     if (!Array)
         return 0;
 
     auto Registry = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetContainerRegistry();
     Registry->Remove(Array);
 
-    Array->~FLuaArray();
+    UnLuaNova::DestroyUserdataPayload<FLuaArray>(L, lua_touserdata(L, 1));
     return 0;
 }
 
@@ -541,7 +541,10 @@ static int32 TArray_ToTable(lua_State* L)
 
 static int32 TArray_Index(lua_State* L)
 {
-    if (lua_isinteger(L, 2))
+    // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER tag,
+    // so `Array[1]` written in a script - every literal is a double there - fell through
+    // to the metatable lookup and returned nil, which crashed the caller on `nil:Set(..)`.
+    if (UnLuaNovaIsIntegralNumber(L, 2))
     {
         return TArray_Get(L);
     }
@@ -585,7 +588,7 @@ static const luaL_Reg TArrayLib[] =
     {"Contains", TArray_Contains},
     {"Append", TArray_Append},
     {"ToTable", TArray_ToTable},
-#if UNLUANOVA_HAS_USERDATA_GC
+#if UNLUANOVA_HAS_GC_METAMETHOD
     {"__gc", TArray_Delete},
 #endif
     {"__call", TArray_New},

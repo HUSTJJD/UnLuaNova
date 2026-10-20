@@ -30,7 +30,7 @@ struct FUNLUANOVATest_Issue362 : FUnLuaNovaTestBase
         FUnLuaNovaTestBase::SetUp();
 
         const auto Chunk = R"(
-        local Stub = NewObject(UE.UUNLUANOVATestStub)
+        local Stub = NewObject(UE.UUnLuaNovaTestStub)
         Stub.Issue362Delegate:Bind(Stub, function(_, InArray)
             InArray:Add(1)
         end)

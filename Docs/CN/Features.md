@@ -1,81 +1,15 @@
 # 功能清单
 
-## 概览
-* 静态绑定和动态绑定
-* 编辑器环境下模拟服务端/客户端
-* 蓝图模版生成与导出
-* 手动静态导出
-* 结构体访问优化
-* 通过 `UE` 命名空间访问C++类型
+[能力与证据矩阵](../feature-matrix.md) 是唯一逐项状态表。状态描述实现范围；测试文件存在不等于当前构建通过。
 
-## 平台支持
-* 运行平台：Windows / Android / iOS / Linux / OSX
-* 引擎版本：Unreal Engine 4.17.x - Unreal Engine 5.x
+| 领域 | 当前实现 | 主要边界 |
+|---|---|---|
+| UE 集成 | 反射调用、属性、覆写、容器、委托、Latent | 生命周期、继承、多环境需要系统验收 |
+| 绑定 | 手写模板导出、生成 thunk、反射回退 | thunk 仍调用 ProcessEvent；并非所有签名都生成 |
+| 后端 | Lua 5.5.1 与固定提交的 Luau | 编译期选择；Lua 5.x 语义不完全等价 |
+| Luau | 语法、标准库、vector、buffer、原生调试、可选 CodeGen | 类型检查在外部；实验库受上游 flag 控制 |
+| 开发工具 | DAP、Profiler、内存/协程诊断、声明导出 | CI 与打包场景的证据尚不完整 |
+| 运行时模块 | Event、OOP、Timer、HotReload | Timer 生命周期和 HotReload upvalue 语义有缺口 |
+| 网络 | RPC、按类型分桶的复制属性 | 实验阶段；条件复制未支持（非 `COND_None` 显式拒绝），复制声明已按 Env 归属；晚加入/重连与 Iris 未覆盖 |
 
-## 支持使用Lua替换实现
-* 蓝图里所有标记了 `BlueprintImplementableEvent` 或 `BlueprintNativeEvent` 的"蓝图事件"
-* 所有网络复制事件通知（Replication Notify）
-* 所有动画事件通知（Animation Notify）
-* 所有输入事件通知（Input Event）
-
-## Lua调用蓝图
-* 支持访问所有 `UCLASS`, `UPROPERTY`, `UFUNCTION`, `USTRUCT`, `UENUM`
-* 支持访问已被覆盖掉的原蓝图逻辑
-* 支持所有标记了 `BlueprintCallable` 或 `Exec` 的 `UFUNCTION` 的默认参数
-* 支持在协程里调用 `Latent` 函数
-
-## Lua调用C++
-* 单播委托绑定、解绑、触发
-* 多播委托绑定、解绑、清理、广播
-* 访问 `UENUM`
-* 支持[自定义碰撞枚举](CollisionEnum.md)
-* 成员变量
-* 成员函数
-* 静态成员变量
-* 静态成员函数
-* 全局函数
-
-## C++调用Lua
-* 全局函数
-* 全局表里的函数
-
-## 其他工具
-* 支持[自定义生成Lua模版](CustomTemplate.md)
-
-## 相对 UnLua 的增量
-
-以下是 UnLuaNova 在 UnLua v2.3.6 之上新增的能力。
-
-### 双 Lua 后端
-
-* 支持 **Lua 5.5** 与 **Luau** 两个后端，默认 Luau，通过配置切换（见[设置](Settings.md#lua后端)）
-* 两者均以 git 子模块引入，克隆后需执行 `git submodule update --init --recursive`
-* 后端差异全部收敛在 `LuaBackend.h`；上层功能定义在抽象层，由各后端提供实现
-
-### 可观测性
-
-* **CPU 性能分析**：Lua 函数级数据写入 Unreal Insights，`lua.profiler` 运行时开关
-* **内存统计**：总量（占用 / 峰值 / 分配次数）与分类（内存类别 / Lua 类型 / userdata 标签），`lua.memstats`
-* **调试服务**：headless 断点、单步、调用栈与局部变量查看，`lua.dbg`
-* **沙盒**：加固 Lua 全局表，`lua.sandbox`
-* **死循环检测**：与 CPU 性能分析可同时开启，通过 VM Hook 分发器共享 Hook 槽，不再互相覆盖
-
-以上命令的用法见[控制台命令](ConsoleCommand.md)。
-
-### 静态绑定
-
-* 类型选择采用 **opt-out**：默认导出全部类型，只需给不想要的类型标记 `meta=(UnLuaNovaNoExport)`
-* 在某个基类上标记 `meta=(UnLuaNovaExport)` 即可把整个类族拉回，适合类型数量庞大的项目
-* 读取路径不使用独占锁，类型数量增长不会放大单次访问开销
-* 详见[静态导出与静态绑定](StaticExportBinding.md)
-
-### 脚本侧类型检查
-
-* 可生成 Luau `.d.lua` 类型声明，交由 `luau-analyze` 做静态检查，把一部分 UE API 误用提前到编译期
-* 见[智能提示](IntelliSense.md)
-
-### 字符串扩展
-
-* 纯 Lua 实现的常用字符串函数（`split` / `strip` / `startswith` / `endswith` / `count` / `join`）
-* `local StringEx = require("UnLuaNova.StringEx")`
-* 以模块形式提供而非写入全局 `string` 表，因此与沙盒模式不冲突
+[当前风险与验收](Benchmark_Review.md) · [Luau](Luau.md) · [内置库](StdLib.md)

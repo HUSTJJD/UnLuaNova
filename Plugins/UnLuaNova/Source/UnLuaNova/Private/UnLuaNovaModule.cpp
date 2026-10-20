@@ -27,6 +27,7 @@
 #include "UnLuaNovaModule.h"
 #include "DefaultParamCollection.h"
 #include "GameDelegates.h"
+#include "LuaDeadLoopCheck.h"
 #include "LuaEnvLocator.h"
 #include "LuaOverrides.h"
 #include "UnLuaNovaDebugBase.h"
@@ -35,6 +36,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Registries/ClassRegistry.h"
 #include "Registries/EnumRegistry.h"
+#include "Misc/EngineVersionComparison.h"
 
 #define LOCTEXT_NAMESPACE "FUnLuaNovaModule"
 
@@ -57,7 +59,12 @@ namespace UnLuaNova
             ConsoleCommands = MakeUnique<FUnLuaNovaConsoleCommands>(this);
 #endif
 
-            FCoreUObjectDelegates::PostLoadMapWithWorld.AddRaw(this, &FUnLuaNovaModule::PostLoadMapWithWorld);
+            PostLoadMapWithWorldHandle = FCoreUObjectDelegates::PostLoadMapWithWorld.AddRaw(this, &FUnLuaNovaModule::PostLoadMapWithWorld);
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
+            PostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddRaw(this, &FUnLuaNovaModule::PreBindConfiguredClasses);
+#else
+            PostEngineInitHandle = FCoreDelegates::GetOnPostEngineInit().AddRaw(this, &FUnLuaNovaModule::PreBindConfiguredClasses);
+#endif
 
             CreateDefaultParamCollection();
 
@@ -65,10 +72,10 @@ namespace UnLuaNova
 #if WITH_EDITOR
             if (!IsRunningGame())
             {
-                FEditorDelegates::PreBeginPIE.AddRaw(this, &FUnLuaNovaModule::OnPreBeginPIE);
-                FEditorDelegates::PostPIEStarted.AddRaw(this, &FUnLuaNovaModule::OnPostPIEStarted);
-                FEditorDelegates::EndPIE.AddRaw(this, &FUnLuaNovaModule::OnEndPIE);
-                FGameDelegates::Get().GetEndPlayMapDelegate().AddRaw(this, &FUnLuaNovaModule::OnEndPlayMap);
+                PreBeginPIEHandle = FEditorDelegates::PreBeginPIE.AddRaw(this, &FUnLuaNovaModule::OnPreBeginPIE);
+                PostPIEStartedHandle = FEditorDelegates::PostPIEStarted.AddRaw(this, &FUnLuaNovaModule::OnPostPIEStarted);
+                EndPIEHandle = FEditorDelegates::EndPIE.AddRaw(this, &FUnLuaNovaModule::OnEndPIE);
+                EndPlayMapHandle = FGameDelegates::Get().GetEndPlayMapDelegate().AddRaw(this, &FUnLuaNovaModule::OnEndPlayMap);
             }
 
             if (IsRunningGame() || IsRunningDedicatedServer())
@@ -79,8 +86,39 @@ namespace UnLuaNova
 
         virtual void ShutdownModule() override
         {
+            // Everything above was bound with AddRaw, so the handles have to come back off
+            // here: a module unload (Live Coding, editor shutdown) destroys this object
+            // while the delegates still point at it, and the next map load then calls
+            // into freed memory.
+            FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(PostLoadMapWithWorldHandle);
+            PostLoadMapWithWorldHandle.Reset();
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
+            FCoreDelegates::OnPostEngineInit.Remove(PostEngineInitHandle);
+#else
+            FCoreDelegates::GetOnPostEngineInit().Remove(PostEngineInitHandle);
+#endif
+            PostEngineInitHandle.Reset();
+
+#if AUTO_UNLUA_STARTUP
+#if WITH_EDITOR
+            FEditorDelegates::PreBeginPIE.Remove(PreBeginPIEHandle);
+            FEditorDelegates::PostPIEStarted.Remove(PostPIEStartedHandle);
+            FEditorDelegates::EndPIE.Remove(EndPIEHandle);
+            FGameDelegates::Get().GetEndPlayMapDelegate().Remove(EndPlayMapHandle);
+            PreBeginPIEHandle.Reset();
+            PostPIEStartedHandle.Reset();
+            EndPIEHandle.Reset();
+            EndPlayMapHandle.Reset();
+#endif
+#endif
+
             UnregisterSettings();
             SetActive(false);
+
+            // Last: the environments are gone now, so nothing can arm a guard any more and
+            // the watchdog thread can be joined. It is a process-wide thread, so this is
+            // the only place that shuts it down.
+            FDeadLoopCheck::Shutdown();
         }
 
         virtual bool IsActive() override
@@ -107,25 +145,7 @@ namespace UnLuaNova
                 FDeadLoopCheck::Timeout = Settings.DeadLoopCheck;
                 FDanglingCheck::Enabled = Settings.DanglingCheck;
 
-                for (const auto Class : TObjectRange<UClass>())
-                {
-                    for (const auto& ClassPath : Settings.PreBindClasses)
-                    {
-                        if (!ClassPath.IsValid())
-                            continue;
-
-                        const auto TargetClass = ClassPath.ResolveClass();
-                        if (!TargetClass)
-                            continue;
-
-                        if (Class->IsChildOf(TargetClass))
-                        {
-                            const auto Env = EnvLocator->Locate(Class);
-                            Env->TryBind(Class);
-                            break;
-                        }
-                    }
-                }
+                PreBindConfiguredClasses();
             }
             else
             {
@@ -136,6 +156,7 @@ namespace UnLuaNova
                 EnvLocator->Reset();
                 EnvLocator->RemoveFromRoot();
                 EnvLocator = nullptr;
+                PreBoundClasses.Empty();
                 FLuaOverrides::Get().RestoreAll();
             }
 
@@ -157,6 +178,33 @@ namespace UnLuaNova
         }
 
     private:
+        void PreBindConfiguredClasses()
+        {
+            if (!EnvLocator)
+                return;
+
+            // Default-phase modules may register classes after this PreDefault module starts.
+            const auto& Paths = GetDefault<UUnLuaNovaSettings>()->PreBindClasses;
+            for (UClass* Class : TObjectRange<UClass>())
+            {
+                if (PreBoundClasses.Contains(Class))
+                    continue;
+                for (const FSoftClassPath& Path : Paths)
+                {
+                    UClass* Target = Path.ResolveClass();
+                    if (Target && Class->IsChildOf(Target))
+                    {
+                        if (FLuaEnv* Env = EnvLocator->Locate(Class))
+                        {
+                            if (Env->TryBind(Class))
+                                PreBoundClasses.Add(Class);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         virtual void NotifyUObjectCreated(const UObjectBase* ObjectBase, int32 Index) override
         {
             // UE_LOG(LogTemp, Log, TEXT("NotifyUObjectCreated : %p"), ObjectBase);
@@ -166,14 +214,21 @@ namespace UnLuaNova
             UObject* Object = (UObject*)ObjectBase;
 
             const auto Env = EnvLocator->Locate(Object);
-            // UE_LOG(LogTemp, Log, TEXT("Locate %s for %s"), *Env->GetName(), *ObjectBase->GetFName().ToString());
+            if (!Env)
+                return;
+
             Env->TryBind(Object);
             Env->TryReplaceInputs(Object);
         }
 
         virtual void NotifyUObjectDeleted(const UObjectBase* Object, int32 Index) override
         {
-            // UE_LOG(LogTemp, Log, TEXT("NotifyUObjectDeleted : %p"), Object);
+            // Intentionally empty. This listener exists so GUObjectArray keeps calling
+            // NotifyUObjectCreated; deletion is already accounted for elsewhere -
+            // FClassRegistry::NotifyUObjectDeleted drops stale descriptors and the object
+            // registry holds everything by weak reference. Do not "fill this in" without
+            // a concrete case: a delete listener is the easiest place to add a use after
+            // free, because the object is already gone when it runs.
         }
 
         virtual void OnUObjectArrayShutdown() override
@@ -225,7 +280,11 @@ namespace UnLuaNova
 
         void OnEndPIE(bool bIsSimulating)
         {
-            // SetActive(false);
+            // Deliberately a no-op. SetActive(false) here would tear the environments down
+            // while PIE is still unwinding (EndPIE fires before the world is torn down),
+            // and OnEndPlayMap below already does it at the point where it is safe. The
+            // commented-out call used to sit here with no explanation - this is the answer
+            // to "is this unfinished?": it is finished, and empty on purpose.
         }
 
         void OnEndPlayMap()
@@ -297,6 +356,17 @@ namespace UnLuaNova
         ULuaEnvLocator* EnvLocator = nullptr;
         FDelegateHandle OnHandleSystemErrorHandle;
         FDelegateHandle OnHandleSystemEnsureHandle;
+        FDelegateHandle PostLoadMapWithWorldHandle;
+        FDelegateHandle PostEngineInitHandle;
+        TSet<TWeakObjectPtr<UClass>> PreBoundClasses;
+#if AUTO_UNLUA_STARTUP
+#if WITH_EDITOR
+        FDelegateHandle PreBeginPIEHandle;
+        FDelegateHandle PostPIEStartedHandle;
+        FDelegateHandle EndPIEHandle;
+        FDelegateHandle EndPlayMapHandle;
+#endif
+#endif
 #if ALLOW_CONSOLE
         TUniquePtr<FUnLuaNovaConsoleCommands> ConsoleCommands;
 #endif

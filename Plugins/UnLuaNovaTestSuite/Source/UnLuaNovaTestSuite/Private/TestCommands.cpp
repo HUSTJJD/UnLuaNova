@@ -15,10 +15,28 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "TestCommands.h"
+#include "UnLuaNovaBase.h"
+
+#include "HAL/FileManager.h"
+#include "HAL/IConsoleManager.h"
+#include "HAL/PlatformMisc.h"
+#include "HAL/PlatformTime.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Misc/PackageName.h"
+#include "Modules/ModuleManager.h"
+#include "UnrealClient.h"
+#include "Kismet/GameplayStatics.h"
 
 #if WITH_EDITOR
 #include "FileHelpers.h"
 #include "LevelEditor.h"
+// EPlayNetMode / ULevelEditorPlaySettings: the editor-only counterpart of
+// EUnLuaNovaPlayNetMode (see TestCommands.h), pulled in here because this is the file that
+// actually calls into the editor.
+#include "Settings/LevelEditorPlaySettings.h"
 #if ENGINE_MAJOR_VERSION >= 5
 #include "Tests/AutomationEditorCommon.h"
 #endif
@@ -26,18 +44,167 @@
 
 namespace UnLuaNovaTestSuite
 {
-    FOpenMapLatentCommand::FOpenMapLatentCommand(FString MapName, bool bForceReload)
-        : MapName(MapName), bForceReload(bForceReload)
+    // A PIE session is "running" for as long as any PIE world is still around, which is
+    // what tells us whether a previous test's session has really finished ending or is only
+    // being torn down.
+    static bool IsPIERunning()
     {
+        if (!GEngine)
+            return false;
+
+        for (const FWorldContext& Context : GEngine->GetWorldContexts())
+        {
+            if (Context.WorldType == EWorldType::PIE && Context.World())
+                return true;
+        }
+
+        return false;
+    }
+
+    FOpenMapLatentCommand::FOpenMapLatentCommand(FString MapName, bool bForceReload, int32 InNumClients, EUnLuaNovaPlayNetMode InPlayNetMode)
+        : MapName(FPackageName::ObjectPathToPackageName(MapName)), bForceReload(bForceReload)
+        , NumClients(InNumClients), PlayNetMode(InPlayNetMode)
+    {
+        NumClients = FMath::Max(NumClients, 1);
+
+        // Set here and not only in LoadMap(): LoadMap() runs on the editor path alone, so
+        // on the -game carrier this would stay 0 and every wait would be judged expired
+        // on its first tick.
+        if (WaitDeadline == 0.0)
+            WaitDeadline = FPlatformTime::Seconds() + WaitTimeoutSeconds;
+    }
+
+    FPieNetWorlds GetPieNetWorlds()
+    {
+        FPieNetWorlds Result;
+        if (!GEngine)
+            return Result;
+
+        for (const FWorldContext& Context : GEngine->GetWorldContexts())
+        {
+            UWorld* World = Context.World();
+            if (!World || Context.WorldType != EWorldType::PIE)
+                continue;
+
+            const ENetMode Mode = World->GetNetMode();
+            if (Mode == NM_ListenServer || Mode == NM_DedicatedServer)
+            {
+                if (!Result.Server)
+                    Result.Server = World;
+            }
+            else if (Mode == NM_Client)
+            {
+                Result.Clients.Add(World);
+            }
+        }
+
+        return Result;
     }
 
     bool FOpenMapLatentCommand::Update()
     {
-        if (WaitForMapToLoad)
-            return WaitForMapToLoad->Update();
+#if !WITH_EDITOR
+        if (GEngine)
+        {
+            for (const FWorldContext& Context : GEngine->GetWorldContexts())
+            {
+                UWorld* World = Context.World();
+                if (Context.WorldType != EWorldType::Game || !World)
+                    continue;
 
-        LoadMap();
+                const bool bMatchesMap = World->GetOutermost()->GetName() == MapName;
+                if (!bTravelRequested)
+                {
+                    if (!bForceReload && bMatchesMap && World->HasBegunPlay() && UnLuaNova::GetState())
+                        return true;
+
+                    bTravelRequested = true;
+                    PreviousWorld = World;
+                    WaitDeadline = FPlatformTime::Seconds() + WaitTimeoutSeconds;
+                    UnLuaNova::Startup();
+                    UGameplayStatics::SetGamePaused(World, false);
+                    UGameplayStatics::OpenLevel(World, FName(*MapName));
+                    return false;
+                }
+
+                // A same-map reload must replace the old world before assertions run.
+                if (bMatchesMap && World != PreviousWorld.Get() && World->HasBegunPlay())
+                {
+                    return true;
+                }
+            }
+        }
+
+        if (FPlatformTime::Seconds() > WaitDeadline)
+        {
+            UE_LOG(LogTemp, Error, TEXT("Game map '%s' did not begin play after %.0fs."),
+                *MapName, WaitTimeoutSeconds);
+            return true;
+        }
+
         return false;
+#else
+        // Phase 1: an earlier test left a session running (see FEndPlayMapCommand). End it
+        // and wait until it is gone - starting the new one on top of a teardown is what
+        // loses the request, and it is also the moment the old session's audio device comes
+        // apart inside this frame.
+        if (bEndingPreviousSession)
+        {
+            if (IsPIERunning())
+                return false;
+
+            bEndingPreviousSession = false;
+        }
+
+        if (!WaitForMapToLoad)
+        {
+            if (IsPIERunning())
+            {
+                GEditor->EndPlayMap();
+                bEndingPreviousSession = true;
+                return false;
+            }
+
+            LoadMap();
+            return false;
+        }
+
+        // Phase 2: wait for this map to be up. Matched by name, not just "some game
+        // world", so a session that is still shutting down cannot stand in for it.
+        //
+        // For a C/S session this is necessary but not sufficient: every peer loads the same
+        // map, so the first one to finish satisfies the name wait while the others are still
+        // coming up. Assertions made against a client that has not joined yet fail for a
+        // reason that has nothing to do with what is being tested, so wait for them too.
+        //
+        // Classified by role rather than counted: the count depends on how the editor reads
+        // "number of players" for a listen server, which is not the same number across
+        // versions, and what a networked test actually needs is "a server and a client".
+        if (WaitForMapToLoad->Update())
+        {
+            if (PlayNetMode == EUnLuaNovaPlayNetMode::Standalone)
+                return true;
+
+            const FPieNetWorlds Peers = GetPieNetWorlds();
+            if (Peers.Server && Peers.Clients.Num() > 0)
+                return true;
+        }
+
+        if (FPlatformTime::Seconds() > WaitDeadline)
+        {
+            // Give up rather than wait forever: the test that asked for this map will fail
+            // on its own assertions with a clear reason here in the log, and the rest of the
+            // suite still runs. Ending the session keeps the next test from inheriting a
+            // half-started one.
+            UE_LOG(LogTemp, Error, TEXT("PIE never came up for '%s' after %.0fs - ending the session and moving on. Check the log above for why the play session did not start (a lost request, or PIE being ended mid-start)."),
+                *MapName, WaitTimeoutSeconds);
+            if (IsPIERunning())
+                GEditor->EndPlayMap();
+            return true;
+        }
+
+        return false;
+#endif
     }
 
     void FOpenMapLatentCommand::LoadMap()
@@ -104,8 +271,14 @@ namespace UnLuaNovaTestSuite
 
         FRequestPlaySessionParams RequestParams;
         ULevelEditorPlaySettings* EditorPlaySettings = NewObject<ULevelEditorPlaySettings>();
-        EditorPlaySettings->SetPlayNumberOfClients(1);
+        EditorPlaySettings->SetPlayNumberOfClients(NumClients);
+        // Separate servers run in another process, and a test can only reach peers that
+        // share its process - which is the whole point of a listen server here.
         EditorPlaySettings->bLaunchSeparateServer = false;
+        EditorPlaySettings->SetPlayNetMode(
+            PlayNetMode == EUnLuaNovaPlayNetMode::ListenServer ? EPlayNetMode::PIE_ListenServer
+            : PlayNetMode == EUnLuaNovaPlayNetMode::Client ? EPlayNetMode::PIE_Client
+            : EPlayNetMode::PIE_Standalone);
         RequestParams.EditorPlaySettings = EditorPlaySettings;
         RequestParams.DestinationSlateViewport = ActiveLevelViewport;
 
@@ -123,7 +296,39 @@ namespace UnLuaNovaTestSuite
         GEditor->StartQueuedPlaySessionRequest();
 
         check(FailHandler.CanProceed());
-        WaitForMapToLoad = MakeUnique<FWaitForMapToLoadCommand>();
+
+        // Waited for by name: FWaitForMapToLoadCommand answers for any game world, and a
+        // session that is still ending would otherwise be accepted as "the map is loaded".
+        WaitForMapToLoad = MakeUnique<FWaitForSpecifiedMapToLoadCommand>(MapName);
+        WaitDeadline = FPlatformTime::Seconds() + WaitTimeoutSeconds;
+#endif
+    }
+
+    bool FEndPieSessionCommand::Update()
+    {
+#if !WITH_EDITOR
+        return true;
+#else
+        if (!bRequested)
+        {
+            bRequested = true;
+            WaitDeadline = FPlatformTime::Seconds() + WaitTimeoutSeconds;
+            if (IsPIERunning() && GEditor)
+                GEditor->EndPlayMap();
+            return false;
+        }
+
+        if (!IsPIERunning())
+            return true;
+
+        if (FPlatformTime::Seconds() > WaitDeadline)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("PIE did not finish ending after %.0fs; the test moves on, but per-session cleanup may have run against a live session."),
+                WaitTimeoutSeconds);
+            return true;
+        }
+
+        return false;
 #endif
     }
 
@@ -135,6 +340,150 @@ namespace UnLuaNovaTestSuite
             GEditor->EndPlayMap();
 #endif
 #endif
+        return true;
+    }
+
+    FScreenshotLatentCommand::FScreenshotLatentCommand(FString ShotName)
+        : Name(MoveTemp(ShotName))
+    {
+    }
+
+    bool FScreenshotLatentCommand::Update()
+    {
+        const FString Path = FPaths::ScreenShotDir() / (Name + TEXT(".png"));
+
+        if (!bRequested)
+        {
+            bRequested = true;
+            // No suffix: the report generator matches screenshots by name, so the file has
+            // to be exactly <Name>.png.
+            //
+            // bShowUI=true, restricted to the game viewport. The tutorial levels' visible
+            // content is PrintString on-screen text and UMG widgets - both live in the UI
+            // layer. With bShowUI=false this captured the bare scene render target only, and
+            // the engine additionally disables on-screen debug messages for that path
+            // (UnrealClient.cpp: GAreScreenMessagesEnabled = false), so every showcase shot
+            // came out as a photo of an empty, unlit world: pure black. Restricting to the
+            // game viewport keeps the editor chrome out when PIE is embedded in the level
+            // editor viewport.
+            FScreenshotRequest::RequestScreenshot(Name, true, false, false, FIntRect(), true);
+            return false;
+        }
+
+        if (IFileManager::Get().FileExists(*Path))
+            return true;
+
+        if (++FramesWaited > 120)
+        {
+            // Not a failure: whether a PNG can be produced at all depends on the run (a
+            // viewport has to exist), and a missing picture must not read as "the showcase
+            // broke". Say it out loud anyway - otherwise the only symptom is an empty
+            // gallery in the report and nobody knows why.
+            UE_LOG(LogTemp, Warning, TEXT("Screenshot '%s' was never written to %s - no viewport, or rendering is off (-NullRHI)."), *Name, *Path);
+            return true;
+        }
+
+        return false;
+    }
+
+    // Lets a run grab pictures without writing a test for it, e.g.
+    //   -ExecCmds="UnLuaNovaTest.Screenshot Showcase_Binding; Quit"
+    // which is how the showcase pages are captured.
+    static void TakeScreenshotCommand(const TArray<FString>& Args)
+    {
+        const FString ShotName = Args.Num() > 0 ? Args[0] : TEXT("UnLuaNovaTest");
+        // Same as FScreenshotLatentCommand: capture the game viewport with UI, not the bare
+        // (and here, empty) scene render target.
+        FScreenshotRequest::RequestScreenshot(ShotName, true, false, false, FIntRect(), true);
+    }
+
+    static FAutoConsoleCommand GScreenshotConsoleCommand(
+        TEXT("UnLuaNovaTest.Screenshot"),
+        TEXT("Requests a screenshot into Saved/Screenshots. Usage: UnLuaNovaTest.Screenshot <name>"),
+        FConsoleCommandWithArgsDelegate::CreateStatic(&TakeScreenshotCommand));
+
+    FString DescribeUniformScreenshot(const FString& PngPath)
+    {
+        IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+        const TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG);
+        if (!ImageWrapper.IsValid())
+        {
+            return FString();
+        }
+
+        TArray<uint8> FileData;
+        if (!FFileHelper::LoadFileToArray(FileData, *PngPath))
+        {
+            return FString();
+        }
+        if (!ImageWrapper->SetCompressed(FileData.GetData(), FileData.Num()))
+        {
+            return FString();
+        }
+
+        TArray64<uint8> Raw;
+        if (!ImageWrapper->GetRaw(ERGBFormat::BGRA, 8, Raw))
+        {
+            return FString();
+        }
+
+        const int32 Width = ImageWrapper->GetWidth();
+        const int32 Height = ImageWrapper->GetHeight();
+        const int64 NumPixels = Raw.Num() / 4;
+        if (NumPixels <= 0)
+        {
+            return FString();
+        }
+
+        // Uniform = min/max luminance over the whole image within a small tolerance. A real
+        // scene shot has far more spread than that, so this only fires on photos of nothing.
+        uint8 MinLuma = 255;
+        uint8 MaxLuma = 0;
+        const uint8* Pixels = Raw.GetData();
+        for (int64 i = 0; i < NumPixels; ++i)
+        {
+            const uint8* Pixel = Pixels + (i << 2); // BGRA
+            const uint8 Luma = static_cast<uint8>((Pixel[0] * 299u + Pixel[1] * 587u + Pixel[2] * 114u) >> 8);
+            MinLuma = FMath::Min(MinLuma, Luma);
+            MaxLuma = FMath::Max(MaxLuma, Luma);
+            if (MaxLuma - MinLuma > 2)
+            {
+                return FString();
+            }
+        }
+
+        return FString::Printf(TEXT("是一张 %dx%d 的纯色图（亮度范围 %d..%d，四舍五入就是什么都看不见）"),
+            Width, Height, MinLuma, MaxLuma);
+    }
+
+    FVerifyScreenshotNotBlankLatentCommand::FVerifyScreenshotNotBlankLatentCommand(FString ShotName, FAutomationTestBase& InTest)
+        : Name(MoveTemp(ShotName)), Test(InTest)
+    {
+    }
+
+    bool FVerifyScreenshotNotBlankLatentCommand::Update()
+    {
+        const FString Path = FPaths::ScreenShotDir() / (Name + TEXT(".png"));
+
+        if (!IFileManager::Get().FileExists(*Path))
+        {
+            // The screenshot command upstream already gave up after 120 frames with a log
+            // line; this only catches the "PNG appeared late" race.
+            if (++FramesWaited <= 120)
+            {
+                return false;
+            }
+            Test.AddWarning(FString::Printf(TEXT("截图 '%s' 没有落盘（%s），无法检查是否为空图。"), *Name, *Path));
+            return true;
+        }
+
+        const FString Uniform = DescribeUniformScreenshot(Path);
+        if (!Uniform.IsEmpty())
+        {
+            Test.AddError(FString::Printf(TEXT("截图 '%s' %s —— 大概率截到了空关卡（没有灯光/网格体，可见内容全在 UI 层）或无效的一帧。"),
+                *Name, *Uniform));
+        }
+
         return true;
     }
 }

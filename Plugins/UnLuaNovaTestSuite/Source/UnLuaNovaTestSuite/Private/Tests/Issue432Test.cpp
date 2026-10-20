@@ -32,7 +32,7 @@ struct FUnLuaNovaTest_Issue432 : FUnLuaNovaTestBase
         UnLuaNova::PushUObject(L, World);
         lua_setglobal(L, "G_World");
         const auto Chunk = R"(
-            local ActorClass = UE.UClass.Load("/UnLuaNovaTestSuite/Tests/Regression/Issue432/BP_UnLuaTestActor_Issue432.BP_UnLuaTestActor_Issue432_C")
+            local ActorClass = UE.UClass.Load("/UnLuaNovaTestSuite/Tests/Regression/Issue432/BP_UnLuaNovaTestActor_Issue432.BP_UnLuaTestActor_Issue432_C")
             local Actor = G_World:SpawnActor(ActorClass)
             Actor:Test()
         )";

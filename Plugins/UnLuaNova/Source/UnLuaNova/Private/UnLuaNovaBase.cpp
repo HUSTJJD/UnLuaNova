@@ -97,7 +97,11 @@ namespace UnLuaNova
         int32 Code = luaL_loadbufferx(L, Chunk, ChunkSize, ChunkName, Mode);        // loads the buffer as a Lua chunk
         if (Code != LUA_OK)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to call luaL_loadbufferx, error code: %d"), Code);
+            // ReportLuaCallError logs the compiler's own message - chunk name, line, what
+            // it expected - which is the part worth reading. The status code says none of
+            // that, so it stays at Warning: a second line at Warning would only repeat the
+            // failure without naming the chunk that failed. See FLuaEnv::LoadBuffer.
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to call luaL_loadbufferx for '%s', error code: %d"), UTF8_TO_TCHAR(ChunkName), Code);
             ReportLuaCallError(L);                          // report pcall error
         }
 
@@ -107,9 +111,9 @@ namespace UnLuaNova
             {
                 /* 'env' parameter? */
                 lua_pushvalue(L, Env);  /* environment for loaded function */
-                if (!lua_setupvalue(L, -2, 1))  /* set it as 1st upvalue */
+                if (!UnLuaNovaSetChunkEnv(L, -2))
                 {
-                    lua_pop(L, 1);  /* remove 'env' if not used by previous call */
+                    UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to set the environment of chunk '%s'"), UTF8_TO_TCHAR(ChunkName));
                 }
             }
         }
@@ -266,7 +270,7 @@ namespace UnLuaNova
             if (!bAlwaysCreate)
             {
                 // cache the new userdata in 'StructMap
-                FLuaEnv::FindEnv(L)->GetDanglingCheck()->CaptureStruct(L, Value);
+                FLuaEnv::FindEnvChecked(L).GetDanglingCheck()->CaptureStruct(L, Value);
                 lua_pushlightuserdata(L, Value);
                 lua_pushvalue(L, -2);
                 lua_rawset(L, -4);
@@ -318,9 +322,9 @@ namespace UnLuaNova
     /**
      * Allocate user data for smart pointer
      */
-    void* NewSmartPointer(lua_State *L, int32 Size, const char *MetatableName)
+    void* NewSmartPointer(lua_State *L, int32 Size, const char *MetatableName, FUnLuaNovaUserdataDtor Dtor)
     {
-        void *Userdata = ::NewUserdataWithPadding(L, Size, MetatableName);
+        void *Userdata = ::NewUserdataWithPaddingDtor(L, Size, MetatableName, 0, Dtor);
         if (Userdata)
         {
             MarkUserdataTwoLvPtrTag(L, -1);          // mark the new userdata as a two level pointer
@@ -344,6 +348,11 @@ namespace UnLuaNova
     void* NewUserdata(lua_State *L, int32 Size, const char *MetatableName, int32 Alignment)
     {
         return ::NewUserdataWithPadding(L, Size, MetatableName, CalcUserdataPadding(Alignment));
+    }
+
+    void* NewUserdataDtor(lua_State *L, int32 Size, const char *MetatableName, int32 Alignment, FUnLuaNovaUserdataDtor Dtor)
+    {
+        return ::NewUserdataWithPaddingDtor(L, Size, MetatableName, CalcUserdataPadding(Alignment), Dtor);
     }
 
     /**

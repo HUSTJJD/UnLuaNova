@@ -1,9 +1,9 @@
 #include "Misc/EngineVersionComparison.h"
 #include "UnLuaNovaCompatibility.h"
-#include "PropertyRegistry.h"
+#include "Registries/PropertyRegistry.h"
 #include "Binding.h"
-#include "ClassRegistry.h"
-#include "EnumRegistry.h"
+#include "Registries/ClassRegistry.h"
+#include "Registries/EnumRegistry.h"
 #include "LowLevel.h"
 #include "LuaEnv.h"
 #include "ReflectionUtils/PropertyDesc.h"
@@ -34,7 +34,14 @@ namespace UnLuaNova
             TypeInterface = GetBoolProperty();
             break;
         case LUA_TNUMBER:
-            TypeInterface = lua_isinteger(L, Index) > 0 ? GetInt64Property() : GetFloatProperty();
+            // Not lua_isinteger(): on Luau that is only true for the separate LUA_TINTEGER
+            // tag, so `UE.TArray(0)` - and every other literal a script writes - was
+            // inferred as float, and TArray<int32> came back holding 1.0f bit patterns.
+            //
+            // int32, not int64: an integer literal means a UE int32, and callers (and the
+            // specs) read the array back as TArray<int32>. Widening it to int64 during the
+            // Luau port misaligned every element past the first.
+            TypeInterface = UnLuaNovaIsIntegralNumber(L, Index) ? GetIntProperty() : GetFloatProperty();
             break;
         case LUA_TSTRING:
             TypeInterface = GetStringProperty();
@@ -357,7 +364,8 @@ namespace UnLuaNova
 #endif
             };
 #if UE_VERSION_NEWER_THAN(5, 2, 1)
-            const auto Property = new FTextProperty(PropertyCollector, "", RF_Transient);
+            // 带 InObjectFlags 的 F*Property 构造函数已弃用：直接去掉那个实参
+            const auto Property = new FTextProperty(PropertyCollector, "");
 #else
             const auto Property = new FTextProperty(PropertyCollector, Params);
 #endif
@@ -481,7 +489,7 @@ namespace UnLuaNova
 			};
         	const auto EnumProperty = new FEnumProperty(PropertyCollector, Params);
 #endif
-            const auto UnderlyingProperty = new FByteProperty(EnumProperty, TEXT("UnderlyingType"), RF_Transient);
+            const auto UnderlyingProperty = new FByteProperty(EnumProperty, TEXT("UnderlyingType"));
             Property = EnumProperty;
             Property->AddCppProperty(UnderlyingProperty);
 #if UE_VERSION_OLDER_THAN(5, 3, 0)

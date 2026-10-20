@@ -15,24 +15,40 @@
 #include "TestCommands.h"
 #include "UnLuaNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
+#include "HAL/PlatformTime.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_TESTSUITE(FIssue434Test, TEXT("UnLuaNova.Regression.Issue434 MulticastDelegate创建Handler时和self绑定"))
+// The widget drives this test: its Tick broadcasts the delegate, so the three handlers bound
+// with self only ever run while Slate ticks the widget - which it does not do under -NullRHI.
+// See BEGIN_VIEWPORT_TESTSUITE.
+BEGIN_VIEWPORT_TESTSUITE(FIssue434Test, TEXT("UnLuaNova.Regression.Issue434 MulticastDelegate创建Handler时和self绑定"))
 
     bool FIssue434Test::RunTest(const FString& Parameters)
     {
         const auto MapName = TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue434/Issue434");
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
-        ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.5f));
-        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
+        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Started = 0.0]() mutable {
+            if (Started == 0.0)
+                Started = FPlatformTime::Seconds();
+            const bool bTimedOut = FPlatformTime::Seconds() - Started >= 10.0;
             const auto L = UnLuaNova::GetState();
+            if (!L)
+            {
+                if (bTimedOut)
+                    AddError(TEXT("Timed out waiting for the Issue434 Lua state"));
+                return bTimedOut;
+            }
             lua_getglobal(L, "Result1");
             const auto Result1 = (int32)lua_tointeger(L, -1);
             lua_getglobal(L, "Result2");
             const auto Result2 = (int32)lua_tointeger(L, -1);
             lua_getglobal(L, "Result3");
             const auto Result3 = (int32)lua_tointeger(L, -1);
+            lua_pop(L, 3);
+
+            if (Result1 <= 0 && !bTimedOut)
+                return false;
 
             TestTrue("Result1", Result1 > 0);
             TestTrue("Result Equal", Result1 == Result2 && Result2 == Result3);

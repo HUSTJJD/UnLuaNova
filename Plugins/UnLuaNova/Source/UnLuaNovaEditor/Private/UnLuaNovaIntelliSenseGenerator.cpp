@@ -45,7 +45,18 @@ void FUnLuaNovaIntelliSenseGenerator::Initialize()
     if (bInitialized)
         return;
 
-    OutputDir = IPluginManager::Get().FindPlugin("UnLuaNova")->GetBaseDir() + "/Intermediate/IntelliSense";
+    // Its own directory next to the plugin, not Intermediate/: Intermediate is UBT's build
+    // scratch - wiped without notice, and nobody looks inside it - while these files are the
+    // IDE's and the type checkers' input (see UnLuaNovaDemo.code-workspace). It is gitignored:
+    // what ends up in here depends on the machine's plugins and modules.
+    OutputDir = IPluginManager::Get().FindPlugin("UnLuaNova")->GetBaseDir() + "/IntelliSense";
+
+    // Two dialects, two directories. The EmmyLua annotations are Lua and are read by LuaLS;
+    // UnLuaNova.d.lua is Luau and is read by luau-analyze. Neither analyzer can parse the
+    // other's dialect, so a single flat directory forced every consumer to know which files
+    // to skip - and LuaLS would try to parse `declare class`, which is not valid Lua.
+    EmmyLuaDir = OutputDir / TEXT("EmmyLua");
+    LuauDir = OutputDir / TEXT("Luau");
 
     FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
     AssetRegistryModule.Get().OnAssetAdded().AddRaw(this, &FUnLuaNovaIntelliSenseGenerator::OnAssetAdded);
@@ -114,8 +125,9 @@ bool FUnLuaNovaIntelliSenseGenerator::IsBlueprint(const FAssetData& AssetData)
     const FName AssetClass = AssetData.AssetClass;
     return AssetClass == UBlueprint::StaticClass()->GetFName() || AssetClass == UWidgetBlueprint::StaticClass()->GetFName();
 #else
-    const auto AssetClassPath = AssetData.AssetClassPath.ToString();
-    return AssetClassPath == UBlueprint::StaticClass()->GetName() || AssetClassPath == UWidgetBlueprint::StaticClass()->GetName();
+    const auto AssetClassPath = AssetData.AssetClassPath;
+    return AssetClassPath == UBlueprint::StaticClass()->GetClassPathName()
+        || AssetClassPath == UWidgetBlueprint::StaticClass()->GetClassPathName();
 #endif
 }
 
@@ -178,30 +190,64 @@ void FUnLuaNovaIntelliSenseGenerator::ExportUnLua()
 {
     const auto ContentDir = IPluginManager::Get().FindPlugin(TEXT("UnLuaNova"))->GetContentDir();
     const auto SrcDir = ContentDir / "IntelliSense";
-    const auto DstDir = OutputDir;
+    const auto DstDir = EmmyLuaDir;
 
-    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
-    if (!PlatformFile.DirectoryExists(*SrcDir))
+    IFileManager& FileManager = IFileManager::Get();
+    if (!FileManager.DirectoryExists(*SrcDir))
         return;
 
-    PlatformFile.CopyDirectoryTree(*DstDir, *SrcDir, true);
+    // File by file rather than CopyDirectoryTree, because Content/IntelliSense now also holds
+    // the Luau declaration of the API (UnLuaNova.d.lua). It is Luau syntax; copied into
+    // EmmyLua/ it makes LuaLS's own "you mixed dialects" check fire and the whole Lua static
+    // check bails out.
+    TArray<FString> Files;
+    FileManager.FindFilesRecursive(Files, *SrcDir, TEXT("*"), true, false);
+
+    for (const FString& File : Files)
+    {
+        if (File.EndsWith(TEXT(".d.lua")))
+            continue;
+
+        const FString Relative = File.RightChop(SrcDir.Len() + 1);
+        const FString Dest = DstDir / Relative;
+        FileManager.MakeDirectory(*FPaths::GetPath(Dest), true);
+        FileManager.Copy(*Dest, *File);
+    }
 }
 
 void FUnLuaNovaIntelliSenseGenerator::ExportLuauDecls(const TArray<const UField*> Types)
 {
     // LuauDecl lives inside namespace UnLuaNova (see UnLuaNovaLuauDecls.h); this
     // function is defined at global scope, so the name has to be qualified.
-    const FString Content = UnLuaNova::LuauDecl::Generate(Types);
+    FString Content = UnLuaNova::LuauDecl::Generate(Types);
+
+    // The engine half is reflected, the script-facing API is not: it is a Lua table the runtime
+    // injects. Its Luau declaration sits in Content/IntelliSense next to the EmmyLua one, is
+    // checked in, and is appended here - one place to edit per API change, two dialects served.
+    const FString ApiDir = IPluginManager::Get().FindPlugin(TEXT("UnLuaNova"))->GetContentDir() / TEXT("IntelliSense");
+    const FString ApiFile = ApiDir / TEXT("UnLuaNova.d.lua");
+
+    FString ApiDecl;
+    if (FFileHelper::LoadFileToString(ApiDecl, *ApiFile) && !ApiDecl.IsEmpty())
+    {
+        Content += TEXT("\n-- From ") + ApiFile + TEXT(" - the script-facing API, hand-written.\n");
+        Content += ApiDecl;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[IntelliSense] %s not found - the Luau declarations have no UnLuaNova API in them."), *ApiFile);
+    }
 
     IFileManager& FileManager = IFileManager::Get();
-    if (!FileManager.DirectoryExists(*OutputDir))
+    if (!FileManager.DirectoryExists(*LuauDir))
     {
-        FileManager.MakeDirectory(*OutputDir);
+        FileManager.MakeDirectory(*LuauDir);
     }
 
     // .d.lua rather than .lua: these are declarations for luau-analyze, not something
-    // a script is meant to require at runtime.
-    const FString FilePath = OutputDir / TEXT("UnLuaNova.d.lua");
+    // a script is meant to require at runtime. It lives under Luau/ so LuaLS - which
+    // points at EmmyLua/ - never sees Luau syntax.
+    const FString FilePath = LuauDir / TEXT("UnLuaNova.d.lua");
 
     FString Existing;
     FFileHelper::LoadFileToString(Existing, *FilePath);
@@ -248,7 +294,7 @@ void FUnLuaNovaIntelliSenseGenerator::CollectTypes(TArray<const UField*>& Types)
 void FUnLuaNovaIntelliSenseGenerator::SaveFile(const FString& ModuleName, const FString& FileName, const FString& GeneratedFileContent)
 {
     IFileManager& FileManager = IFileManager::Get();
-    const FString Directory = OutputDir / ModuleName;
+    const FString Directory = EmmyLuaDir / ModuleName;
     if (!FileManager.DirectoryExists(*Directory))
         FileManager.MakeDirectory(*Directory);
 
@@ -262,7 +308,7 @@ void FUnLuaNovaIntelliSenseGenerator::SaveFile(const FString& ModuleName, const 
 void FUnLuaNovaIntelliSenseGenerator::DeleteFile(const FString& ModuleName, const FString& FileName)
 {
     IFileManager& FileManager = IFileManager::Get();
-    const FString Directory = OutputDir / ModuleName;
+    const FString Directory = EmmyLuaDir / ModuleName;
     if (!FileManager.DirectoryExists(*Directory))
         FileManager.MakeDirectory(*Directory);
 

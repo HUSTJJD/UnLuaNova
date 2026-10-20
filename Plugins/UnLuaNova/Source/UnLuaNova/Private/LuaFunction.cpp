@@ -151,13 +151,18 @@ void ULuaFunction::Override(UFunction* Function, UClass* Class, bool bAddNew)
     bActivated = false;
     bAdded = bAddNew;
     From = Function;
+    if (bAddNew && Function->HasAnyFunctionFlags(FUNC_Net) && !Function->GetOuter()->IsA<UClass>())
+        DeclaredRpcTemplate = Function;
 
     if (Function->GetNativeFunc() == execScriptCallLua)
     {
         // 目标UFunction可能已经被覆写过了
         const auto LuaFunction = Get(Function);
-        Overridden = LuaFunction->GetOverridden();
-        check(Overridden);
+        Overridden = LuaFunction ? LuaFunction->GetOverridden() : nullptr;
+        // Both are invariants of the "already overridden" path: the previous
+        // implementation is kept in the function's own script data, so a null here means
+        // that data was rewritten underneath us - not merely an override that is missing.
+        check(LuaFunction && Overridden);
     }
     else
     {
@@ -177,8 +182,15 @@ void ULuaFunction::Restore()
 {
     if (bAdded)
     {
-        if (const auto OverriddenClass = Cast<ULuaOverridesClass>(GetOuter())->GetOwner())
+        // GetOverriddenUClass() rather than Cast<...>(GetOuter())->GetOwner(): the outer
+        // is not necessarily a ULuaOverridesClass, and this is the teardown path, where
+        // a bad cast would turn into a crash on the way out.
+        if (const auto OverriddenClass = GetOverriddenUClass())
+        {
             OverriddenClass->RemoveFunctionFromFunctionMap(this);
+            if (DeclaredRpcTemplate)
+                OverriddenClass->NetFields.Remove(this);
+        }
     }
     else
     {
@@ -207,7 +219,7 @@ void ULuaFunction::SetActive(const bool bActive)
     if (!Function)
         return;
 
-    const auto Class = Cast<ULuaOverridesClass>(GetOuter())->GetOwner();
+    const auto Class = GetOverriddenUClass();
     if (!Class)
         return;
     
@@ -216,12 +228,22 @@ void ULuaFunction::SetActive(const bool bActive)
         if (bAdded)
         {
             check(!Class->FindFunctionByName(GetFName(), EIncludeSuperFlag::ExcludeSuper));
-            SetSuperStruct(Function);
+            SetSuperStruct(DeclaredRpcTemplate ? nullptr : Function);
             FunctionFlags |= FUNC_Native;
             ClearInternalFlags(EInternalObjectFlags::Native);
             SetNativeFunc(execCallLua);
 
             Class->AddFunctionToFunctionMap(this, *GetName());
+            if (DeclaredRpcTemplate)
+            {
+                // The engine sends root RPCs using NetFields, not the function lookup map.
+                Class->SetUpRuntimeReplicationData();
+                Class->NetFields.AddUnique(this);
+                Class->NetFields.Sort([](const UField& A, const UField& B)
+                {
+                    return A.GetFName().LexicalLess(B.GetFName());
+                });
+            }
             if (Function->HasAnyFunctionFlags(FUNC_Native))
                 Class->AddNativeFunction(*GetName(), &ULuaFunction::execCallLua);
         }
@@ -248,6 +270,8 @@ void ULuaFunction::SetActive(const bool bActive)
         if (bAdded)
         {
             Class->RemoveFunctionFromFunctionMap(this);
+            if (DeclaredRpcTemplate)
+                Class->NetFields.Remove(this);
         }
         else
         {

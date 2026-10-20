@@ -252,6 +252,96 @@ void FUnLuaNovaLibSetSpec::Define()
         });
     });
 
+    Describe(TEXT("pairs"), [this]()
+    {
+        It(TEXT("迭代拿到Set里的每个元素"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // pairs(Set) yields (element, true): a set has no key of its own, so the element
+            // is what a script wants - the same value C++ range-for hands out, and the same
+            // value ToTable() would have given it. TSet registered no iteration entry at all
+            // until now (__iter on Luau, __pairs on Lua 5.x), so this raised on both backends
+            // and ToArray / ToTable were the only way to walk one.
+            const char* Chunk = "\
+            local Set = UE.TSet(0)\
+            Set:Add(1)\
+            Set:Add(2)\
+            local Count = 0\
+            local Sum = 0\
+            for Element, Flag in pairs(Set) do\
+                Count = Count + 1\
+                Sum = Sum + Element\
+            end\
+            return Count, Sum\
+            ";
+            UnLuaNova::RunChunk(L, Chunk);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -2), 2LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 3LL);
+        });
+
+        It(TEXT("删除元素后迭代不会带回空洞"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // A TSet leaves holes where elements were removed, so an iterator that simply
+            // increments the index either hands back dead slots or stops early. Both are
+            // silent - the element just never shows up.
+            const char* Chunk = "\
+            local Set = UE.TSet(0)\
+            Set:Add(1)\
+            Set:Add(2)\
+            Set:Add(3)\
+            Set:Remove(2)\
+            local Count = 0\
+            local Sum = 0\
+            for Element in pairs(Set) do\
+                Count = Count + 1\
+                Sum = Sum + Element\
+            end\
+            return Count, Sum\
+            ";
+            UnLuaNova::RunChunk(L, Chunk);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -2), 2LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 4LL);
+        });
+
+        It(TEXT("迭代中删除元素不崩，且删除真的生效"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // Mutating a container while an iterator is walking it is where a naive
+            // iterator either crashes or quietly skips an element. What is asserted is
+            // that the walk survives and the container ends up consistent - how many
+            // elements the walk happens to visit is not a contract anyone should rely on.
+            const char* Chunk = "\
+            local Set = UE.TSet(0)\
+            Set:Add(1)\
+            Set:Add(2)\
+            Set:Add(3)\
+            for Element in pairs(Set) do\
+                if Element == 2 then Set:Remove(2) end\
+            end\
+            return Set:Length(), Set:Contains(2), Set:Contains(1)\
+            ";
+            TEST_TRUE(UnLuaNova::RunChunk(L, Chunk));
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -3), 2LL);
+            TEST_FALSE(lua_toboolean(L, -2));
+            TEST_TRUE(lua_toboolean(L, -1));
+        });
+
+        It(TEXT("迭代中新增元素不崩，且新增真的生效"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // The other half: an Add can reallocate the set's storage under the iterator.
+            const char* Chunk = "\
+            local Set = UE.TSet(0)\
+            Set:Add(1)\
+            Set:Add(2)\
+            for Element in pairs(Set) do\
+                if Element == 1 then Set:Add(99) end\
+            end\
+            return Set:Contains(99), Set:Length()\
+            ";
+            TEST_TRUE(UnLuaNova::RunChunk(L, Chunk));
+            TEST_TRUE(lua_toboolean(L, -2));
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 3LL);
+        });
+    });
+
     AfterEach([this]
     {
         UnLuaNova::Shutdown();

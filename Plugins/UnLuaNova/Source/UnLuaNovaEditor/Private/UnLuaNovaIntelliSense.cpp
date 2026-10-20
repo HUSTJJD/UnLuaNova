@@ -533,6 +533,12 @@ namespace UnLuaNova
             if (Name.IsEmpty())
                 return false;
 
+            // 不能是脚本内部名（__index / __newindex / __gc ...）。双下划线是Lua元方法与
+            // UnLuaNova自己生成的名字专用的前缀：把它们写进声明文件既不可调用，又会让
+            // 补全给出脚本根本用不了的东西。
+            if (Name.StartsWith(TEXT("__")))
+                return false;
+
             // 不能有Lua关键字
             for (const auto& Keyword : LuaKeywords)
             {
