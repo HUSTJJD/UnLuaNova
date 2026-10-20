@@ -128,11 +128,14 @@ public class UnLuaNova : ModuleRules
             }
         };
 
-        // Accept both "Lua55" and the shorter "Lua". Anything else selects Luau, which is
-        // the default. "Lua55" used to fall through to Luau, which was a nasty trap given
-        // the module is literally named Lua55.
-        if (string.Equals(backend, "Lua55", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(backend, "Lua", StringComparison.OrdinalIgnoreCase))
+        // Only "Lua" selects the plain-Lua backend; anything else selects Luau, which is
+        // the default.
+        //
+        // The name is the backend, never its version: upgrading Lua is moving the submodule
+        // pointer, so a version baked into this string - or into the module name - goes
+        // stale the moment the submodule moves. Versioned aliases were accepted here once
+        // and have been removed on purpose; do not re-add them.
+        if (string.Equals(backend, "Lua", StringComparison.OrdinalIgnoreCase))
         {
             requireBackendHeaders("Lua", Path.Combine(ModuleDirectory, "..", "ThirdParty", "LuaLib", "Lua", "lua.h"));
             PublicDependencyModuleNames.Add("Lua");

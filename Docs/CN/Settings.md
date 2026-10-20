@@ -119,7 +119,7 @@ LuaBackend=Luau
 
 | 值 | 说明 |
 |---|---|
-| `Lua55` | Lua 5.5（`github.com/lua/lua`），与上游 UnLua 行为一致 |
+| `Lua` | 官方 Lua（`github.com/lua/lua`），与上游 UnLua 行为一致。版本由子模块指针决定，不体现在名字里 |
 | `Luau` | Luau（`github.com/luau-lang/luau`）**默认**；提供渐进类型、原生沙盒、原生断点调试等能力 |
 
 两个后端**都以 git 子模块引入**，位于 `Plugins/UnLuaNova/Source/ThirdParty/`：
