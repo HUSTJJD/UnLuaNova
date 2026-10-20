@@ -34,7 +34,7 @@ public:
 
     SLATE_END_ARGS()
 
-    UnLuaNovaEDITOR_API void Construct(const FArguments& InArgs);
+    UNLUANOVAEDITOR_API void Construct(const FArguments& InArgs);
 
 private:
     struct FLineDefinition

@@ -18,11 +18,11 @@
 #include "UnLuaNovaBase.h"
 
 #if NO_LOGGING
-    #define UNLUANOVA_LOG(L, CategoryName, Verbosity, Format, ...)
-    #define UNLUANOVA_LOGWARNING(L, CategoryName, Verbosity, Format, ...)
-    #define UNLUANOVA_LOGERROR(L, CategoryName, Verbosity, Format, ...)
+    #define UNLUANOVA_LOG(L, Format, ...)
+    #define UNLUANOVA_LOGWARNING(L, Format, ...)
+    #define UNLUANOVA_LOGERROR(L, Format, ...)
 #else
-#define UNLUANOVA_LOG(L, CategoryName, Verbosity, Format, ...) \
+#define UNLUANOVA_LOG(L, Format, ...) \
     {\
     	FString LogMsg = FString::Printf(Format, ##__VA_ARGS__);\
         luaL_traceback(L, L, "", 0); \
@@ -30,7 +30,7 @@
         lua_pop(L,1); \
     }
 
-#define UNLUANOVA_LOGWARNING(L, CategoryName, Verbosity, Format, ...) \
+#define UNLUANOVA_LOGWARNING(L, Format, ...) \
     {\
     	FString LogMsg = FString::Printf(Format, ##__VA_ARGS__);\
         luaL_traceback(L, L, "", 0); \
@@ -38,7 +38,7 @@
         lua_pop(L,1); \
     }
 
-#define UNLUANOVA_LOGERROR(L, CategoryName, Verbosity, Format, ...) \
+#define UNLUANOVA_LOGERROR(L, Format, ...) \
     {\
     	FString LogMsg = FString::Printf(Format, ##__VA_ARGS__);\
         luaL_traceback(L, L, "", 0); \

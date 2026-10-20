@@ -23,7 +23,7 @@
 #include "Registries/PropertyRegistry.h"
 #include "Registries/EnumRegistry.h"
 #include "UnLuaNovaManager.h"
-#include "lua.hpp"
+#include "LuaBackend.h"
 #include "ObjectReferencer.h"
 #include "HAL/Platform.h"
 #include "LuaDanglingCheck.h"

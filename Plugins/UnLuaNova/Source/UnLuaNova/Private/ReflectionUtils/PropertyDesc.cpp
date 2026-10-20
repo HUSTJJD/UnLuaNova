@@ -344,7 +344,7 @@ public:
         auto Object = UnLuaNova::GetUObject(L, IndexInStack, false);
         if (UnLuaNova::LowLevel::IsReleasedPtr(Object))
         {
-            UNLUANOVA_LOGWARNING(L, LogUnLuaNova, Warning, TEXT("attempt to set property %s with released object"), *GetName());
+            UNLUANOVA_LOGWARNING(L, TEXT("attempt to set property %s with released object"), *GetName());
             Object = nullptr;
         }
 
@@ -364,7 +364,7 @@ public:
             {
                 if (!Object->GetClass()->IsChildOf(ObjectBaseProperty->PropertyClass))
                 {
-                    UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("Invalid value type : property.type=%s, value.type=%s"), *ObjectBaseProperty->PropertyClass->GetName(), *Object->GetClass()->GetName());
+                    UNLUANOVA_LOGERROR(L, TEXT("Invalid value type : property.type=%s, value.type=%s"), *ObjectBaseProperty->PropertyClass->GetName(), *Object->GetClass()->GetName());
                 }
             }
 #endif

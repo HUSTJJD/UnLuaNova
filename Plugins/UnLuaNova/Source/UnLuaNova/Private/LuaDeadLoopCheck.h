@@ -16,7 +16,7 @@
 
 #include "CoreMinimal.h"
 #include "HAL/Runnable.h"
-#include "lua.hpp"
+#include "LuaBackend.h"
 #include <atomic>
 
 namespace UnLuaNova

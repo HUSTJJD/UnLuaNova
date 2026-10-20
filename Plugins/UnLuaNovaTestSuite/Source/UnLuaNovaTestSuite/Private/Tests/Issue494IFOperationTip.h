@@ -24,7 +24,7 @@ class UIssue494IFOperationTip : public UInterface
     GENERATED_BODY()
 };
 
-class UnLuaNovaTESTSUITE_API IIssue494IFOperationTip
+class UNLUANOVATESTSUITE_API IIssue494IFOperationTip
 {
     GENERATED_BODY()
 

@@ -1,9 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="UnLuaDefaultParamCollectorUbtPlugin.ubtplugin.csproj.props" Condition="Exists('UnLuaDefaultParamCollectorUbtPlugin.ubtplugin.csproj.props')" />
+  <Import Project="UnLuaNovaDefaultParamCollectorUbtPlugin.ubtplugin.csproj.props" Condition="Exists('UnLuaNovaDefaultParamCollectorUbtPlugin.ubtplugin.csproj.props')" />
   <Import Project="$(EngineDir)\Source\Programs\Shared\UnrealEngine.csproj.props" />
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- TargetFramework comes from UnrealEngine.csproj.props. Hardcoding a framework here
+         (this file used to pin net8.0) makes UBT skip the project entirely - see
+         EpicGames.MsBuild/CsProjBuilder.cs - so no DLL is produced and UHT then crashes
+         with FileNotFoundException when it tries to load the plugin. -->
     <Configuration Condition=" '$(Configuration)' == '' ">Development</Configuration>
     <OutputType>Library</OutputType>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -30,9 +33,8 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-  </ItemGroup>
+  <!-- No PackageReference: Microsoft.CSharp is pruned by the modern SDK (NU1510), and
+       TreatWarningsAsErrors is on. The engine's own ScriptGeneratorUbtPlugin needs none. -->
   <ItemGroup>
     <Reference Include="EpicGames.Build">
       <HintPath>$(EngineDir)\Binaries\DotNET\UnrealBuildTool\EpicGames.Build.dll</HintPath>

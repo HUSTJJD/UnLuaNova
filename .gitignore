@@ -20,4 +20,12 @@ IOS/
 /TPSProject.sln.DotSettings.user
 /Plugins/Developer/RiderLink
 /Benchmark
-/Plugins/UnLua/Source/UnLuaDefaultParamCollectorUbtPlugin/obj
+/Plugins/UnLuaNova/Source/UnLuaNovaDefaultParamCollectorUbtPlugin/obj
+
+# Generated on the machine that last opened/built the project:
+#   *.slnx            - VS solution (same role as the already-ignored *.sln)
+#   .vsconfig         - local VS component selection
+#   *.ubtplugin.csproj.props - UBT writes the absolute EngineDir of this machine into it
+*.slnx
+/.vsconfig
+*.ubtplugin.csproj.props

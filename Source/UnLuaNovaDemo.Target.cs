@@ -20,7 +20,9 @@ public class UnLuaNovaDemoTarget : TargetRules
     public UnLuaNovaDemoTarget(TargetInfo Target) : base(Target)
     {
         Type = TargetType.Game;
-        DefaultBuildSettings = BuildSettingsVersion.V6;
+        // See UnLuaNovaDemoEditor.Target.cs: track the engine's defaults so the shared build
+        // environment stays valid (UnrealGame is the base target here).
+        DefaultBuildSettings = BuildSettingsVersion.Latest;
         IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
         ExtraModuleNames.AddRange(
             new string[]

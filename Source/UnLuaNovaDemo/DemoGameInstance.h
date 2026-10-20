@@ -15,14 +15,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UnLuaInterface.h"
+#include "UnLuaNovaInterface.h"
 #include "UObject/Object.h"
 #include "DemoGameInstance.generated.h"
 
 UCLASS()
-class UnLuaNovaDemo_API UDemoGameInstance
+class UNLUANOVADEMO_API UDemoGameInstance
     : public UGameInstance,
-      public IUnLuaInterface
+      public IUnLuaNovaInterface
 {
     GENERATED_BODY()
 

@@ -20,34 +20,34 @@ namespace UnLuaNova
 {
     namespace IntelliSense
     {
-        UnLuaNovaEDITOR_API FString Get(const UBlueprint* Blueprint);
+        UNLUANOVAEDITOR_API FString Get(const UBlueprint* Blueprint);
 
-        UnLuaNovaEDITOR_API FString Get(const UField* Field);
+        UNLUANOVAEDITOR_API FString Get(const UField* Field);
 
-        UnLuaNovaEDITOR_API FString Get(const UEnum* Enum);
+        UNLUANOVAEDITOR_API FString Get(const UEnum* Enum);
         
-        UnLuaNovaEDITOR_API FString Get(const UStruct* Struct);
+        UNLUANOVAEDITOR_API FString Get(const UStruct* Struct);
 
-        UnLuaNovaEDITOR_API FString Get(const UScriptStruct* ScriptStruct);
+        UNLUANOVAEDITOR_API FString Get(const UScriptStruct* ScriptStruct);
         
-        UnLuaNovaEDITOR_API FString Get(const UClass* Class);
+        UNLUANOVAEDITOR_API FString Get(const UClass* Class);
         
-        UnLuaNovaEDITOR_API FString Get(const UFunction* Function, FString ForceClassName = "");
+        UNLUANOVAEDITOR_API FString Get(const UFunction* Function, FString ForceClassName = "");
 
-        UnLuaNovaEDITOR_API FString Get(const FProperty* Property);
+        UNLUANOVAEDITOR_API FString Get(const FProperty* Property);
 
-        UnLuaNovaEDITOR_API FString GetUE(const TArray<const UField*> AllTypes);
+        UNLUANOVAEDITOR_API FString GetUE(const TArray<const UField*> AllTypes);
         
-        UnLuaNovaEDITOR_API FString GetTypeName(const UObject* Field);
+        UNLUANOVAEDITOR_API FString GetTypeName(const UObject* Field);
 
-        UnLuaNovaEDITOR_API FString GetTypeName(const FProperty* Property);
+        UNLUANOVAEDITOR_API FString GetTypeName(const FProperty* Property);
 
-        UnLuaNovaEDITOR_API FString EscapeComments(const FString Comments, bool bSingleLine);
+        UNLUANOVAEDITOR_API FString EscapeComments(const FString Comments, bool bSingleLine);
 
-        UnLuaNovaEDITOR_API FString EscapeSymbolName(const FString InName);
+        UNLUANOVAEDITOR_API FString EscapeSymbolName(const FString InName);
 
-        UnLuaNovaEDITOR_API bool IsValid(const UFunction* Function);
+        UNLUANOVAEDITOR_API bool IsValid(const UFunction* Function);
 
-        UnLuaNovaEDITOR_API bool IsValidFunctionName(const FString Name);
+        UNLUANOVAEDITOR_API bool IsValidFunctionName(const FString Name);
     }
 }

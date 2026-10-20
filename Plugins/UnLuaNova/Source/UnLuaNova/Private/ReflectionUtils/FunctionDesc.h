@@ -15,7 +15,7 @@
 #pragma once
 
 #include "Containers/StaticBitArray.h"
-#include "lua.hpp"
+#include "LuaBackend.h"
 #include "ParamBufferAllocator.h"
 #include "Registries/FunctionRegistry.h"
 #include "ReflectionUtils/PropertyDesc.h"

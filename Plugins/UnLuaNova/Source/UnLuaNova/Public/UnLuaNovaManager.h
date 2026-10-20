@@ -16,7 +16,7 @@
 
 #include "InputCoreTypes.h"
 #include "Engine/DynamicBlueprintBinding.h"
-#include "lua.hpp"
+#include "LuaBackend.h"
 #include "UnLuaNovaCompatibility.h"
 #include "UnLuaNovaManager.generated.h"
 

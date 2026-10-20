@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include "lua.hpp"
+#include "LuaBackend.h"
 
 int32 Enum_Index(lua_State *L);
 int32 Enum_GetMaxValue(lua_State* L);

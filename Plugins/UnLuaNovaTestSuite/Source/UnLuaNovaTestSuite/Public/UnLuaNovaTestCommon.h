@@ -61,7 +61,7 @@ private:
     float Delay;
 };
 
-class UnLuaNovaTESTSUITE_API FUnLuaNovaTestCommand_LoadMap : public IAutomationLatentCommand
+class UNLUANOVATESTSUITE_API FUnLuaNovaTestCommand_LoadMap : public IAutomationLatentCommand
 {
 public:
     FUnLuaNovaTestCommand_LoadMap(FWorldContext* WorldContext, FString MapName)
@@ -115,7 +115,7 @@ private:
     bool bMapLoaded;
 };
 
-struct UnLuaNovaTESTSUITE_API FUnLuaNovaTestBase
+struct UNLUANOVATESTSUITE_API FUnLuaNovaTestBase
 {
 public:
     virtual ~FUnLuaNovaTestBase()
@@ -159,11 +159,11 @@ protected:
     FWorldContext* WorldContext;
 };
 
-DEFINE_EXPORTED_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(UnLuaNovaTESTSUITE_API, FUnLuaNovaTestCommand_SetUpTest, FUnLuaNovaTestBase*, UnLuaNovaTest);
+DEFINE_EXPORTED_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(UNLUANOVATESTSUITE_API, FUnLuaNovaTestCommand_SetUpTest, FUnLuaNovaTestBase*, UnLuaNovaTest);
 
-DEFINE_EXPORTED_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(UnLuaNovaTESTSUITE_API, FUnLuaNovaTestCommand_PerformTest, FUnLuaNovaTestBase*, UnLuaNovaTest);
+DEFINE_EXPORTED_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(UNLUANOVATESTSUITE_API, FUnLuaNovaTestCommand_PerformTest, FUnLuaNovaTestBase*, UnLuaNovaTest);
 
-DEFINE_EXPORTED_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(UnLuaNovaTESTSUITE_API, FUnLuaNovaTestCommand_TearDownTest, FUnLuaNovaTestBase*, UnLuaNovaTest);
+DEFINE_EXPORTED_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(UNLUANOVATESTSUITE_API, FUnLuaNovaTestCommand_TearDownTest, FUnLuaNovaTestBase*, UnLuaNovaTest);
 
 /////////////////////////////////////////
 // TEST DEFINE MACROS

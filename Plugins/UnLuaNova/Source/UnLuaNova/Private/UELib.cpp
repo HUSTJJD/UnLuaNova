@@ -86,14 +86,14 @@ static int32 Global_NewObject(lua_State *L)
     int32 NumParams = lua_gettop(L);
     if (NumParams < 1)
     {
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
     UClass *Class = Cast<UClass>(UnLuaNova::GetUObject(L, 1));
     if (!Class)
     {
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Log, TEXT("%s: Invalid class!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s: Invalid class!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
@@ -127,7 +127,7 @@ static int32 Global_NewObject(lua_State *L)
         }
         else
         {
-            UNLUANOVA_LOGERROR(L, LogUnLuaNova, Log, TEXT("%s: Failed to new object for class %s!"), ANSI_TO_TCHAR(__FUNCTION__), *Class->GetName());
+            UNLUANOVA_LOGERROR(L, TEXT("%s: Failed to new object for class %s!"), ANSI_TO_TCHAR(__FUNCTION__), *Class->GetName());
             return 0;
         }
     }

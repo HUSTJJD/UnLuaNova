@@ -17,12 +17,12 @@
 #include "Issue398TestInterface.generated.h"
 
 UINTERFACE(BlueprintType)
-class UnLuaNovaTESTSUITE_API UInterfaceForIssue398 : public UInterface
+class UNLUANOVATESTSUITE_API UInterfaceForIssue398 : public UInterface
 {
     GENERATED_BODY()
 };
 
-class UnLuaNovaTESTSUITE_API IInterfaceForIssue398
+class UNLUANOVATESTSUITE_API IInterfaceForIssue398
 {
     GENERATED_BODY()
 };

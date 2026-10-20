@@ -85,7 +85,7 @@ bool UUnLuaNovaManager::Bind(UObject *Object, const TCHAR *InModuleName, int32 I
 
     if (!Error.IsEmpty())
     {
-        UE_LOG(LogUnLua, Warning, TEXT("Failed to attach %s module for object %s,%p!\n%s"), InModuleName, *Object->GetName(), Object, *Error);
+        UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to attach %s module for object %s,%p!\n%s"), InModuleName, *Object->GetName(), Object, *Error);
         return false;
     }
 
@@ -108,7 +108,7 @@ bool UUnLuaNovaManager::Bind(UObject *Object, const TCHAR *InModuleName, int32 I
         bool bResult = ::CallFunction(L, 2, 0);                                 // call 'Initialize'
         if (!bResult)
         {
-            UE_LOG(LogUnLua, Warning, TEXT("Failed to call 'Initialize' function!"));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to call 'Initialize' function!"));
         }
         luaL_unref(L, LUA_REGISTRYINDEX, FunctionRef);
     }

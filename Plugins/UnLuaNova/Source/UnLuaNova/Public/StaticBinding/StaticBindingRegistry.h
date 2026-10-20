@@ -19,7 +19,7 @@ public:
 	static FStaticBindingRegistry& Get();
 
 	/**
-	 * Resolve every FProperty*/UFunction* inside the descriptor.
+	 * Resolve every FProperty and UFunction pointer inside the descriptor.
 	 * Safe to call repeatedly; a type is only resolved once.
 	 */
 	void Register(const FStaticTypeBinding* Type);

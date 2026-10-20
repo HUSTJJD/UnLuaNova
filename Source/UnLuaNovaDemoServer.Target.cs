@@ -19,7 +19,9 @@ public class UnLuaNovaDemoServerTarget : TargetRules
     public UnLuaNovaDemoServerTarget(TargetInfo Target) : base(Target)
     {
         Type = TargetType.Server;
-        DefaultBuildSettings = BuildSettingsVersion.V6;
+        // See UnLuaNovaDemoEditor.Target.cs: track the engine's defaults so the shared build
+        // environment stays valid (UnrealServer is the base target here).
+        DefaultBuildSettings = BuildSettingsVersion.Latest;
         IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
         ExtraModuleNames.Add("UnLuaNovaDemo");
     }

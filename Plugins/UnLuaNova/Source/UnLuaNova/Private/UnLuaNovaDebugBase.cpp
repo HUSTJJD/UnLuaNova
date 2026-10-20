@@ -618,6 +618,15 @@ namespace UnLuaNova
             return false;
         }
         lua_Debug ar;
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+        // Luau folds the stack walk into lua_getinfo: the level is an argument and a
+        // level past the top of the stack simply reports 0, so one call does the work
+        // of lua_getstack + lua_getinfo.
+        if (!UNLUANOVA_GETINFO(L, StackLevel, "nSlu", &ar))
+        {
+            return false;
+        }
+#else
         if (!lua_getstack(L, StackLevel, &ar))
         {
             return false;
@@ -626,10 +635,16 @@ namespace UnLuaNova
         {
             return false;
         }
+#endif
 
         for (int32 i = 1; ; ++i)
         {
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+            // Luau addresses a frame by level, plain Lua by the lua_Debug it just filled.
+            const char *VarName = lua_getlocal(L, StackLevel, i);
+#else
             const char *VarName = lua_getlocal(L, &ar, i);
+#endif
             if (!VarName)
             {
                 break;
@@ -647,7 +662,7 @@ namespace UnLuaNova
             lua_pop(L, 1);
         }
 
-        if (lua_getinfo(L, "f", &ar))
+        if (UNLUANOVA_GETINFO(L, StackLevel, "f", &ar))
         {
             int32 FunctionIdx = lua_gettop(L);
             for (int32 i = 1; ; ++i)
@@ -679,9 +694,19 @@ namespace UnLuaNova
         int32 Depth = 0;
         lua_Debug ar;
         FString CallStack = TEXT("Lua stack : \n");
-        while (lua_getstack(L, Depth++, &ar))
+        for (;; ++Depth)
         {
-            lua_getinfo(L, "nSl", &ar);
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+            if (!UNLUANOVA_GETINFO(L, Depth, "nSl", &ar))
+            {
+                break;
+            }
+#else
+            if (!lua_getstack(L, Depth, &ar) || !lua_getinfo(L, "nSl", &ar))
+            {
+                break;
+            }
+#endif
             FString DisplayInfo = FString::Printf(TEXT("Source : %s, name : %s, Line : %d \n"), UTF8_TO_TCHAR(ar.source), UTF8_TO_TCHAR(ar.name), ar.currentline);
             CallStack += DisplayInfo;
         }

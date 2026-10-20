@@ -33,15 +33,15 @@ namespace UnLuaNova
          */
 
         /** UE property -> Luau type name. */
-        UnLuaNovaEDITOR_API FString TypeName(const FProperty* Property);
+        UNLUANOVAEDITOR_API FString TypeName(const FProperty* Property);
 
         /** Declaration block for one reflected struct or class. */
-        UnLuaNovaEDITOR_API FString StructDecl(const UStruct* Struct);
+        UNLUANOVAEDITOR_API FString StructDecl(const UStruct* Struct);
 
         /** Declaration block for one enum, as a Luau string union. */
-        UnLuaNovaEDITOR_API FString EnumDecl(const UEnum* Enum);
+        UNLUANOVAEDITOR_API FString EnumDecl(const UEnum* Enum);
 
         /** Full .d.lua file for a set of types. */
-        UnLuaNovaEDITOR_API FString Generate(const TArray<const UField*>& Types);
+        UNLUANOVAEDITOR_API FString Generate(const TArray<const UField*>& Types);
     }
 }

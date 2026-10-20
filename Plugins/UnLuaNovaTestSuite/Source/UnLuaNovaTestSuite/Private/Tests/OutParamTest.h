@@ -18,7 +18,7 @@
 #include "OutParamTest.generated.h"
 
 UCLASS(Blueprintable)
-class UnLuaNovaTESTSUITE_API UOutParamTestStub : public UObject, public IUnLuaNovaInterface
+class UNLUANOVATESTSUITE_API UOutParamTestStub : public UObject, public IUnLuaNovaInterface
 {
     GENERATED_BODY()
 

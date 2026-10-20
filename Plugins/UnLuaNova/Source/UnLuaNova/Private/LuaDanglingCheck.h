@@ -15,7 +15,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "lua.hpp"
+#include "LuaBackend.h"
 
 namespace UnLuaNova
 {

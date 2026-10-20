@@ -5,7 +5,7 @@
 #include "TutorialBlueprintFunctionLibrary.generated.h"
 
 UCLASS()
-class UnLuaNovaDemo_API UTutorialBlueprintFunctionLibrary : public UBlueprintFunctionLibrary
+class UNLUANOVADEMO_API UTutorialBlueprintFunctionLibrary : public UBlueprintFunctionLibrary
 {
     GENERATED_BODY()
 

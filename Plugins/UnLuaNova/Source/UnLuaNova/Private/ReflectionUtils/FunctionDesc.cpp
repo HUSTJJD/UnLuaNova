@@ -382,7 +382,7 @@ void FFunctionDesc::PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex
             if (Property->CheckPropertyType(L, FirstParamIndex + ParamIndex, ErrorMsg))
                 CleanupFlags[i] = Property->WriteValue_InContainer(L, Params, FirstParamIndex + ParamIndex, false);
             else
-                UNLUANOVA_LOGERROR(L, LogUnLuaNova, Error, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
+                UNLUANOVA_LOGERROR(L, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
 #else
             CleanupFlags[i] = Property->WriteValue_InContainer(L, Params, FirstParamIndex + ParamIndex, false);
 #endif
@@ -406,7 +406,7 @@ void FFunctionDesc::PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex
                 FString ErrorMsg = "";
                 if (!Property->CheckPropertyType(L, FirstParamIndex + ParamIndex, ErrorMsg))
                 {
-                    UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
+                    UNLUANOVA_LOGERROR(L, TEXT("Invalid parameter type calling ufunction : %s,parameter : %d, error msg : %s"), *FuncName, ParamIndex, *ErrorMsg);
                 }
 #endif
             }
@@ -578,7 +578,7 @@ bool FFunctionDesc::CallLuaInternal(lua_State *L, void *InParams, FOutParmRec *O
         {
             ReturnProperty->GetProperty()->InitializeValue(RetValueAddress);
 #if ENABLE_TYPE_CHECK == 1
-            UNLUANOVA_LOGERROR(L, LogUnLuaNova, Error, TEXT("FuncName %s has return value, but no value found on stack!"),*FuncName);
+            UNLUANOVA_LOGERROR(L, TEXT("FuncName %s has return value, but no value found on stack!"),*FuncName);
 #endif
         }
         else

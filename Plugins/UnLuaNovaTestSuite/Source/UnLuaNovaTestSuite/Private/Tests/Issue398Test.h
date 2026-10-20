@@ -18,7 +18,7 @@
 #include "Issue398Test.generated.h"
 
 UCLASS(BlueprintType)
-class UnLuaNovaTESTSUITE_API ACharacterForIssue398 : public ACharacter, public IInterfaceForIssue398
+class UNLUANOVATESTSUITE_API ACharacterForIssue398 : public ACharacter, public IInterfaceForIssue398
 {
     GENERATED_BODY()
 };

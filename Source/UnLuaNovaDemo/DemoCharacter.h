@@ -7,7 +7,7 @@
 #include "DemoCharacter.generated.h"
 
 UCLASS()
-class UnLuaNovaDemo_API ADemoCharacter : public ACharacter
+class UNLUANOVADEMO_API ADemoCharacter : public ACharacter
 {
 	GENERATED_BODY()
 

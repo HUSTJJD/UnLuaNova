@@ -1,8 +1,8 @@
 #include "TutorialObject.h"
 
 #include "LuaCore.h"
-#include "UnLua.h"
-#include "UnLuaEx.h"
+#include "UnLuaNova.h"
+#include "UnLuaNovaEx.h"
 
 FTutorialObject::FTutorialObject()
 {
@@ -13,7 +13,7 @@ static int32 FTutorialObject_New(lua_State* L)
 	const auto NumParams = lua_gettop(L);
     if (NumParams != 2)
     {
-        UNLUA_LOGERROR(L, LogUnLuaNova, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 

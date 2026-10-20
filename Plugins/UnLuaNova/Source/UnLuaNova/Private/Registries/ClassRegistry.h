@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include "lua.hpp"
+#include "LuaBackend.h"
 #include "ReflectionUtils/ClassDesc.h"
 
 namespace UnLuaNova

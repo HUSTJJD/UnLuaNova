@@ -37,7 +37,7 @@ enum class EHotReloadMode : uint8
 };
 
 UCLASS(config=UnLuaNovaEditor, defaultconfig, meta=(DisplayName="UnLuaNovaEditor"))
-class UnLuaNovaEDITOR_API UUnLuaNovaEditorSettings : public UObject
+class UNLUANOVAEDITOR_API UUnLuaNovaEditorSettings : public UObject
 {
     GENERATED_BODY()
 
@@ -57,9 +57,6 @@ public:
     /** Enable UnLuaNova debug routine codes. (Requires restart to take effect) */
     UPROPERTY(config, EditAnywhere, Category = "Build")
     bool bEnableDebug = false;
-
-    /** Enable Unreal Insights to profile call performance. (Requires restart to take effect) */
-    UPROPERTY(config, EditAnywhere, Category = "Build")
 
     /** Enable persistent buffer for UFunction's parameters. (Requires restart to take effect) */
     UPROPERTY(config, EditAnywhere, Category = "Build")

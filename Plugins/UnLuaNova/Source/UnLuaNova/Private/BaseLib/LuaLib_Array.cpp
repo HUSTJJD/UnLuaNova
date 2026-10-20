@@ -318,7 +318,7 @@ static int32 TArray_Get(lua_State* L)
     --Index;
     if (!Array->IsValidIndex(Index))
     {
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Log, TEXT("%s: TArray Invalid Index!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s: TArray Invalid Index!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
@@ -345,7 +345,7 @@ static int32 TArray_GetRef(lua_State* L)
     --Index;
     if (!Array->IsValidIndex(Index))
     {
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Log, TEXT("%s: TArray Invalid Index!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s: TArray Invalid Index!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
@@ -370,7 +370,7 @@ static int32 TArray_Set(lua_State* L)
     --Index;
     if (!Array->IsValidIndex(Index))
     {
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Log, TEXT("%s: TArray Invalid Index!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s: TArray Invalid Index!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 

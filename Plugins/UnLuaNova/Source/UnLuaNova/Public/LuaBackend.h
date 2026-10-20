@@ -17,6 +17,10 @@
 
 #pragma once
 
+#include <cstdarg> // va_list, for the luaL_error shim below
+#include <cstdlib> // free, for the luaL_loadbufferx shim below
+#include <cstring> // strlen, for the luaL_loadstring shim below
+
 #define UNLUANOVA_BACKEND_LUA 0
 #define UNLUANOVA_BACKEND_LUAU 1
 
@@ -35,6 +39,198 @@
 #include "lua.hpp"
 
 #endif
+
+// --- plain-Lua spellings Luau does not provide -------------------------------
+//
+// The rest of UnLuaNova was written against plain Lua. Rather than touch every call
+// site, Luau is taught the same spellings here - this header is the one place where
+// the backends are allowed to differ, and everything below is a faithful equivalent
+// of the lauxlib/lua 5.x behaviour the call sites expect.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+
+// Luau declares luaL_error as noreturn void (it is a macro over luaL_errorL); plain
+// Lua returns int, and a great many call sites are written `return luaL_error(...)`.
+// Raise the same error - longjmp, so the value is never observed - with the Lua type.
+// Declared first: the shims below raise errors themselves.
+#undef luaL_error
+inline int luaL_error(lua_State* L, const char* Format, ...)
+{
+    va_list Args;
+    va_start(Args, Format);
+    lua_pushvfstring(L, Format, Args);
+    va_end(Args);
+#ifdef _MSC_VER
+    __pragma(warning(push))
+    __pragma(warning(disable: 4702)) // unreachable: lua_error longjmps out
+#endif
+    lua_error(L);
+    return 0;
+#ifdef _MSC_VER
+    __pragma(warning(pop))
+#endif
+}
+
+// Luau's lua_pushcfunction/lua_pushcclosure are macros that also take a debug name,
+// and take it *before* nup. Re-expose them as the plain-Lua two/three-argument
+// functions so existing call sites compile unchanged; the debug name is optional.
+#undef lua_pushcfunction
+inline void lua_pushcfunction(lua_State* L, lua_CFunction Fn, const char* DebugName = "UnLuaNova")
+{
+    lua_pushcclosurek(L, Fn, DebugName, 0, nullptr);
+}
+
+#undef lua_pushcclosure
+inline void lua_pushcclosure(lua_State* L, lua_CFunction Fn, int NUp, const char* DebugName = "UnLuaNova")
+{
+    lua_pushcclosurek(L, Fn, DebugName, NUp, nullptr);
+}
+
+// Luau spells the integer type test lua_isinteger64 (LUA_TINTEGER).
+inline int lua_isinteger(lua_State* L, int Index)
+{
+    return lua_isinteger64(L, Index);
+}
+
+// Luau kept the 5.1 name for "raw length". UNLUANOVA_UDATA_LEN is the userdata spelling.
+inline int lua_rawlen(lua_State* L, int Index)
+{
+    return lua_objlen(L, Index);
+}
+
+// Lua 5.2+ only. pushvalue + replace is the documented emulation.
+inline void lua_copy(lua_State* L, int FromIndex, int ToIndex)
+{
+    lua_pushvalue(L, FromIndex);
+    lua_replace(L, ToIndex);
+}
+
+// Luau's lua_ref/lua_unref address the value by stack index and do not pop it, while
+// luaL_ref pops the value on top of the stack. Match the lauxlib behaviour so callers
+// can keep writing `Ref = luaL_ref(L, LUA_REGISTRYINDEX)` after pushing a value.
+inline int luaL_ref(lua_State* L, int Table)
+{
+    (void)Table; // Luau only ever refs into the registry
+    const int Ref = lua_ref(L, -1);
+    lua_pop(L, 1);
+    return Ref;
+}
+
+inline void luaL_unref(lua_State* L, int Table, int Ref)
+{
+    (void)Table;
+    lua_unref(L, Ref);
+}
+
+inline void luaL_setmetatable(lua_State* L, const char* TableName)
+{
+    luaL_getmetatable(L, TableName);
+    lua_setmetatable(L, -2);
+}
+
+// Luau has no text loader: source is compiled to bytecode up front and then handed to
+// luau_load. These are the lauxlib spellings the rest of the plugin is written against.
+inline int luaL_loadbufferx(lua_State* L, const char* Buff, size_t Size, const char* Name, const char* Mode)
+{
+    (void)Mode; // Luau always compiles source; there is no "binary chunk" mode to honour
+    lua_CompileOptions Options = {};
+    Options.optimizationLevel = 1; // baseline - keeps line info, unlike level 2
+    Options.debugLevel = 1;        // line info + function names: enough for backtraces
+
+    size_t BytecodeSize = 0;
+    char* Bytecode = luau_compile(Buff, Size, &Options, &BytecodeSize);
+    if (!Bytecode)
+    {
+        lua_pushliteral(L, "Luau compilation failed");
+        return LUA_ERRSYNTAX;
+    }
+
+    const int Result = luau_load(L, Name, Bytecode, BytecodeSize, 0);
+    free(Bytecode); // luau_load has already decoded the bytecode into a Proto
+    return Result;
+}
+
+#define luaL_loadbuffer(L, s, sz, n) luaL_loadbufferx(L, s, sz, n, nullptr)
+
+inline int luaL_loadstring(lua_State* L, const char* Source)
+{
+    return luaL_loadbufferx(L, Source, strlen(Source), Source, nullptr);
+}
+
+#define luaL_dostring(L, s) (luaL_loadstring(L, s) || lua_pcall(L, 0, LUA_MULTRET, 0))
+
+// Luau has no luaL_setfuncs. Register each entry as a *named* C closure - which is
+// exactly what the debug name argument of lua_pushcclosure is for.
+inline void luaL_setfuncs(lua_State* L, const luaL_Reg* Reg, int NUp)
+{
+    for (; Reg->name != nullptr; Reg++)
+    {
+        for (int i = 0; i < NUp; i++)
+        {
+            lua_pushvalue(L, -NUp);
+        }
+        lua_pushcclosure(L, Reg->func, NUp, Reg->name);
+        lua_setfield(L, -(NUp + 2), Reg->name);
+    }
+    lua_pop(L, NUp);
+}
+
+// Luau has no luaL_requiref either. This is the uncached form: the module table is
+// left on the stack, and published as a global when Glb is set, which is all the
+// call sites rely on.
+inline void luaL_requiref(lua_State* L, const char* ModuleName, lua_CFunction OpenF, int Glb)
+{
+    lua_pushcfunction(L, OpenF, ModuleName);
+    lua_pushstring(L, ModuleName);
+    lua_call(L, 1, 1);
+    if (Glb)
+    {
+        lua_pushvalue(L, -1);
+        lua_setglobal(L, ModuleName);
+    }
+}
+
+// Lua 5.2+ folded lua_equal/lua_lessthan into lua_compare. Luau kept the 5.1 pair, so
+// rebuild the comparison out of them. Raising an error on an unknown op matches Lua.
+#ifndef LUA_OPEQ
+#define LUA_OPEQ 0
+#endif
+#ifndef LUA_OPLT
+#define LUA_OPLT 1
+#endif
+#ifndef LUA_OPLE
+#define LUA_OPLE 2
+#endif
+
+inline int lua_compare(lua_State* L, int Index1, int Index2, int Op)
+{
+    switch (Op)
+    {
+    case LUA_OPEQ:
+        return lua_equal(L, Index1, Index2);
+    case LUA_OPLT:
+        return lua_lessthan(L, Index1, Index2);
+    case LUA_OPLE:
+        return lua_lessthan(L, Index1, Index2) || lua_equal(L, Index1, Index2);
+    default:
+        return luaL_error(L, "invalid option for lua_compare");
+    }
+}
+
+// Luau has no lua_register (it only offers lua_registeruserdatadirect*). Plain Lua's
+// form pushes the C function and assigns it to a global of the same name.
+#undef lua_register
+inline void lua_register(lua_State* L, const char* Name, lua_CFunction Fn)
+{
+    lua_pushcfunction(L, Fn, Name);
+    lua_setglobal(L, Name);
+}
+
+// lauxlib.h defines this on plain Lua; Luau never did.
+#ifndef LUA_GNAME
+#define LUA_GNAME "_G"
+#endif
+
+#endif // UNLUANOVA_BACKEND_LUAU
 
 // --- userdata allocation ----------------------------------------------------
 // Lua 5.5: lua_newuserdatauv(L, size, nuvalue)

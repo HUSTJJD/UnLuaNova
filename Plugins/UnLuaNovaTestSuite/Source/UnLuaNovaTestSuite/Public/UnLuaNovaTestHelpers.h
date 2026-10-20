@@ -71,7 +71,7 @@ enum class EUnLuaTestEnum : uint8
 };
 
 UCLASS(Blueprintable)
-class UnLuaNovaTESTSUITE_API UUnLuaNovaTestStub : public UObject
+class UNLUANOVATESTSUITE_API UUnLuaNovaTestStub : public UObject
 {
     GENERATED_BODY()
 
@@ -118,7 +118,7 @@ public:
 };
 
 UCLASS()
-class UnLuaNovaTESTSUITE_API UUnLuaNovaTestStubForIssue446 : public UObject, public FTickableGameObject, public IUnLuaNovaInterface
+class UNLUANOVATESTSUITE_API UUnLuaNovaTestStubForIssue446 : public UObject, public FTickableGameObject, public IUnLuaNovaInterface
 {
     GENERATED_BODY()
 
@@ -143,7 +143,7 @@ public:
 };
 
 UCLASS()
-class UnLuaNovaTESTSUITE_API AUnLuaTestActor : public AActor
+class UNLUANOVATESTSUITE_API AUnLuaTestActor : public AActor
 {
     GENERATED_BODY()
 
@@ -159,7 +159,7 @@ public:
 };
 
 USTRUCT(BlueprintType)
-struct UnLuaNovaTESTSUITE_API FUnLuaNovaTestTableRow : public FTableRowBase
+struct UNLUANOVATESTSUITE_API FUnLuaNovaTestTableRow : public FTableRowBase
 {
     GENERATED_USTRUCT_BODY()
 
@@ -174,7 +174,7 @@ struct UnLuaNovaTESTSUITE_API FUnLuaNovaTestTableRow : public FTableRowBase
     }
 };
 
-struct UnLuaNovaTESTSUITE_API FUnLuaNovaTestLib
+struct UNLUANOVATESTSUITE_API FUnLuaNovaTestLib
 {
     static void TestForBaseSpec1(int32 A, int32& B, const int32& C, FString& D)
     {
@@ -193,7 +193,7 @@ struct UnLuaNovaTESTSUITE_API FUnLuaNovaTestLib
 DECLARE_DYNAMIC_DELEGATE_TwoParams(FIssule294Event, int32, Value1, UObject*, Value2);
 
 UCLASS()
-class UnLuaNovaTESTSUITE_API UUnLuaNovaTestFunctionLibrary : public UBlueprintFunctionLibrary
+class UNLUANOVATESTSUITE_API UUnLuaNovaTestFunctionLibrary : public UBlueprintFunctionLibrary
 {
     GENERATED_BODY()
 

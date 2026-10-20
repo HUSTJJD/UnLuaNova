@@ -18,13 +18,13 @@
 #include "IssueOverridesTest.generated.h"
 
 UCLASS(BlueprintType, Blueprintable)
-class UnLuaNovaTESTSUITE_API AIssueOverridesActor : public AActor
+class UNLUANOVATESTSUITE_API AIssueOverridesActor : public AActor
 {
     GENERATED_BODY()
 };
 
 UCLASS()
-class UnLuaNovaTESTSUITE_API UIssueOverridesObject
+class UNLUANOVATESTSUITE_API UIssueOverridesObject
     : public UObject,
       public IUnLuaNovaInterface
 {

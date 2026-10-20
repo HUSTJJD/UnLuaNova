@@ -282,13 +282,13 @@ void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName
     if (Size < 1)
     {
         // userdata size must be greater than 0
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid size!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid size!"), ANSI_TO_TCHAR(__FUNCTION__));
         return nullptr;
     }
     if ((PaddingSize & 0x07) != 0)          // 8 bytes padding at least..., 8, 24, 88
     {
         // padding size must be greater or equal to 8 bytes
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid padding size!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid padding size!"), ANSI_TO_TCHAR(__FUNCTION__));
         return nullptr;
     }
 
@@ -298,7 +298,7 @@ void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName
         bool bSuccess = TryToSetMetatable(L, MetatableName);        // set metatable
         if (!bSuccess)
         {
-            UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
+            UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
             return nullptr;
         }
     }
@@ -353,7 +353,7 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
 {
     if (!Key)
     {
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid key!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid key!"), ANSI_TO_TCHAR(__FUNCTION__));
         return nullptr;
     }
 
@@ -388,7 +388,7 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
 {
     if (!Key)
     {
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid key!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid key!"), ANSI_TO_TCHAR(__FUNCTION__));
         return nullptr;
     }
 
@@ -474,7 +474,7 @@ void PushObjectCore(lua_State *L, UObjectBaseUtility *Object)
     bool bSuccess = TryToSetMetatable(L, TCHAR_TO_UTF8(*MetatableName), (UObject*)Object);
 	if (!bSuccess)
 	{
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid metatable,Name %s, Object %s,%p!"), ANSI_TO_TCHAR(__FUNCTION__), *MetatableName, *Object->GetName(), Object);
+        UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid metatable,Name %s, Object %s,%p!"), ANSI_TO_TCHAR(__FUNCTION__), *MetatableName, *Object->GetName(), Object);
     }
 }
 
@@ -618,14 +618,14 @@ static void PushPropertyArray(lua_State *L, T *Property, void *Value, void(*Push
 #if !UE_BUILD_SHIPPING
     if (!Property || !Value || Property->ArrayDim < 2 || Property->GetElementSize() < 1)
     {
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
         return;
     }
 #endif
 
     if (!TPropertyArrayPushPolicy<T, WithMetaTableName>::CheckMetaTable(MetatableName))
     {
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid metatable name!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid metatable name!"), ANSI_TO_TCHAR(__FUNCTION__));
         return;
     }
 
@@ -750,7 +750,7 @@ bool GetObjectMapping(lua_State *L, UObjectBaseUtility *Object)
 {
     if (!Object)
     {
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid object!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid object!"), ANSI_TO_TCHAR(__FUNCTION__));
         return false;
     }
 
@@ -1202,7 +1202,7 @@ int32 Class_CallLatentFunction(lua_State *L)
     auto ThreadRef = Env.FindOrAddThread(L);
     if (ThreadRef == LUA_REFNIL)
     {
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s: Can't call latent action in main lua thread!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s: Can't call latent action in main lua thread!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
@@ -1254,7 +1254,7 @@ int32 Class_Cast(lua_State* L)
     int32 NumParams = lua_gettop(L);
     if (NumParams < 2)
     {
-        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGERROR(L, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 

@@ -27,8 +27,20 @@
 			"Enabled": true
 		},
 		{
-			"Name": "UnLuaTestSuite",
+			"Name": "UnLuaNovaTestSuite",
 			"Enabled": true
+		},
+		{
+			"Name": "LuaSocket",
+			"Enabled": false
+		},
+		{
+			"Name": "LuaRapidjson",
+			"Enabled": false
+		},
+		{
+			"Name": "LuaProtobuf",
+			"Enabled": false
 		}
 	]
 }

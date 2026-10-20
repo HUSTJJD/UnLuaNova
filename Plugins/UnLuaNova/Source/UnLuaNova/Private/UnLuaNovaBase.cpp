@@ -236,7 +236,7 @@ namespace UnLuaNova
                     bool bSuccess = TryToSetMetatable(L, MetatableName);        // set metatable
                     if (!bSuccess)
                     {
-                        UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("Invalid metatable, metatable name: %s!"),  UTF8_TO_TCHAR(MetatableName));
+                        UNLUANOVA_LOGERROR(L, TEXT("Invalid metatable, metatable name: %s!"),  UTF8_TO_TCHAR(MetatableName));
                         return 1;
                     }
                 }
@@ -257,7 +257,7 @@ namespace UnLuaNova
                 bool bSuccess = TryToSetMetatable(L, MetatableName);        // set metatable
                 if (!bSuccess)
                 {
-                    UNLUANOVA_LOGERROR(L, LogUnLuaNova, Warning, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
+                    UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
                     lua_pop(L, 1);
                     return 1;
                 }

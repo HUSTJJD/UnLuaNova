@@ -1,7 +1,7 @@
 #include "TutorialBlueprintFunctionLibrary.h"
 #include "Kismet/KismetSystemLibrary.h"
 
-#include "UnLua.h"
+#include "UnLuaNova.h"
 
 static void PrintScreen(const FString& Msg)
 {
@@ -93,13 +93,13 @@ void UTutorialBlueprintFunctionLibrary::SetupCustomLoader(int Index)
     switch (Index)
     {
     case 0:
-        FUnLuaDelegates::CustomLoadLuaFile.Unbind();
+        FUnLuaNovaDelegates::CustomLoadLuaFile.Unbind();
         break;
     case 1:
-        FUnLuaDelegates::CustomLoadLuaFile.BindStatic(CustomLoader1);
+        FUnLuaNovaDelegates::CustomLoadLuaFile.BindStatic(CustomLoader1);
         break;
     case 2:
-        FUnLuaDelegates::CustomLoadLuaFile.BindStatic(CustomLoader2);
+        FUnLuaNovaDelegates::CustomLoadLuaFile.BindStatic(CustomLoader2);
         break;
     }
 }

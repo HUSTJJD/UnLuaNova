@@ -474,21 +474,16 @@ namespace UnLuaNova
     /**
      * Get value from the stack.
      */
-    template <typename T> auto Get(lua_State *L, int32 Index, TType<T>)
-		-> std::enable_if_t<!std::is_base_of<TTypeCheckable<T>, TType<T>>::value, T>;
-
-	template <typename T> auto Get(lua_State *L, int32 Index, TType<T>)
-		-> std::enable_if_t<std::is_base_of<TTypeCheckable<T>, TType<T>>::value, T>;
+    // The "checkable" split this used to express (SFINAE on a TTypeCheckable<T> base,
+    // Ty.bIfNeedCheck / Ty.EnableCheck()) no longer exists: TType is keyed on its
+    // IsUObject parameter and has neither member. Collapsed to one overload per form.
+    template <typename T> auto Get(lua_State *L, int32 Index, TType<T>);
 
     template <typename T> T* Get(lua_State *L, int32 Index, TType<T*>);
 
     template <typename T> T& Get(lua_State *L, int32 Index, TType<T&>);
 
-	template <typename T> auto GetChecked(lua_State *L, int32 Index, TType<T>)
-		-> std::enable_if_t<!std::is_base_of<TTypeCheckable<T>, TType<T>>::value, T>;
-
-	template <typename T> auto GetChecked(lua_State *L, int32 Index, TType<T>)
-		-> std::enable_if_t<std::is_base_of<TTypeCheckable<T>, TType<T>>::value, T>;
+    template <typename T> auto GetChecked(lua_State *L, int32 Index, TType<T> Ty);
 
 	template <typename T> T* GetChecked(lua_State *L, int32 Index, TType<T*>);
 
@@ -1089,16 +1084,8 @@ namespace UnLuaNova
      */
     template <typename T>
 	FORCEINLINE auto Get(lua_State *L, int32 Index, TType<T>)
-		-> std::enable_if_t<!std::is_base_of<TTypeCheckable<T>, TType<T>>::value, T>
     {
         return TGenericTypeHelper<T>::Get(L, Index);
-    }
-
-	template <typename T>
-	FORCEINLINE auto Get(lua_State *L, int32 Index, TType<T> Ty)
-		-> std::enable_if_t<std::is_base_of<TTypeCheckable<T>, TType<T>>::value, T>
-    {
-    	return TGenericTypeHelper<T>::Get(L, Index, Ty.bIfNeedCheck);
     }
 
     template <typename T>
@@ -1116,18 +1103,9 @@ namespace UnLuaNova
 
 	template <typename T>
 	FORCEINLINE auto GetChecked(lua_State *L, int32 Index, TType<T> Ty)
-		-> std::enable_if_t<!std::is_base_of<TTypeCheckable<T>, TType<T>>::value, T>
     {
-    	// NOT Checkable type && in check context, using custom UnLuaNova::Get
-    	return Get(L, Index, Ty);
-    }
-
-	template <typename T>
-	FORCEINLINE auto GetChecked(lua_State *L, int32 Index, TType<T> Ty)
-		-> std::enable_if_t<std::is_base_of<TTypeCheckable<T>, TType<T>>::value, T>
-    {
-    	// Checkable type && in check context, using custom UnLuaNova::Get or TGenericTypeHelper<T>::Get
-    	Ty.EnableCheck();
+    	// No checkable/non-checkable split any more (see the declarations above) - the
+    	// custom UnLuaNova::Get overloads are what do the type checking.
     	return Get(L, Index, Ty);
     }
 

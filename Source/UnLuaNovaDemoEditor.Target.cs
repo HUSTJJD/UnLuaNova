@@ -20,7 +20,11 @@ public class UnLuaNovaDemoEditorTarget : TargetRules
     public UnLuaNovaDemoEditorTarget(TargetInfo Target) : base(Target)
     {
         Type = TargetType.Editor;
-        DefaultBuildSettings = BuildSettingsVersion.V6;
+        // Pinned to the engine's own defaults, not a fixed version number: an Editor target
+        // shares its build environment with UnrealEditor, and UBT rejects any project target
+        // whose CppCompileWarningSettings differ from it (see UEBuildTarget.ValidateSharedEnvironment).
+        // Hardcoding e.g. V6 breaks as soon as the engine moves to V7+.
+        DefaultBuildSettings = BuildSettingsVersion.Latest;
         IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
         ExtraModuleNames.AddRange(
             new string[]

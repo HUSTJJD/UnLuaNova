@@ -18,7 +18,7 @@
 #include "Issue500Test.generated.h"
 
 UCLASS(Blueprintable)
-class UnLuaNovaTESTSUITE_API UObjectForIssue500 : public UObject, public IUnLuaNovaInterface
+class UNLUANOVATESTSUITE_API UObjectForIssue500 : public UObject, public IUnLuaNovaInterface
 {
     GENERATED_BODY()
 

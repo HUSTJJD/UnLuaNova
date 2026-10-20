@@ -20,7 +20,7 @@
 #include "UnLuaNovaEditorFunctionLibrary.generated.h"
 
 UCLASS()
-class UnLuaNovaEDITOR_API UUnLuaNovaEditorFunctionLibrary : public UBlueprintFunctionLibrary
+class UNLUANOVAEDITOR_API UUnLuaNovaEditorFunctionLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 

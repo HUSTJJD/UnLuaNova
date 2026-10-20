@@ -177,7 +177,7 @@ int32 CollisionEnum_Index(lua_State* L, int32 (*Converter)(FName))
         int32 Value = Converter(FName(Name));
         if (Value == INDEX_NONE)
         {
-            UNLUANOVA_LOGWARNING(L, LogUnLuaNova, Warning, TEXT("%s: Cann't find enum %s!"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(Name));
+            UNLUANOVA_LOGWARNING(L, TEXT("%s: Cann't find enum %s!"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(Name));
         }
         lua_pushvalue(L, 2);
         lua_pushinteger(L, Value);

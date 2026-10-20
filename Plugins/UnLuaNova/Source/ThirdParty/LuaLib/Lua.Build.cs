@@ -34,11 +34,40 @@ public class Lua : ModuleRules
         PublicDefinitions.Add("MAKE_LIB=1");
 
         // Third-party C: do not let UE's strict settings fail the build.
+        // Off, not Warning, so third-party code never fails the build on diagnostics.
+        //
+        // The knob moved twice: bool bEnable*Warnings (<=5.4), a flat *WarningLevel property
+        // on ModuleRules (5.5), then CppCompileWarningSettings.* (5.6+).
+#if UE_5_6_OR_LATER
+        CppCompileWarningSettings.UndefinedIdentifierWarningLevel = WarningLevel.Off;
+#elif UE_5_5_OR_LATER
+        UndefinedIdentifierWarningLevel = WarningLevel.Off;
+#else
         bEnableUndefinedIdentifierWarnings = false;
+#endif
+
+#if UE_5_6_OR_LATER
+        CppCompileWarningSettings.NonInlinedGenCppWarningLevel = WarningLevel.Off;
+#else
         bEnableNonInlinedGenCppWarnings = false;
+#endif
+
+        // BuildSettingsVersion.V7 (UE 5.8) promotes these three to errors. Upstream Lua is
+        // not written against them - e.g. C4702 right after lua_error/luaD_throw, which are
+        // only "noreturn" in practice, not to the compiler.
+#if UE_5_8_OR_LATER
+        CppCompileWarningSettings.UnreachableCodeWarningLevel = WarningLevel.Off;
+        CppCompileWarningSettings.ReturnTypeWarningLevel = WarningLevel.Off;
+        CppCompileWarningSettings.DanglingWarningLevel = WarningLevel.Off;
+#endif
+
         if (Target.Platform == UnrealTargetPlatform.Win64)
         {
+#if UE_5_6_OR_LATER
+            CppCompileWarningSettings.ShadowVariableWarningLevel = WarningLevel.Off;
+#else
             bEnableShadowVariableWarnings = false;
+#endif
         }
 
         // Rebuild when the submodule contents change.

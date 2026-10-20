@@ -30,21 +30,21 @@ namespace UnLuaNova
         static int LogInfo(lua_State* L)
         {
             const auto Msg = GetMessage(L);
-            UE_LOG(LogUnLua, Log, TEXT("%s"), *Msg);
+            UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Msg);
             return 0;
         }
 
         static int LogWarn(lua_State* L)
         {
             const auto Msg = GetMessage(L);
-            UE_LOG(LogUnLua, Warning, TEXT("%s"), *Msg);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("%s"), *Msg);
             return 0;
         }
 
         static int LogError(lua_State* L)
         {
             const auto Msg = GetMessage(L);
-            UE_LOG(LogUnLua, Error, TEXT("%s"), *Msg);
+            UE_LOG(LogUnLuaNova, Error, TEXT("%s"), *Msg);
             return 0;
         }
 
