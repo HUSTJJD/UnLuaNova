@@ -30,6 +30,9 @@ Plugins/UnLuaNovaTestSuite/
 # 只跑某一类
 .\Tools\RunTests.ps1 -Filter UnLuaNova.API
 
+# 只跑三个可选扩展插件（LuaRapidjson / LuaProtobuf / LuaSocket）
+.\Tools\RunTests.ps1 -Filter UnLuaNova.Extensions
+
 # 带截图，并把结果发布到文档站
 .\Tools\RunTests.ps1 -Screenshots -Publish
 ```

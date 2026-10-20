@@ -202,6 +202,37 @@ inline void luaL_setmetatable(lua_State* L, const char* TableName)
     lua_setmetatable(L, -2);
 }
 
+// Plain Lua's luaL_newmetatable does two things: it files the new table in the registry
+// under TypeName, and it stamps that same name onto the table as __name. Luau's only
+// does the first - see laux.cpp, where the whole function is four stack operations and
+// no __name anywhere.
+//
+// UnLuaNova reads __name to get from a metatable back to the type it describes:
+// Class_Index, Enum_Index, PropertyRegistry and the container checks all start there.
+// On Luau the field was simply absent, so every *first* read of a class or enum member -
+// the one that is not cached in the metatable yet - reached GetFieldInternal, looked up
+// a nil __name and tripped its check(). Nothing noticed while hot reload was broken,
+// because that was the only path reaching an uncached member this early: HotReload.lua
+// reads UE.UUnLuaNovaFunctionLibrary.GetScriptRootPath() while it is being required.
+//
+// Teach Luau the plain-Lua spelling rather than patching each reader. Same contract:
+// 1 and the new table on the stack, or 0 and the existing one.
+inline int UnLuaNovaNewMetatable(lua_State* L, const char* TypeName)
+{
+    lua_getfield(L, LUA_REGISTRYINDEX, TypeName);
+    if (!lua_isnil(L, -1))
+        return 0; // already registered - leave the previous table on top, as plain Lua does
+    lua_pop(L, 1);
+
+    lua_newtable(L);
+    lua_pushstring(L, TypeName);
+    lua_setfield(L, -2, "__name");
+    lua_pushvalue(L, -1);
+    lua_setfield(L, LUA_REGISTRYINDEX, TypeName);
+    return 1;
+}
+#define luaL_newmetatable(L, TypeName) UnLuaNovaNewMetatable(L, TypeName)
+
 // Luau has no text loader: source is compiled to bytecode up front and then handed to
 // luau_load. These are the lauxlib spellings the rest of the plugin is written against.
 inline int luaL_loadbufferx(lua_State* L, const char* Buff, size_t Size, const char* Name, const char* Mode)
@@ -323,7 +354,35 @@ inline void lua_register(lua_State* L, const char* Name, lua_CFunction Fn)
 // which is what plain Lua does.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
 #define UNLUANOVA_PUSHINT64(L, V) lua_pushinteger64(L, (int64_t)(V))
-#define UNLUANOVA_TOINT64(L, Idx) ((int64)lua_tointeger64(L, Idx, nullptr))
+
+// Luau's lua_tointeger64 reads *only* the 64-bit integer type (LUA_TINTEGER) and hands
+// back 0 for anything else - see lapi.cpp: it tests ttisinteger() and returns 0 from the
+// else branch. Every ordinary Lua number is a double there, and the compiler emits
+// doubles for every literal, so `return 1` read through it gave 0. Anything round-tripped
+// through a script - enum values, int64 properties, indices - was silently zero.
+//
+// Read the double when the value is not already an integer, under the same rule plain
+// Lua's lua_tointeger applies: a number without an exact integer representation is not
+// an answer, so 1.5 yields 0 rather than 1.
+inline int64 UnLuaNovaToInt64(lua_State* L, int Idx)
+{
+    int IsInteger = 0;
+    const int64 AsInteger = (int64)lua_tointeger64(L, Idx, &IsInteger);
+    if (IsInteger)
+        return AsInteger;
+
+    if (!lua_isnumber(L, Idx))
+        return 0;
+
+    const double AsDouble = lua_tonumber(L, Idx);
+    if (AsDouble != AsDouble) // NaN
+        return 0;
+
+    const int64 Truncated = (int64)AsDouble;
+    return (double)Truncated == AsDouble ? Truncated : 0;
+}
+
+#define UNLUANOVA_TOINT64(L, Idx) UnLuaNovaToInt64(L, Idx)
 #else
 #define UNLUANOVA_PUSHINT64(L, V) lua_pushinteger(L, (lua_Integer)(V))
 #define UNLUANOVA_TOINT64(L, Idx) ((int64)lua_tointeger(L, Idx))
@@ -348,9 +407,13 @@ inline void lua_register(lua_State* L, const char* Name, lua_CFunction Fn)
 #endif
 
 // --- compiling a chunk -------------------------------------------------------
-// Luau exposes luau_load() and has no bytecode loader/dumper at all.
+// Source goes in, a chunk comes out - the same on both backends.
+//
+// Luau's luau_load() takes *bytecode*, not source, which is why it cannot stand in here:
+// the call sites hand over script text. luaL_loadbufferx is the shim above that compiles
+// first, so this backend gets the plain-Lua spelling after all.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
-#define UNLUANOVA_LOAD(L, ChunkName, Data, Size) luau_load(L, ChunkName, Data, Size, 0)
+#define UNLUANOVA_LOAD(L, ChunkName, Data, Size) luaL_loadbufferx(L, Data, Size, ChunkName, nullptr)
 #else
 #define UNLUANOVA_LOAD(L, ChunkName, Data, Size) luaL_loadbuffer(L, Data, Size, ChunkName)
 #endif
@@ -554,3 +617,32 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 // started inside an engine callback does not. Ask before yielding so the failure names
 // the real constraint instead of surfacing a VM error.
 #define UNLUANOVA_IS_YIELDABLE(L) lua_isyieldable(L)
+
+// --- filling in what Luau leaves out -----------------------------------------
+// Luau is a deliberately smaller language than the plain Lua this plugin was written
+// against, and two of its omissions change behaviour rather than merely failing to
+// compile:
+//
+//   * its debug library is traceback, info and the profiler hooks and nothing else,
+//     while plain Lua 5.5 also answers getupvalue / setupvalue / upvalueid / getlocal /
+//     setlocal / getregistry / getuservalue. Anything that hot-reloads Lua - UnLuaNova's
+//     own HotReload.lua among them - needs those to move a live closure's state onto a
+//     freshly loaded one.
+//   * it has no load(), so there is no way for a script to compile source at all.
+//
+// Both are patched in from the C API Luau does have, so the two backends answer the same
+// questions. Where Luau genuinely has no answer - a registry table, uservalues - the
+// shim returns nothing instead of raising, which is what lets a script degrade instead
+// of dying.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_SETUP_SCRIPT_COMPAT(L) UnLuaNova::SetupScriptCompat(L)
+#else
+#define UNLUANOVA_SETUP_SCRIPT_COMPAT(L) ((void)0)
+#endif
+
+namespace UnLuaNova
+{
+    // Adds the missing debug functions to a Luau state's debug table and installs load().
+    // Existing entries are left alone, so this only ever adds.
+    void SetupScriptCompat(lua_State* L);
+}

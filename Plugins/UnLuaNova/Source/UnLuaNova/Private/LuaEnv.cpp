@@ -73,46 +73,63 @@ namespace UnLuaNova
 
         luaL_openlibs(L);
 
-        AddSearcher(LoadFromCustomLoader, 2);
-        AddSearcher(LoadFromFileSystem, 3);
-        AddSearcher(LoadFromBuiltinLibs, 4);
-
-        // Luau ships no package library, so there is no require() at all - and every
-        // UnLuaNova script, starting with the startup module, is written against one.
+        // Luau ships no package library, so there is no require() and no package table at
+        // all - and every UnLuaNova script, starting with the startup module, is written
+        // against both.
         //
-        // On plain Lua the three loaders above end up in package.searchers and require()
-        // comes from the standard library. On this backend they are driven by our own
-        // require instead, with the module cache living in an upvalue (a private stand-in
-        // for package.loaded). Same loaders, same order, same semantics, so scripts do not
-        // have to know which backend they are on.
+        // On plain Lua the standard library owns require() and package, and the three
+        // loaders below end up in package.searchers. On this backend we build the same two
+        // things: our own require(), and a package table carrying the same two fields,
+        // so a script cannot tell the backends apart.
         //
-        // Only installed when the global is missing, so a backend that already provides
-        // require keeps its own.
+        // Both are only installed when missing, so a backend that already provides them
+        // keeps its own.
         lua_getglobal(L, "require");
         const bool bHasRequire = lua_isfunction(L, -1) != 0;
         lua_pop(L, 1);
         if (!bHasRequire)
         {
             lua_newtable(L);                     // the module cache
-            lua_pushvalue(L, -1);                // ...and a second reference for package.loaded
-            lua_pushlightuserdata(L, this);      // upvalue 2: FLuaEnv
-            lua_pushcclosure(L, &FLuaEnv::Require, 2);
+            lua_pushcclosure(L, &FLuaEnv::Require, 1);
             lua_setglobal(L, "require");
-
-            // Publish the very same table as package.loaded. LowLevel::GetLoadedModule()
-            // reads it to tell whether a module is already in, and scripts that inspect
-            // package.loaded work unchanged. On plain Lua the standard library owns this
-            // table; here ours does, and it stays the single source of truth.
-            lua_newtable(L);                     // [cache, package]
-            lua_pushvalue(L, -2);                // [cache, package, cache] - the cache sits
-                                                 // at -2 now that require has been popped,
-                                                 // not at -3; pushing index -3 here would
-                                                 // push nothing and silently publish
-                                                 // package.loaded = nil
-            lua_setfield(L, -2, "loaded");       // package.loaded = cache
-            lua_setglobal(L, "package");
-            lua_pop(L, 1);                       // drop the cache reference
+            lua_pop(L, 1);                       // drop the cache; require keeps it as an upvalue
         }
+
+        lua_getglobal(L, "package");
+        const bool bHasPackage = lua_istable(L, -1) != 0;
+        lua_pop(L, 1);
+        if (!bHasPackage)
+        {
+            // package.loaded stays the single source of truth: LowLevel::GetLoadedModule()
+            // reads it to tell whether a module is already in, and it is the very table
+            // require() above caches into.
+            //
+            // package.searchers matters just as much. Plain Lua's own require walks it, and
+            // so does any script that loads a module itself - HotReload.lua does exactly
+            // that with `ipairs(package.searchers)`. Publishing package without it is worse
+            // than publishing nothing: the table looks usable, and then indexing it hands
+            // back nil.
+            lua_newtable(L);                     // [package]
+            lua_getglobal(L, "require");         // [package, require]
+            lua_getupvalue(L, -1, 1);            // [package, require, cache]
+            lua_remove(L, -2);                   // [package, cache]
+            lua_setfield(L, -2, "loaded");       // package.loaded = cache
+            lua_newtable(L);                     // [package, searchers]
+            lua_setfield(L, -2, "searchers");    // package.searchers = {}
+            lua_setglobal(L, "package");
+        }
+
+        // Now that package.searchers exists on both backends, the loaders can go into it -
+        // which is also what makes a searcher added later from script work.
+        AddSearcher(LoadFromCustomLoader, 2);
+        AddSearcher(LoadFromFileSystem, 3);
+        AddSearcher(LoadFromBuiltinLibs, 4);
+
+        // Fill in what Luau leaves out - the debug functions (getupvalue, setupvalue,
+        // upvalueid, ...) and load(). Has to happen before any script runs, because
+        // HotReload.lua reaches for them the moment it is required during
+        // UnLuaNovaLib::Open below.
+        UNLUANOVA_SETUP_SCRIPT_COMPAT(L);
 
         UELib::Open(L);
 
@@ -691,6 +708,11 @@ namespace UnLuaNova
 
         const uint32 Len = lua_rawlen(L, -1);
         Index = Index < 0 ? (int)(Len + Index + 2) : Index;
+        // Plain Lua's package.searchers starts with four entries of its own, so the
+        // indices above land inside a populated list. On Luau the list starts empty, and
+        // writing to index 2 of an empty list leaves a hole at 1 - every ipairs() over it
+        // then stops immediately. Keep the list dense instead.
+        Index = FMath::Min(Index, (int)Len + 1);
         for (int e = (int)Len + 1; e > Index; e--)
         {
             lua_rawgeti(L, -1, e - 1);
@@ -705,63 +727,66 @@ namespace UnLuaNova
 
     int FLuaEnv::Require(lua_State* L)
     {
-        // Upvalue 1 is the module cache (package.loaded equivalent), upvalue 2 is this
-        // FLuaEnv - the loaders below expect it as their own upvalue.
-        if (!lua_isstring(L, 1))
+        // Upvalue 1 is the module cache - the same table published as package.loaded.
+        // The searchers carry their own FLuaEnv upvalue, so this one needs none.
+        const int Name = 1;
+
+        if (!lua_isstring(L, Name))
             return luaL_error(L, "require: module name expected");
 
         lua_pushvalue(L, lua_upvalueindex(1));   // 2: cache
-        lua_pushvalue(L, 1);                     // 3: name
+        lua_pushvalue(L, Name);                  // 3: name
         lua_rawget(L, 2);                        // 3: cache[name]
         if (!lua_isnil(L, 3))
             return 1;                            // already loaded - do not run it again
         lua_pop(L, 2);                           // drop cache and the nil, back to the name
 
-        // Same loaders, same order as AddSearcher() on plain Lua. Each takes the module
-        // name and either returns the chunk or nothing when it cannot provide one.
-        static const lua_CFunction Loaders[] =
-        {
-            &FLuaEnv::LoadFromCustomLoader,
-            &FLuaEnv::LoadFromFileSystem,
-            &FLuaEnv::LoadFromBuiltinLibs
-        };
+        // Walk package.searchers the way plain Lua's require does, rather than a private
+        // list of the same loaders. Two reasons: the order then stays whatever AddSearcher
+        // built, and a searcher a script installs afterwards is picked up here too -
+        // HotReload.lua replaces require() precisely so it can do that.
+        lua_getglobal(L, "package");             // 2: package
+        lua_getfield(L, 2, "searchers");         // 3: searchers
+        lua_remove(L, 2);                        // 2: searchers
+        const int Searchers = 2;
+        const int Chunk = 3;
 
-        for (const lua_CFunction Loader : Loaders)
+        const int NumSearchers = (int)lua_rawlen(L, Searchers);
+        for (int i = 1; i <= NumSearchers; i++)
         {
-            lua_pushvalue(L, lua_upvalueindex(2));
-            lua_pushcclosure(L, Loader, 1);
-            lua_pushvalue(L, 1);                 // module name
+            lua_rawgeti(L, Searchers, i);        // Chunk: searcher
+            lua_pushvalue(L, Name);              // Chunk+1: module name
             if (lua_pcall(L, 1, 1, 0) != 0)
-                return luaL_error(L, "error loading module '%s': %s", lua_tostring(L, 1), lua_tostring(L, -1));
+                return luaL_error(L, "error loading module '%s': %s", lua_tostring(L, Name), lua_tostring(L, -1));
 
-            if (lua_isfunction(L, -1))
+            if (lua_isfunction(L, Chunk))
                 break;
 
-            lua_pop(L, 1);                       // nil: this loader does not handle it
+            lua_pop(L, 1);                       // nil: this searcher does not handle it
         }
 
-        if (lua_gettop(L) < 2 || !lua_isfunction(L, 2))
-            return luaL_error(L, "module '%s' not found", lua_tostring(L, 1));
+        if (!lua_isfunction(L, Chunk))
+            return luaL_error(L, "module '%s' not found", lua_tostring(L, Name));
 
         // Run the chunk with the module name as its single argument, so one chunk can be
         // shared by several names the way Lua's own loaders are.
-        lua_pushvalue(L, 1);                     // 3: name
+        lua_pushvalue(L, Name);                  // Chunk+1: name
         if (lua_pcall(L, 1, 1, 0) != 0)
-            return luaL_error(L, "error loading module '%s': %s", lua_tostring(L, 1), lua_tostring(L, -1));
+            return luaL_error(L, "error loading module '%s': %s", lua_tostring(L, Name), lua_tostring(L, -1));
 
         // Cache the result. Lua stores true for a module that returns nothing, so a second
         // require() is a no-op instead of re-executing the module.
-        if (lua_isnil(L, 2))
+        if (lua_isnil(L, Chunk))
         {
             lua_pushboolean(L, 1);
-            lua_replace(L, 2);
+            lua_replace(L, Chunk);
         }
 
-        lua_pushvalue(L, lua_upvalueindex(1));   // 3: cache
-        lua_pushvalue(L, 1);                     // 4: name
-        lua_pushvalue(L, 2);                     // 5: module
-        lua_rawset(L, 3);
-        lua_settop(L, 2);
+        lua_pushvalue(L, lua_upvalueindex(1));   // cache
+        lua_pushvalue(L, Name);                  // name
+        lua_pushvalue(L, Chunk);                 // module
+        lua_rawset(L, -3);
+        lua_settop(L, Chunk);
         return 1;
     }
 

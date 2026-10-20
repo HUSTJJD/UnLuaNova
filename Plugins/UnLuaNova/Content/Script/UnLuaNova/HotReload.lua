@@ -14,7 +14,7 @@ local loaded_modules = setmetatable({}, { __mode = "v" })
 local ignore_modules = {}
 local config = {
     debug = false,
-    script_root_path = UE.UUnLuaFunctionLibrary.GetScriptRootPath(),
+    script_root_path = UE.UUnLuaNovaFunctionLibrary.GetScriptRootPath(),
     ignore_modules = ignore_modules
 }
 local hook = {
@@ -115,7 +115,7 @@ local loaded_module_times = {}
 
 local function get_last_modified_time(module_name)
     local filename = config.script_root_path .. module_name:gsub("%.", "/") .. ".lua"
-    return UE.UUnLuaFunctionLibrary.GetFileLastModifiedTimestamp(filename)
+    return UE.UUnLuaNovaFunctionLibrary.GetFileLastModifiedTimestamp(filename)
 end
 
 local function make_sandbox()

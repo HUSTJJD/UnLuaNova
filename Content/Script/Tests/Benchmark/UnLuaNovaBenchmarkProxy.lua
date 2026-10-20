@@ -1,9 +1,9 @@
 local M = UnLuaNova.Class()
 
-local Start = UE.UUnLuaBenchmarkFunctionLibrary.Start
-local Stop = UE.UUnLuaBenchmarkFunctionLibrary.Stop
-local StartTimer = UE.UUnLuaBenchmarkFunctionLibrary.StartTimer
-local StopTimer = UE.UUnLuaBenchmarkFunctionLibrary.StopTimer
+local Start = UE.UUnLuaNovaBenchmarkFunctionLibrary.Start
+local Stop = UE.UUnLuaNovaBenchmarkFunctionLibrary.Stop
+local StartTimer = UE.UUnLuaNovaBenchmarkFunctionLibrary.StartTimer
+local StopTimer = UE.UUnLuaNovaBenchmarkFunctionLibrary.StopTimer
 
 function M:Run(N)
 	local SpawnClass = UE.UUnLuaBenchmarkProxy

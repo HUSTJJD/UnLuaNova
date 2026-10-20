@@ -128,7 +128,10 @@ def load_tests(reports_dir: Path):
         if path.name == "summary.json":
             continue
         try:
-            data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+            # utf-8-sig, not utf-8: the automation framework writes its index.json with a
+            # UTF-8 BOM, and plain utf-8 raises on it - which used to make this skip the
+            # report entirely and report "0 tests" for a run that had actually finished.
+            data = json.loads(path.read_text(encoding="utf-8-sig", errors="replace"))
         except (json.JSONDecodeError, OSError) as exc:
             print(f"WARNING: could not read {path.name}: {exc}", file=sys.stderr)
             continue
