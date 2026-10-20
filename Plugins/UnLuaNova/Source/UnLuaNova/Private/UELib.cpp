@@ -79,6 +79,18 @@ static int UE_Index(lua_State* L)
     return 1;
 }
 
+// Scripts have no business writing into the UE namespace: every entry there is published
+// by the binding layer with lua_rawset. A __newindex that raises both documents that and
+// stops a hotfixed (or downloaded) script from swapping an engine binding out from under
+// everything else - which is the thing the sandbox is supposed to prevent.
+//
+// Registered *after* luaL_setfuncs below, because luaL_setfuncs writes through
+// lua_setfield, which goes through __newindex like any other assignment.
+static int UE_NewIndex(lua_State* L)
+{
+    return luaL_error(L, "attempt to write into the UE namespace: engine types are registered by the binding layer, not by scripts");
+}
+
 extern int32 UObject_Load(lua_State *L);
 extern int32 UClass_Load(lua_State *L);
 static int32 Global_NewObject(lua_State *L)
@@ -157,6 +169,13 @@ int UnLuaNova::UELib::Open(lua_State* L)
     lua_rawset(L, LUA_REGISTRYINDEX);
 
     luaL_setfuncs(L, UE_Functions, 0);
+
+    // Only now: everything the namespace owns has been written through lua_setfield, and
+    // from here on a script writing into it is a mistake rather than a registration.
+    lua_pushstring(L, "__newindex");
+    lua_pushcfunction(L, UE_NewIndex);
+    lua_rawset(L, -3);
+
     lua_setglobal(L, NAMESPACE_NAME);
 
     // global access for legacy support
@@ -187,5 +206,16 @@ void UnLuaNova::UELib::SetTableForClass(lua_State* L, const char* Name)
     lua_pushstring(L, Name);
     lua_pushvalue(L, -3);
     lua_rawset(L, -3);
+    lua_pop(L, 1);
+}
+
+void UnLuaNova::UELib::SetNamespaceWritable(lua_State* L, bool bWritable)
+{
+    lua_getglobal(L, NAMESPACE_NAME);
+    if (lua_istable(L, -1))
+    {
+        // No-op on backends without readonly tables, so this stays callable unconditionally.
+        UNLUANOVA_SET_READONLY(L, -1, !bWritable);
+    }
     lua_pop(L, 1);
 }

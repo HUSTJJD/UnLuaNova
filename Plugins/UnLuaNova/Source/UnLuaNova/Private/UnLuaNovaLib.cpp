@@ -3,6 +3,7 @@
 #include "LuaBackend.h"
 #include "LuaEnv.h"
 #include "UnLuaNovaBase.h"
+#include "UnLuaNovaSandbox.h"
 
 namespace UnLuaNova
 {
@@ -360,5 +361,36 @@ namespace UnLuaNova
             lua_setfield(L, -2, PACKAGE_PATH_KEY);
             lua_pop(L, 2);
         }
+    }
+
+    void RestoreTablesAfterSandbox(lua_State* L)
+    {
+        // luaL_sandbox marks every table hanging off the globals read-only. That is exactly
+        // right for the globals themselves and exactly wrong for the tables UnLuaNova keeps
+        // writing to after startup:
+        //   * UE.<Type>      - types are registered lazily, on first access
+        //   * Lua.<Module>   - the __index fallback caches what it just required
+        //   * package.loaded - written by every require
+        // Freezing those hardens nothing a script can legitimately reach; it just turns type
+        // registration and require into errors. Hand write access back instead.
+        static const char* const WritableGlobals[] = { "UE", "UE4", "Lua", "UnLua", "UnLuaNova", "package" };
+        for (const char* Name : WritableGlobals)
+        {
+            lua_getglobal(L, Name);
+            if (lua_istable(L, -1))
+                UNLUANOVA_SET_READONLY(L, -1, false);
+            lua_pop(L, 1);
+        }
+
+        // package.loaded sits one level down, so the loop above cannot reach it.
+        lua_getglobal(L, "package");
+        if (lua_istable(L, -1))
+        {
+            lua_getfield(L, -1, "loaded");
+            if (lua_istable(L, -1))
+                UNLUANOVA_SET_READONLY(L, -1, false);
+            lua_pop(L, 1);
+        }
+        lua_pop(L, 1);
     }
 }

@@ -36,8 +36,8 @@ LuaBackend=Luau   ; 或 Lua
 | `table.freeze` / `isfrozen` / `clone` / `clear` | 可用 | freeze 后改写会报错，可用来保护配置表 |
 | `coroutine.close` | 可用 | Lua 5.4+ 才有 |
 | `bit32`、`utf8` | 可用 | Luau 标准库自带 |
-| `vector`（原生 vector3 值类型） | 库已注册，**UE 侧未打通** | 见[尚未打通的部分](#五尚未打通的部分) |
-| `buffer` | 库已注册，**UE 侧未打通** | 同上 |
+| `vector`（原生 vector3 值类型） | 已打通 | 见[vector 与 FVector](#vector-与-fvector) |
+| `buffer` | 库已注册，容器需显式转换 | 见[vector 与 FVector](#vector-与-fvector) |
 | `load()` | 由 UnLuaNova 补齐 | Luau 原生没有源码加载器 |
 | `debug.getupvalue` / `setupvalue` / `upvalueid` / `getlocal` / `setlocal` | 由 UnLuaNova 补齐 | 热重载依赖它们 |
 
@@ -107,6 +107,16 @@ UE.UObject = somethingElse   -- 改写引擎绑定：沙盒下报错
 热更新 / 下载脚本建议开启；存量项目先评估，因为它会改变"全局可写"这一既有行为。
 该能力依赖 Luau 原生沙盒，Lua 5.5 后端不支持（`UNLUANOVA_HAS_SANDBOX == 0`）。
 
+另外，`UE` 命名空间自身装了 `__newindex`：脚本改写里面的类型会被直接拒绝 ——
+类型是由绑定层用 `lua_rawset` 发布的，脚本没有理由去改它。这一条在两个后端下都生效。
+
+!!! note "沙盒会顺手冻结 `UE`，UnLuaNova 已经把它解冻"
+    `luaL_sandbox` 会把全局表下的所有子表都设成只读，其中就包括 `UE`，
+    而 UE 的类型是**懒注册**的：第一次访问 `UE.XXX` 时才写进去。
+    所以沙盒之后，UnLuaNova 会把 `UE`、`Lua`、`package.loaded` 这几张表的写权限还回去 ——
+    否则下一个访问新类型的脚本、下一次 `require`，都会变成错误。
+    脚本那一侧的写入仍然由 `__newindex` 拦着，保护的强度没有下降。
+
 ### 原生断点调试
 
 Luau 的断点原语能让 VM 停在指定行，这是 `lua_sethook` 做不到的（后者只能"报告"每一行）。
@@ -139,6 +149,44 @@ lua.memstats reset  -- 清零
 !!! note "分类统计的是分配量，不是存活字节"
     `onfree` 回调不带大小，所以分类维度统计的是**分配量（churn）**。
     想知道存活多少、峰值多少，看报告的总量部分。
+
+### vector 与 FVector
+
+Luau 的 `vector` 是塞在 TValue 里的值类型（3 个 float）：运算不分配任何对象，
+而 `FVector` 是带元表的 userdata，每次 `a + b` 都要新建一个 userdata 再被 GC 掉。
+UnLuaNova 打通了这几条路：
+
+```lua
+local Native = vector.create(1, 2, 3)   -- 纯数学，零分配
+local Sum = (Native + Native) * 2
+
+local Vec = UE.FVector(Native)          -- vector -> FVector，不走三次 lua_tonumber
+Vec:Set(vector.create(10, 20, 30))      -- 一次写入三个分量
+local Back = Vec:ToVector()             -- 取回原生 vector（Lua 5.5 返回 nil）
+
+-- UFUNCTION 的 FVector 参数可以直接收 vector
+self:K2_SetActorLocation(vector.create(0, 0, 100), false, false)
+```
+
+反射路径（`FScriptStructPropertyDesc`）也认它：vector 没有元表，如果不显式开一个分支，
+它会先被类型检查以「需要 userdata」为由拒掉。
+
+!!! warning "精度：vector 是 float，FVector 在 UE5 是 double"
+    UE 5 的 `FVector` 分量是 double，`vector` 是 float，往返一次会掉精度。
+    数学上不敏感的用途（方向、速度、偏移）没问题；需要精确回读的场景仍用 `FVector`。
+
+`buffer` 库同样是 Luau 自带的，可以和 `TArray` 互转：
+
+```lua
+local Bytes = UE.TArray(0)
+Bytes:Add(1) Bytes:Add(2) Bytes:Add(3)
+local Buf = UnLuaNova.Buffer.FromArray(Bytes)   -- TArray -> buffer
+local Back = UnLuaNova.Buffer.ToArray(Buf)      -- buffer -> TArray
+```
+
+逐字节循环是 O(n)，适合一次性打包/解包，不要放进每帧的热路径。
+`UnLuaNova.Vector` / `UnLuaNova.Buffer` 两个模块在两个后端下都能安全调用
+（Lua 5.5 下 `HasVector()` / `HasBuffer()` 返回 false，转换函数返回 nil）。
 
 ---
 
@@ -182,9 +230,27 @@ luau-analyze --solver=V2 --settings=luau-settings.json Content/Script/
 `TArray<T>` → `{T}`，`TMap<K,V>` → `{[K]: V}`，`TSet<T>` → `{[T]: boolean}`，
 结构体按 `USTRUCT` 名，委托等无法表达的类型退化为 `any`。
 
-!!! tip "类型检查工具链正在补齐"
-    目前声明文件已经能生成，但仓库里还没有一键检查脚本。
-    计划提供 `Tools/CheckLuauTypes.ps1` 把 `luau-analyze` 接到本地与 CI 流程里。
+**一键检查**：`Tools/CheckLuauTypes.ps1` 把上面两步串起来 —— 找到 `luau-analyze`、
+带上 `.d.lua`、对脚本目录跑一遍，有类型错误就以非零退出码结束：
+
+```powershell
+# 检查整个 Content/Script
+.\Tools\CheckLuauTypes.ps1
+
+# 只看 Luau 示例，严格模式
+.\Tools\CheckLuauTypes.ps1 -Path Content/Script/Luau -Mode strict
+
+# 指定 luau-analyze；找不到时就报错而不是跳过
+.\Tools\CheckLuauTypes.ps1 -LuauAnalyze C:\Tools\luau-analyze.exe -Require
+```
+
+`luau-analyze` 本身不在仓库里（它是个可执行文件），脚本按这个顺序找：
+`-LuauAnalyze` 参数 → 环境变量 `LUAU_ANALYZE` → `PATH` → Luau 子模块的 cmake 构建目录。
+找不到时默认跳过并以 0 退出，所以可以放心挂到任何调度里；想让"没工具"也算失败就加 `-Require`。
+
+!!! note "为什么不在 CI 里跑"
+    GitHub 托管 runner 上没有 `luau-analyze`，也没有本地 UE 源码构建，
+    所以类型检查是**本地步骤**；CI 只保证脚本本身语法正确。
 
 ---
 
@@ -215,28 +281,64 @@ luau-analyze --solver=V2 --settings=luau-settings.json Content/Script/
 
 ---
 
-## 五、尚未打通的部分
+## 五、示例与测试
 
-Luau 的语言特性里，还有几块引擎侧没有用起来，正在按优先级推进：
+### 示例集
 
-| 项 | 现状 | 打通后能带来什么 |
+`Content/Script/Luau/` 下是按 Luau 特性组织的示例，通过 `Index.lua` 进入：
+
+```lua
+local Examples = require "Luau.Index"
+if Examples.Available then
+    Examples.StrictTyping:Run()
+end
+```
+
+| 文件 | 演示什么 |
+|---|---|
+| `Index.lua` | 后端守卫：不是 Luau 就一个示例都不加载 |
+| `01_StrictTyping.lua` | `--!strict`、类型注解、冻结的配置表 |
+| `02_SandboxBoundary.lua` | 沙盒开启后什么能写、什么会被拦截 |
+| `03_NativeDebug.lua` | 给 `lua.dbg` 下断点的目标文件 |
+| `04_LuauSyntax.lua` | `continue`、复合赋值、`table.freeze/clone/clear`、`bit32` |
+| `05_VectorInterop.lua` | `vector` ↔ `FVector` 的四条路径 |
+
+!!! warning "这些文件在 Lua 5.5 后端下不能加载"
+    它们用的是 Luau 语法（类型注解、`continue`、复合赋值），在 Lua 5.5 下是**编译期错误**。
+    `Index.lua` 先问 `UnLuaNova.GetBackend()`，只有确认是 Luau 才 `require`；
+    不要绕过 `Index.lua` 直接 require 其中任何一个。
+
+### 测试
+
+`LuaBackend.spec.cpp` 里新增了「Luau 专属能力」一组用例，按能力宏分支：
+
+* 两端都跑：`GetBackend()` 报告正确后端、`HasFeature()` 与编译期能力一致、脚本改写 `UE` 命名空间被拦截
+* 仅 Luau：Luau 语法能编译并求值、`vector` 进出 `FVector`、`UnLuaNova.Vector` 转换、`buffer` 读写、沙盒拦截全局写入、沙盒下类型注册仍可用、断点原语可用、分配回调能收到事件
+* 仅 Lua 5.5：`ToVector()` 降级返回 `nil`
+
+跑法与其他测试一样：
+
+```powershell
+.\Tools\RunTests.ps1 -Filter UnLuaNova.API.LuaBackend
+```
+
+---
+
+## 六、仍未完成的部分
+
+| 项 | 现状 | 备注 |
 |---|---|---|
-| `vector` ↔ `FVector` | 库已可用，但 `FVector` 仍是 userdata | 原生 vector 是寄存器内的值类型，运算零分配，热路径上省掉一次 userdata 分配 |
-| `buffer` ↔ `TArray<uint8>` | 库已可用，未与容器绑定 | 字节流读写免拷贝 |
-| 沙盒下 freeze 类型表 | 沙盒只加固全局表 | 已注册的 UE 类型表一并冻结，改写直接失败，且 Luau 对冻结表有优化 |
-| `luau-analyze` 工具链 | 声明可生成，无检查脚本 | 静态检查进 CI，UE API 误用提前暴露 |
-| 示例与测试 | 示例全是纯 Lua 写法，spec 未覆盖 Luau 专属能力 | 见下 |
-
-配套计划中的示例集（`Content/Script/Luau/`）会覆盖：严格类型写法、沙盒下的安全边界、
-`lua.dbg` 断点命中、Luau 语法速览；测试侧会在 `LuaBackend.spec.cpp` 里按
-`UNLUANOVA_HAS_SANDBOX` / `UNLUANOVA_HAS_BREAKPOINT` / `UNLUANOVA_HAS_ALLOC_CALLBACKS`
-分支补上对应的用例。
+| `buffer` ↔ `TArray<uint8>` 的零拷贝 | 目前是显式逐字节转换 | 真正的零拷贝要让容器绑定直接读写 buffer 内存 |
+| 沙盒下冻结**类表** | 只冻结了全局表 + 拦截脚本写入 `UE` | 类表是懒缓存的（首次访问会 `rawset`），冻结会打断缓存 |
+| `luau-analyze` 进 CI | 本地脚本已有，CI 没有可执行文件 | 有自托管 runner 就可以直接挂上去 |
+| DAP 适配器 | `lua.dbg` 是 headless 的 | 能力已暴露，缺一个把它接到 IDE 的适配层 |
 
 ---
 
 ## 延伸阅读
 
 - [设置项](Settings.md) —— 后端怎么选、子模块怎么初始化
+- [功能清单](Features.md) —— 相对 UnLua 的增量里，哪些是 Luau 带来的
 - [控制台命令](ConsoleCommand.md) —— `lua.dbg` / `lua.memstats` / `lua.profiler`
 - [调试](Debugging.md) —— 断点调试与 IDE 接入
 - [智能提示](IntelliSense.md) —— 声明文件与 IDE 补全

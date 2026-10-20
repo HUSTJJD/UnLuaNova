@@ -15,8 +15,10 @@
 
 local M = {}
 
+-- 注意：与 Vector.lua 一样，这里刻意不写类型注解 —— 本模块要能在两个后端下加载。
+
 --- 当前后端有没有 Luau 的 buffer 类型
-function M.HasBuffer(): boolean
+function M.HasBuffer()
     return type(buffer) == "table"
 end
 

@@ -14,10 +14,39 @@
 
 #include "UnLuaNovaBase.h"
 #include "LuaBackend.h"
+#include "UnLuaNovaSandbox.h"
 #include "UnLuaNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+
+#if UNLUANOVA_HAS_ALLOC_CALLBACKS
+namespace
+{
+    // The categorized half of lua.memstats is built entirely on these callbacks - the only
+    // place Luau tells you *what kind* of memory an allocation is. Nothing else observes
+    // them, so if they stop firing the report still prints, it just quietly says nothing.
+    int32 GSpecAllocateEvents = 0;
+
+    void SpecOnAllocate(lua_State* L, void* Block, size_t OldSize, size_t NewSize, uint8_t MemCat, int Type, int Tag)
+    {
+        (void)L;
+        (void)Block;
+        (void)OldSize;
+        (void)MemCat;
+        (void)Type;
+        (void)Tag;
+        if (NewSize > 0)
+            ++GSpecAllocateEvents;
+    }
+
+    void SpecOnFree(lua_State* L, void* Block)
+    {
+        (void)L;
+        (void)Block;
+    }
+}
+#endif
 
 // Covers the shims in LuaBackend.h rather than UnLuaNova's own behaviour. These are the
 // seams between plain Lua and Luau - every one of them is a place where the two backends
@@ -189,6 +218,201 @@ void FLuaBackendSpec::Define()
             TestTrue(TEXT("HotReload 的 require 加载出了模块"), lua_toboolean(L, -1) != 0);
             lua_settop(L, Top);
         });
+    });
+
+    // Capabilities that exist on one backend and not the other. They are compiled out
+    // rather than skipped at runtime: a test that is present but never runs reads as
+    // covered while covering nothing, which is worse than no test at all.
+    Describe(TEXT("Luau 专属能力"), [this]()
+    {
+        It(TEXT("脚本能问到当前后端"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto L = Env->GetMainState();
+            const int32 Top = lua_gettop(L);
+
+            // This is the guard Content/Script/Luau/Index.lua uses. Without it, requiring
+            // a file that uses Luau syntax is a compile error on Lua 5.5 - it fails at
+            // require() time, long before any Lua of ours gets a chance to run.
+            Env->DoString(TEXT("return UnLuaNova.GetBackend()"));
+            const FString Backend = lua_isstring(L, -1) ? FString(UTF8_TO_TCHAR(lua_tostring(L, -1))) : FString();
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+            TestTrue(TEXT("GetBackend 报告 Luau"), Backend == TEXT("Luau"));
+#else
+            TestTrue(TEXT("GetBackend 报告 Lua"), Backend == TEXT("Lua"));
+#endif
+            lua_settop(L, Top);
+        });
+
+        It(TEXT("HasFeature 与编译期能力一致"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto L = Env->GetMainState();
+            const int32 Top = lua_gettop(L);
+
+            // Scripts branch on this instead of on the backend name, so the answer has to
+            // match the macro the C++ side would have branched on.
+            Env->DoString(TEXT("return UnLuaNova.HasFeature('sandbox')"));
+            TestTrue(TEXT("sandbox"), (lua_toboolean(L, -1) != 0) == (UNLUANOVA_HAS_SANDBOX != 0));
+            lua_settop(L, Top);
+
+            Env->DoString(TEXT("return UnLuaNova.HasFeature('vector')"));
+            TestTrue(TEXT("vector"), (lua_toboolean(L, -1) != 0) == (UNLUANOVA_HAS_NATIVE_VECTOR != 0));
+            lua_settop(L, Top);
+
+            Env->DoString(TEXT("return UnLuaNova.HasFeature('buffer')"));
+            TestTrue(TEXT("buffer"), (lua_toboolean(L, -1) != 0) == (UNLUANOVA_HAS_NATIVE_BUFFER != 0));
+            lua_settop(L, Top);
+        });
+
+#if UNLUANOVA_HAS_NATIVE_VECTOR
+        It(TEXT("Luau 语法能编译并按预期求值"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto L = Env->GetMainState();
+            const int32 Top = lua_gettop(L);
+
+            // continue and compound assignment are syntax, not library functions: on Lua
+            // 5.5 this chunk never compiles. Compiling it *is* the assertion.
+            Env->DoString(TEXT("local s = 0; for i = 1, 10 do if i % 2 == 0 then continue end; s += i end; return s"));
+            TEST_EQUAL((int64)lua_tonumber(L, -1), 25ll); // 1 + 3 + 5 + 7 + 9
+            lua_settop(L, Top);
+        });
+
+        It(TEXT("原生 vector 能进出 FVector"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto L = Env->GetMainState();
+            const int32 Top = lua_gettop(L);
+
+            // vector is carried in the TValue, so UE.FVector(v) builds the FVector with no
+            // intermediate userdata - which is the whole reason the type is interesting.
+            Env->DoString(TEXT("local v = UE.FVector(vector.create(1, 2, 3)); return v.X + v.Y + v.Z"));
+            TEST_EQUAL((int64)lua_tonumber(L, -1), 6ll);
+            lua_settop(L, Top);
+
+            Env->DoString(TEXT("local v = UE.FVector(4, 5, 6); return type(v:ToVector())"));
+            const FString TypeName = lua_isstring(L, -1) ? FString(UTF8_TO_TCHAR(lua_tostring(L, -1))) : FString();
+            TestTrue(TEXT("ToVector 交回原生 vector"), TypeName == TEXT("vector"));
+            lua_settop(L, Top);
+        });
+
+        It(TEXT("UnLuaNova.Vector 能把原生 vector 转成 FVector"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto L = Env->GetMainState();
+            const int32 Top = lua_gettop(L);
+
+            // The module is the cross-backend entry point: on Lua 5.5 it answers false and
+            // nil instead of erroring, so one script runs on both. Here it also proves the
+            // vector->FVector path end to end rather than just that the type exists.
+            Env->DoString(TEXT("local V = require('UnLuaNova.Vector'); local v = V.ToFVector(V.Create(1, 2, 3)); return tostring(V.HasVector()) .. '|' .. tostring(v.X)"));
+            const FString Result = lua_isstring(L, -1) ? FString(UTF8_TO_TCHAR(lua_tostring(L, -1))) : FString();
+            TestTrue(TEXT("vector 转 FVector 成功"), Result.StartsWith(TEXT("true|1")));
+            lua_settop(L, Top);
+        });
+#else
+        It(TEXT("没有原生 vector 时 ToVector 降级为 nil"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto L = Env->GetMainState();
+            const int32 Top = lua_gettop(L);
+
+            // Degrade, do not error: a script written against Luau has to keep running on
+            // Lua 5.5, just without the native type.
+            Env->DoString(TEXT("local v = UE.FVector(4, 5, 6); return v:ToVector()"));
+            TestTrue(TEXT("ToVector 返回 nil"), lua_isnil(L, -1) != 0);
+            lua_settop(L, Top);
+        });
+#endif
+
+#if UNLUANOVA_HAS_NATIVE_BUFFER
+        It(TEXT("buffer 能按类型读写"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto L = Env->GetMainState();
+            const int32 Top = lua_gettop(L);
+
+            Env->DoString(TEXT("local b = buffer.create(4); buffer.writeu8(b, 0, 7); return buffer.readu8(b, 0)"));
+            TEST_EQUAL((int64)lua_tonumber(L, -1), 7ll);
+            lua_settop(L, Top);
+        });
+#endif
+
+#if UNLUANOVA_HAS_SANDBOX
+        It(TEXT("沙盒开启后全局表只读"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto L = Env->GetMainState();
+            const int32 Top = lua_gettop(L);
+
+            // Exactly what UnLuaNova runs at env startup when lua.sandbox=1. After it, a
+            // hotfixed or downloaded script can no longer clobber engine bindings - easy to
+            // lose if the call ever moves, and invisible until something overwrites UE.
+            UNLUANOVA_SANDBOX(L);
+
+            Env->DoString(TEXT("return pcall(function() rawset(_G, 'SandboxProbe', 1) end)"));
+            TestTrue(TEXT("向全局表写入被拦截"), lua_toboolean(L, -2) == 0); // -2: pcall 的 ok
+            lua_settop(L, Top);
+        });
+
+        It(TEXT("沙盒下 UE 命名空间仍能写入：类型注册不会被冻住"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto L = Env->GetMainState();
+            const int32 Top = lua_gettop(L);
+
+            // luaL_sandbox marks every table hanging off the globals read-only - including
+            // UE, whose types are registered lazily, on first access. Left alone, the next
+            // script to ask for a not-yet-seen type errors out, so the sandbox restores
+            // write access to exactly those tables before it is done.
+            UNLUANOVA_SANDBOX(L);
+            UnLuaNova::RestoreTablesAfterSandbox(L);
+
+            Env->DoString(TEXT("return UE.FVector ~= nil"));
+            TestTrue(TEXT("沙盒下仍能访问引擎类型"), lua_toboolean(L, -1) != 0);
+            lua_settop(L, Top);
+        });
+#endif
+
+        It(TEXT("脚本改写 UE 命名空间被拦截"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto L = Env->GetMainState();
+            const int32 Top = lua_gettop(L);
+
+            // Not Luau-specific - the namespace's __newindex is installed on both backends -
+            // but it is what the sandbox is *for*: engine types are published with
+            // lua_rawset, so a script replacing one is always a mistake. luaL_sandbox cannot
+            // cover this case, because the namespace has to stay writable to register.
+            Env->DoString(TEXT("return pcall(function() UE.FVector = nil end)"));
+            TestTrue(TEXT("写入被拦截"), lua_toboolean(L, -2) == 0); // -2: pcall 的 ok
+            lua_settop(L, Top);
+        });
+
+#if UNLUANOVA_HAS_BREAKPOINT
+        It(TEXT("断点原语可用"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto L = Env->GetMainState();
+            const int32 Top = lua_gettop(L);
+
+            // lua_breakpoint answers whether the line holds an instruction, so a 0 means
+            // "no such line" rather than "no such API" - assert that the calls are accepted
+            // and symmetric, which is what lua.dbg is built on.
+            Env->DoString(TEXT("return function() local a = 1; local b = 2; return a + b end"));
+            const int SetResult = UNLUANOVA_BREAKPOINT(L, -1, 2, 1);
+            const int ClearResult = UNLUANOVA_BREAKPOINT(L, -1, 2, 0);
+            TestTrue(TEXT("断点设置与清除都被接受"), SetResult >= 0 && ClearResult >= 0);
+            TestTrue(TEXT("lua_stackdepth 可用"), UNLUANOVA_STACKDEPTH(L) >= 0);
+            lua_settop(L, Top);
+        });
+#endif
+
+#if UNLUANOVA_HAS_ALLOC_CALLBACKS
+        It(TEXT("分配回调能收到分配事件"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto L = Env->GetMainState();
+            const int32 Top = lua_gettop(L);
+
+            GSpecAllocateEvents = 0;
+            UNLUANOVA_SET_ALLOC_CALLBACKS(L, &SpecOnAllocate, &SpecOnFree);
+            Env->DoString(TEXT("local t = {}; for i = 1, 64 do t[i] = i end; return #t"));
+            UNLUANOVA_SET_ALLOC_CALLBACKS(L, nullptr, nullptr);
+
+            TestTrue(TEXT("分配回调被触发"), GSpecAllocateEvents > 0);
+            lua_settop(L, Top);
+        });
+#endif
     });
 
     AfterEach([this]

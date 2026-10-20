@@ -10,13 +10,16 @@
 
 local M = {}
 
+-- 注意：本模块故意不写类型注解。它是跨后端通用的，
+-- 注解是 Luau 语法，写了就只能在 Luau 后端下加载了。
+
 --- 当前后端有没有 Luau 原生 vector
-function M.HasVector(): boolean
+function M.HasVector()
     return type(vector) == "table"
 end
 
 --- 构造一个原生 vector；非 Luau 后端返回 nil
-function M.Create(x: number, y: number, z: number)
+function M.Create(x, y, z)
     if type(vector) ~= "table" then
         return nil
     end

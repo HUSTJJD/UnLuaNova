@@ -36,8 +36,8 @@ These come from Luau itself (all Luau libraries are registered via `luaL_openlib
 | `table.freeze` / `isfrozen` / `clone` / `clear` | Available | Writing to a frozen table raises an error |
 | `coroutine.close` | Available | Lua 5.4+ only |
 | `bit32`, `utf8` | Available | Shipped with Luau |
-| `vector` (native vector3 value type) | Library registered, **not wired to UE** | See [what is not wired up yet](#5-what-is-not-wired-up-yet) |
-| `buffer` | Library registered, **not wired to UE** | Same |
+| `vector` (native vector3 value type) | Wired up | See [vector and FVector](#vector-and-fvector) |
+| `buffer` | Library registered, container needs explicit conversion | See [vector and FVector](#vector-and-fvector) |
 | `load()` | Patched in by UnLuaNova | Luau has no source loader |
 | `debug.getupvalue` / `setupvalue` / `upvalueid` / `getlocal` / `setlocal` | Patched in by UnLuaNova | Hot reload depends on them |
 
@@ -107,6 +107,17 @@ Recommended for hotfix / downloaded scripts; evaluate first on existing projects
 changes the "globals are writable" behaviour they may rely on. Luau-only
 (`UNLUANOVA_HAS_SANDBOX == 0` on Lua 5.5).
 
+On top of that, the `UE` namespace carries its own `__newindex`, so a script replacing a type
+in it is refused outright - types are published by the binding layer with `lua_rawset`, and
+nothing in script land has a reason to overwrite one. That half works on both backends.
+
+!!! note "The sandbox freezes `UE`; UnLuaNova thaws it again"
+    `luaL_sandbox` marks every table hanging off the globals read-only, `UE` included - and
+    UE types are registered **lazily**, the first time `UE.XXX` is asked for. So right after
+    sandboxing, UnLuaNova hands write access back to `UE`, `Lua` and `package.loaded`.
+    Without that, the next script to ask for a new type - or the next `require` - errors out.
+    Script-side writes are still stopped by `__newindex`, so nothing is lost.
+
 ### Native breakpoints
 
 Luau's breakpoint primitives can make the VM stop on a given line — something `lua_sethook`
@@ -143,6 +154,45 @@ Luau's allocation callbacks; on Lua 5.5 it prints
     The `onfree` callback carries no size, so the categorized view measures allocation
     *volume*. For live bytes and peak, read the totals half.
 
+### vector and FVector
+
+Luau's `vector` lives inside a TValue (three floats): arithmetic on it allocates nothing.
+`FVector` is a userdata with a metatable, so every `a + b` allocates one and hands it to
+the GC. UnLuaNova bridges the two:
+
+```lua
+local Native = vector.create(1, 2, 3)   -- pure math, zero allocation
+local Sum = (Native + Native) * 2
+
+local Vec = UE.FVector(Native)          -- vector -> FVector, no three lua_tonumber calls
+Vec:Set(vector.create(10, 20, 30))      -- all three components in one call
+local Back = Vec:ToVector()             -- back to a native vector (nil on Lua 5.5)
+
+-- a UFUNCTION taking FVector accepts a vector directly
+self:K2_SetActorLocation(vector.create(0, 0, 100), false, false)
+```
+
+The reflection path accepts it too: a vector has no metatable, so without an explicit branch
+there the type check rejects it with "userdata needed".
+
+!!! warning "Precision: vector is float, FVector is double on UE5"
+    UE 5's `FVector` stores doubles while `vector` stores floats, so a round trip loses
+    precision. Fine for directions, velocities and offsets; keep `FVector` where you need
+    exact values back.
+
+The `buffer` library ships with Luau as well and converts to and from `TArray`:
+
+```lua
+local Bytes = UE.TArray(0)
+Bytes:Add(1) Bytes:Add(2) Bytes:Add(3)
+local Buf = UnLuaNova.Buffer.FromArray(Bytes)   -- TArray -> buffer
+local Back = UnLuaNova.Buffer.ToArray(Buf)      -- buffer -> TArray
+```
+
+That loop is O(n) byte by byte: fine for one-shot packing, wrong for a per-frame hot path.
+Both `UnLuaNova.Vector` and `UnLuaNova.Buffer` are safe to call on either backend
+(`HasVector()` / `HasBuffer()` answer false on Lua 5.5 and the conversions return nil).
+
 ---
 
 ## 3. Type declarations and luau-analyze
@@ -174,9 +224,29 @@ Mapping rules: integers of every width and floats collapse to `number`,
 `TSet<T>` to `{[T]: boolean}`, structs keep their `USTRUCT` name, and delegates or anything
 exotic degrade to `any`.
 
-!!! tip "Tooling is being filled in"
-    Declarations are generated today; a one-command check script is not in the repo yet.
-    `Tools/CheckLuauTypes.ps1` is planned to wire `luau-analyze` into local and CI runs.
+**One command**: `Tools/CheckLuauTypes.ps1` wires the two steps together - find
+`luau-analyze`, pass it the `.d.lua`, run it over a script directory, and exit non-zero if
+any type error is reported:
+
+```powershell
+# check all of Content/Script
+.\Tools\CheckLuauTypes.ps1
+
+# only the Luau examples, in strict mode
+.\Tools\CheckLuauTypes.ps1 -Path Content/Script/Luau -Mode strict
+
+# pin the binary; fail instead of skipping when it is missing
+.\Tools\CheckLuauTypes.ps1 -LuauAnalyze C:\Tools\luau-analyze.exe -Require
+```
+
+`luau-analyze` itself is not in the repo (it is an executable). The script looks for it as
+`-LuauAnalyze` → `LUAU_ANALYZE` → `PATH` → the Luau submodule's cmake build directory.
+When it finds none it skips and exits 0, so it is safe to hang off any scheduler; add
+`-Require` if a missing tool should count as a failure.
+
+!!! note "Why this is not a CI step"
+    GitHub-hosted runners have neither `luau-analyze` nor a local UE source build, so type
+    checking is a **local** step. CI only checks that the script itself parses.
 
 ---
 
@@ -208,19 +278,61 @@ Two practical consequences:
 
 ---
 
-## 5. What is not wired up yet
+## 5. Examples and tests
 
-| Item | Status | Why it matters |
+### Examples
+
+`Content/Script/Luau/` holds the examples, entered through `Index.lua`:
+
+```lua
+local Examples = require "Luau.Index"
+if Examples.Available then
+    Examples.StrictTyping:Run()
+end
+```
+
+| File | What it shows |
+|---|---|
+| `Index.lua` | the backend guard: loads nothing at all unless the backend is Luau |
+| `01_StrictTyping.lua` | `--!strict`, type annotations, a frozen config table |
+| `02_SandboxBoundary.lua` | what you can still write once the sandbox is on |
+| `03_NativeDebug.lua` | a target to set `lua.dbg` breakpoints in |
+| `04_LuauSyntax.lua` | `continue`, compound assignment, `table.freeze/clone/clear`, `bit32` |
+| `05_VectorInterop.lua` | the four `vector` ↔ `FVector` paths |
+
+!!! warning "These files cannot load on Lua 5.5"
+    They use Luau syntax (annotations, `continue`, compound assignment), which is a
+    **compile error** on Lua 5.5. `Index.lua` asks `UnLuaNova.GetBackend()` first and only
+    requires them when the answer is Luau - never require one of them directly.
+
+### Tests
+
+`LuaBackend.spec.cpp` grew a "Luau 专属能力" group, branched on capability macros:
+
+* Both backends: `GetBackend()` reports the right backend, `HasFeature()` agrees with the
+  compile-time capability, script writes into `UE` are refused
+* Luau only: Luau syntax compiles and evaluates, `vector` round-trips through `FVector`,
+  `UnLuaNova.Vector` converts, `buffer` reads and writes, the sandbox blocks global writes,
+  type registration still works under sandbox, breakpoint primitives respond, allocation
+  callbacks fire
+* Lua 5.5 only: `ToVector()` degrades to `nil`
+
+Run them like any other test:
+
+```powershell
+.\Tools\RunTests.ps1 -Filter UnLuaNova.API.LuaBackend
+```
+
+---
+
+## 6. What is still missing
+
+| Item | Status | Note |
 |---|---|---|
-| `vector` ↔ `FVector` | library usable, `FVector` still userdata | native vector is a register-sized value type — no allocation per operation |
-| `buffer` ↔ `TArray<uint8>` | library usable, no container binding | zero-copy byte streams |
-| Freeze type tables under sandbox | only the global table is hardened | freezing registered UE type tables makes accidental writes fail, and Luau optimizes frozen tables |
-| `luau-analyze` tooling | declarations generated, no check script | static checks in CI, catch UE API misuse early |
-| Examples and tests | examples are plain Lua, specs do not cover Luau-only paths | see below |
-
-Planned alongside: an example set under `Content/Script/Luau/` (strict typing, sandbox
-boundaries, `lua.dbg` hits, Luau syntax tour) and spec cases in `LuaBackend.spec.cpp`
-branched on `UNLUANOVA_HAS_SANDBOX` / `UNLUANOVA_HAS_BREAKPOINT` / `UNLUANOVA_HAS_ALLOC_CALLBACKS`.
+| Zero-copy `buffer` ↔ `TArray<uint8>` | explicit byte-by-byte conversion | true zero copy needs the container binding to read and write buffer memory directly |
+| Freezing **class tables** under sandbox | globals hardened + writes into `UE` refused | class tables cache lazily (a first access `rawset`s), so freezing them breaks the cache |
+| `luau-analyze` in CI | local script exists, CI has no binary | a self-hosted runner can run it as-is |
+| DAP adapter | `lua.dbg` is headless | the capability is exposed; what is missing is the layer that plugs it into an IDE |
 
 ---
 

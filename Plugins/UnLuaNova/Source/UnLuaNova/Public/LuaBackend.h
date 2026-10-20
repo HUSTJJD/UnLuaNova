@@ -555,6 +555,20 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #define UNLUANOVA_ISBUFFER(L, Idx) false
 #endif
 
+// --- read-only tables ---------------------------------------------------------
+// Luau can mark any table read-only; writes then fail instead of silently creating a
+// field. Plain Lua has no such flag, so the macros are inert there and callers have to
+// branch on UNLUANOVA_HAS_SANDBOX (or accept a no-op).
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_HAS_READONLY_TABLES 1
+#define UNLUANOVA_SET_READONLY(L, Idx, Enabled) lua_setreadonly(L, Idx, (Enabled) ? 1 : 0)
+#define UNLUANOVA_GET_READONLY(L, Idx) (lua_getreadonly(L, Idx) != 0)
+#else
+#define UNLUANOVA_HAS_READONLY_TABLES 0
+#define UNLUANOVA_SET_READONLY(L, Idx, Enabled) ((void)0)
+#define UNLUANOVA_GET_READONLY(L, Idx) false
+#endif
+
 // --- sandboxing ---------------------------------------------------------------
 // Luau hardens the global table in a single call: after luaL_sandbox the globals are
 // read-only and the env is flagged safe, so a hotfixed / downloaded script can no

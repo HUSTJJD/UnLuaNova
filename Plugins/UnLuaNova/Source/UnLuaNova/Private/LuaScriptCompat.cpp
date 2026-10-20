@@ -240,6 +240,42 @@ namespace
         return 1;
     }
 
+    // pairs(t) -> generator, state, initial
+    //
+    // Luau's pairs() insists on a real table, so `pairs(TArray)` - the documented way to
+    // walk a container - raises "table expected, got userdata" and every script that walks
+    // a TArray/TMap/TSet dies. Luau's generic *for* has no such restriction: FORGPREP asks
+    // the object's metatable for __iter, which is exactly what UNLUANOVA_ITER_ENTRY
+    // registers. So keep the builtin for tables and route everything else through __iter,
+    // which returns the same three values a Lua 5.x __pairs function would.
+    int LuaPairs(lua_State* L)
+    {
+        luaL_checkany(L, 1);
+
+        if (lua_istable(L, 1))
+        {
+            lua_pushvalue(L, lua_upvalueindex(1)); // Luau's own pairs
+            lua_pushvalue(L, 1);
+            lua_call(L, 1, 3);
+            return 3;
+        }
+
+        if (lua_getmetatable(L, 1))
+        {
+            lua_getfield(L, -1, "__iter");
+            lua_remove(L, -2); // the metatable
+            if (lua_isfunction(L, -1))
+            {
+                lua_pushvalue(L, 1);
+                lua_call(L, 1, 3);
+                return 3;
+            }
+            lua_pop(L, 1);
+        }
+
+        return luaL_error(L, "invalid argument #1 to 'pairs' (table expected, got %s)", luaL_typename(L, 1));
+    }
+
     // Installs a global only when the name is free, so a backend that already provides it
     // keeps its own.
     void AddMissingGlobal(lua_State* L, const char* Name, lua_CFunction Function)
@@ -300,6 +336,20 @@ namespace UnLuaNova
         }
 
         AddMissingGlobal(L, "load", LuaLoad);
+
+        // pairs exists on Luau, so it is not "missing" - it is too narrow. Replace it,
+        // keeping the builtin as an upvalue so tables still go through the fast native
+        // path rather than through a C boundary.
+        lua_getglobal(L, "pairs");
+        if (lua_isfunction(L, -1))
+        {
+            lua_pushcclosure(L, LuaPairs, 1, "pairs");
+            lua_setglobal(L, "pairs");
+        }
+        else
+        {
+            lua_pop(L, 1);
+        }
     }
 }
 

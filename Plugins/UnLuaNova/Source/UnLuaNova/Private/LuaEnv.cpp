@@ -149,7 +149,15 @@ namespace UnLuaNova
                 TEXT("Harden the Lua global table once startup finishes (Luau backend only). 0=off, 1=on."),
                 ECVF_Default);
             if (SandboxCVar->GetInt() != 0)
+            {
                 UNLUANOVA_SANDBOX(L);
+
+                // ...and then give back the tables it froze that we still write to. Without
+                // this the sandbox does not merely harden the globals: UE.<Type> can no
+                // longer be registered on first access and require() can no longer record
+                // what it loaded, so the next script to ask for a new type errors out.
+                UnLuaNova::RestoreTablesAfterSandbox(L);
+            }
         }
 #endif
 

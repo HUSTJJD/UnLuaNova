@@ -22,5 +22,13 @@ namespace UnLuaNova
         int Open(lua_State* L);
 
         void SetTableForClass(lua_State* L, const char* Name);
+
+        /**
+         * The UE namespace has to stay writable for the binding layer: types are registered
+         * lazily, on first access, with lua_rawset. luaL_sandbox marks every table hanging
+         * off the globals read-only, which would freeze it mid-flight. Scripts are still
+         * stopped - by __newindex - so handing write access back costs nothing.
+         */
+        void SetNamespaceWritable(lua_State* L, bool bWritable);
     }
 }
