@@ -6,7 +6,8 @@
 // prebuilt archives, no one has to run CMake/make before the editor will build.
 // Every platform is compiled by UBT from identical sources.
 //
-// This file deliberately lives OUTSIDE the Luau submodule (../Luau): anything written
+// The submodule is checked out at ./Luau, inside this wrapper. This file deliberately
+// lives OUTSIDE it: anything written
 // inside the submodule belongs to luau-lang/luau's own git repository and would never
 // be committed to this project.
 //
@@ -35,7 +36,21 @@ public class Luau : ModuleRules
 		// GenerateWrappers.py.
 		bUseUnity = false;
 
-		var LuauRoot = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "Luau"));
+		var LuauRoot = Path.GetFullPath(Path.Combine(ModuleDirectory, "Luau"));
+
+		// Keep UBT from compiling the submodule's own sources. It now sits inside this
+		// module's directory, and UBT collects .cpp recursively from there - so Analysis/
+		// (the type checker), CLI/, tests/, fuzz/, bench/ and CodeGen/ would be dragged in
+		// too, none of which are part of the VM/Ast/Compiler/Bytecode subset we build. A
+		// .ubtignore makes UBT skip a directory tree entirely.
+		//
+		// It has to live inside the checkout, which is luau-lang's repo and not ours to
+		// commit to, so the wrapper writes it when it is missing.
+		string UbtIgnoreFile = Path.Combine(LuauRoot, ".ubtignore");
+		if (!System.IO.File.Exists(UbtIgnoreFile))
+		{
+			System.IO.File.WriteAllText(UbtIgnoreFile, "Compiled through the wrappers in ../Generated, not directly.\n");
+		}
 
 		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "VM", "include"));
 		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "Compiler", "include"));
@@ -46,10 +61,39 @@ public class Luau : ModuleRules
 		// fails on #include "Luau/BytecodeBuilder.h".
 		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "Bytecode", "include"));
 
+		// Entry point for this backend. These headers live outside the submodule, so
+		// they are ours and carry unique names - see ./Public/UnLuaNovaBackend_Luau.h.
+		PublicIncludePaths.Add(Path.Combine(ModuleDirectory, "Public"));
+
+		// Tells LuaBackend.h that this backend module is in the build, so it can fail
+		// loudly if the other one is too (or if neither is).
+		PublicDefinitions.Add("UNLUANOVA_BACKEND_MODULE_LUAU=1");
+
 		// Luau defaults to LUA_USE_LONGJMP=0, i.e. C++ exceptions (class lua_exception).
 		// Unreal builds with exceptions disabled, so force setjmp/longjmp instead - that
 		// is also what plain Lua does, so pcall/error semantics match.
 		PublicDefinitions.Add("LUA_USE_LONGJMP=1");
+
+		// Export the Luau API out of this module's DLL.
+		//
+		// Editor builds are modular: every module links as its own DLL, and on Windows a
+		// symbol only leaves a DLL if it was declared __declspec(dllexport). Luau declares
+		// its whole public API with `LUA_API` / `LUACODE_API`, which luaconf.h / luacode.h
+		// define as bare `extern` - so UnrealEditor-Luau.dll used to export *nothing*, and
+		// every lua_*/luaL_*/luau_* call in UnLuaNova failed with LNK2019 at link time.
+		// The module itself compiled and linked cleanly, which hides the real cause.
+		//
+		// Private, not Public, on purpose: dependents must keep seeing the header default
+		// (`extern`), otherwise every module that includes these headers would re-export
+		// the entire Luau API. A plain `extern` reference resolves against the import
+		// library, since MSVC emits both the decorated name and a thunk per export.
+		//
+		// Both macros sit behind #ifndef upstream, so the /D wins instead of colliding.
+		if (Target.Platform == UnrealTargetPlatform.Win64)
+		{
+			PrivateDefinitions.Add("LUA_API=__declspec(dllexport)");
+			PrivateDefinitions.Add("LUACODE_API=__declspec(dllexport)");
+		}
 
 		// Third-party C++: do not let Unreal's strict settings fail the build.
 		// Off, not Warning, so third-party code never fails the build on diagnostics.

@@ -146,7 +146,7 @@ void FUnLuaNovaLibArraySpec::Define()
             return Array:Length()
             )";
             Env->DoString(Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 2LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 2LL);
         });
 
         It(TEXT("Num"), EAsyncExecution::TaskGraphMainThread, [this]
@@ -158,7 +158,7 @@ void FUnLuaNovaLibArraySpec::Define()
             return Array:Num()
             )";
             Env->DoString(Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 2LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 2LL);
         });
     });
 
@@ -214,7 +214,7 @@ void FUnLuaNovaLibArraySpec::Define()
             return Array:Find(2)
             )";
             Env->DoString(Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 2LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 2LL);
         });
 
         It(TEXT("没有找到元素，返回0"), EAsyncExecution::TaskGraphMainThread, [this]
@@ -226,7 +226,7 @@ void FUnLuaNovaLibArraySpec::Define()
             return Array:Find(100)
             )";
             Env->DoString(Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 0LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 0LL);
         });
     });
 
@@ -551,7 +551,7 @@ void FUnLuaNovaLibArraySpec::Define()
             return Array:LastIndex()
             )";
             Env->DoString(Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 2LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 2LL);
         });
     });
 
@@ -640,8 +640,8 @@ void FUnLuaNovaLibArraySpec::Define()
             return Table[1], Table[2]
             )";
             Env->DoString(Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 2LL);
-            TEST_EQUAL(lua_tointeger(L, -2), 1LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 2LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -2), 1LL);
         });
     });
 

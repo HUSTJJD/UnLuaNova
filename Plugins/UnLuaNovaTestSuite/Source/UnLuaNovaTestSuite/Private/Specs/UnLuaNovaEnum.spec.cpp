@@ -27,8 +27,8 @@ void FUNLUANOVAEnumSpec::Define()
 {
     BeforeEach([this]
     {
-        UNLUANOVA::Startup();
-        L = UNLUANOVA::GetState();
+        UnLuaNova::Startup();
+        L = UnLuaNova::GetState();
     });
 
     Describe(TEXT("GetNameStringByValue"), [this]()
@@ -38,7 +38,7 @@ void FUNLUANOVAEnumSpec::Define()
             const char* Chunk = "\
             return UE.ECollisionResponse:GetNameStringByValue(UE.ECollisionResponse.ECR_Overlap)\
             ";
-            UNLUANOVA::RunChunk(L, Chunk);
+            UnLuaNova::RunChunk(L, Chunk);
             const auto Actual = lua_tostring(L, -1);
             const auto Expected = UEnum::GetValueAsString(ECR_Overlap);
             TEST_EQUAL(Actual, Expected);
@@ -46,9 +46,9 @@ void FUNLUANOVAEnumSpec::Define()
 
         It(TEXT("不存在的枚举值返回nil"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UNLUANOVA::Push(L, static_cast<int16>(0x7FFF));
-            TEST_TRUE(UNLUANOVA::IsType(L, -1, UNLUANOVA::TType<int16>()));
-            TEST_EQUAL(lua_tointeger(L, -1), 0x7FFFLL);
+            UnLuaNova::Push(L, static_cast<int16>(0x7FFF));
+            TEST_TRUE(UnLuaNova::IsType(L, -1, UnLuaNova::TType<int16>()));
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 0x7FFFLL);
         });
     });
 
@@ -59,7 +59,7 @@ void FUNLUANOVAEnumSpec::Define()
             const char* Chunk = R"(
             return UE.ECollisionResponse:GetDisplayNameTextByValue(UE.ECollisionResponse.ECR_Overlap)
             )";
-            UNLUANOVA::RunChunk(L, Chunk);
+            UnLuaNova::RunChunk(L, Chunk);
 #if UNLUANOVA_ENABLE_FTEXT
             const auto Actual = *(FText*)GetCppInstanceFast(L, -1);
             const auto Expected = UEnum::GetDisplayValueAsText(ECR_Overlap);
@@ -73,9 +73,9 @@ void FUNLUANOVAEnumSpec::Define()
 
         It(TEXT("不存在的枚举值返回nil"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UNLUANOVA::Push(L, static_cast<int16>(0x7FFF));
-            TEST_TRUE(UNLUANOVA::IsType(L, -1, UNLUANOVA::TType<int16>()));
-            TEST_EQUAL(lua_tointeger(L, -1), 0x7FFFLL);
+            UnLuaNova::Push(L, static_cast<int16>(0x7FFF));
+            TEST_TRUE(UnLuaNova::IsType(L, -1, UnLuaNova::TType<int16>()));
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 0x7FFFLL);
         });
     });
 
@@ -86,7 +86,7 @@ void FUNLUANOVAEnumSpec::Define()
             const char* Chunk = R"(
             return UE.ECollisionResponse:GetMaxValue()
             )";
-            UNLUANOVA::RunChunk(L, Chunk);
+            UnLuaNova::RunChunk(L, Chunk);
             const auto Actual = (int32)lua_tointeger(L, -1);
             const auto Expected = (int32)ECR_MAX;
             TEST_EQUAL(Actual, Expected);
@@ -95,7 +95,7 @@ void FUNLUANOVAEnumSpec::Define()
 
     AfterEach([this]
     {
-        UNLUANOVA::Shutdown();
+        UnLuaNova::Shutdown();
     });
 }
 

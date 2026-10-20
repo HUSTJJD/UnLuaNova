@@ -117,7 +117,7 @@ void FUnLuaNovaLibMapSpec::Define()
             return Map:Length()
             )";
             Env->DoString(Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 2LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 2LL);
         });
     });
 
@@ -201,7 +201,7 @@ void FUnLuaNovaLibMapSpec::Define()
             return Map:Find(1)
             )";
             Env->DoString(Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 1LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 1LL);
         });
     });
 
@@ -245,7 +245,7 @@ void FUnLuaNovaLibMapSpec::Define()
             return Map:Length()
             )";
             Env->DoString(Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 0LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 0LL);
         });
     });
 
@@ -301,8 +301,8 @@ void FUnLuaNovaLibMapSpec::Define()
             return Table[1], Table[2]
             )";
             Env->DoString(Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 4LL);
-            TEST_EQUAL(lua_tointeger(L, -2), 3LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 4LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -2), 3LL);
         });
     });
 

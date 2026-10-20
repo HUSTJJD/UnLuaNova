@@ -100,7 +100,7 @@ namespace UnLuaNova
 
     FLuaValue FLuaTable::operator[](int64 i) const
     {
-        lua_pushinteger(L, i);
+        UNLUANOVA_PUSHINT64(L, i);
         lua_gettable(L, Index);
         ++PushedValues;
         return FLuaValue(L, -1);

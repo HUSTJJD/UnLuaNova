@@ -126,11 +126,13 @@ LuaBackend=Luau
 
 ```
 ThirdParty/
-├── Lua55/      子模块：github.com/lua/lua
-├── Lua55Lib/   本项目：Lua55.Build.cs
-├── Luau/       子模块：github.com/luau-lang/luau
-└── LuauLib/    本项目：Luau.Build.cs
+├── LuaLib/            本项目：Lua.Build.cs + LuaUnity.c
+│   └── Lua/           子模块：github.com/lua/lua
+└── LuauLib/           本项目：Luau.Build.cs + GenerateWrappers.py + Generated/
+    └── Luau/          子模块：github.com/luau-lang/luau
 ```
+
+子模块就放在各自的包装目录里：源码归上游仓库，包装（`*.Build.cs`、单一 TU 聚合文件、Luau 的生成包装）归本项目。
 
 克隆仓库后需要初始化子模块：
 

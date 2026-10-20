@@ -3,4 +3,4 @@
 // Keeps this Luau source in its own translation unit. See GenerateWrappers.py for
 // why Luau cannot simply be unity-built.
 
-#include "../../Luau/Common/src/TimeTrace.cpp"
+#include "../Luau/Common/src/TimeTrace.cpp"

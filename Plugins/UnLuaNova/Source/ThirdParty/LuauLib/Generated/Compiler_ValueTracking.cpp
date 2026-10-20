@@ -3,4 +3,4 @@
 // Keeps this Luau source in its own translation unit. See GenerateWrappers.py for
 // why Luau cannot simply be unity-built.
 
-#include "../../Luau/Compiler/src/ValueTracking.cpp"
+#include "../Luau/Compiler/src/ValueTracking.cpp"

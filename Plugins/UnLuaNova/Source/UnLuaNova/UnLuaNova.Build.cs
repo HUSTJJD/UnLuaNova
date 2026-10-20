@@ -97,8 +97,8 @@ public class UnLuaNova : ModuleRules
 
         // --- Lua backend -------------------------------------------------------------
         // The single place the backend is chosen. Both are submodules:
-        //   Lua  -> Source/ThirdParty/Lua   (github.com/lua/lua),          wrapper: LuaLib
-        //   Luau -> Source/ThirdParty/Luau  (github.com/luau-lang/luau),   wrapper: LuauLib
+        //   Lua  -> Source/ThirdParty/LuaLib/Lua    (github.com/lua/lua)
+        //   Luau -> Source/ThirdParty/LuauLib/Luau  (github.com/luau-lang/luau)
         //                                                                    <-- default
         //
         // This is a compile-time choice, not a runtime one: the two backends export the
@@ -112,17 +112,35 @@ public class UnLuaNova : ModuleRules
         if (!config.GetString(section, "LuaBackend", out backend))
             backend = "Luau";
 
+        // The selected backend's headers must be on disk before anything is compiled.
+        // They are submodules, and an uninitialised one used to fail in the worst way
+        // possible: UBT notes "Luau has been deleted since makefile was built", drops it
+        // from the build, and the Luau call sites then quietly compile against whatever
+        // other backend is lying around. Refuse to generate a build at all instead.
+        Action<string, string> requireBackendHeaders = (name, header) =>
+        {
+            if (!File.Exists(header))
+            {
+                throw new BuildException(
+                    string.Format("The {0} backend is selected but its sources are missing: {1} does not exist. "
+                        + "The Lua backends are git submodules - run 'git submodule update --init --recursive' "
+                        + "and rebuild.", name, header));
+            }
+        };
+
         // Accept both "Lua55" and the shorter "Lua". Anything else selects Luau, which is
         // the default. "Lua55" used to fall through to Luau, which was a nasty trap given
         // the module is literally named Lua55.
         if (string.Equals(backend, "Lua55", StringComparison.OrdinalIgnoreCase)
             || string.Equals(backend, "Lua", StringComparison.OrdinalIgnoreCase))
         {
+            requireBackendHeaders("Lua", Path.Combine(ModuleDirectory, "..", "ThirdParty", "LuaLib", "Lua", "lua.h"));
             PublicDependencyModuleNames.Add("Lua");
             PublicDefinitions.Add("UNLUANOVA_LUA_BACKEND=0");
         }
         else
         {
+            requireBackendHeaders("Luau", Path.Combine(ModuleDirectory, "..", "ThirdParty", "LuauLib", "Luau", "VM", "include", "lua.h"));
             PublicDependencyModuleNames.Add("Luau");
             PublicDefinitions.Add("UNLUANOVA_LUA_BACKEND=1");
         }

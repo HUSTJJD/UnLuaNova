@@ -346,9 +346,11 @@ static const luaL_Reg TMapLib[] =
     {"Keys", TMap_Keys},
     {"Values", TMap_Values},
     {"ToTable", TMap_ToTable},
+#if UNLUANOVA_HAS_USERDATA_GC
     {"__gc", TMap_Delete},
+#endif
     {"__call", TMap_New},
-    {"__pairs", TMap_Pairs},
+    UNLUANOVA_ITER_ENTRY(TMap_Pairs),
     {nullptr, nullptr}
 };
 

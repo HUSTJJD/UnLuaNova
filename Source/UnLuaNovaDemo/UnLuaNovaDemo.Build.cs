@@ -29,10 +29,20 @@ public class UnLuaNovaDemo : ModuleRules
                 "InputCore",
             });
 
+        // Do NOT list a Lua backend here. The backend is a compile-time choice owned by
+        // UnLuaNova (Config/DefaultUnLuaNovaEditor.ini -> LuaBackend), and UnLuaNova
+        // re-exports whichever one it picked as a *public* dependency, so it arrives here
+        // on its own.
+        //
+        // Naming "Lua" (or "Luau") here puts the other backend on the include path too.
+        // Both ship lua.h / lualib.h under those names, and plain Lua's directory is added
+        // as a plain /I while Luau's are /external:I (searched last), so plain Lua's lua.h
+        // wins #include "lua.h" even when UNLUANOVA_LUA_BACKEND says Luau. That is how the
+        // game module once compiled Luau call sites against Lua's headers: luaL_Reg
+        // undefined, lua_pushcclosurek missing, lua_rawlen returning the wrong type.
         PrivateDependencyModuleNames.AddRange(new string[]
         {
             "UnLuaNova",
-            "Lua",
         });
     }
 }

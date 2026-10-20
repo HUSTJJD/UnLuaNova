@@ -48,61 +48,61 @@ namespace UnLuaNova
 
     FORCEINLINE int32 Push(lua_State* L, int8 V, bool bCopy = false)
     {
-        lua_pushinteger(L, V);
+        UNLUANOVA_PUSHINT64(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, int16 V, bool bCopy = false)
     {
-        lua_pushinteger(L, V);
+        UNLUANOVA_PUSHINT64(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, int32 V, bool bCopy = false)
     {
-        lua_pushinteger(L, V);
+        UNLUANOVA_PUSHINT64(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, int64 V, bool bCopy = false)
     {
-        lua_pushinteger(L, V);
+        UNLUANOVA_PUSHINT64(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, long V, bool bCopy = false)
     {
-        lua_pushinteger(L, V);
+        UNLUANOVA_PUSHINT64(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, uint8 V, bool bCopy = false)
     {
-        lua_pushinteger(L, V);
+        UNLUANOVA_PUSHINT64(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, uint16 V, bool bCopy = false)
     {
-        lua_pushinteger(L, V);
+        UNLUANOVA_PUSHINT64(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, uint32 V, bool bCopy = false)
     {
-        lua_pushinteger(L, V);
+        UNLUANOVA_PUSHINT64(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, uint64 V, bool bCopy = false)
     {
-        lua_pushinteger(L, V);
+        UNLUANOVA_PUSHINT64(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, unsigned long V, bool bCopy = false)
     {
-        lua_pushinteger(L, V);
+        UNLUANOVA_PUSHINT64(L, V);
         return 1;
     }
 
@@ -515,52 +515,52 @@ namespace UnLuaNova
 
     FORCEINLINE int8 Get(lua_State* L, int32 Index, TType<int8>)
     {
-        return (int8)lua_tointeger(L, Index);
+        return (int8)UNLUANOVA_TOINT64(L, Index);
     }
 
     FORCEINLINE int16 Get(lua_State* L, int32 Index, TType<int16>)
     {
-        return (int16)lua_tointeger(L, Index);
+        return (int16)UNLUANOVA_TOINT64(L, Index);
     }
 
     FORCEINLINE int32 Get(lua_State* L, int32 Index, TType<int32>)
     {
-        return (int32)lua_tointeger(L, Index);
+        return (int32)UNLUANOVA_TOINT64(L, Index);
     }
 
     FORCEINLINE int64 Get(lua_State* L, int32 Index, TType<int64>)
     {
-        return (int64)lua_tointeger(L, Index);
+        return (int64)UNLUANOVA_TOINT64(L, Index);
     }
 
     FORCEINLINE long Get(lua_State* L, int32 Index, TType<long>)
     {
-        return (long)lua_tointeger(L, Index);
+        return (long)UNLUANOVA_TOINT64(L, Index);
     }
 
     FORCEINLINE uint8 Get(lua_State* L, int32 Index, TType<uint8>)
     {
-        return (uint8)lua_tointeger(L, Index);
+        return (uint8)UNLUANOVA_TOINT64(L, Index);
     }
 
     FORCEINLINE uint16 Get(lua_State* L, int32 Index, TType<uint16>)
     {
-        return (uint16)lua_tointeger(L, Index);
+        return (uint16)UNLUANOVA_TOINT64(L, Index);
     }
 
     FORCEINLINE uint32 Get(lua_State* L, int32 Index, TType<uint32>)
     {
-        return (uint32)lua_tointeger(L, Index);
+        return (uint32)UNLUANOVA_TOINT64(L, Index);
     }
 
     FORCEINLINE uint64 Get(lua_State* L, int32 Index, TType<uint64>)
     {
-        return (uint64)lua_tointeger(L, Index);
+        return (uint64)UNLUANOVA_TOINT64(L, Index);
     }
 
     FORCEINLINE unsigned long Get(lua_State* L, int32 Index, TType<unsigned long>)
     {
-        return (unsigned long)lua_tointeger(L, Index);
+        return (unsigned long)UNLUANOVA_TOINT64(L, Index);
     }
 
     FORCEINLINE float Get(lua_State* L, int32 Index, TType<float>)
@@ -1024,23 +1024,24 @@ namespace UnLuaNova
         }
     };
 
+    // Specialized on the *integer* family (see TGenericTypeHelper's second parameter).
+    // Goes through UNLUANOVA_*INT64 because T can be int64/uint64, and because Luau's
+    // lua_pushinteger would otherwise push a double and break lua_isinteger round-trips.
     template <typename T>
     struct TGenericTypeHelper<T, true>
     {
         static int32 Push(lua_State* L, T&& V, bool bCopy)
         {
-            lua_pushinteger(L, (lua_Integer)V);
+            UNLUANOVA_PUSHINT64(L, V);
             return 1;
         }
 
-        static T Get(lua_State* L, int32 Index)
-        {
-            return (T)lua_tointeger(L, Index);
-        }
-
+        // One overload only, matching the primary template. A two-argument overload
+        // alongside this one makes `Get(L, Index)` ambiguous - both are viable and
+        // neither is better, because the third parameter has a default.
         static T Get(lua_State *L, int32 Index, bool bIfNeedCheck = false)
         {
-            return (T)lua_tointeger(L, Index);
+            return (T)UNLUANOVA_TOINT64(L, Index);
         }
     };
 

@@ -125,8 +125,8 @@ void FUnLuaNovaLibMulticastDelegateSpec::Define()
             return Counter1, Counter2
             )";
             UnLuaNova::RunChunk(L, Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 1LL);
-            TEST_EQUAL(lua_tointeger(L, -2), 1LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 1LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -2), 1LL);
         });
     });
 

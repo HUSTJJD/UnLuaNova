@@ -97,7 +97,7 @@ void FUnLuaNovaLibDelegateSpec::Define()
             return Counter
             )";
             Env->DoString(Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 1LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 1LL);
         });
 
         It(TEXT("执行委托：赋值"), EAsyncExecution::TaskGraphMainThread, [this]()
@@ -109,7 +109,7 @@ void FUnLuaNovaLibDelegateSpec::Define()
             return Counter
             )";
             Env->DoString(Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 1LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 1LL);
         });
 
         It(TEXT("执行委托：从Lua返回值"), EAsyncExecution::TaskGraphMainThread, [this]()

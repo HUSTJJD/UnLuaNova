@@ -45,7 +45,11 @@ EStaticPropKind FStaticBindingRegistry::GetPropertyKind(const FProperty* Propert
 	return EStaticPropKind::Unknown;
 }
 
-static UStruct* ResolveStructByName(const FString& Name)
+// UField, not UStruct: UEnum derives from UField and not from UStruct, so an enum cannot
+// be stored in StructToType. It is still looked up so that a known enum does not get
+// reported as unresolved; the caller casts and leaves enum binding to the reflective
+// path.
+static UField* ResolveFieldByName(const FString& Name)
 {
 	if (UClass* Class = FindFirstObject<UClass>(*Name))
 		return Class;
@@ -68,13 +72,19 @@ void FStaticBindingRegistry::Resolve(const FStaticTypeBinding* Type, FEntry& Ent
 {
 	const FString TypeName = Type->TypeName ? Type->TypeName : TEXT("");
 
-	UStruct* Struct = ResolveStructByName(TypeName);
-	if (!Struct)
+	UField* Field = ResolveFieldByName(TypeName);
+	if (!Field)
 	{
 		UE_LOG(LogTemp, Warning,
 			TEXT("[StaticBinding] type '%s' could not be resolved; reflective fallback stays in effect."), *TypeName);
 		return;
 	}
+
+	// Only classes and structs are keyed here. Enums resolve as UField but have no
+	// properties or functions to bind, so they stay on the reflective path.
+	UStruct* Struct = Cast<UStruct>(Field);
+	if (!Struct)
+		return;
 
 	StructToType.Add(Struct, Type);
 

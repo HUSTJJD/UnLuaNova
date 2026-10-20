@@ -3,4 +3,4 @@
 // Keeps this Luau source in its own translation unit. See GenerateWrappers.py for
 // why Luau cannot simply be unity-built.
 
-#include "../../Luau/Ast/src/Lexer.cpp"
+#include "../Luau/Ast/src/Lexer.cpp"

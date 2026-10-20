@@ -63,6 +63,9 @@ namespace UnLuaNova
         /** Where allocation volume is going, per category / type / userdata tag. */
         FString BuildCategoryReport(int32 TopN = 8) const;
 
+        /** One-shot summary of the allocator hook: live / peak bytes and call counts. */
+        FString BuildReport() const;
+
         std::atomic<bool> bEnabled{false};
 
     private:

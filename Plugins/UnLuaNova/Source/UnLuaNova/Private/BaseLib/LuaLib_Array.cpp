@@ -585,9 +585,11 @@ static const luaL_Reg TArrayLib[] =
     {"Contains", TArray_Contains},
     {"Append", TArray_Append},
     {"ToTable", TArray_ToTable},
+#if UNLUANOVA_HAS_USERDATA_GC
     {"__gc", TArray_Delete},
+#endif
     {"__call", TArray_New},
-    {"__pairs", TArray_Pairs},
+    UNLUANOVA_ITER_ENTRY(TArray_Pairs),
     {"__index", TArray_Index},
     {"__newindex", TArray_NewIndex},
     {nullptr, nullptr}

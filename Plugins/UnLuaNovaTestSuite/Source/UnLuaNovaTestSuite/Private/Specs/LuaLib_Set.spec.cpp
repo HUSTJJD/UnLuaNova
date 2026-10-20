@@ -111,7 +111,7 @@ void FUnLuaNovaLibSetSpec::Define()
             return Set:Length()\
             ";
             UnLuaNova::RunChunk(L, Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 2LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 2LL);
         });
     });
 
@@ -211,7 +211,7 @@ void FUnLuaNovaLibSetSpec::Define()
             return Set:Length()\
             ";
             UnLuaNova::RunChunk(L, Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 0LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 0LL);
         });
     });
 
@@ -247,8 +247,8 @@ void FUnLuaNovaLibSetSpec::Define()
             return Table[1], Table[2]\
             ";
             UnLuaNova::RunChunk(L, Chunk);
-            TEST_EQUAL(lua_tointeger(L, -1), 2LL);
-            TEST_EQUAL(lua_tointeger(L, -2), 1LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 2LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -2), 1LL);
         });
     });
 

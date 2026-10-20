@@ -18,7 +18,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #if UNLUANOVA_LEGACY_ARGS_PASSING
 
-struct FUNLUANOVATest_Issue362 : FUNLUANOVATestBase
+struct FUNLUANOVATest_Issue362 : FUnLuaNovaTestBase
 {
     virtual bool InstantTest() override
     {
@@ -27,7 +27,7 @@ struct FUNLUANOVATest_Issue362 : FUNLUANOVATestBase
 
     virtual bool SetUp() override
     {
-        FUNLUANOVATestBase::SetUp();
+        FUnLuaNovaTestBase::SetUp();
 
         const auto Chunk = R"(
         local Stub = NewObject(UE.UUNLUANOVATestStub)
@@ -38,7 +38,7 @@ struct FUNLUANOVATest_Issue362 : FUNLUANOVATestBase
         Stub.Issue362Delegate:Execute(Array)
         return Array:Length()
         )";
-        UNLUANOVA::RunChunk(L, Chunk);
+        UnLuaNova::RunChunk(L, Chunk);
 
         const auto Actual = (int)lua_tonumber(L, -1);
         RUNNER_TEST_EQUAL(Actual, 1);

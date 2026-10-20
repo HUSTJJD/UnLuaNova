@@ -50,7 +50,9 @@ namespace UnLuaNova
 
     static const luaL_Reg FTextLib[] =
     {
+#if UNLUANOVA_HAS_USERDATA_GC
         {"__gc", FText_Delete},
+#endif
         {"__tostring", FText_ToString},
         {nullptr, nullptr}
     };

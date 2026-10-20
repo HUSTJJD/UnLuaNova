@@ -189,7 +189,9 @@ void FUnLuaNovaIntelliSenseGenerator::ExportUnLua()
 
 void FUnLuaNovaIntelliSenseGenerator::ExportLuauDecls(const TArray<const UField*> Types)
 {
-    const FString Content = LuauDecl::Generate(Types);
+    // LuauDecl lives inside namespace UnLuaNova (see UnLuaNovaLuauDecls.h); this
+    // function is defined at global scope, so the name has to be qualified.
+    const FString Content = UnLuaNova::LuauDecl::Generate(Types);
 
     IFileManager& FileManager = IFileManager::Get();
     if (!FileManager.DirectoryExists(*OutputDir))

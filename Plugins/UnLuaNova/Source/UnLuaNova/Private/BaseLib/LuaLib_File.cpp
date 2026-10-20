@@ -197,14 +197,15 @@ public:
 		{
 			lua_Number Number = 0;
 			FILE->SerializeBits(&Number, sizeof(lua_Number) * 8);
-			lua_Integer IntegerNumber = (lua_Integer)floor((double)Number);
+			// Serialized as a full lua_Number, so the integer round-trip has to be 64-bit.
+			int64 IntegerNumber = (int64)floor((double)Number);
 			if (Number - IntegerNumber > 0)
 			{
 				lua_pushnumber(L, Number);
 			}
 			else
 			{
-				lua_pushinteger(L, IntegerNumber);
+				UNLUANOVA_PUSHINT64(L, IntegerNumber);
 			}
 		}
 	}
@@ -427,7 +428,7 @@ static int32 UE4File_WriteFile(lua_State *L)
 		{
 			if (lua_isinteger(L, arg))
 			{
-				lua_Number luaValue = (lua_Number)lua_tointeger(L, arg);
+				lua_Number luaValue = (lua_Number)UNLUANOVA_TOINT64(L, arg);
 				fileArchive->SerializeBits(&luaValue, sizeof(lua_Number) * 8);
 			}
 			else
@@ -471,7 +472,9 @@ static const luaL_Reg UE4FileLib[] =
 {
 	{"Read", UE4File_ReadFile },
 	{"Write",UE4File_WriteFile},
+#if UNLUANOVA_HAS_USERDATA_GC
 	{"__gc",UE4File_Delete},
+#endif
 	{ nullptr, nullptr }
 };
 

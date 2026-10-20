@@ -91,13 +91,15 @@ public:
         }
         else
         {
-            lua_pushinteger(L, NumericProperty->GetUnsignedIntPropertyValue(ValuePtr));
+            UNLUANOVA_PUSHINT64(L, NumericProperty->GetUnsignedIntPropertyValue(ValuePtr));
         }
     }
 
     virtual bool SetValueInternal(lua_State *L, void *ValuePtr, int32 IndexInStack, bool bCopyValue) const override
     {
-        NumericProperty->SetIntPropertyValue(ValuePtr, (uint64)lua_tointeger(L, IndexInStack));
+        // Covers int8..int64 and uint8..uint64 alike (CPT_Int64/CPT_UInt64 land here too),
+        // so the value has to travel as 64 bits.
+        NumericProperty->SetIntPropertyValue(ValuePtr, (uint64)UNLUANOVA_TOINT64(L, IndexInStack));
         return false;
     }
 
@@ -190,13 +192,15 @@ public:
         }
         else
         {
-            lua_pushinteger(L, EnumProperty->GetUnderlyingProperty()->GetSignedIntPropertyValue(ValuePtr));
+            UNLUANOVA_PUSHINT64(L, EnumProperty->GetUnderlyingProperty()->GetSignedIntPropertyValue(ValuePtr));
         }
     }
 
     virtual bool SetValueInternal(lua_State *L, void *ValuePtr, int32 IndexInStack, bool bCopyValue) const override
     {
-        EnumProperty->GetUnderlyingProperty()->SetIntPropertyValue(ValuePtr, lua_tointeger(L, IndexInStack));
+        // UNLUANOVA_TOINT64, not lua_tointeger: on Luau the latter returns a 32-bit int,
+        // which makes the int64/uint64 overloads of SetIntPropertyValue ambiguous (C2668).
+        EnumProperty->GetUnderlyingProperty()->SetIntPropertyValue(ValuePtr, UNLUANOVA_TOINT64(L, IndexInStack));
         return false;
     }
 

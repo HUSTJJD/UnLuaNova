@@ -91,6 +91,10 @@ namespace UnLuaNova
         return TypeInterface;
     }
 
+    // UE 5.8 dropped EObjectFlags ObjectFlags from UE_PROPERTY_PARAMS_BASE_FIELDS (the
+    // FProperty constructors taking InObjectFlags were deprecated in the same release),
+    // so every UECodeGen_Private::F*PropertyParams below omits it from 5.8 on. Each
+    // list is positional, so getting that wrong shifts every field after it.
     TSharedPtr<ITypeInterface> FPropertyRegistry::GetBoolProperty()
     {
         if (!BoolProperty)
@@ -104,7 +108,9 @@ namespace UnLuaNova
                 nullptr,
                 CPF_None,
                 UECodeGen_Private::EPropertyGenFlags::Bool | UECodeGen_Private::EPropertyGenFlags::NativeBool,
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
                 RF_Transient,
+#endif
 #if UE_VERSION_OLDER_THAN(5, 3, 0)
                 1,
 #endif
@@ -142,7 +148,9 @@ namespace UnLuaNova
                 nullptr,
                 CPF_HasGetValueTypeHash,
                 UECodeGen_Private::EPropertyGenFlags::Int,
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
                 RF_Transient,
+#endif
 #if UE_VERSION_OLDER_THAN(5, 3, 0)
                 1,
 #endif
@@ -178,12 +186,23 @@ namespace UnLuaNova
                 nullptr,
                 CPF_HasGetValueTypeHash,
                 UECodeGen_Private::EPropertyGenFlags::Int64,
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
                 RF_Transient,
+#endif
+#if UE_VERSION_OLDER_THAN(5, 3, 0)
                 1,
+#endif
                 nullptr,
                 nullptr,
+#if UE_VERSION_NEWER_THAN(5, 2, 1)
+                1,
+#endif
                 0,
+#if UE_VERSION_NEWER_THAN(5, 2, 1)
+                METADATA_PARAMS(0, nullptr)
+#else
                 METADATA_PARAMS(nullptr, 0)
+#endif
             };
             const auto Property = new FInt64Property(PropertyCollector, Params);
 #endif
@@ -205,7 +224,9 @@ namespace UnLuaNova
                 nullptr,
                 CPF_HasGetValueTypeHash,
                 UECodeGen_Private::EPropertyGenFlags::Float,
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
                 RF_Transient,
+#endif
 #if UE_VERSION_OLDER_THAN(5, 3, 0)
                 1,
 #endif
@@ -241,7 +262,9 @@ namespace UnLuaNova
                 nullptr,
                 CPF_HasGetValueTypeHash,
                 UECodeGen_Private::EPropertyGenFlags::Str,
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
                 RF_Transient,
+#endif
 #if UE_VERSION_OLDER_THAN(5, 3, 0)
                 1,
 #endif
@@ -277,7 +300,9 @@ namespace UnLuaNova
                 nullptr,
                 CPF_HasGetValueTypeHash,
                 UECodeGen_Private::EPropertyGenFlags::Name,
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
                 RF_Transient,
+#endif
 #if UE_VERSION_OLDER_THAN(5, 3, 0)
                 1,
 #endif
@@ -313,7 +338,9 @@ namespace UnLuaNova
                 nullptr,
                 CPF_HasGetValueTypeHash,
                 UECodeGen_Private::EPropertyGenFlags::Text,
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
                 RF_Transient,
+#endif
 #if UE_VERSION_OLDER_THAN(5, 3, 0)
                 1,
 #endif
@@ -357,7 +384,9 @@ namespace UnLuaNova
                 nullptr,
                 CPF_HasGetValueTypeHash,
                 UECodeGen_Private::EPropertyGenFlags::Object,
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
                 RF_Transient,
+#endif
 #if UE_VERSION_OLDER_THAN(5, 3, 0)
                 1,
 #endif
@@ -392,7 +421,9 @@ namespace UnLuaNova
                     ? ScriptStruct->GetCppStructOps()->GetComputedPropertyFlags() | CPF_HasGetValueTypeHash
                     : CPF_HasGetValueTypeHash,
                 UECodeGen_Private::EPropertyGenFlags::Struct,
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
                 RF_Transient,
+#endif
 #if UE_VERSION_OLDER_THAN(5, 3, 0)
                 1,
 #endif
@@ -429,7 +460,9 @@ namespace UnLuaNova
 				nullptr,
 				CPF_HasGetValueTypeHash,
 				UECodeGen_Private::EPropertyGenFlags::Enum,
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
 				RF_Transient,
+#endif
 #if UE_VERSION_OLDER_THAN(5, 3, 0)
 				1,
 #endif

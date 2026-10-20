@@ -51,9 +51,9 @@ int32 Enum_Index(lua_State *L)
 
     lua_pop(L, 1);
     lua_pushvalue(L, 2);
-    lua_pushinteger(L, Value);
+    UNLUANOVA_PUSHINT64(L, Value);
     lua_rawset(L, 1);
-    lua_pushinteger(L, Value);
+    UNLUANOVA_PUSHINT64(L, Value);
 
     return 1;
 }
@@ -84,7 +84,7 @@ int32 Enum_GetMaxValue(lua_State* L)
     }
     lua_pop(L, 1);
 
-    lua_pushinteger(L, MaxValue);
+    UNLUANOVA_PUSHINT64(L, MaxValue);
     return 1;
 }
 
@@ -101,7 +101,7 @@ int32 Enum_GetNameStringByValue(lua_State* L)
     if (lua_type(L, -1) == LUA_TTABLE)
     {
         // enum value
-        int64 Value = lua_tointegerx(L, -2, nullptr);
+        int64 Value = UNLUANOVA_TOINT64(L, -2);
 
         lua_pushstring(L, "__name");
         int32 Type = lua_rawget(L, -2);
@@ -140,7 +140,7 @@ int32 Enum_GetDisplayNameTextByValue(lua_State* L)
     if (lua_type(L, -1) == LUA_TTABLE)
     {
         // enum value
-        int64 Value = lua_tointegerx(L, -2, nullptr);
+        int64 Value = UNLUANOVA_TOINT64(L, -2);
 
         lua_pushstring(L, "__name");
         int32 Type = lua_rawget(L, -2);
@@ -180,9 +180,9 @@ int32 CollisionEnum_Index(lua_State* L, int32 (*Converter)(FName))
             UNLUANOVA_LOGWARNING(L, TEXT("%s: Cann't find enum %s!"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(Name));
         }
         lua_pushvalue(L, 2);
-        lua_pushinteger(L, Value);
+        UNLUANOVA_PUSHINT64(L, Value);
         lua_rawset(L, 1);
-        lua_pushinteger(L, Value);
+        UNLUANOVA_PUSHINT64(L, Value);
     }
     else
     {

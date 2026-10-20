@@ -46,7 +46,7 @@ BEGIN_TESTSUITE(FIssue372Test, TEXT("UnLuaNova.Regression.Issue372 Actor调用K2
             UnLuaNova::RunChunk(L, Chunk);
 
             auto Ref = (int32)lua_tointeger(L, -1);
-            TestNotEqual(TEXT("Ref"), Ref, LUA_NOREF);
+            TestNotEqual(TEXT("Ref"), (double)Ref, (double)LUA_NOREF);
 
             lua_rawgeti(L, LUA_REGISTRYINDEX, Ref);
             auto Actual = lua_type(L, -1);
@@ -57,7 +57,7 @@ BEGIN_TESTSUITE(FIssue372Test, TEXT("UnLuaNova.Regression.Issue372 Actor调用K2
 
             lua_rawgeti(L, LUA_REGISTRYINDEX, Ref);
             Actual = lua_type(L, -1);
-            TestNotEqual(TEXT("Actual"), Actual, LUA_TTABLE);
+            TestNotEqual(TEXT("Actual"), (double)Actual, (double)LUA_TTABLE);
             return true;
             }));
         ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());

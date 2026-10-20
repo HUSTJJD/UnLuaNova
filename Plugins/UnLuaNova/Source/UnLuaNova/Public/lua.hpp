@@ -14,18 +14,12 @@
 
 #pragma once
 
-#ifdef __cplusplus
-#if !LUA_COMPILE_AS_CPP
-extern "C" {
-#endif
-#endif
-
-#include "lua.h"
-#include "lualib.h"
-#include "lauxlib.h"
-
-#ifdef __cplusplus
-#if !LUA_COMPILE_AS_CPP
-}
-#endif
-#endif
+// Third-party Lua bindings (LuaSocket, LuaProtobuf, LuaRapidjson) include "lua.hpp"
+// expecting plain Lua's headers. Plain Lua and Luau both ship lua.h/lualib.h, so that
+// include used to be answered by whichever backend directory happened to come first on
+// the include path - which is not necessarily the one being built.
+//
+// Route it through LuaBackend.h instead: that is the one place that knows which backend
+// is selected, and it reaches the backend's headers by path rather than by name. The
+// extern "C" wrapping lives in UnLuaNovaBackend_Lua.h (Luau's headers self-guard).
+#include "LuaBackend.h"

@@ -14,6 +14,9 @@
 //
 // Everything else in UnLuaNova must go through the UNLUANOVA_* macros below instead of
 // calling the VM directly, so that neither backend leaks into the rest of the codebase.
+// This header is also the only file that pulls in a backend's headers, and it does so
+// through UnLuaNovaBackend_Lua.h / UnLuaNovaBackend_Luau.h: no other file should include
+// lua.h, lualib.h, lauxlib.h or luacode.h, because both backends own those names.
 
 #pragma once
 
@@ -28,16 +31,61 @@
 #define UNLUANOVA_LUA_BACKEND UNLUANOVA_BACKEND_LUAU
 #endif
 
+// Both backends ship headers called lua.h / lualib.h, so never ask for one by name:
+// include-order decides which you get, and when it picks the wrong one the build still
+// compiles far enough to bury the cause under dozens of unrelated errors. These two
+// wrappers have unique names and include their backend by path relative to themselves,
+// so neither can be satisfied by, or reach into, the other backend.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
 
-#include "lua.h"
-#include "lualib.h"
-#include "luacode.h"
+#include "UnLuaNovaBackend_Luau.h"
 
 #else
 
-#include "lua.hpp"
+#include "UnLuaNovaBackend_Lua.h"
 
+#endif
+
+// --- guards against the backends bleeding into each other --------------------
+//
+// Three independent checks, cheapest first. Any one of them turns "compiles, then
+// explodes somewhere else" into a single error that points at the real cause.
+
+// 1. Which backend *modules* are in this build (a PublicDefinitions marker from
+// Lua.Build.cs / Luau.Build.cs). Both present means something named the backend that
+// was not selected - UnLuaNovaDemo.Build.cs once listed 'Lua' outright while the
+// backend was Luau, which put both on the include path.
+#if defined(UNLUANOVA_BACKEND_MODULE_LUA) && defined(UNLUANOVA_BACKEND_MODULE_LUAU)
+#error "Both the Lua and Luau backend modules are in this build. They export the same lua_* symbols and share header file names, so one is answering the other's includes. Only UnLuaNova.Build.cs may name a backend module - find and remove the direct dependency (grep another .Build.cs for 'Lua' or 'Luau')."
+#endif
+
+// 2. The selected module is the one that is actually here. Skipped when no marker is
+// visible, which only happens for translation units outside the dependency graph.
+#if defined(UNLUANOVA_BACKEND_MODULE_LUA) || defined(UNLUANOVA_BACKEND_MODULE_LUAU)
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#if !defined(UNLUANOVA_BACKEND_MODULE_LUAU)
+#error "UNLUANOVA_LUA_BACKEND selects Luau, but the module in this build is Lua. The backend is chosen once in UnLuaNova.Build.cs - check LuaBackend in Config/DefaultUnLuaNovaEditor.ini, and check for a stale Intermediate/ build."
+#endif
+#else
+#if !defined(UNLUANOVA_BACKEND_MODULE_LUA)
+#error "UNLUANOVA_LUA_BACKEND selects Lua, but the module in this build is Luau. The backend is chosen once in UnLuaNova.Build.cs - check LuaBackend in Config/DefaultUnLuaNovaEditor.ini, and check for a stale Intermediate/ build."
+#endif
+#endif
+#endif
+
+// 3. Which headers we actually got. LUA_VECTOR_SIZE exists only in Luau's luaconf.h,
+// and lua_Integer is 32-bit there versus 64-bit in plain Lua - the width difference is
+// the one that silently corrupts values, so it is worth asserting on its own.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#if !defined(LUA_VECTOR_SIZE)
+#error "Configured for the Luau backend but these are not Luau's headers. Check that Plugins/UnLuaNova/Source/ThirdParty/Luau is checked out (git submodule update --init --recursive) and that the Luau module is really in the build - see any 'Luau deleted' note in the build log."
+#endif
+static_assert(sizeof(lua_Integer) == 4, "Luau's lua_Integer is 32-bit; these headers are not Luau's, or Luau changed its integer type - UNLUANOVA_PUSHINT64/TOINT64 need rechecking.");
+#else
+#if defined(LUA_VECTOR_SIZE)
+#error "Configured for the plain Lua backend but these are Luau's headers. Check that Plugins/UnLuaNova/Source/ThirdParty/Lua is checked out and that the Lua module is really in the build."
+#endif
+static_assert(sizeof(lua_Integer) == 8, "Plain Lua's lua_Integer is 64-bit; these headers are not Lua's, or LUA_INT_TYPE was changed in luaconf.h - UNLUANOVA_PUSHINT64/TOINT64 need rechecking.");
 #endif
 
 // --- plain-Lua spellings Luau does not provide -------------------------------
@@ -53,21 +101,25 @@
 // Raise the same error - longjmp, so the value is never observed - with the Lua type.
 // Declared first: the shims below raise errors themselves.
 #undef luaL_error
+// Luau declares lua_error [[noreturn]] (l_noret). The dead `return 0` that follows is
+// part of the contract, not a bug - this header mirrors plain Lua, where luaL_error
+// returns int - but it still has to compile: see the note at the raise below.
 inline int luaL_error(lua_State* L, const char* Format, ...)
 {
     va_list Args;
     va_start(Args, Format);
     lua_pushvfstring(L, Format, Args);
     va_end(Args);
-#ifdef _MSC_VER
-    __pragma(warning(push))
-    __pragma(warning(disable: 4702)) // unreachable: lua_error longjmps out
-#endif
-    lua_error(L);
+    // Gated on L so the `return 0` stays reachable: lua_error is [[noreturn]], so a plain
+    // `lua_error(L); return 0;` is dead code - C4702, which BuildSettingsVersion.V7
+    // promotes to an error and which neither #pragma warning nor the module's warning
+    // level can switch back off. L is never null at a call site, so the longjmp happens
+    // exactly as before.
+    if (L != nullptr)
+    {
+        lua_error(L);
+    }
     return 0;
-#ifdef _MSC_VER
-    __pragma(warning(pop))
-#endif
 }
 
 // Luau's lua_pushcfunction/lua_pushcclosure are macros that also take a debug name,
@@ -232,6 +284,28 @@ inline void lua_register(lua_State* L, const char* Name, lua_CFunction Fn)
 
 #endif // UNLUANOVA_BACKEND_LUAU
 
+// --- 64-bit integers ---------------------------------------------------------
+// lua_Integer is 64-bit on plain Lua but only 32-bit on Luau (typedef int), and Luau
+// spells the 64-bit pair *64. Same name, same signature, half the width - so a 64-bit
+// value sent through lua_pushinteger is silently truncated on Luau, at compile time
+// without a sound.
+//
+// Use these whenever the value may exceed 32 bits: UE int64/uint64 properties, enum
+// values (their underlying type can be 64-bit), hashes, pointers-as-integers. Plain
+// lua_pushinteger/lua_tointeger stay correct for indices, counts and small ints.
+//
+// They also keep the *type* consistent, which is the subtler half: Luau's
+// lua_pushinteger pushes a double (LUA_TNUMBER), so lua_isinteger answers false for a
+// value Lua 5.5 reports as an integer. lua_pushinteger64 pushes LUA_TINTEGER instead,
+// which is what plain Lua does.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_PUSHINT64(L, V) lua_pushinteger64(L, (int64_t)(V))
+#define UNLUANOVA_TOINT64(L, Idx) ((int64)lua_tointeger64(L, Idx, nullptr))
+#else
+#define UNLUANOVA_PUSHINT64(L, V) lua_pushinteger(L, (lua_Integer)(V))
+#define UNLUANOVA_TOINT64(L, Idx) ((int64)lua_tointeger(L, Idx))
+#endif
+
 // --- userdata allocation ----------------------------------------------------
 // Lua 5.5: lua_newuserdatauv(L, size, nuvalue)
 // Luau:    lua_newuserdatatagged(L, size, tag) - 0 is the "untagged" value, and
@@ -256,6 +330,15 @@ inline void lua_register(lua_State* L, const char* Name, lua_CFunction Fn)
 #define UNLUANOVA_LOAD(L, ChunkName, Data, Size) luau_load(L, ChunkName, Data, Size, 0)
 #else
 #define UNLUANOVA_LOAD(L, ChunkName, Data, Size) luaL_loadbuffer(L, Data, Size, ChunkName)
+#endif
+
+// Luau's lua_gc always takes (L, what, data). Plain Lua's data argument is ignored for
+// most ops, and call sites spell it with two arguments - give them that spelling back.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+inline int lua_gc(lua_State* L, int What)
+{
+    return lua_gc(L, What, 0);
+}
 #endif
 
 // --- garbage collector --------------------------------------------------------
@@ -398,20 +481,53 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 // on them rather than on the backend id.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
 
-/** Luau has no table __gc; finalizers only exist for userdata (lua_newuserdatadtor). */
-#define UNLUANOVA_HAS_TABLE_GC 0
-/** Luau numbers are doubles only - there is no integer subtype. */
-#define UNLUANOVA_HAS_INTEGER_SUBTYPE 0
-/** Luau drops io/os/loadfile/dofile for sandboxing and has no string.dump bytecode. */
-#define UNLUANOVA_HAS_BYTECODE_DUMP 0
-/** Luau uses __iter instead of __pairs/__ipairs. */
+/**
+ * 0 on Luau: it has no __gc metamethod at all - "TM_GC" does not exist anywhere in
+ * Luau/VM/src. Userdata finalizers there go through lua_newuserdatadtor() instead.
+ *
+ * Note this is about *userdata*: every __gc in this codebase is registered on a
+ * userdata metatable (TArray/TMap/TSet/FText/file handles), which is why the flag used
+ * to be called HAS_TABLE_GC - that name was wrong and made it look like an unused
+ * corner. Luau's substitute, lua_newuserdatadtor(), is NOT wired in yet: every __gc
+ * here ends in ContainerRegistry::Remove(), which goes back through FLuaEnv for the
+ * main state and then touches the Lua stack, and that is not safe from a GC callback.
+ * Closing the gap needs a different cleanup design - explicit release, or a sweep owned
+ * by the env - not a rename. Until then Luau simply never finalizes these userdata.
+ */
+#define UNLUANOVA_HAS_USERDATA_GC 0
+/**
+ * 0 on Luau: it is recognized by the iteration protocol only through __iter (TM_ITER).
+ * __pairs/__ipairs do not exist there, and Luau's own pairs() even insists on a real
+ * table, so registering "__pairs" on a userdata is silently dead. Use
+ * UNLUANOVA_ITER_ENTRY to register the right name.
+ */
 #define UNLUANOVA_HAS_ITER_METAMETHOD 1
-
 #else
 
-#define UNLUANOVA_HAS_TABLE_GC 1
-#define UNLUANOVA_HAS_INTEGER_SUBTYPE 1
-#define UNLUANOVA_HAS_BYTECODE_DUMP 1
+#define UNLUANOVA_HAS_USERDATA_GC 1
 #define UNLUANOVA_HAS_ITER_METAMETHOD 0
 
 #endif
+
+// --- iteration metamethod ----------------------------------------------------
+// Luau's FORGPREP looks up TM_ITER ("__iter"), calls it with the object and expects
+// the usual three results (generator, state, initial) - which is exactly the protocol
+// a Lua __pairs function already implements. So the same C function serves both, and
+// only the name it is registered under differs. Drop this into a luaL_Reg table:
+//
+//     static const luaL_Reg TArrayLib[] = { ..., UNLUANOVA_ITER_ENTRY(TArray_Pairs) };
+#if UNLUANOVA_HAS_ITER_METAMETHOD
+#define UNLUANOVA_ITER_ENTRY(Fn) {"__iter", (Fn)}
+#else
+#define UNLUANOVA_ITER_ENTRY(Fn) {"__pairs", (Fn)}
+#endif
+
+// --- can this C function yield? ------------------------------------------------
+// Both backends answer this, but only Luau ever says no: it refuses lua_yield() once
+// another C boundary has been crossed (nCcalls > baseCcalls). Reaching a C function
+// straight from Lua is fine - Luau's LOP_CALL does not bump nCcalls - but one reached
+// through lua_pcall is not, and Luau reports that as the opaque "attempt to yield across
+// metamethod/C-call boundary". So a LatentAction started by script works, while one
+// started inside an engine callback does not. Ask before yielding so the failure names
+// the real constraint instead of surfacing a VM error.
+#define UNLUANOVA_IS_YIELDABLE(L) lua_isyieldable(L)

@@ -1,6 +1,6 @@
 // Single translation unit that compiles the whole official Lua library.
 //
-// The real sources live in the ../Lua submodule. Upstream ships onelua.c, the official
+// The real sources live in the ./Lua submodule. Upstream ships onelua.c, the official
 // aggregation of every core + stdlib file, so including it here builds Lua on every UE
 // target with no CMake / make / NDK toolchain in the loop - UBT compiles it like any
 // other module source.
@@ -11,4 +11,4 @@
 
 #define MAKE_LIB
 
-#include "../Lua/onelua.c"
+#include "Lua/onelua.c"

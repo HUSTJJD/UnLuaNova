@@ -7,8 +7,10 @@ Luau should be compiled by UBT like any other module source - that is how Unreal
 integrates self-contained third-party code (see Engine/Source/ThirdParty/nanosvg for
 the same pattern) and it avoids asking every developer to run CMake first.
 
-The catch: Luau's sources live in the ../Luau submodule, and UBT only compiles sources
-that sit inside the module directory. Luau also has no official single-file aggregation
+The catch: Luau's sources live in the ./Luau submodule, and UBT only compiles sources
+that sit inside the module directory - unless the directory carries a .ubtignore, which
+is how the submodule keeps UBT from compiling Analysis/, CLI/, tests/ and friends (see
+Luau.Build.cs). Luau also has no official single-file aggregation
 (unlike Lua's onelua.c), and a naive unity build breaks because three file-scope names
 are declared `static` in more than one file:
 
@@ -30,7 +32,7 @@ and commit the result. Usage:
 from pathlib import Path
 
 LIB_DIR = Path(__file__).resolve().parent
-LUAU_DIR = LIB_DIR.parent / "Luau"
+LUAU_DIR = LIB_DIR / "Luau"
 OUT_DIR = LIB_DIR / "Generated"
 
 # Whole groups, not hand-picked files: upstream reorganizes these freely (release/743
@@ -81,7 +83,7 @@ def main() -> None:
         path = source.relative_to(LUAU_DIR).as_posix()
         wrapper = OUT_DIR / f"{group}_{source.stem}.cpp"
         wrapper.write_text(
-            f'{HEADER}\n#include "../../Luau/{path}"\n',
+            f'{HEADER}\n#include "../Luau/{path}"\n',
             encoding="utf-8",
             newline="\n",
         )

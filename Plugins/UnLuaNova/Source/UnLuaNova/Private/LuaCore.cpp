@@ -484,7 +484,7 @@ void PushObjectCore(lua_State *L, UObjectBaseUtility *Object)
  */
 static void PushIntegerElement(lua_State *L, FNumericProperty *Property, void *Value)
 {
-    lua_pushinteger(L, Property->GetUnsignedIntPropertyValue(Value));
+    UNLUANOVA_PUSHINT64(L, Property->GetUnsignedIntPropertyValue(Value));
 }
 
 /**
@@ -500,7 +500,7 @@ static void PushFloatElement(lua_State *L, FNumericProperty *Property, void *Val
  */
 static void PushEnumElement(lua_State *L, FNumericProperty *Property, void *Value)
 {
-    lua_pushinteger(L, Property->GetSignedIntPropertyValue(Value));
+    UNLUANOVA_PUSHINT64(L, Property->GetSignedIntPropertyValue(Value));
 }
 
 /**
@@ -1203,6 +1203,17 @@ int32 Class_CallLatentFunction(lua_State *L)
     if (ThreadRef == LUA_REFNIL)
     {
         UNLUANOVA_LOGERROR(L, TEXT("%s: Can't call latent action in main lua thread!"), ANSI_TO_TCHAR(__FUNCTION__));
+        return 0;
+    }
+
+    // Luau only allows a C function to yield while no other C boundary has been crossed;
+    // otherwise lua_yield raises the opaque
+    // "attempt to yield across metamethod/C-call boundary". Reaching here through an
+    // engine callback - UE calling into Lua with lua_pcall - is exactly that case, so
+    // report it as what it is instead of letting the VM error surface.
+    if (!UNLUANOVA_IS_YIELDABLE(L))
+    {
+        UNLUANOVA_LOGERROR(L, TEXT("%s: cannot start a latent action here. This thread was entered from C (an engine callback), and the Luau backend only allows yielding from a thread Lua resumed directly - start the latent action from script instead."), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
