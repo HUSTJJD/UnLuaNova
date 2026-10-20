@@ -1,0 +1,75 @@
+site_name: UnLuaNova
+site_description: 面向 Unreal Engine 的 Lua 脚本方案，Tencent/UnLua 的社区续作
+site_url: https://hustjjd.github.io/UnLuaNova/
+repo_url: https://github.com/HUSTJJD/UnLuaNova
+repo_name: HUSTJJD/UnLuaNova
+edit_uri: blob/master/Docs/
+docs_dir: Docs
+exclude_docs: |
+  Archive/
+
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: 切换到暗色模式
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: 切换到亮色模式
+
+nav:
+  - 首页: index.md
+  - 中文文档:
+      - UE 新手快速上手: CN/Quickstart_For_UE_Newbie.md
+      - 功能清单: CN/Features.md
+      - 编程指南: CN/UnLuaNova_Programming_Guide.md
+      - API 参考: CN/API.md
+      - 设置项: CN/Settings.md
+      - 调试: CN/Debugging.md
+      - IntelliSense: CN/IntelliSense.md
+      - 静态导出绑定: CN/StaticExportBinding.md
+      - 如何实现覆写: CN/How_To_Implement_Overriding.md
+      - 自定义模板: CN/CustomTemplate.md
+      - 插件与模块: CN/Plugins_And_Modules.md
+      - 控制台命令: CN/ConsoleCommand.md
+      - 自定义碰撞枚举: CN/CollisionEnum.md
+      - 常见问题 FAQ: CN/FAQ.md
+  - English Docs:
+      - Programming Guide: EN/UnLuaNova_Programming_Guide.md
+      - API Reference: EN/API.md
+      - How To Implement Overriding: EN/How_To_Implement_Overriding.md
+      - FAQ: EN/FAQ.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+plugins:
+  - search

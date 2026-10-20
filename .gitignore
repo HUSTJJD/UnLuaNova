@@ -29,3 +29,6 @@ IOS/
 *.slnx
 /.vsconfig
 *.ubtplugin.csproj.props
+
+# MkDocs build output
+/_site/
