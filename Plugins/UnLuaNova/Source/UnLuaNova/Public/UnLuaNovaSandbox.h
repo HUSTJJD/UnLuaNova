@@ -34,5 +34,5 @@ namespace UnLuaNova
      * A no-op on backends without read-only tables (plain Lua), so it is safe to call
      * unconditionally - but it only ever matters when UNLUANOVA_HAS_SANDBOX is 1.
      */
-    void RestoreTablesAfterSandbox(lua_State* L);
+    UNLUANOVA_API void RestoreTablesAfterSandbox(lua_State* L);
 }

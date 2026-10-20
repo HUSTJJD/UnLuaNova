@@ -32,6 +32,7 @@
 #include "LuaBackend.h"
 #include "LuaMemoryStats.h"
 #include "LuaProfiler.h"
+#include "UnLuaNovaSandbox.h"
 
 namespace UnLuaNova
 {
