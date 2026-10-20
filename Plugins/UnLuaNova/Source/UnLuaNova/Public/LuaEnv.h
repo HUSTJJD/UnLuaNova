@@ -129,6 +129,11 @@ namespace UnLuaNova
 
         static int LoadFromFileSystem(lua_State* L);
 
+        // require() for backends with no package library (Luau has neither package nor
+        // require). Upvalues: 1 = module cache, 2 = this FLuaEnv. Registered from the
+        // constructor; see the comment there.
+        static int Require(lua_State* L);
+
         static void* DefaultLuaAllocator(void* ud, void* ptr, size_t osize, size_t nsize);
 
         virtual lua_Alloc GetLuaAllocator() const;

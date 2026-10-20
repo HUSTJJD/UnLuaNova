@@ -1,0 +1,73 @@
+name: CI
+
+# Deliberately everything that does NOT need a UE build. UnLuaNova compiles against a
+# local UE source build (5.8.3), which GitHub-hosted runners cannot do - so the C++
+# automation tests have to run locally via Tools/RunTests.ps1. What CI *can* guard is
+# that the tooling stays runnable and the docs site still builds.
+#
+# See Docs/CN/Testing.md for how to run the tests, and docs.yml for the Pages deploy.
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-tools:
+    name: Lint test tooling
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Report generator compiles
+        run: python -m py_compile Tools/GenerateTestReport.py
+
+      - name: PowerShell scripts parse
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $scripts = Get-ChildItem -Path Tools -Filter *.ps1
+          if ($scripts.Count -eq 0) { throw "no scripts found under Tools/" }
+          foreach ($script in $scripts) {
+              $errors = $null
+              $tokens = $null
+              [System.Management.Automation.Language.Parser]::ParseFile(
+                  $script.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+              if ($errors -and $errors.Count -gt 0) {
+                  throw "syntax error in $($script.Name): $($errors[0].Message)"
+              }
+              Write-Host "ok: $($script.Name)"
+          }
+
+      - name: Report generator runs on empty input
+        run: |
+          python Tools/GenerateTestReport.py --reports . --out _smoke
+          if (-not (Test-Path _smoke/report.md)) { throw "no report.md produced" }
+          if (-not (Test-Path _smoke/summary.json)) { throw "no summary.json produced" }
+        shell: pwsh
+
+  docs-build:
+    name: Docs site builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install MkDocs Material
+        run: pip install mkdocs-material
+
+      # Not --strict: Docs/test-report.md only exists once someone has run the tests with
+      # -Publish, and a missing page must not break the build before that.
+      - name: Build docs
+        run: mkdocs build --site-dir _site

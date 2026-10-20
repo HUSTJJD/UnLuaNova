@@ -125,7 +125,24 @@ namespace UnLuaNova
             }
 
             lua_getglobal(L, "package");
+
+            // Luau ships no package library, so "package" is nil here. Indexing nil raises
+            // an index error, and this runs straight from C++ - with no errorJmp to unwind
+            // to, Luau aborts the process. Bail out before touching it; the answer is
+            // simply "module not loaded" on that backend.
+            if (!lua_istable(L, -1))
+            {
+                lua_pop(L, 1);
+                return LUA_TNIL;
+            }
+
             lua_getfield(L, -1, "loaded");
+            if (!lua_istable(L, -1))
+            {
+                lua_pop(L, 2);
+                return LUA_TNIL;
+            }
+
             int32 Type = lua_getfield(L, -1, ModuleName);
             lua_remove(L, -2);
             lua_remove(L, -2);

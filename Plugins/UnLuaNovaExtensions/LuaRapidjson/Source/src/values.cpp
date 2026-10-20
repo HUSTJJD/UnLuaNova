@@ -3,7 +3,11 @@
 
 
 using rapidjson::Value;
-using rapidjson::SizeType;
+// Deliberately no `using rapidjson::SizeType;`. A using-declaration at global scope
+// makes SizeType a *global* name, and Unreal declares a member `SizeType` of its own in
+// TArray/TMap/... - so every UE container header included after this line fails with
+// C4459 ("declaration of 'SizeType' hides global declaration"), which is an error at
+// BuildSettingsVersion.V7. Spell it out at the (single) use site instead.
 
 
 namespace values {
@@ -51,7 +55,7 @@ namespace values {
 		Value StringValue(lua_State* L, int idx, Allocator& allocator) {
 			size_t len;
 			const char* s = lua_tolstring(L, idx, &len);
-			return Value(s, static_cast<SizeType>(len), allocator);
+			return Value(s, static_cast<rapidjson::SizeType>(len), allocator);
 		}
 
 		Value TableValue(lua_State* L, int idx, int depth, Allocator& allocator)

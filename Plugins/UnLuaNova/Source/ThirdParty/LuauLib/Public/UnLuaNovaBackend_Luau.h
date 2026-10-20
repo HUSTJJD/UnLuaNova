@@ -26,6 +26,19 @@
 #endif
 
 // Luau's public headers already guard themselves with extern "C".
+//
+// One name has to be renamed on the way in. Luau's luaL_Strbuf forward-declares
+// `struct TString` in the *global* namespace (VM/include/lualib.h), and Unreal has a
+// global `TString<CharType>` too (Core/Public/Misc/ExpressionParserTypes.h). Whichever
+// the compiler sees first wins and the other one stops compiling: a translation unit
+// that reaches Luau before Core's header dies with C2059 on
+// `TString<CharType> GetString() const`. LuaProtobufModule.cpp hit exactly that.
+//
+// The member is an opaque pointer that nothing outside Luau ever names, so renaming it
+// changes no layout and no ABI - and Luau's own translation units are unaffected,
+// because they include ../Luau/VM/src/*.cpp directly and never see this wrapper.
+#define TString UnLuaNovaLuauTString
 #include "../Luau/VM/include/lua.h"
 #include "../Luau/VM/include/lualib.h"
 #include "../Luau/Compiler/include/luacode.h"
+#undef TString

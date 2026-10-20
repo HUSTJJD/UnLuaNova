@@ -1,0 +1,48 @@
+﻿Using bundled DotNet SDK version: 10.0 win-x64
+UnrealBuildTool is up-to-date
+Running UnrealBuildTool: dotnet "..\..\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.dll" UnLuaNovaDemoEditor Win64 Development -Project=d:\learning\UnLua\UnLuaNovaDemo.uproject -WaitMutex -FromMsBuild
+Log file: D:\learning\AnnBuildTools\AnnUnrealEngine\Engine\Programs\UnrealBuildTool\Log.txt
+Determining max actions to execute in parallel (8 physical cores, 16 logical cores)
+  Executing up to 8 processes, one per physical core
+Using 'git status' to determine working set for adaptive non-unity build (D:\learning\AnnBuildTools\AnnUnrealEngine).
+Using 'git status' to determine working set for adaptive non-unity build (D:\learning\UnLua).
+UbaServer - Listening on 0.0.0.0:1345
+Invalidating makefile for UnLuaNovaDemoEditor (Luau deleted)
+Waiting for 'git status' command to complete
+Building UnLuaNovaDemoEditor...
+===== Toolchain Information =====
+Using ISPC compiler (D:\learning\AnnBuildTools\AnnUnrealEngine\Engine\Source\ThirdParty\Intel\ISPC\bin\Windows\ispc.exe)
+  Intel(r) Implicit SPMD Program Compiler (Intel(r) ISPC), 1.24.0 (build commit  @ 20250404, LLVM 18.1.2) 
+Using Visual Studio 14.50.35738 toolchain (C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717) and Windows 10.0.22621.0 SDK (C:\Program Files (x86)\Windows Kits\10).
+[Adaptive Build] Excluded from LuaSocket unity file: inet.cpp, select.cpp, udp.cpp, wsocket.cpp
+[Adaptive Build] Excluded from LuaRapidjson unity file: values.cpp
+[Adaptive Build] Excluded from UnLuaNovaTestSuite unity file: TestCommands.cpp, LuaBackend.spec.cpp, Issue276Test.cpp, Issue286Test.cpp, Issue295Test.cpp, Issue300Test.cpp, Issue372Test.cpp, Issue401Test.cpp, Issue430Test.cpp, Issue434Test.cpp, Issue443Test.cpp, Issue446Test.cpp, Issue453Test.cpp, Issue455Test.cpp, Issue471Test.cpp, Issue603Test.cpp, Issue660Test.cpp
+[Adaptive Build] Excluded from UnLuaNova unity file: LuaEnv.cpp, UnLuaNovaBase.cpp, UnLuaNovaLib.cpp, UnLuaNovaManager.cpp, LowLevel.cpp
+=================================
+Using Unreal Build Accelerator local executor to run 5 action(s)
+  CPU 8 physical cores, 16 logical cores
+  Memory 79.35 GB physical, 63.25 GB/117.35 GB committed
+  UBA Storage capacity 40 GB
+[1/5] Compile [x64] UnLuaNovaManager.cpp
+[2/5] Compile [x64] Module.UnLuaNova.cpp
+D:\learning\UnLua\Plugins\UnLuaNova\Source\UnLuaNova\Private\BaseLib\LuaLib_Object.cpp(306,5): warning C4191: “类型强制转换”: 从“UObject *(__cdecl FSoftObjectPtr::* )(ELoadFlags) const”到“UObject *(__cdecl FSoftObjectPtr::* )(void) const”的不安全转换
+        使用结果指针进行函数调用可能会导致程序失败
+    ADD_CONST_FUNCTION_EX("LoadSynchronous", UObject*, LoadSynchronous)
+    ^
+D:\learning\UnLua\Plugins\UnLuaNova\Source\UnLuaNova\Private\Registries\PropertyRegistry.cpp(360,52): warning C4996: 'FTextProperty::FTextProperty': FTextProperty constructor with InObjectFlags is deprecated, remove that parameter. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+            const auto Property = new FTextProperty(PropertyCollector, "", RF_Transient);
+                                                   ^
+D:\learning\UnLua\Plugins\UnLuaNova\Source\UnLuaNova\Private\Registries\PropertyRegistry.cpp(484,62): warning C4996: 'FByteProperty::FByteProperty': FByteProperty constructor with InObjectFlags is deprecated, remove that parameter. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+            const auto UnderlyingProperty = new FByteProperty(EnumProperty, TEXT("UnderlyingType"), RF_Transient);
+                                                             ^
+[3/5] Link [x64] UnrealEditor-UnLuaNova.lib
+  正在创建库 D:/learning/UnLua/Plugins/UnLuaNova/Intermediate/Build/Win64/x64/UnrealEditor/Development/UnLuaNova/UnrealEditor-UnLuaNova.lib 和对象 D:/learning/UnLua/Plugins/UnLuaNova/Intermediate/Build/Win64/x64/UnrealEditor/Development/UnLuaNova/UnrealEditor-UnLuaNova.exp
+[4/5] Link [x64] UnrealEditor-UnLuaNova.dll
+[5/5] WriteMetadata UnLuaNovaDemoEditor.target [NoUba]
+
+Total time in Unreal Build Accelerator local executor: 42.57 seconds
+Output binary: D:\learning\AnnBuildTools\AnnUnrealEngine\Engine\Binaries\Win64\UnrealEditor.exe
+
+Result: Succeeded
+Total execution time: 52.72 seconds
+Trace written to file D:\learning\AnnBuildTools\AnnUnrealEngine\Engine\Programs\UnrealBuildTool\Trace.uba with size 10.2kb

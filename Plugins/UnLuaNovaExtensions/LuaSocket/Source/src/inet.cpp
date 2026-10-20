@@ -10,6 +10,7 @@
 #include <string.h>
 
 #if (defined(_WIN32) && defined(UNICODE))
+#undef gai_strerror // ws2tcpip.h already defines it as an object-like macro (C4005)
 #define gai_strerror(err) FTCHARToUTF8(gai_strerrorW(err)).Get()
 #endif
 

@@ -107,9 +107,9 @@ namespace UnLuaNova
             {
                 /* 'env' parameter? */
                 lua_pushvalue(L, Env);  /* environment for loaded function */
-                if (!lua_setupvalue(L, -2, 1))  /* set it as 1st upvalue */
+                if (!UnLuaNovaSetChunkEnv(L, -2))
                 {
-                    lua_pop(L, 1);  /* remove 'env' if not used by previous call */
+                    UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to set the environment of chunk '%s'"), UTF8_TO_TCHAR(ChunkName));
                 }
             }
         }

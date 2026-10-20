@@ -37,7 +37,12 @@ int select_open(lua_State *L) {
     lua_pushinteger(L, FD_SETSIZE);
     lua_rawset(L, -3);
     lua_pushstring(L, "_SOCKETINVALID");
-    lua_pushinteger(L, SOCKET_INVALID);
+    // SOCKET_INVALID is INVALID_SOCKET: a 64-bit *constant* on Windows, and
+    // lua_pushinteger takes a 32-bit one on Luau - narrowing it in place is C4309 and
+    // casting it is C4310, both errors. Route it through a variable so it is a value
+    // rather than a constant by the time it is narrowed. -1 either way.
+    t_socket InvalidSocket = SOCKET_INVALID;
+    lua_pushinteger(L, (int)InvalidSocket);
     lua_rawset(L, -3);
     luaL_setfuncs(L, func, 0);
     return 0;

@@ -53,6 +53,9 @@ nav:
       - 控制台命令: CN/ConsoleCommand.md
       - 自定义碰撞枚举: CN/CollisionEnum.md
       - 常见问题 FAQ: CN/FAQ.md
+      - 测试与自动化: CN/Testing.md
+      - Showcase 示例: CN/Showcase.md
+  - 测试报告: test-report.md
   - English Docs:
       - Programming Guide: EN/UnLuaNova_Programming_Guide.md
       - API Reference: EN/API.md

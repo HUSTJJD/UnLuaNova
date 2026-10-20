@@ -14,6 +14,11 @@
 
 using System;
 using System.IO;
+#if UE_5_0_OR_LATER
+using EpicGames.Core;
+#else
+using Tools.DotNETCommon;
+#endif
 using UnrealBuildTool;
 
 public class LuaRapidjson : ModuleRules
@@ -45,10 +50,36 @@ public class LuaRapidjson : ModuleRules
                 "InputCore",
             });
 
+        // The backend module has to be listed here, even though UnLuaNova already
+        // depends on it - same reason as UnLuaNovaDemo.Build.cs: this module calls
+        // lua_* directly (it *is* a Lua C module), so those references live in
+        // LuaRapidjson's own objects, and UEBuildModule.GetDependencies() is not
+        // recursive. Without it every lua_* here is an LNK2019.
+        //
+        // Which backend is a compile-time choice owned by UnLuaNova, so read the same
+        // key instead of naming one here.
+        var configFile = new FileReference(Path.Combine(Target.ProjectFile.Directory.FullName, "Config", "DefaultUnLuaNovaEditor.ini"));
+        var config = new ConfigHierarchy(new[] { FileReference.Exists(configFile) ? new ConfigFile(configFile) : new ConfigFile() });
+        const string section = "/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings";
+
+        string backend;
+        if (!config.GetString(section, "LuaBackend", out backend))
+            backend = "Luau";
+
         PrivateDependencyModuleNames.AddRange(new[]
         {
-            "UnLuaNova"
+            "UnLuaNova",
+            string.Equals(backend, "Lua", StringComparison.OrdinalIgnoreCase) ? "Lua" : "Luau",
         });
+
+        // Third-party C++: do not let UE's strict settings fail the build.
+        // BuildSettingsVersion.V7 (UE 5.8) promotes these three to errors, and rapidjson
+        // is not written against them.
+#if UE_5_8_OR_LATER
+        CppCompileWarningSettings.UnreachableCodeWarningLevel = WarningLevel.Off;
+        CppCompileWarningSettings.ReturnTypeWarningLevel = WarningLevel.Off;
+        CppCompileWarningSettings.DanglingWarningLevel = WarningLevel.Off;
+#endif
 
         PrivateDefinitions.AddRange(
             new[]

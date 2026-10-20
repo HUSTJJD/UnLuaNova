@@ -77,6 +77,39 @@ namespace UnLuaNova
         AddSearcher(LoadFromFileSystem, 3);
         AddSearcher(LoadFromBuiltinLibs, 4);
 
+        // Luau ships no package library, so there is no require() at all - and every
+        // UnLuaNova script, starting with the startup module, is written against one.
+        //
+        // On plain Lua the three loaders above end up in package.searchers and require()
+        // comes from the standard library. On this backend they are driven by our own
+        // require instead, with the module cache living in an upvalue (a private stand-in
+        // for package.loaded). Same loaders, same order, same semantics, so scripts do not
+        // have to know which backend they are on.
+        //
+        // Only installed when the global is missing, so a backend that already provides
+        // require keeps its own.
+        lua_getglobal(L, "require");
+        const bool bHasRequire = lua_isfunction(L, -1) != 0;
+        lua_pop(L, 1);
+        if (!bHasRequire)
+        {
+            lua_newtable(L);                     // the module cache
+            lua_pushvalue(L, -1);                // ...and a second reference for package.loaded
+            lua_pushlightuserdata(L, this);      // upvalue 2: FLuaEnv
+            lua_pushcclosure(L, &FLuaEnv::Require, 2);
+            lua_setglobal(L, "require");
+
+            // Publish the very same table as package.loaded. LowLevel::GetLoadedModule()
+            // reads it to tell whether a module is already in, and scripts that inspect
+            // package.loaded work unchanged. On plain Lua the standard library owns this
+            // table; here ours does, and it stays the single source of truth.
+            lua_newtable(L);                     // package
+            lua_pushvalue(L, -3);                // the cache
+            lua_setfield(L, -2, "loaded");
+            lua_setglobal(L, "package");
+            lua_pop(L, 1);                       // drop the cache reference
+        }
+
         UELib::Open(L);
 
 #if UNLUANOVA_HAS_SANDBOX
@@ -627,11 +660,28 @@ namespace UnLuaNova
     void FLuaEnv::AddSearcher(lua_CFunction Searcher, int Index) const
     {
         lua_getglobal(L, "package");
+
+        // Check the table BEFORE indexing into it. Luau has no package library, so
+        // "package" is nil here and lua_getfield would raise an index error - and because
+        // this runs straight from C++ with no protected call around it, Luau has no
+        // errorJmp to unwind to and aborts the whole process. Plain Lua always had a
+        // package table, which is why the old ordering never showed the problem.
+        //
+        // Skipping is safe on Luau: nothing consults package.searchers there, module
+        // resolution goes through LoadFromCustomLoader / LoadFromFileSystem /
+        // LoadFromBuiltinLibs, which UnLuaNova calls directly.
+        if (!lua_istable(L, -1))
+        {
+            UE_LOG(LogUnLuaNova, Verbose, TEXT("No package table on this Lua backend; skipping searcher registration."));
+            lua_pop(L, 1);
+            return;
+        }
+
         lua_getfield(L, -1, "searchers");
         lua_remove(L, -2);
         if (!lua_istable(L, -1))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Invalid package.serachers!"));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Invalid package.searchers!"));
             return;
         }
 
@@ -647,6 +697,68 @@ namespace UnLuaNova
         lua_pushcclosure(L, Searcher, 1);
         lua_rawseti(L, -2, Index);
         lua_pop(L, 1);
+    }
+
+    int FLuaEnv::Require(lua_State* L)
+    {
+        // Upvalue 1 is the module cache (package.loaded equivalent), upvalue 2 is this
+        // FLuaEnv - the loaders below expect it as their own upvalue.
+        if (!lua_isstring(L, 1))
+            return luaL_error(L, "require: module name expected");
+
+        lua_pushvalue(L, lua_upvalueindex(1));   // 2: cache
+        lua_pushvalue(L, 1);                     // 3: name
+        lua_rawget(L, 2);                        // 3: cache[name]
+        if (!lua_isnil(L, 3))
+            return 1;                            // already loaded - do not run it again
+        lua_pop(L, 2);                           // drop cache and the nil, back to the name
+
+        // Same loaders, same order as AddSearcher() on plain Lua. Each takes the module
+        // name and either returns the chunk or nothing when it cannot provide one.
+        static const lua_CFunction Loaders[] =
+        {
+            &FLuaEnv::LoadFromCustomLoader,
+            &FLuaEnv::LoadFromFileSystem,
+            &FLuaEnv::LoadFromBuiltinLibs
+        };
+
+        for (const lua_CFunction Loader : Loaders)
+        {
+            lua_pushvalue(L, lua_upvalueindex(2));
+            lua_pushcclosure(L, Loader, 1);
+            lua_pushvalue(L, 1);                 // module name
+            if (lua_pcall(L, 1, 1, 0) != 0)
+                return luaL_error(L, "error loading module '%s': %s", lua_tostring(L, 1), lua_tostring(L, -1));
+
+            if (lua_isfunction(L, -1))
+                break;
+
+            lua_pop(L, 1);                       // nil: this loader does not handle it
+        }
+
+        if (lua_gettop(L) < 2 || !lua_isfunction(L, 2))
+            return luaL_error(L, "module '%s' not found", lua_tostring(L, 1));
+
+        // Run the chunk with the module name as its single argument, so one chunk can be
+        // shared by several names the way Lua's own loaders are.
+        lua_pushvalue(L, 1);                     // 3: name
+        if (lua_pcall(L, 1, 1, 0) != 0)
+            return luaL_error(L, "error loading module '%s': %s", lua_tostring(L, 1), lua_tostring(L, -1));
+
+        // Cache the result. Lua stores true for a module that returns nothing, so a second
+        // require() is a no-op instead of re-executing the module.
+        if (lua_isnil(L, 2))
+        {
+            lua_pushboolean(L, 1);
+            lua_replace(L, 2);
+        }
+
+        lua_pushvalue(L, lua_upvalueindex(1));   // 3: cache
+        lua_pushvalue(L, 1);                     // 4: name
+        lua_pushvalue(L, 2);                     // 5: module
+        lua_rawset(L, 3);
+        lua_settop(L, 2);
+        return 1;
     }
 
     void FLuaEnv::OnAsyncLoadingFlushUpdate()

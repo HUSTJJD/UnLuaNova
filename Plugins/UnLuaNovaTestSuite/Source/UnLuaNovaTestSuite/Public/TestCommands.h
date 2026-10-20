@@ -41,6 +41,25 @@ namespace UnLuaNovaTestSuite
     public:
         virtual bool Update() override;
     };
+
+    // Takes a screenshot and waits until the PNG is actually on disk.
+    //
+    // Screenshots are written asynchronously, so a test that screenshots and immediately
+    // moves on leaves the report generator with an empty gallery. The wait is bounded on
+    // purpose: a -NullRHI run never produces a PNG, and hanging the whole suite is worse
+    // than missing a picture.
+    class FScreenshotLatentCommand : public IAutomationLatentCommand
+    {
+    public:
+        explicit FScreenshotLatentCommand(FString ShotName);
+
+        virtual bool Update() override;
+
+    private:
+        FString Name;
+        bool bRequested = false;
+        int32 FramesWaited = 0;
+    };
 }
 
 #endif

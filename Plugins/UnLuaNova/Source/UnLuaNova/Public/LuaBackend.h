@@ -88,6 +88,29 @@ static_assert(sizeof(lua_Integer) == 4, "Luau's lua_Integer is 32-bit; these hea
 static_assert(sizeof(lua_Integer) == 8, "Plain Lua's lua_Integer is 64-bit; these headers are not Lua's, or LUA_INT_TYPE was changed in luaconf.h - UNLUANOVA_PUSHINT64/TOINT64 need rechecking.");
 #endif
 
+// --- giving a loaded chunk its own environment --------------------------------
+// Plain Lua keeps a chunk's environment in upvalue 1 (_ENV); Luau keeps it on the
+// LClosure itself - `luaF_newLclosure(L, 0, envt, main)` in lvmload.cpp gives the main
+// chunk *zero* upvalues. So `lua_setupvalue(L, Idx, 1)` on Luau is a no-op, and worse, a
+// silent one: lapi.cpp only pops the value when it found the upvalue, so the env table
+// stays on the stack. Anything that then expects the chunk on top of the stack calls the
+// table instead, and the resulting error text ends up being indexed as if it were a
+// table - which, outside a protected call, is an abort().
+//
+// Both calls take the chunk at Idx (negative) and the env table on top of the stack, and
+// both pop it on success; plain Lua does not pop when it refuses, so this does.
+inline bool UnLuaNovaSetChunkEnv(lua_State* L, int Idx)
+{
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+    return lua_setfenv(L, Idx) != 0; // always pops
+#else
+    const bool Ok = lua_setupvalue(L, Idx, 1) != nullptr; // pops only on success
+    if (!Ok)
+        lua_pop(L, 1);
+    return Ok;
+#endif
+}
+
 // --- plain-Lua spellings Luau does not provide -------------------------------
 //
 // The rest of UnLuaNova was written against plain Lua. Rather than touch every call

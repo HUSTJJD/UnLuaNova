@@ -272,6 +272,19 @@ bool UUnLuaNovaManager::BindClass(UClass* Class, const FString& InModuleName, FS
 
     const auto  L = Env->GetMainState();
     const auto Top = lua_gettop(L);
+    {
+        lua_getglobal(L, "package");
+        const int PkgType = lua_type(L, -1);
+        int LoadedType = LUA_TNONE;
+        if (lua_istable(L, -1))
+        {
+            lua_getfield(L, -1, "loaded");
+            LoadedType = lua_type(L, -1);
+            lua_pop(L, 1);
+        }
+        lua_pop(L, 1);
+        UE_LOG(LogUnLuaNova, Warning, TEXT("DBG %s: package=%s loaded=%s"), *InModuleName, UTF8_TO_TCHAR(lua_typename(L, PkgType)), UTF8_TO_TCHAR(lua_typename(L, LoadedType)));
+    }
     const auto Type = UnLuaNova::LowLevel::GetLoadedModule(L, TCHAR_TO_UTF8(*InModuleName));
     if (Type != LUA_TTABLE)
     {

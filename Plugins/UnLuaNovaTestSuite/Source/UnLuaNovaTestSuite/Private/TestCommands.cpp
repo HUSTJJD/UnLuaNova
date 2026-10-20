@@ -16,6 +16,11 @@
 
 #include "TestCommands.h"
 
+#include "HAL/FileManager.h"
+#include "HAL/IConsoleManager.h"
+#include "Misc/Paths.h"
+#include "UnrealClient.h"
+
 #if WITH_EDITOR
 #include "FileHelpers.h"
 #include "LevelEditor.h"
@@ -137,6 +142,44 @@ namespace UnLuaNovaTestSuite
 #endif
         return true;
     }
+
+    FScreenshotLatentCommand::FScreenshotLatentCommand(FString ShotName)
+        : Name(MoveTemp(ShotName))
+    {
+    }
+
+    bool FScreenshotLatentCommand::Update()
+    {
+        const FString Path = FPaths::ScreenShotDir() / (Name + TEXT(".png"));
+
+        if (!bRequested)
+        {
+            bRequested = true;
+            // No suffix: the report generator matches screenshots by name, so the file has
+            // to be exactly <Name>.png.
+            FScreenshotRequest::RequestScreenshot(Name, false, false);
+            return false;
+        }
+
+        if (IFileManager::Get().FileExists(*Path))
+            return true;
+
+        return ++FramesWaited > 120;
+    }
+
+    // Lets a run grab pictures without writing a test for it, e.g.
+    //   -ExecCmds="UnLuaNovaTest.Screenshot Showcase_Binding; Quit"
+    // which is how the showcase pages are captured.
+    static void TakeScreenshotCommand(const TArray<FString>& Args)
+    {
+        const FString ShotName = Args.Num() > 0 ? Args[0] : TEXT("UnLuaNovaTest");
+        FScreenshotRequest::RequestScreenshot(ShotName, false, false);
+    }
+
+    static FAutoConsoleCommand GScreenshotConsoleCommand(
+        TEXT("UnLuaNovaTest.Screenshot"),
+        TEXT("Requests a screenshot into Saved/Screenshots. Usage: UnLuaNovaTest.Screenshot <name>"),
+        FConsoleCommandWithArgsDelegate::CreateStatic(&TakeScreenshotCommand));
 }
 
 #endif
