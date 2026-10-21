@@ -32,7 +32,7 @@ BEGIN_TESTSUITE(FIssue372Test, TEXT("UnLuaNova.Regression.Issue372 Actor调用K2
             UnLuaNova::PushUObject(L, GWorld);
 
             const auto Chunk = R"(
-            local ActorClass = UE.UClass.Load("/UnLuaNovaTestSuite/Tests/Binding/BP_UnLuaTestActor_StaticBinding.BP_UnLuaTestActor_StaticBinding_C")
+            local ActorClass = UE.UClass.Load("/UnLuaNovaTestSuite/Tests/Binding/BP_UnLuaNovaTestActor_StaticBinding.BP_UnLuaTestActor_StaticBinding_C")
             Actor = World:SpawnActor(ActorClass)
 
             local registry = debug.getregistry()

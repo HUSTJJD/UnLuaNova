@@ -34,8 +34,8 @@ struct FUnLuaNovaTest_Issue321 : FUnLuaNovaTestBase
         lua_setglobal(L, "G_World");
         
         const char* Chunk = "\
-            local ClassA = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue321/A/BP_UnLuaTestActor_Issue321.BP_UnLuaTestActor_Issue321_C')\
-            local ClassB = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue321/B/BP_UnLuaTestActor_Issue321.BP_UnLuaTestActor_Issue321_C')\
+            local ClassA = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue321/A/BP_UnLuaNovaTestActor_Issue321.BP_UnLuaTestActor_Issue321_C')\
+            local ClassB = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue321/B/BP_UnLuaNovaTestActor_Issue321.BP_UnLuaTestActor_Issue321_C')\
             return ClassA ~= ClassB\
             ";
         UnLuaNova::RunChunk(L, Chunk);

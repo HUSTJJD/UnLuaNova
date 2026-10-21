@@ -355,8 +355,16 @@ inline void lua_register(lua_State* L, const char* Name, lua_CFunction Fn)
 // lua_pushinteger pushes a double (LUA_TNUMBER), so lua_isinteger answers false for a
 // value Lua 5.5 reports as an integer. lua_pushinteger64 pushes LUA_TINTEGER instead,
 // which is what plain Lua does.
+//
+// That consistency is exactly what makes LUA_TINTEGER wrong to push on Luau. A Luau script
+// only ever has doubles - the compiler emits LUA_TNUMBER for every literal - so handing one
+// back a LUA_TINTEGER makes `Value + 1` an integer-plus-double and a hard runtime error,
+// "attempt to perform arithmetic (add) on integer and number". Anything reading an int64
+// property or an enum value and doing arithmetic on it dies. Push the double instead:
+// values past 2^53 lose precision, but the number stays usable by a script, and for a
+// scripting layer usable beats exact. UNLUANOVA_TOINT64 still reads both tags back.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
-#define UNLUANOVA_PUSHINT64(L, V) lua_pushinteger64(L, (int64_t)(V))
+#define UNLUANOVA_PUSHINT64(L, V) lua_pushnumber(L, (lua_Number)(V))
 
 // Luau's lua_tointeger64 reads *only* the 64-bit integer type (LUA_TINTEGER) and hands
 // back 0 for anything else - see lapi.cpp: it tests ttisinteger() and returns 0 from the

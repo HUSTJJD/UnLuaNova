@@ -23,6 +23,7 @@ Usage:
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from datetime import datetime
@@ -127,6 +128,23 @@ def _entry_messages(entry, kind):
     return out
 
 
+# Assertion failures carry the absolute path of the file that raised them, which means the
+# checkout directory and the engine directory. That is fine in Saved/ and wrong in a file
+# that is committed and published, so the published copy gets them rewritten to something
+# that still identifies the file without saying where this machine keeps it.
+_ENGINE_SOURCE_RE = re.compile(r"[A-Za-z]:\\[^\s\[\]\"']*?\\Engine\\Source\\")
+
+
+def strip_machine_paths(text: str, repo_root: Path) -> str:
+    text = _ENGINE_SOURCE_RE.sub(r"<UE>\\Engine\\Source\\", text)
+
+    root = str(repo_root)
+    for candidate in (root, root.replace("\\", "/")):
+        for sep in ("\\", "/"):
+            text = text.replace(candidate + sep, "")
+    return text
+
+
 def load_tests(reports_dir: Path):
     tests = []
     for path in sorted(reports_dir.glob("*.json")):
@@ -199,6 +217,15 @@ def render(tests, screenshots, image_prefix, generated, reports_dir, published=F
     total_time = sum(t["duration"] for t in timed)
 
     lines = []
+    if published:
+        # MkDocs takes the page title and description from front matter. Writing the report
+        # over this file without it dropped both, so the page fell back to its file name in
+        # the nav and lost its description - the report looked like it had gone missing.
+        lines.append("---")
+        lines.append('title: "测试报告"')
+        lines.append('description: "自动化测试产出的通过率、失败明细与截图"')
+        lines.append("---")
+        lines.append("")
     lines.append("# 测试报告")
     lines.append("")
     lines.append(f"> 由 `Tools/GenerateTestReport.py` 自动生成于 {generated}。请勿手工编辑。")
@@ -349,7 +376,10 @@ def main() -> None:
             for name in screenshots:
                 shutil.copy2(shot_dir / name, images_dir / name)
         (docs_dir / "test-report.md").write_text(
-            render(tests, screenshots, "Images/tests/", generated, reports_dir, published=True),
+            strip_machine_paths(
+                render(tests, screenshots, "Images/tests/", generated, reports_dir, published=True),
+                repo_root,
+            ),
             encoding="utf-8",
             newline="\n",
         )

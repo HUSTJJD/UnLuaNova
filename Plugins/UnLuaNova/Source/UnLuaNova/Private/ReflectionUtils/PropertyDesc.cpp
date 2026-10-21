@@ -787,7 +787,10 @@ public:
         }
         else if (Type == LUA_TUSERDATA)
         {
-            FLuaArray* Src = (FLuaArray*)lua_touserdata(L, IndexInStack);
+            // Not lua_touserdata(): a script container is UnLuaNova userdata, so the block
+            // start is a FUserdataDesc and the FLuaArray lives behind it. Reading the
+            // descriptor as the array made Src->ScriptArray -1 and the memcpy crash.
+            FLuaArray* Src = (FLuaArray*)GetUserdataFast(L, IndexInStack);
             if (Src)
             {
                 if (!bCopyValue && Property->HasAnyPropertyFlags(CPF_OutParm))

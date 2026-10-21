@@ -31,7 +31,7 @@ struct FUnLuaNovaTest_Issue473 : FUnLuaNovaTestBase
         FUnLuaNovaTestBase::SetUp();
 
         const auto Chunk = R"(
-            local StubClass = UE.UClass.Load("/UnLuaNovaTestSuite/Tests/Regression/Issue473/BP_UnLuaTestStub_Issue473.BP_UnLuaTestStub_Issue473_C")
+            local StubClass = UE.UClass.Load("/UnLuaNovaTestSuite/Tests/Regression/Issue473/BP_UnLuaNovaTestStub_Issue473.BP_UnLuaTestStub_Issue473_C")
             local Stub = NewObject(StubClass)
             print("Stub.Name=", Stub.Name)
             return Stub:TestForIssue473(Stub.Name)

@@ -37,7 +37,7 @@ struct FUnLuaNovaTest_Issue445 : FUnLuaNovaTestBase
         World->BeginPlay();
         World->SetBegunPlay(true);
 
-        const auto ActorClass = LoadClass<AUnLuaTestActor>(World, TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue445/BP_UnLuaTestActor_Issue445.BP_UnLuaTestActor_Issue445_C"));
+        const auto ActorClass = LoadClass<AUnLuaTestActor>(World, TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue445/BP_UnLuaNovaTestActor_Issue445.BP_UnLuaTestActor_Issue445_C"));
         const auto Actor = (AUnLuaTestActor*)World->SpawnActor(ActorClass);
         const auto Result = Actor->TestForIssue445(1);
         RUNNER_TEST_TRUE(Result!= nullptr)

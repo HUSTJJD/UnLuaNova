@@ -48,9 +48,9 @@ void FUnLuaNovaLibObjectSpec::Define()
     {
         It(TEXT("加载一个对象"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UClass* Expected = LoadObject<UClass>(nullptr, TEXT("/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C"));
+            UClass* Expected = LoadObject<UClass>(nullptr, TEXT("/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaNovaTestStubActor.BP_UnLuaTestStubActor_C"));
             const char* Chunk = R"(
-            local ActorClass = UE.UObject.Load('/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C')
+            local ActorClass = UE.UObject.Load('/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaNovaTestStubActor.BP_UnLuaTestStubActor_C')
             return ActorClass
             )";
             UnLuaNova::RunChunk(L, Chunk);

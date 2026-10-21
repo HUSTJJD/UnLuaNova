@@ -916,7 +916,7 @@ static void GetFieldInternal(lua_State* L)
             // check cached property from non-native class
             if (bCached && !Field->OuterClass->IsNative())
             {
-                auto Ptr = lua_touserdata(L, -1);
+                auto Ptr = GetUserdataFast(L, -1);
                 if (Ptr)
                 {
                     auto Property = static_cast<TSharedPtr<UnLuaNova::ITypeOps>*>(Ptr);
@@ -1109,7 +1109,11 @@ int32 Class_Index(lua_State *L)
 {
     GetField(L);
 
-    auto Ptr = lua_touserdata(L, -1);
+    // Not lua_touserdata(): userdata UnLuaNova allocated carries a FUserdataDesc header
+    // ([desc][padding][payload]), so the block start is not the TSharedPtr. Reading the
+    // descriptor bytes as the pointer gave a property whose object was -1, and the first
+    // virtual call on it crashed. Same rule as ScriptStruct_Index / GetUserdata().
+    auto Ptr = GetUserdataFast(L, -1);
     if (!Ptr)
         return 1;
 
@@ -1139,7 +1143,8 @@ int32 Class_NewIndex(lua_State *L)
 {
     GetField(L);
 
-    auto Ptr = lua_touserdata(L, -1);
+    // See Class_Index: the payload, not the block start.
+    auto Ptr = GetUserdataFast(L, -1);
     if (Ptr)
     {
         auto Property = static_cast<TSharedPtr<UnLuaNova::ITypeOps>*>(Ptr);

@@ -32,7 +32,7 @@ struct FUnLuaNovaTest_Issue344 : FUnLuaNovaTestBase
         GetTestRunner().AddExpectedError(TEXT("invalid owner"), EAutomationExpectedErrorFlags::Contains);
 
         const auto Chunk = "\
-        local obj = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C') \
+        local obj = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaNovaTestStubActor.BP_UnLuaTestStubActor_C') \
         obj.Int32Property = 1 \
         ";
         UnLuaNova::RunChunk(L, Chunk);

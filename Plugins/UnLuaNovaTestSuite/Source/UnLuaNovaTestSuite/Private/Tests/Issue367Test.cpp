@@ -33,7 +33,7 @@ struct FUnLuaNovaTest_Issue367 : FUnLuaNovaTestBase
         lua_setglobal(L, "World");
         
         const auto Chunk1 = R"(
-                local ActorClass = UE.UObject.Load('/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C')
+                local ActorClass = UE.UObject.Load('/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaNovaTestStubActor.BP_UnLuaTestStubActor_C')
                 _G.MT = getmetatable(ActorClass) 
                 local Actor = World:SpawnActor(ActorClass)
                 Actor:K2_DestroyActor()
@@ -43,7 +43,7 @@ struct FUnLuaNovaTest_Issue367 : FUnLuaNovaTestBase
         CollectGarbage(RF_NoFlags, true); // UEGC了ActorClass，此时lua里ActorClass的元表还没有被luagc，但元表里对应的FClassDesc已经在FReflectionRegistry::NotifyUObjectDeleted中析构了
 
         const auto Chunk2 = R"(
-                _G.ActorClass = UE.UObject.Load('/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaTestStubActor.BP_UnLuaTestStubActor_C')
+                _G.ActorClass = UE.UObject.Load('/UnLuaNovaTestSuite/Tests/Misc/BP_UnLuaNovaTestStubActor.BP_UnLuaTestStubActor_C')
                 _G.Actor = World:SpawnActor(ActorClass)
                 _G.MT = nil
             )";

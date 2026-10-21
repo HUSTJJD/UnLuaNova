@@ -161,6 +161,12 @@ Could not locate a UE build. Do one of:
 if (-not $OutputDir) {
     $OutputDir = Join-Path $RepoRoot ("Saved/TestReports/" + (Get-Date -Format "yyyyMMdd-HHmmss"))
 }
+# UE resolves -ReportExportPath against its own working directory (the engine's
+# Binaries/Win64), not ours, so a relative -OutputDir silently wrote the JSON next to
+# UnrealEditor-Cmd.exe and the run looked like it produced nothing.
+if (-not [System.IO.Path]::IsPathRooted($OutputDir)) {
+    $OutputDir = Join-Path (Get-Location) $OutputDir
+}
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
 $EditorCmd = Join-Path $EnginePath "Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
