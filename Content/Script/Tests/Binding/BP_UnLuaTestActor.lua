@@ -34,7 +34,10 @@ function M:RunTest()
             actual = getter(actual)
         end
         if actual ~= expected then
-            table.insert(errors, string.format("self.%s should be %s, but got %s", key, expected, actual))
+            -- tostring() on all three: Luau's %s takes a string and nothing else (plain Lua
+            -- stringifies numbers and booleans for you), and the values compared here are
+            -- booleans, numbers and UObjects.
+            table.insert(errors, string.format("self.%s should be %s, but got %s", tostring(key), tostring(expected), tostring(actual)))
         end
     end
 

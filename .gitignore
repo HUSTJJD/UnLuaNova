@@ -32,3 +32,4 @@ IOS/
 
 # MkDocs build output
 /_site/
+__pycache__

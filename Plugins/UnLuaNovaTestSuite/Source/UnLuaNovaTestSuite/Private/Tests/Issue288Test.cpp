@@ -29,7 +29,9 @@ struct FUnLuaNovaTest_Issue288 : FUnLuaNovaTestBase
         FUnLuaNovaTestBase::SetUp();
 
         const auto Chunk1 = R"(
-        local UMGClass = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue288/UnLuaNovaTestUMG_Issue288.UnLuaNovaTestUMG_Issue288_C')
+        -- As in Issue295: the asset file was renamed to UnLuaNovaTestUMG_Issue288, but the
+        -- BlueprintGeneratedClass inside it is still UnLuaTestUMG_Issue288_C.
+        local UMGClass = UE.UClass.Load('/UnLuaNovaTestSuite/Tests/Regression/Issue288/UnLuaNovaTestUMG_Issue288.UnLuaTestUMG_Issue288_C')
         G_UMG = NewObject(UMGClass)
         )";
         UnLuaNova::RunChunk(L, Chunk1);

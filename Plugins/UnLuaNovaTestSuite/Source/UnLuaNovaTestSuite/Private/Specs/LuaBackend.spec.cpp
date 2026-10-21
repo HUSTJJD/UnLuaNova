@@ -89,6 +89,17 @@ namespace
     }
 }
 
+namespace
+{
+    // Read back by the yieldable spec: runs inside a pcall, i.e. with a C boundary crossed,
+    // which is the state Luau's lua_isyieldable() actually reports on.
+    int SpecYieldableProbe(lua_State* L)
+    {
+        lua_pushboolean(L, UNLUANOVA_IS_YIELDABLE(L) == 0);
+        return 1;
+    }
+}
+
 #if UNLUANOVA_HAS_BREAKPOINT
 namespace
 {
@@ -746,10 +757,28 @@ void FLuaBackendSpec::Define()
 
             // Latent actions ask this before yielding, so the failure names the real
             // constraint instead of Luau's opaque "attempt to yield across a C-call boundary".
+            //
+            // The main state is where the two backends genuinely disagree, and both are
+            // right: plain Lua will not yield from the main thread at all, while Luau only
+            // refuses once another C boundary has been crossed (nCcalls > baseCcalls) - and
+            // at the top of a chunk none has been, so it answers yes. Cross one (a pcall
+            // into a C function, below) and Luau says no too.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+            TEST_TRUE(UNLUANOVA_IS_YIELDABLE(L) != 0);
+#else
             TEST_TRUE(UNLUANOVA_IS_YIELDABLE(L) == 0);
+#endif
 
+            // A coroutine is yieldable on both, which is the case a latent action asks about.
             const auto Co = lua_newthread(L);
             TEST_TRUE(UNLUANOVA_IS_YIELDABLE(Co) != 0);
+
+            // The Luau half of the same primitive: inside a C function reached through
+            // pcall, the boundary is crossed and yielding is refused.
+            lua_pushcfunction(L, SpecYieldableProbe);
+            TEST_EQUAL(lua_pcall(L, 0, 1, 0), LUA_OK);
+            TEST_TRUE(UNLUANOVA_IS_YIELDABLE(L) != 0); // back outside, still yes
+            TEST_TRUE(lua_toboolean(L, -1));
             lua_settop(L, Top);
         });
 

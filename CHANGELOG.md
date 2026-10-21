@@ -40,6 +40,10 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   上游组件的 MIT 授权不变，见 `LICENSE-THIRD-PARTY.md`
 - 贡献需要签 CLA（见 `CLA.md` / `CONTRIBUTING.md`），否则商业授权无法向下再许可
 - `UE` 命名空间新增 `__newindex`：脚本改写引擎类型会被直接拒绝
+- `Tools/RunTests.ps1` 切换 Lua 后端改为**原子操作**：后端是编译期选择，ini 与二进制一旦分叉，
+  结果就会被记在错误的后端名下（真发生过：目录叫 `lua`，跑的是 Luau 的二进制）。现在加了
+  单实例锁（`Saved/RunTests.lock`，带持有者 PID）、编译失败立刻还原 ini、启动编辑器前按
+  UBT 生成的 `Definitions.UnLuaNova.h` 校验磁盘上真正的后端，`-SkipBuild` 与切后端互斥
 
 ### Fixed
 - **Lua 5.5 后端一跑就崩**：`TSharedPtr` 的 `__gc`（`ReleaseSharedPtr`）用 `lua_touserdata()` 取到的是
@@ -76,26 +80,53 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   现在改为写 `lua_callbacks(L)->debugbreak` / `debugstep`（Luau 真正回调调试 hook 的两个槽位），
   nullptr 即撤下；顺带修好 `lua.dbg` 的单步：此前没有任何回调装在 `debugstep` 上，
   `SetSingleStep()` 是静默失效的
+- **测试进程崩溃后报告只剩"0 tests"**：崩溃时自动化框架不导出任何 JSON，报告与"压根没跑起来"
+  长得一模一样，只能去翻几百 KB 的 `Editor.log`。现在 `GenerateTestReport.py` 会从中抓出
+  **崩溃时正在跑的用例**和调用栈，写进报告的「崩溃」一节，`summary.json` 增加 `crashed` /
+  `crash_test`；`RunTests.ps1` 同时把崩溃栈打到控制台并把退出码置 1（否则 CI 会当成通过）
+- **Luau 没有 `collectgarbage`**：Luau 的基础库只到 `gcinfo()`，凡是强制 gc 的脚本（Issue291
+  就是靠它证明委托绑定能活过一次 gc）都死在 `attempt to call a nil value`。现在
+  `LuaScriptCompat` 在名字空闲时补上（plain Lua 自带，不会被覆盖），支持
+  `collect` / `step` / `count`，单位与 plain Lua 一致
+- **Luau 的 `%s` 只吃字符串**：`string.format("%s", 整数或布尔)` 在 Luau 下是
+  `invalid argument #4 to 'format' (string expected, got integer)`，plain Lua 会自动
+  `tostring`。`Tests/Binding/BP_UnLuaTestActor.lua` 的错误拼接因此炸掉，连带 Dynamic /
+  Static / Priority 三条绑定用例在 Luau 上失败；已改为显式 `tostring()`
+- **Issue362 的 chunk 里类名大小写被改名脚本改坏**：`UE.UUNLUANOVATestStub` 应为
+  `UE.UUnLuaNovaTestStub`（改名把 `UnLua` 替换成 `UNLUANOVA` 时把 `UUnLua...` 拼坏了），取到 nil，
+  两个后端都失败
+- **Issue288 / Issue295 按新类名取 UMG 类**：资产文件改名成了 `UnLuaNovaTestUMG_Issue288`，
+  但里面的 `BlueprintGeneratedClass` 仍是 `UnLuaTestUMG_Issue288_C`（改文件名不会改资产里的类），
+  `UE.UClass.Load` 因此拿到 nil、`NewObject` 报 `Invalid class!`。已按资产里真实存在的类取
+- **`UNLUANOVA_IS_YIELDABLE` 用例按 plain Lua 的语义断言主线程**：Luau 的
+  `lua_isyieldable()` 是 `nCcalls <= baseCcalls`，主线程在没跨过 C 边界时回答"可 yield"，
+  所以 `== 0` 在 Luau 上必然失败。现在按后端断言，并额外验证"跨过 C 边界后两边都回答不可 yield"
 
 ### Reverted
 - **PR #719**：其守卫会在子类实例上跳过 Lua 覆写（详见 `Docs/Archive/` 说明），
   需先补「子类实例仍能执行 Lua 覆写」的测试再评估
 
 ### Known Issues
-- **剩余测试失败的分类结论**（Luau 357 条里 32 条失败，与 Lua 后端 367 条里 23 条失败逐条比对得出）：
-  - **17 条两个后端都挂**，与后端分叉无关，全部是资产/数据层：
-    6 条是 `Failed to find object 'Class .../BP_X.BP_X_C'`（Multiple / Overridden / Issue288 /
-    Issue295 / Issue314 / Issue362 / Issue398，`.uasset` 在盘上但生成类取不到，需要在编辑器里
-    resave 重新编译）；3 条是 `Missing RowStruct`（DataTable_CppTest / DataTable_Issue583 的
-    RowStruct 结构已不存在）；Issue634 是蓝图编译失败（`Issue 634Struct` 结构体已不存在）；
-    其余 6 条（Issue286 / 300 / 401 / 434 / 443 / 453）是蓝图脚本没写回期望的全局变量，需要运行时定位
-  - 另有 4 条「按引用传递参数」是 chunk 里类名大小写写错（`UE.FUNLUANOVATestLib` /
-    `UE.UUNLUANOVATestFunctionLibrary`，实际是 `FUnLuaNovaTestLib` / `UUnLuaNovaTestFunctionLibrary`），
-    取到 nil，两个后端一样；已改正
-  - **Luau 独有**里剩下的：`创建Actor，指定初始Transform...`（Translation 取到 `98.451/120.737/1`，
-    Z 对而 X/Y 是脏值，像是别名/复用内存，需运行时确认）与 Issue291（委托 `attempt to call a nil value`）
-  - `UE.FUNLUANOVATestLib` / `UE.UUNLUANOVATestFunctionLibrary` 在 Luau 下取到 nil（plain Lua 能取到），
-    是「按引用传递参数」4 条在 Luau 上多出来的一层失败
+- **剩余测试失败的分类结论**（Luau 23 条失败、Lua 17 条失败，逐条比对 + 直接读 `.uasset` 二进制得出）：
+  - **资产未编译（3 条，两个后端）**：`Tests/Binding/BP_UnLuaNovaTestActor_StaticBindingChild`
+    （Multiple / Overridden）、`Tests/Regression/Issue314/BP_UnLuaNovaTestActor_Issue314_Child`
+    （Issue314）、`Tests/Regression/Issue398/BP_Character`（Issue398）这三个 `.uasset` 里既没有
+    `SKEL_*` 也没有 `Default__*`，更没有 `BlueprintGeneratedClass` 导出——是"未编译"状态，
+    所以 `Class ..._C` 取不到。同目录的 Parent / 兄弟蓝图都有，说明是落盘时没编译，
+    **必须在编辑器里编译并保存**（`BP_Character` 内部还残留旧包路径 `/UnLuaTestSuite/`）
+  - **DataTable（3 条，两个后端）**：`Tests/Misc/DataTable_CppTest.uasset` 的 RowStruct 是空的
+    （资产很旧，只剩一个 `RowStructure` 属性名，没有任何 `/Script/...Row` 引用），
+    需要设成 `UnLuaNovaTestTableRow` 并补数据；`Tests/Regression/Issue583/DataTable_Issue583.uasset`
+    引用的是 `/Script/UnLuaNovaTestSuite.Issue583Row`（结构体还在），但同样需要 resave
+  - **Issue634**：蓝图编译失败，`Issue 634Struct` 已不存在
+  - **值不回传（6 条，两个后端一致，与后端分叉无关）**：Issue286 / 300 / 401 / 434 / 443 / 453。
+    这些蓝图都已编译、`GetModuleName` 的返回值也都在（如 `Tests.Regression.Issue300.TestActor`），
+    地图资产也没有指向旧包路径，所以不是资产问题，而是运行时：Lua 覆写 UFUNCTION 的返回值 /
+    引用参数没写回、蓝图 TMap `FindRef`、MulticastDelegate 的 handler 与 self 绑定。需要运行时定位
+  - **Luau 独有 1 条**：`创建Actor，指定初始Transform/CollisionHanding/Owner/Instigator`
+    （4 个参数版通过，5 个参数版 Translating 取到 `98.451/120.737/1`，Z 对而 X/Y 是脏值，
+    且 `SpawnCollisionHandlingMethod` 也不对）。`UWorld_SpawnActor` 里 `NumParams == 6` 时
+    读 `Transform`（索引 3）与读枚举（索引 4）都不对，像是别名/复用内存，需要运行时确认
 - 尚未在 UE 5.8 上编译验证
 - UCLASS 改名需要 resave 资产与迁移 `Config/*.ini`
 - Luau 后端未接线：`UNLUANOVA_LUA_BACKEND` 默认 0，`LuaCore` 仍依赖 Lua 5.4 内部头

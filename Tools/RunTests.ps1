@@ -17,6 +17,13 @@
     rebuilds, runs, then does the same for the other backend - one report directory per
     backend, and two pages when publishing.
 
+    That setting is global state, so switching it is treated as a transaction: an exclusive
+    lock keeps two runs from interleaving (a second Build.bat would otherwise just wait on
+    UBT's mutex and then run the first run's binaries), the ini is restored the moment a
+    build fails rather than only at the end, and before the editor starts the run checks
+    the artifacts UBT left behind - not the directory name - to confirm which backend is
+    actually on disk. -SkipBuild still switches nothing.
+
     After each run it collects the JSON the automation framework exported, grabs any
     screenshots the tests took, and hands both to Tools/GenerateTestReport.py, which
     writes the actual conclusions (report.md + summary.json).
@@ -47,8 +54,10 @@
     Configuration handed to UBT. Default Development.
 
 .PARAMETER SkipBuild
-    Skip the build and test whatever binaries are already there. Only right when you know
-    they were built for the backend being tested.
+    Skip the build and test whatever binaries are already there. Refuses to run if the
+    backend being asked for is not the one the project is currently set to: switching the
+    setting without rebuilding would only relabel the existing binaries, and every result
+    would be filed - and read - as the wrong backend.
 
 .PARAMETER Filter
     Automation test filter, matched as a prefix. Default "UnLuaNova" runs everything the
@@ -213,6 +222,130 @@ if (-not $SkipBuild -and -not (Test-Path $BuildBat)) {
     throw "Build.bat not found under '$EnginePath'. Pass -EnginePath <UE root> or add -SkipBuild."
 }
 
+# --- one run at a time -------------------------------------------------------------
+# The backend is global state: an ini value plus whatever the last build linked. Two runs
+# overlap at their peril - the second Build.bat only waits on UBT's mutex and then uses
+# whatever the first one produced, which is exactly how a run filed under 'lua' once ran
+# Luau binaries. This lock makes that impossible, and it records the owning PID so a run
+# that was killed does not block the next one forever.
+$LockPath = Join-Path $RepoRoot "Saved/RunTests.lock"
+$LockStream = $null
+
+function Acquire-RunLock {
+    if (Test-Path $LockPath) {
+        $Held = Get-Content $LockPath -Raw -ErrorAction SilentlyContinue
+        $HeldPid = if ($Held -match "pid=(\d+)") { $Matches[1] } else { $null }
+        if ($HeldPid -and (Get-Process -Id ([int]$HeldPid) -ErrorAction SilentlyContinue)) {
+            throw @"
+Another RunTests.ps1 is already running (pid $HeldPid - see $LockPath).
+The Lua backend is global state: an ini value plus the built binaries. Two runs at once
+would hand one of them the other one's build. Wait for it to finish, or delete the lock
+if you are certain it is not running.
+"@
+        }
+        Write-Host "Removing stale lock from a run that is no longer alive ($LockPath)" -ForegroundColor Yellow
+        Remove-Item $LockPath -Force -ErrorAction SilentlyContinue
+    }
+
+    New-Item -ItemType Directory -Path (Split-Path -Parent $LockPath) -Force | Out-Null
+    # FileShare::None is the actual mutex: a second process cannot even open the file.
+    $script:LockStream = [System.IO.File]::Open($LockPath, [System.IO.FileMode]::OpenOrCreate,
+        [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    $Stamp = [System.Text.Encoding]::UTF8.GetBytes("pid=$PID started=$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
+    $script:LockStream.Write($Stamp, 0, $Stamp.Length)
+    $script:LockStream.Flush()
+}
+
+function Release-RunLock {
+    if ($script:LockStream) {
+        $script:LockStream.Dispose()
+        $script:LockStream = $null
+    }
+    Remove-Item $LockPath -Force -ErrorAction SilentlyContinue
+}
+
+# --- which backend is actually in these binaries? -----------------------------------
+# The ini and the run directory name are only intentions. The authoritative answer is the
+# header UBT generated for the plugin module when it compiled: it carries
+# UNLUANOVA_LUA_BACKEND (0 = Lua, 1 = Luau) and it only exists for a build that ran.
+$PluginRoot = Join-Path $RepoRoot "Plugins/UnLuaNova"
+
+function Get-BuiltBackend {
+    $Definitions = Join-Path $PluginRoot "Intermediate/Build/Win64/x64/UnrealEditor/Development/UnLuaNova/Definitions.UnLuaNova.h"
+    if (-not (Test-Path $Definitions)) { return $null }
+
+    $Text = Get-Content $Definitions -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+    if (-not $Text) { return $null }
+    if ($Text -match "UNLUANOVA_LUA_BACKEND\s+1") { return "Luau" }
+    if ($Text -match "UNLUANOVA_LUA_BACKEND\s+0") { return "Lua" }
+    return $null
+}
+
+function Assert-BackendBuilt {
+    param([string] $Value)
+
+    $Dll = Join-Path $PluginRoot ("Binaries/Win64/UnrealEditor-" + $Value + ".dll")
+    if (-not (Test-Path $Dll)) {
+        throw "'$Dll' is missing - the $Value backend has never been built here. Drop -SkipBuild."
+    }
+
+    $Built = Get-BuiltBackend
+    if ($Built -ne $Value) {
+        throw @"
+This run is for the $Value backend, but the binaries on disk are the $Built build.
+The backend is a compile-time choice (UnLuaNova.Build.cs reads LuaBackend from $IniPath);
+switching it without a build that actually finishes - or a build that was interrupted -
+leaves the ini, the run directory name and the DLLs disagreeing, and the tests get filed
+under the wrong backend. Rebuild (drop -SkipBuild) and run again.
+"@
+    }
+}
+
+# A crash exports no JSON, so a crashed run used to look like "0 tests" and the only clue
+# was a 500 KB log nobody opened. Pull the answer out of the log and print it here.
+function Show-CrashSummary {
+    param([string] $LogPath)
+
+    if (-not (Test-Path $LogPath)) { return }
+    $Lines = Get-Content $LogPath -Encoding UTF8 -ErrorAction SilentlyContinue
+    if (-not $Lines) { return }
+
+    $CrashAt = -1
+    for ($i = 0; $i -lt $Lines.Count; $i++) {
+        if ($Lines[$i] -match "Critical error|Fatal error|Unhandled Exception|Assertion failed|Ensure failed") {
+            $CrashAt = $i
+            break
+        }
+    }
+    if ($CrashAt -lt 0) { return }
+
+    # The test that was running: the last "Test Started" with no "Test Completed" to match.
+    # (-notMatch would not fill $Matches, hence the nested if.)
+    $Running = $null
+    for ($i = 0; $i -lt $CrashAt; $i++) {
+        if ($Lines[$i] -match "Test Started\. Name=\{([^}]*)\}") {
+            $Name = $Matches[1]
+            $Done = $false
+            for ($j = $i + 1; $j -lt $CrashAt; $j++) {
+                if ($Lines[$j] -match "Test Started\.") { break }
+                if ($Lines[$j] -match "Test Completed\." -and $Lines[$j] -match [regex]::Escape("Name={$Name}")) {
+                    $Done = $true
+                    break
+                }
+            }
+            if (-not $Done) { $Running = $Name }
+        }
+    }
+
+    Write-Host ""
+    Write-Host "CRASH: the editor died - no results were exported." -ForegroundColor Red
+    if ($Running) { Write-Host "  running at the time : $Running" -ForegroundColor Red }
+    $Lines[$CrashAt..([Math]::Min($CrashAt + 5, $Lines.Count - 1))] | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+    $Lines | Where-Object { $_ -match "\[Callstack\]" } | Select-Object -First 5 |
+        ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+    Write-Host ""
+}
+
 # --- the Lua backend is a build-time setting ------------------------------------------
 # Both backends export the same lua_* symbols, so exactly one of them is in a build and it
 # is picked by UnLuaNova.Build.cs reading LuaBackend out of this ini. Running both backends
@@ -340,6 +473,11 @@ if ($DryRun)
 
 $ExitCode = 0
 $CurrentBackend = Get-IniBackend
+$IniOriginal = $CurrentBackend
+
+# Taken only now: -DryRun exits above without touching anything, and must not leave a lock
+# behind for the next run to trip over.
+Acquire-RunLock
 
 try {
     foreach ($B in $Backends) {
@@ -347,6 +485,18 @@ try {
         Write-Host "=== Backend $B ===" -ForegroundColor Cyan
 
         if ($CurrentBackend -ne $B) {
+            # Switching the backend without rebuilding is the one thing this script must
+            # never do: the ini would name one backend while the DLLs are the other, and
+            # every result would be filed - and read - as the wrong backend.
+            if ($SkipBuild) {
+                throw @"
+-Backend $B together with -SkipBuild, while the project is set to '$CurrentBackend'.
+-SkipBuild means "test whatever is already built", and what is built here is
+$CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
+-Backend $CurrentBackend.
+"@
+            }
+
             Write-Host "Setting LuaBackend=$B in $IniPath"
             Set-IniBackend -Value $B
             $CurrentBackend = $B
@@ -371,13 +521,24 @@ try {
             Write-Host "Build exited with $BuildExit in $('{0:N1}' -f $Bsw.Elapsed.TotalSeconds)s"
             if ($BuildExit -ne 0) {
                 Write-Host "Build failed for the $B backend - its tests were not run." -ForegroundColor Red
+                # Put the ini back *now*, not only at the end of the script: it currently
+                # names a backend that was never built, and the next -SkipBuild run would
+                # silently test the old binaries under the new name.
+                Restore-IniBackend
+                $CurrentBackend = $IniOriginal
                 $ExitCode = 1
                 continue
             }
         }
 
+        # Only now is it safe to name this run's backend: the build produced it and the
+        # artifacts agree with the ini. Everything downstream reads it from here.
+        Assert-BackendBuilt -Value $B
+
         $RunDir = Join-Path $OutputDir $B.ToLower()
         New-Item -ItemType Directory -Path $RunDir -Force | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $RunDir "backend.txt"), $B,
+            (New-Object System.Text.UTF8Encoding($false)))
         $RunArgs = @(Get-EditorArgs -ReportDir $RunDir)
         Write-Host "Cmd    : $EditorCmd $($RunArgs -join ' ')"
 
@@ -405,6 +566,11 @@ try {
             Write-Host "No automation JSON in '$RunDir' - check '$(Join-Path $RunDir 'Editor.log')'." -ForegroundColor Yellow
         }
 
+        # A crash exports nothing, so without this the run looks like "0 tests" and the only
+        # clue is a half-megabyte log. Show-CrashSummary says nothing unless the log really
+        # contains a crash, so calling it on a merely failed run is harmless.
+        Show-CrashSummary -LogPath (Join-Path $RunDir "Editor.log")
+
         if (-not $NoReport) {
             $Generator = Join-Path $ToolsDir "GenerateTestReport.py"
             if (-not (Test-Path $Generator)) {
@@ -427,12 +593,21 @@ try {
                 Write-Host ("Result ($B) : {0} passed, {1} failed, {2} total" -f $S.passed, $S.failed, $S.total)
                 Write-Host ("Report ($B) : {0}" -f (Join-Path $RunDir "report.md"))
                 if ($S.failed -gt 0) { $ExitCode = 1 }
+                if ($S.crashed) {
+                    # A crash exports no JSON, so "0 tests" would otherwise leave this run
+                    # looking green to anything that only checks the exit code.
+                    Write-Host ("CRASHED ($B) : {0}" -f $S.crash_test) -ForegroundColor Red
+                    $ExitCode = 1
+                }
             }
         }
     }
 }
 finally {
+    # The ini is global state and this script edits it, so it goes back the way it was
+    # found - including after a failed build, which restores it above and again here.
     Restore-IniBackend
+    Release-RunLock
 }
 
 exit $ExitCode

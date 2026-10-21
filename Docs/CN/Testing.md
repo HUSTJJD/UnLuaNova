@@ -65,7 +65,7 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `-DryRun` | 关 | 只打印将要执行的命令，不启动编辑器、不编译 |
 | `-Backend` | `Both` | 跑哪个 Lua 后端：`Lua`、`Luau` 或 `Both` |
 | `-Platform` / `-Configuration` | `Win64` / `Development` | 传给 UBT 的编译参数 |
-| `-SkipBuild` | 关 | 跳过编译，直接跑现有二进制 |
+| `-SkipBuild` | 关 | 跳过编译，直接跑现有二进制；**不允许同时切换后端**（见下） |
 | `-Filter` | `UnLuaNova` | 用例过滤器，前缀匹配 |
 | `-Map` | 空 | 场景测试要开哪个关卡；多数用例自建 World，不需要 |
 | `-OutputDir` | `Saved/TestReports/<时间戳>` | 报告输出根目录，每个后端一个子目录 |
@@ -93,6 +93,30 @@ Lua 后端是**编译期选择**（见[设置项](Settings.md)里的"Lua 后端"
 3. `Engine/Build/BatchFiles/Build.bat <工程>Editor <平台> <配置> -Project=<uproject>`；
 4. 跑测试，结果落到 `Saved/TestReports/<时间戳>/lua` 和 `.../luau`；
 5. 生成报告；跑完把 ini 恢复成原样（`try/finally`，中断也会恢复）。
+
+### 切后端是全局状态，所以整套动作是原子的
+
+ini 是仓库级可变状态、二进制又是编译期产物，两者一旦分叉，跑出来的东西就会记在错误的
+后端名下（真发生过：目录叫 `lua`，里面跑的是 Luau 的二进制）。脚本为此加了四道保险：
+
+- **同时只允许一个 `RunTests.ps1`**：`Saved/RunTests.lock` 持有者写了自己的 PID，第二个
+  进程直接报错退出；PID 已经不存在的残留锁会被自动清掉。少了这层，第二次运行的
+  `Build.bat` 只是在 UBT 的 mutex 上等一等，然后跑第一次编译出来的产物。
+- **编译失败立刻还原 ini**，不等脚本结束：否则 ini 指向一个从没编译成功的后端，下一次
+  `-SkipBuild` 就会把旧二进制当成它来测。
+- **启动编辑器前校验产物**：读 UBT 给插件模块生成的
+  `Definitions.UnLuaNova.h`（里面的 `UNLUANOVA_LUA_BACKEND`），确认磁盘上的二进制确实是
+  本次要跑的后端，而不是看目录名或 ini。
+- **`-SkipBuild` 不允许切后端**：它只改 ini 不重编，等于给现有二进制换个标签，直接拒绝。
+
+因此 `-SkipBuild` 只在"接着跑刚才那个后端"时才有用，比如报告生成失败想重跑一次。
+
+### 崩溃也能出报告
+
+编辑器崩掉时自动化框架不会导出任何 JSON，以前报告就只剩一句"0 tests"，看不出死在哪。
+现在：`RunTests.ps1` 会把崩溃栈直接打到控制台，`GenerateTestReport.py` 从 `Editor.log`
+里抓出**崩溃时正在跑的用例**和调用栈写进报告的「崩溃」一节，`summary.json` 里也有
+`crashed` / `crash_test`（脚本据此把退出码置 1，CI 不会误判成通过）。
 
 产物：
 

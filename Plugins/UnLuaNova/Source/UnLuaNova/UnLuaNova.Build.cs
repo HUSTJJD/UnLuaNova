@@ -140,13 +140,24 @@ public class UnLuaNova : ModuleRules
             requireBackendHeaders("Lua", Path.Combine(ModuleDirectory, "..", "ThirdParty", "LuaLib", "Lua", "lua.h"));
             PublicDependencyModuleNames.Add("Lua");
             PublicDefinitions.Add("UNLUANOVA_LUA_BACKEND=0");
+            // See the note below the if/else: switching backends leaves the other one's DLL
+            // behind in Binaries/, so state which one this build is actually using.
+            Console.WriteLine("[UnLuaNova] Lua backend: Lua (official Lua) -> {0}-Lua.dll", Target.Name);
         }
         else
         {
             requireBackendHeaders("Luau", Path.Combine(ModuleDirectory, "..", "ThirdParty", "LuauLib", "Luau", "VM", "include", "lua.h"));
             PublicDependencyModuleNames.Add("Luau");
             PublicDefinitions.Add("UNLUANOVA_LUA_BACKEND=1");
+            Console.WriteLine("[UnLuaNova] Lua backend: Luau -> {0}-Luau.dll", Target.Name);
         }
+
+        // Two backend DLLs with near-identical names can sit side by side in
+        // Binaries/<Platform>/: nothing deletes the one that is no longer selected, so
+        // "UnrealEditor-Luau.dll exists" does not mean Luau is what this build uses.
+        // The name can never disagree with the contents - the module name decides which
+        // source tree UBT compiles - but which of the two is current cannot be read off
+        // the directory, hence the line above.
 
         string hotReloadMode;
         if (!config.GetString(section, "HotReloadMode", out hotReloadMode))

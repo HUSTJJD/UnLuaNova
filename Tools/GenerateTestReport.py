@@ -20,6 +20,10 @@ do not overwrite each other:
     Docs/test-luau-report.md    --backend Luau
     Docs/test-report.md         no --backend (single, unlabelled run)
 
+A run that crashed exports no JSON at all, which used to make the report say "0 tests" -
+indistinguishable from a run that never started. When that happens this reads Editor.log
+next to the (missing) JSON instead and reports what was running and where it died.
+
 Either way that copy is what gets committed and rendered by MkDocs, and it deliberately
 points at no local path: the run directory is timestamped and Saved/ is gitignored, so
 naming it here would make the file change on every single run.
@@ -44,6 +48,18 @@ SKIP_STATES = {"skipped", "skip", "notrun", "notrun", "ignored", "na"}
 
 MAX_MESSAGE_LEN = 400
 SLOWEST_COUNT = 10
+
+# What a crash looks like in Editor.log. The automation framework exports nothing when the
+# process dies, so the log is the only evidence there is.
+CRASH_MARKERS = (
+    "=== Critical error: ===",
+    "Fatal error!",
+    "Unhandled Exception",
+    "Assertion failed",
+    "Ensure failed",
+    "LowLevelFatalError",
+)
+MAX_STACK_LINES = 25
 
 
 def _get(obj, *names, default=None):
@@ -216,7 +232,91 @@ def load_tests(reports_dir: Path):
     return tests
 
 
-def render(tests, screenshots, image_prefix, generated, reports_dir, published=False, backend=None):
+def find_log(reports_dir: Path):
+    """The editor log for this run, if there is one."""
+    for name in ("Editor.log", "Editor-backup.log"):
+        candidate = reports_dir / name
+        if candidate.is_file():
+            return candidate
+    found = sorted(reports_dir.glob("Editor*.log"))
+    return found[-1] if found else None
+
+
+def parse_crash(log_path):
+    """Pull the crash out of Editor.log: what was running, and where it died.
+
+    Returns None when the log has no crash in it, which is the normal case - a merely
+    failed run still exports its JSON and is reported from that.
+    """
+    if log_path is None:
+        return None
+    try:
+        # utf-8-sig: UE writes Editor.log with a BOM, and utf-8 would leave the marker at
+        # the front of the first line.
+        lines = log_path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+    except OSError:
+        return None
+
+    crash_at = None
+    for index, line in enumerate(lines):
+        if any(marker in line for marker in CRASH_MARKERS):
+            crash_at = index
+            break
+    if crash_at is None:
+        return None
+
+    # Which test died: the last "Test Started" with no "Test Completed" for the same name
+    # before the crash. Tests run one at a time, so there is at most one.
+    running = None
+    for index in range(crash_at):
+        started = re.search(r"Test Started\. Name=\{([^}]*)\}", lines[index])
+        if not started:
+            continue
+        name = started.group(1)
+        completed = any(
+            "Test Completed." in line and f"Name={{{name}}}" in line for line in lines[index + 1 : crash_at]
+        )
+        if not completed:
+            running = name
+
+    window = lines[crash_at : crash_at + 60]
+    head = [
+        line.rstrip()
+        for line in window
+        if any(key in line for key in ("Critical", "Fatal", "Unhandled", "Assertion", "Ensure"))
+    ][:6]
+    stack = [line.rstrip() for line in window if "[Callstack]" in line][:MAX_STACK_LINES]
+
+    return {"test": running, "head": head, "stack": stack}
+
+
+def render_crash(crash):
+    lines = ["## 崩溃", ""]
+    lines.append("**测试进程崩了** —— 自动化框架没来得及导出任何 JSON，所以下面的统计不是这次运行的真实结果。")
+    lines.append("")
+    if crash["test"]:
+        lines.append(f"- 崩溃时正在跑：`{crash['test']}`")
+    else:
+        lines.append("- 崩溃时没有正在跑的用例（可能死在启动或收尾阶段）")
+    if crash["head"]:
+        lines.append("")
+        lines.append("```")
+        lines.extend(crash["head"])
+        lines.append("```")
+    if crash["stack"]:
+        lines.append("")
+        lines.append("<details><summary>调用栈</summary>")
+        lines.append("")
+        lines.append("```")
+        lines.extend(crash["stack"])
+        lines.append("```")
+        lines.append("")
+        lines.append("</details>")
+    lines.append("")
+    return lines
+
+
+def render(tests, screenshots, image_prefix, generated, reports_dir, published=False, backend=None, crash=None):
     total = len(tests)
     failed = [t for t in tests if not t["passed"]]
     skipped = [t for t in tests if t["skipped"]]
@@ -243,15 +343,22 @@ def render(tests, screenshots, image_prefix, generated, reports_dir, published=F
     lines.append("")
     lines.append(f"> 由 `Tools/GenerateTestReport.py` 自动生成于 {generated}。请勿手工编辑。")
     lines.append("")
+    if crash:
+        # Up front: with a crash the numbers below are incomplete, and a reader who only
+        # looks at the pass rate would take them at face value.
+        lines.extend(render_crash(crash))
     lines.append("## 结论")
     lines.append("")
     if total == 0:
-        lines.append("**没有找到任何自动化测试结果。**")
-        lines.append("")
-        lines.append(
-            "这通常是测试进程没跑起来（引擎启动失败、过滤器没匹配到任何用例），"
-            "而不是\"全部通过\"。先看同目录下的 `Editor.log`。"
-        )
+        if crash:
+            lines.append("**没有找到任何自动化测试结果：进程崩溃，见上面的「崩溃」一节。**")
+        else:
+            lines.append("**没有找到任何自动化测试结果。**")
+            lines.append("")
+            lines.append(
+                "这通常是测试进程没跑起来（引擎启动失败、过滤器没匹配到任何用例），"
+                "而不是\"全部通过\"。先看同目录下的 `Editor.log`。"
+            )
     else:
         rate = len(passed) / total * 100
         verdict = "全部通过 ✅" if not failed else f"存在失败 ❌（{len(failed)} 项）"
@@ -394,6 +501,18 @@ def main() -> None:
 
     tests = load_tests(reports_dir)
 
+    # A crash exports no JSON, so this is the only way to say anything about it. Parsed
+    # unconditionally - a run can crash after exporting part of its results, and then the
+    # numbers are incomplete even though they are not all zero.
+    crash = parse_crash(find_log(reports_dir))
+    if crash:
+        print(
+            "WARNING: this run crashed"
+            + (f" while running '{crash['test']}'" if crash["test"] else "")
+            + "; the totals below are incomplete.",
+            file=sys.stderr,
+        )
+
     shot_dir = out_dir / "screenshots"
     screenshots = sorted(p.name for p in shot_dir.glob("*.png")) if shot_dir.is_dir() else []
 
@@ -404,7 +523,7 @@ def main() -> None:
     passed = total - failed - skipped
 
     (out_dir / "report.md").write_text(
-        render(tests, screenshots, "screenshots/", generated, reports_dir, backend=backend),
+        render(tests, screenshots, "screenshots/", generated, reports_dir, backend=backend, crash=crash),
         encoding="utf-8",
         newline="\n",
     )
@@ -418,6 +537,8 @@ def main() -> None:
         "skipped": skipped,
         "duration": round(sum(t["duration"] for t in tests if t["duration"] is not None), 3),
         "screenshots": len(screenshots),
+        "crashed": crash is not None,
+        "crash_test": crash["test"] if crash else None,
     }
     (out_dir / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n"
@@ -448,6 +569,7 @@ def main() -> None:
                     reports_dir,
                     published=True,
                     backend=backend,
+                    crash=crash,
                 ),
                 repo_root,
             ),

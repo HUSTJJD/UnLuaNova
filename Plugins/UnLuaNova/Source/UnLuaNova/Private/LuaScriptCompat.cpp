@@ -17,6 +17,7 @@
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
 
 #include <string>
+#include <string.h>
 
 // Luau's debug library is a deliberate subset - traceback, info, the profiler hooks -
 // because everything else in it is a way to reach past the sandbox, and load() is left
@@ -276,6 +277,41 @@ namespace
         return luaL_error(L, "invalid argument #1 to 'pairs' (table expected, got %s)", luaL_typename(L, 1));
     }
 
+    // collectgarbage(option [, arg]) -> result
+    //
+    // Luau's base library stops at gcinfo(): there is no collectgarbage in it, so a script
+    // that forces a collection - which is exactly what the GC-sensitive tests do, to prove
+    // a delegate binding survives one - dies with "attempt to call a nil value". The same
+    // three options the tests and the hot reload path use are enough here; anything else
+    // is answered with plain Lua's error rather than with silence.
+    int LuaCollectGarbage(lua_State* L)
+    {
+        const char* Option = luaL_optstring(L, 1, "collect");
+
+        if (strcmp(Option, "collect") == 0)
+        {
+            lua_gc(L, LUA_GCCOLLECT, 0);
+            lua_pushinteger(L, 0); // what plain Lua returns
+            return 1;
+        }
+
+        if (strcmp(Option, "step") == 0)
+        {
+            const int Step = (int)luaL_optinteger(L, 2, 0);
+            lua_pushboolean(L, lua_gc(L, LUA_GCSTEP, Step) != 0);
+            return 1;
+        }
+
+        if (strcmp(Option, "count") == 0)
+        {
+            // Kbytes, like plain Lua: Luau reports totalbytes >> 10.
+            lua_pushnumber(L, (double)lua_gc(L, LUA_GCCOUNT, 0));
+            return 1;
+        }
+
+        return luaL_error(L, "collectgarbage: invalid option '%s'", Option);
+    }
+
     // Installs a global only when the name is free, so a backend that already provides it
     // keeps its own.
     void AddMissingGlobal(lua_State* L, const char* Name, lua_CFunction Function)
@@ -336,6 +372,10 @@ namespace UnLuaNova
         }
 
         AddMissingGlobal(L, "load", LuaLoad);
+
+        // Same shape as load: absent on Luau, present on plain Lua, and only installed
+        // where it is missing.
+        AddMissingGlobal(L, "collectgarbage", LuaCollectGarbage);
 
         // pairs exists on Luau, so it is not "missing" - it is too narrow. Replace it,
         // keeping the builtin as an upvalue so tables still go through the fast native
