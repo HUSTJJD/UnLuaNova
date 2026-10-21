@@ -46,6 +46,38 @@ namespace UnLuaNova
     FLuaEnv::FOnCreated FLuaEnv::OnCreated;
     FLuaEnv::FOnDestroyed FLuaEnv::OnDestroyed;
 
+    // Fills package.loaded with the standard libraries. Expects `package` on top of the
+    // stack and leaves it there.
+    //
+    // Plain Lua's luaL_openlibs registers every standard library as a module too, so
+    // `require('string')` returns the string table - that is what package.loaded *is*
+    // there. Luau has no package library at all, so nothing is registered and the same
+    // line raises "module 'string' not found". Third-party scripts do exactly that:
+    // LuaSocket's socket.lua opens with require("string") and require("math"), so on this
+    // backend it cannot even be loaded. Each name is published only when the global of
+    // that name is really a table, because the set differs per backend (Luau adds vector
+    // and buffer, and has no io).
+    static void PublishStdLibModules(lua_State* L)
+    {
+        static const char* const StdLibModules[] = {
+            "string", "table", "math", "os", "io", "coroutine", "debug", "utf8", "bit32",
+            "vector", "buffer", "integer",
+        };
+
+        lua_getfield(L, -1, "loaded");                  // [package, loaded]
+        for (const char* Name : StdLibModules)
+        {
+            lua_getglobal(L, Name);                     // [package, loaded, lib]
+            if (lua_istable(L, -1))
+            {
+                lua_pushvalue(L, -1);                   // [package, loaded, lib, lib]
+                lua_setfield(L, -3, Name);              // loaded[Name] = lib
+            }
+            lua_pop(L, 1);                              // [package, loaded]
+        }
+        lua_pop(L, 1);                                  // [package]
+    }
+
     // The profiler hook used to live here. It now lives in LuaProfiler.cpp, which caches
     // one Insights spec id per function rather than formatting an FString on every single
     // call/return, and can be toggled at runtime instead of only at compile time.
@@ -122,6 +154,11 @@ namespace UnLuaNova
             lua_setfield(L, -2, "loaded");       // package.loaded = cache
             lua_newtable(L);                     // [package, searchers]
             lua_setfield(L, -2, "searchers");    // package.searchers = {}
+
+            // ...and the standard libraries, which plain Lua publishes as modules and
+            // this backend otherwise does not publish at all.
+            PublishStdLibModules(L);             // [package]
+
             lua_setglobal(L, "package");
         }
 

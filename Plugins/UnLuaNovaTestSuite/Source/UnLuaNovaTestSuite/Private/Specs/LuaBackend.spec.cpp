@@ -89,6 +89,22 @@ namespace
     }
 }
 
+#if UNLUANOVA_HAS_BREAKPOINT
+namespace
+{
+    // Read back by the debug-channel spec: the hook has to be reachable by the VM, not
+    // merely accepted, so the only convincing evidence is the VM calling it.
+    int32 GSpecDebugChannelCalls = 0;
+
+    void SpecDebugChannelHook(lua_State* L, lua_Debug* Ar)
+    {
+        (void)L;
+        (void)Ar;
+        ++GSpecDebugChannelCalls;
+    }
+}
+#endif
+
 // Covers the shims in LuaBackend.h rather than UnLuaNova's own behaviour. These are the
 // seams between plain Lua and Luau - every one of them is a place where the two backends
 // disagree, so a mistake shows up here as a failing spec instead of as a link error or a
@@ -315,7 +331,13 @@ void FLuaBackendSpec::Define()
             lua_pop(L, 1);
 
             luaL_unref(L, LUA_REGISTRYINDEX, Ref);
-            TEST_EQUAL(lua_rawgeti(L, LUA_REGISTRYINDEX, Ref), LUA_TNIL);
+
+            // Not LUA_TNIL. Plain Lua keeps its free list *in* the registry: luaL_unref
+            // writes the previous free-list head - a number - into the slot, so reading it
+            // back gives LUA_TNUMBER there and nil on Luau. The invariant that matters is
+            // the one the caller relies on: the slot no longer holds what we cached.
+            const int TypeAfterUnref = lua_rawgeti(L, LUA_REGISTRYINDEX, Ref);
+            TestTrue(TEXT("unref 之后槽位不再持有该表"), TypeAfterUnref != LUA_TTABLE);
             lua_settop(L, Top);
         });
     });
@@ -435,11 +457,17 @@ void FLuaBackendSpec::Define()
 
             const auto CheckContainer = [&](const TCHAR* Factory) -> bool
             {
+                // rawget, not mt[key]: TMap's and TSet's metatables are their own __index
+                // (that is how Map:Add() resolves), so indexing one for a key it does not
+                // have walks into itself and plain Lua raises "'__index' chain too long;
+                // possible loop" instead of handing back nil - which turned a missing
+                // registration into a chunk error. rawget asks the question actually
+                // being asked: is the entry on the metatable itself.
                 const FString Chunk = FString::Printf(TEXT(
                     "local mt = getmetatable(%s);"
                     "if type(mt) ~= 'table' then return false end;"
-                    "if mt['%s'] == nil then return false end;"
-                    "if mt['%s'] ~= nil then return false end;"
+                    "if rawget(mt, '%s') == nil then return false end;"
+                    "if rawget(mt, '%s') ~= nil then return false end;"
                     "return true"), Factory, IterKey, OtherKey);
                 if (!Env->DoString(Chunk))
                     return false;
@@ -591,13 +619,22 @@ void FLuaBackendSpec::Define()
             const auto L = Env->GetMainState();
             const int32 Top = lua_gettop(L);
 
-            // lua_breakpoint answers whether the line holds an instruction, so a 0 means
-            // "no such line" rather than "no such API" - assert that the calls are accepted
-            // and symmetric, which is what lua.dbg is built on.
-            Env->DoString(TEXT("return function() local a = 1; local b = 2; return a + b end"));
-            const int SetResult = UNLUANOVA_BREAKPOINT(L, -1, 2, 1);
-            const int ClearResult = UNLUANOVA_BREAKPOINT(L, -1, 2, 0);
-            TestTrue(TEXT("断点设置与清除都被接受"), SetResult >= 0 && ClearResult >= 0);
+            // lua_breakpoint returns the line it landed on: it walks forward to the next
+            // line that actually holds an instruction, and answers -1 when there is none
+            // (ldebug.cpp getnextline). A single-line chunk has no line 2 to land on, so
+            // asking for one is a -1 that says nothing about the API - hence a chunk whose
+            // body sits on the lines being asked for.
+            const auto Chunk = R"(
+                return function()
+                    local a = 1
+                    local b = 2
+                    return a + b
+                end
+            )";
+            Env->DoString(Chunk);
+            const int SetResult = UNLUANOVA_BREAKPOINT(L, -1, 3, 1);
+            const int ClearResult = UNLUANOVA_BREAKPOINT(L, -1, 3, 0);
+            TestTrue(TEXT("断点设置与清除都被接受"), SetResult > 0 && ClearResult == SetResult);
             TestTrue(TEXT("lua_stackdepth 可用"), UNLUANOVA_STACKDEPTH(L) >= 0);
             lua_settop(L, Top);
         });
@@ -893,13 +930,45 @@ void FLuaBackendSpec::Define()
             const auto L = Env->GetMainState();
             const int32 Top = lua_gettop(L);
 
-            // lua.dbg keeps its hook on Luau's own channel (lua_callhook), separate from the
-            // lua_Callbacks::interrupt slot the profiler and the watchdog share - so clearing
-            // it must disturb neither. Plain Lua has no second channel at all: a debugger
-            // registers as a FLuaVmHooks listener instead, which is why this is compiled out
-            // there rather than expected to be a no-op.
+            // lua.dbg keeps its hook on Luau's own channel - the lua_Callbacks slots the VM
+            // calls on a breakpoint and while stepping - separate from the
+            // lua_Callbacks::interrupt slot the profiler and the watchdog share, so
+            // installing and withdrawing it must disturb neither. Plain Lua has no second
+            // channel at all: a debugger registers as a FLuaVmHooks listener instead, which
+            // is why this is compiled out there rather than expected to be a no-op.
             TEST_TRUE(UNLUANOVA_ATBREAKPOINT(L) == 0);
+
+            GSpecDebugChannelCalls = 0;
+            UNLUANOVA_SET_DEBUG_HOOK(L, &SpecDebugChannelHook, nullptr);
+            TestTrue(TEXT("调试 hook 装到了调试通道上"),
+                     lua_callbacks(L)->debugbreak == &SpecDebugChannelHook);
+
+            // A breakpoint is what makes that channel fire at all, so "installed" is only
+            // proven when the VM calls the hook back. Line 3 is the first body line of the
+            // returned closure - see the note on the breakpoint spec above.
+            const auto Chunk = R"(
+                return function()
+                    local a = 1
+                    local b = 2
+                    return a + b
+                end
+            )";
+            Env->DoString(Chunk);
+            const int32 FuncIndex = lua_gettop(L);
+            if (UNLUANOVA_BREAKPOINT(L, FuncIndex, 3, 1) > 0)
+            {
+                lua_pushvalue(L, FuncIndex);
+                TEST_EQUAL(lua_pcall(L, 0, 1, 0), 0);
+                TEST_EQUAL((int64)lua_tonumber(L, -1), 3ll);
+                TestTrue(TEXT("断点触发了调试 hook"), GSpecDebugChannelCalls > 0);
+                UNLUANOVA_BREAKPOINT(L, FuncIndex, 3, 0);
+            }
+            lua_settop(L, Top);
+
+            // Withdrawing is the half that used to take the editor down: a null hook has to
+            // mean "off" rather than "call nothing right now".
             UNLUANOVA_SET_DEBUG_HOOK(L, nullptr, nullptr);
+            TestTrue(TEXT("调试 hook 能从调试通道撤下"), lua_callbacks(L)->debugbreak == nullptr);
 
             Env->DoString(TEXT("return 1 + 1"));
             TEST_EQUAL((int64)lua_tonumber(L, -1), 2ll);

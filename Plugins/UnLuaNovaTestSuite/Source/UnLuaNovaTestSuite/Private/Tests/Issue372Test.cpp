@@ -14,9 +14,34 @@
 
 #include "TestCommands.h"
 #include "UnLuaNovaTestCommon.h"
+#include "LuaBackend.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+
+    // Walks the registry for the entry that is the object at ObjIdx - what the chunk used
+    // to do with pairs(debug.getregistry()). Luau has no debug.getregistry() and no C API
+    // that hands the registry to a script, so there the chunk died on its first line and
+    // the case never ran. LUA_REGISTRYINDEX is reachable from C++ on both backends.
+    //
+    // lua_compare rather than lua_rawequal: the entry is the object's Lua table while
+    // `Actor` is the userdata bound to it, and it is the __eq on that userdata that says
+    // the two are the same object - the same comparison `v == Actor` used to make.
+    static int32 FindRegistryRef(lua_State* L, int32 ObjIdx)
+    {
+        lua_pushnil(L);                                 // [k]
+        while (lua_next(L, LUA_REGISTRYINDEX) != 0)     // [k, v]
+        {
+            if (lua_compare(L, -1, ObjIdx, LUA_OPEQ) != 0)
+            {
+                const int32 Ref = (int32)UNLUANOVA_TOINT64(L, -2);
+                lua_pop(L, 2);                          // [k, v] -> []
+                return Ref;
+            }
+            lua_pop(L, 1);                              // [k] - the key lua_next needs
+        }
+        return LUA_NOREF;                               // lua_next already took the key
+    }
 
 BEGIN_TESTSUITE(FIssue372Test, TEXT("UnLuaNova.Regression.Issue372 Actor调用K2_DestroyActor销毁时，lua部分会在注册表残留"));
 
@@ -34,23 +59,20 @@ BEGIN_TESTSUITE(FIssue372Test, TEXT("UnLuaNova.Regression.Issue372 Actor调用K2
             const auto Chunk = R"(
             local ActorClass = UE.UClass.Load("/UnLuaNovaTestSuite/Tests/Binding/BP_UnLuaNovaTestActor_StaticBinding.BP_UnLuaTestActor_StaticBinding_C")
             Actor = World:SpawnActor(ActorClass)
-
-            local registry = debug.getregistry()
-            for k, v in pairs(registry) do
-                if v == Actor then
-                    return k
-                end
-            end
-            return -2 -- LUA_NOREF
             )";
             UnLuaNova::RunChunk(L, Chunk);
 
-            auto Ref = (int32)lua_tointeger(L, -1);
+            const int32 Top = lua_gettop(L);
+            lua_getglobal(L, "Actor");
+            auto Ref = FindRegistryRef(L, lua_gettop(L));
+            lua_settop(L, Top);
+
             TestNotEqual(TEXT("Ref"), (double)Ref, (double)LUA_NOREF);
 
             lua_rawgeti(L, LUA_REGISTRYINDEX, Ref);
             auto Actual = lua_type(L, -1);
             TestEqual(TEXT("Actual"), Actual, LUA_TTABLE);
+            lua_pop(L, 1);
 
             UnLuaNova::RunChunk(L, "Actor:K2_DestroyActor()");
             CollectGarbage(RF_NoFlags, true);
@@ -58,6 +80,7 @@ BEGIN_TESTSUITE(FIssue372Test, TEXT("UnLuaNova.Regression.Issue372 Actor调用K2
             lua_rawgeti(L, LUA_REGISTRYINDEX, Ref);
             Actual = lua_type(L, -1);
             TestNotEqual(TEXT("Actual"), (double)Actual, (double)LUA_TTABLE);
+            lua_pop(L, 1);
             return true;
             }));
         ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());

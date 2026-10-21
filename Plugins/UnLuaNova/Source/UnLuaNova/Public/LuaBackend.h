@@ -612,9 +612,11 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #endif
 
 // --- debug channel ------------------------------------------------------------
-// Luau keeps the debug hook on a channel of its own (lua_callhook), completely
-// separate from the lua_Callbacks::interrupt slot the profiler and the dead-loop
-// watchdog share - so installing a debugger disturbs neither of them.
+// Luau has no lua_sethook. A debugger claims the two lua_Callbacks slots the VM
+// calls on its own: debugbreak (a BREAK instruction, i.e. a breakpoint) and
+// debugstep (single-step mode). Both are completely separate from the
+// lua_Callbacks::interrupt slot the profiler and the dead-loop watchdog share,
+// so installing a debugger disturbs neither of them.
 //
 // Plain Lua has no second channel: lua_sethook is the only hook and FLuaVmHooks
 // already owns it, so a debugger must register there as a listener rather than
@@ -625,7 +627,20 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 // line, but cannot make the VM stop on one. Those are Luau-only.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
 #define UNLUANOVA_HAS_BREAKPOINT 1
-#define UNLUANOVA_SET_DEBUG_HOOK(L, Hook, UserData) lua_callhook(L, Hook, UserData)
+// A null hook means "off", and that is the only way off the channel.
+//
+// lua_callhook() looks like the setter but is not one: it *invokes* a hook on the
+// spot, against the current call frame, so it installed nothing and - with a null
+// hook and no frame to speak of (L->ci == base_ci, hence L->ci->p == null) -
+// dereferenced a proto that does not exist. luau_callhook() dereferences it at
+// lvmexecute.cpp:181 before it ever reaches the callback.
+#define UNLUANOVA_SET_DEBUG_HOOK(L, Hook, UserData) \
+    do \
+    { \
+        lua_callbacks(L)->debugbreak = (Hook); \
+        lua_callbacks(L)->debugstep = (Hook); \
+        lua_callbacks(L)->userdata = (UserData); \
+    } while (0)
 #define UNLUANOVA_BREAKPOINT(L, FuncIndex, Line, Enabled) lua_breakpoint(L, FuncIndex, Line, Enabled)
 #define UNLUANOVA_SINGLESTEP(L, Enabled) lua_singlestep(L, Enabled)
 #define UNLUANOVA_ATBREAKPOINT(L) lua_atbreakpoint(L)

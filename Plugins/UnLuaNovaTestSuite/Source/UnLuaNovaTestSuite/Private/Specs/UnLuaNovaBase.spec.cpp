@@ -172,7 +172,16 @@ void FUNLUANOVABaseSpec::Define()
 
         It(TEXT("执行失败返回false"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
+            // Luau's parser has its own words for a broken chunk - "Incomplete statement:
+            // expected assignment or a function call" - and never says "syntax error", so
+            // one string cannot cover both. The case is about RunChunk reporting a
+            // *compile* failure rather than running the chunk, so the expected text is
+            // whatever this backend actually produces.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+            AddExpectedError(TEXT("Incomplete statement"), EAutomationExpectedErrorFlags::Contains);
+#else
             AddExpectedError(TEXT("syntax error"), EAutomationExpectedErrorFlags::Contains);
+#endif
             TEST_FALSE(UnLuaNova::RunChunk(L, "invalid chunk"));
         });
     });
@@ -242,7 +251,7 @@ void FUNLUANOVABaseSpec::Define()
             B = 20 -- int32&
             C = 30 -- const int32&
             D = 'Test' -- FString&
-            B, D = UE.UUNLUANOVATestFunctionLibrary.TestForBaseSpec1(A, B, C, D)
+            B, D = UE.UUnLuaNovaTestFunctionLibrary.TestForBaseSpec1(A, B, C, D)
             )";
             UnLuaNova::RunChunk(L, Chunk);
             lua_getglobal(L, "B");
@@ -261,7 +270,7 @@ void FUNLUANOVABaseSpec::Define()
                     A = 10 -- int32
                     B = 20 -- int32&
                     C = 30 -- int32&
-                    B, C, Ret = UE.UUNLUANOVATestFunctionLibrary.TestForBaseSpec2(A, B, C)
+                    B, C, Ret = UE.UUnLuaNovaTestFunctionLibrary.TestForBaseSpec2(A, B, C)
                     )";
             UnLuaNova::RunChunk(L, Chunk);
             lua_getglobal(L, "Ret");
@@ -283,7 +292,7 @@ void FUNLUANOVABaseSpec::Define()
             A = 10 -- int32
             B = 20 -- int32&
             C = 30 -- int32&
-            Ret, B, C = UE.UUNLUANOVATestFunctionLibrary.TestForBaseSpec2(A, B, C)
+            Ret, B, C = UE.UUnLuaNovaTestFunctionLibrary.TestForBaseSpec2(A, B, C)
             )";
             UnLuaNova::RunChunk(L, Chunk);
             lua_getglobal(L, "Ret");
@@ -307,7 +316,7 @@ void FUNLUANOVABaseSpec::Define()
             B = 20 -- int32&
             C = 30 -- const int32&
             D = 'Test' -- FString&
-            B, D = UE.FUNLUANOVATestLib.TestForBaseSpec1(A, B, C, D)
+            B, D = UE.FUnLuaNovaTestLib.TestForBaseSpec1(A, B, C, D)
             )";
             UnLuaNova::RunChunk(L, Chunk);
             lua_getglobal(L, "B");
@@ -326,7 +335,7 @@ void FUNLUANOVABaseSpec::Define()
             A = 10 -- int32
             B = 20 -- int32&
             C = 30 -- int32&
-            B, C, Ret = UE.FUNLUANOVATestLib.TestForBaseSpec2(A, B, C)
+            B, C, Ret = UE.FUnLuaNovaTestLib.TestForBaseSpec2(A, B, C)
             )";
             UnLuaNova::RunChunk(L, Chunk);
             lua_getglobal(L, "Ret");
@@ -348,7 +357,7 @@ void FUNLUANOVABaseSpec::Define()
             A = 10 -- int32
             B = 20 -- int32&
             C = 30 -- int32&
-            Ret, B, C = UE.FUNLUANOVATestLib.TestForBaseSpec2(A, B, C)
+            Ret, B, C = UE.FUnLuaNovaTestLib.TestForBaseSpec2(A, B, C)
             )";
             UnLuaNova::RunChunk(L, Chunk);
             lua_getglobal(L, "Ret");

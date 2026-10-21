@@ -61,8 +61,12 @@ void FUELibSpec::Define()
                 return Enum.None, Enum.Value2
             )";
             Env->DoString(Chunk);
-            const auto Result1 = (EUnLuaTestEnum)lua_tointeger(L, -2);
-            const auto Result2 = (EUnLuaTestEnum)lua_tointeger(L, -1);
+            // UNLUANOVA_TOINT64, not lua_tointeger: a UEnum entry goes out as a 64-bit
+            // integer on Luau (LUA_TINTEGER), and lua_tointeger there reads only doubles
+            // and hands back 0 for everything else - so every value read this way looked
+            // like the 0 member. None looks like a pass precisely because 0 is None.
+            const auto Result1 = (EUnLuaTestEnum)UNLUANOVA_TOINT64(L, -2);
+            const auto Result2 = (EUnLuaTestEnum)UNLUANOVA_TOINT64(L, -1);
             TEST_EQUAL(Result1, EUnLuaTestEnum::None);
             TEST_EQUAL(Result2, EUnLuaTestEnum::Value2);
         });
