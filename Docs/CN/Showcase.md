@@ -15,7 +15,7 @@ description: "可运行示例清单：绑定、覆写、容器访问与调试"
 
 手截的图会过期——代码一改，图还是旧的，读者却以为它是当前的。所以截图走
 自动化：跑 `Tools/RunTests.ps1 -Screenshots -Publish` 时顺带刷新，
-和[测试报告](../test-report.md)同一批产物。详见[测试与自动化](Testing.md)。
+和[测试报告](../test-luau-report.md)同一批产物。详见[测试与自动化](Testing.md)。
 
 生成方式：
 
@@ -70,5 +70,5 @@ Lua 侧的函数如何被 C++ 调回去。
 ## 延伸阅读
 
 - [测试与自动化](Testing.md) — 示例截图由自动化测试产出
-- [测试报告](../test-report.md) — 最新一次测试报告
+- [测试报告（Lua 后端）](../test-lua-report.md) · [测试报告（Luau 后端）](../test-luau-report.md)
 - [编程指南](UnLuaNova_Programming_Guide.md) — 编程指南

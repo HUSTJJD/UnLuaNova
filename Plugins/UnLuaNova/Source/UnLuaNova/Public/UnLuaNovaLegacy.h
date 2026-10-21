@@ -46,21 +46,24 @@ namespace UnLuaNova
     template <typename T>
     TSharedPtr<ITypeInterface> GetTypeInterface();
 
+    // Widths up to 32 bits go out through UNLUANOVA_PUSHINT: on Luau that is a double, and
+    // a script can do arithmetic on the result. Only the two 64-bit overloads keep
+    // UNLUANOVA_PUSHINT64, where staying exact matters more - see the note on the macros.
     FORCEINLINE int32 Push(lua_State* L, int8 V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, int16 V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, int32 V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
@@ -72,25 +75,25 @@ namespace UnLuaNova
 
     FORCEINLINE int32 Push(lua_State* L, long V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, uint8 V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, uint16 V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
     FORCEINLINE int32 Push(lua_State* L, uint32 V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
@@ -102,7 +105,7 @@ namespace UnLuaNova
 
     FORCEINLINE int32 Push(lua_State* L, unsigned long V, bool bCopy = false)
     {
-        UNLUANOVA_PUSHINT64(L, V);
+        UNLUANOVA_PUSHINT(L, V);
         return 1;
     }
 
@@ -1052,7 +1055,21 @@ namespace UnLuaNova
     {
         static int32 Push(lua_State* L, T&& V, bool bCopy)
         {
-            UNLUANOVA_PUSHINT64(L, V);
+            // Same width split as the Push() overloads. This is the path enums and the
+            // narrower integer types actually take, so pushing the 64-bit tag here handed a
+            // script a LUA_TINTEGER for every enum value and int32 property - which on Luau
+            // cannot be added to a literal, cannot be compared to one, and is rejected by
+            // string.format's %s ("string expected, got integer"). Keep the tag only when
+            // the type really is 64-bit and needs to round-trip exactly.
+            using TValue = typename TRemoveReference<T>::Type;
+            if constexpr (sizeof(TValue) > 4)
+            {
+                UNLUANOVA_PUSHINT64(L, V);
+            }
+            else
+            {
+                UNLUANOVA_PUSHINT(L, V);
+            }
             return 1;
         }
 

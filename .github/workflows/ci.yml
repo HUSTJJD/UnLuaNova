@@ -67,7 +67,8 @@ jobs:
       - name: Install MkDocs Material
         run: pip install mkdocs-material
 
-      # Not --strict: Docs/test-report.md only exists once someone has run the tests with
-      # -Publish, and a missing page must not break the build before that.
+      # Not --strict: Docs/test-lua-report.md and Docs/test-luau-report.md only exist once
+      # someone has run Tools/RunTests.ps1 -Backend Both -Publish, and a missing page must
+      # not break the build before that.
       - name: Build docs
         run: mkdocs build --site-dir _site

@@ -9,16 +9,24 @@ end up on one page.
 
 Outputs, next to --reports unless --out says otherwise:
     summary.json   machine-readable totals, so RunTests.ps1 can set its exit code
-    report.md      the conclusions: totals, failures with their messages, slowest tests,
-                   and a gallery of whatever the tests screenshotted
+    report.md      the conclusions: totals, the passed tests, failures with their
+                   messages, slowest tests, and a gallery of whatever the tests
+                   screenshotted
 
-With --publish the same conclusions are written to Docs/test-report.md, which is what gets
-committed and rendered by MkDocs. That copy deliberately points at no local path: the run
-directory is timestamped and Saved/ is gitignored, so naming it here would make the file
-change on every single run.
+--backend Lua|Luau records which Lua backend produced the run (a compile-time choice, see
+UnLuaNova.Build.cs). With --publish it also picks the destination, so the two backend runs
+do not overwrite each other:
+    Docs/test-lua-report.md     --backend Lua
+    Docs/test-luau-report.md    --backend Luau
+    Docs/test-report.md         no --backend (single, unlabelled run)
+
+Either way that copy is what gets committed and rendered by MkDocs, and it deliberately
+points at no local path: the run directory is timestamped and Saved/ is gitignored, so
+naming it here would make the file change on every single run.
 
 Usage:
-    python GenerateTestReport.py --reports <dir> [--out <dir>] [--publish]
+    python GenerateTestReport.py --reports <dir> [--out <dir>] [--backend Lua|Luau]
+                                 [--publish]
 """
 
 import argparse
@@ -208,7 +216,7 @@ def load_tests(reports_dir: Path):
     return tests
 
 
-def render(tests, screenshots, image_prefix, generated, reports_dir, published=False):
+def render(tests, screenshots, image_prefix, generated, reports_dir, published=False, backend=None):
     total = len(tests)
     failed = [t for t in tests if not t["passed"]]
     skipped = [t for t in tests if t["skipped"]]
@@ -216,17 +224,22 @@ def render(tests, screenshots, image_prefix, generated, reports_dir, published=F
     timed = [t for t in tests if t["duration"] is not None]
     total_time = sum(t["duration"] for t in timed)
 
+    # Both backends are named in every heading: the two published reports are separate
+    # pages, and a page that just says "测试报告" cannot be told apart from the other one
+    # once it is open.
+    suffix = f"（{backend} 后端）" if backend else ""
+
     lines = []
     if published:
         # MkDocs takes the page title and description from front matter. Writing the report
         # over this file without it dropped both, so the page fell back to its file name in
         # the nav and lost its description - the report looked like it had gone missing.
         lines.append("---")
-        lines.append('title: "测试报告"')
-        lines.append('description: "自动化测试产出的通过率、失败明细与截图"')
+        lines.append(f'title: "测试报告{suffix}"')
+        lines.append('description: "自动化测试产出的通过率、通过明细、失败明细与截图"')
         lines.append("---")
         lines.append("")
-    lines.append("# 测试报告")
+    lines.append(f"# 测试报告{suffix}")
     lines.append("")
     lines.append(f"> 由 `Tools/GenerateTestReport.py` 自动生成于 {generated}。请勿手工编辑。")
     lines.append("")
@@ -253,6 +266,30 @@ def render(tests, screenshots, image_prefix, generated, reports_dir, published=F
         if timed:
             lines.append(f"| 总耗时 | {total_time:.2f}s |")
         lines.append(f"| 截图 | {len(screenshots)} |")
+        if backend:
+            lines.append(f"| Lua 后端 | `{backend}` |")
+
+    # Passing tests are listed too, not just the failures: "what still works" is the part
+    # that has to be checked after a change that touched shared code, and a bare pass rate
+    # cannot answer it.
+    if passed:
+        lines.append("")
+        lines.append(f"## 通过明细（{len(passed)} 项）")
+        lines.append("")
+        lines.append("| 用例 | 来源 | 耗时 |")
+        lines.append("|---|---|---|")
+        for t in sorted(passed, key=lambda t: (t["source"], t["name"])):
+            duration = f"{t['duration']:.3f}s" if t["duration"] is not None else "-"
+            lines.append(f"| `{t['name']}` | `{t['source']}` | {duration} |")
+
+    if skipped:
+        lines.append("")
+        lines.append(f"## 跳过明细（{len(skipped)} 项）")
+        lines.append("")
+        lines.append("| 用例 | 来源 |")
+        lines.append("|---|---|")
+        for t in sorted(skipped, key=lambda t: (t["source"], t["name"])):
+            lines.append(f"| `{t['name']}` | `{t['source']}` |")
 
     if failed:
         lines.append("")
@@ -324,12 +361,28 @@ def main() -> None:
     parser.add_argument("--reports", required=True, help="directory holding the automation JSON")
     parser.add_argument("--out", default=None, help="where to write report.md / summary.json (default: --reports)")
     parser.add_argument(
+        "--backend",
+        default=None,
+        metavar="Lua|Luau",
+        help="which Lua backend produced this run; with --publish it selects the destination"
+        " (Docs/test-lua-report.md or Docs/test-luau-report.md)",
+    )
+    parser.add_argument(
         "--publish",
         action="store_true",
-        help="also write Docs/test-report.md; that copy is committed, so it carries no "
+        help="also write the Docs/ copy; that copy is committed, so it carries no "
         "machine specific path and no per-run directory name",
     )
     args = parser.parse_args()
+
+    # Lua and Luau differ only by case here, and the published file name is derived from
+    # it, so normalise once: --backend luau and --backend Luau must not be two reports.
+    backend = None
+    if args.backend:
+        normalized = args.backend.strip().lower()
+        if normalized not in ("lua", "luau"):
+            raise SystemExit(f"unknown backend '{args.backend}' (expected Lua or Luau)")
+        backend = "Lua" if normalized == "lua" else "Luau"
 
     reports_dir = Path(args.reports).resolve()
     out_dir = Path(args.out).resolve() if args.out else reports_dir
@@ -349,13 +402,14 @@ def main() -> None:
     passed = total - failed - skipped
 
     (out_dir / "report.md").write_text(
-        render(tests, screenshots, "screenshots/", generated, reports_dir),
+        render(tests, screenshots, "screenshots/", generated, reports_dir, backend=backend),
         encoding="utf-8",
         newline="\n",
     )
 
     summary = {
         "generated": generated,
+        "backend": backend,
         "total": total,
         "passed": passed,
         "failed": failed,
@@ -370,22 +424,41 @@ def main() -> None:
     if args.publish:
         repo_root = Path(__file__).resolve().parent.parent
         docs_dir = repo_root / "Docs"
-        images_dir = docs_dir / "Images" / "tests"
+        # One page per backend, so the two runs are both visible instead of the second
+        # overwriting the first. Screenshots get the same treatment: the two backends can
+        # legitimately produce different pictures of the same scene.
+        tag = backend.lower() if backend else ""
+        page_name = f"test-{tag}-report.md" if tag else "test-report.md"
+        image_dir_name = f"tests-{tag}" if tag else "tests"
+        images_dir = docs_dir / "Images" / image_dir_name
         if screenshots:
             images_dir.mkdir(parents=True, exist_ok=True)
             for name in screenshots:
                 shutil.copy2(shot_dir / name, images_dir / name)
-        (docs_dir / "test-report.md").write_text(
+        page_path = docs_dir / page_name
+        page_path.write_text(
             strip_machine_paths(
-                render(tests, screenshots, "Images/tests/", generated, reports_dir, published=True),
+                render(
+                    tests,
+                    screenshots,
+                    f"Images/{image_dir_name}/",
+                    generated,
+                    reports_dir,
+                    published=True,
+                    backend=backend,
+                ),
                 repo_root,
             ),
             encoding="utf-8",
             newline="\n",
         )
-        print(f"published to {docs_dir / 'test-report.md'}")
+        print(f"published to {page_path}")
 
-    print(f"{total} tests: {passed} passed, {failed} failed, {skipped} skipped -> {out_dir / 'report.md'}")
+    label = f"[{backend}] " if backend else ""
+    print(
+        f"{label}{total} tests: {passed} passed, {failed} failed, {skipped} skipped "
+        f"-> {out_dir / 'report.md'}"
+    )
 
 
 if __name__ == "__main__":

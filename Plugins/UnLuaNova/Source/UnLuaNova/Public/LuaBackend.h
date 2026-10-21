@@ -356,15 +356,18 @@ inline void lua_register(lua_State* L, const char* Name, lua_CFunction Fn)
 // value Lua 5.5 reports as an integer. lua_pushinteger64 pushes LUA_TINTEGER instead,
 // which is what plain Lua does.
 //
-// That consistency is exactly what makes LUA_TINTEGER wrong to push on Luau. A Luau script
-// only ever has doubles - the compiler emits LUA_TNUMBER for every literal - so handing one
-// back a LUA_TINTEGER makes `Value + 1` an integer-plus-double and a hard runtime error,
-// "attempt to perform arithmetic (add) on integer and number". Anything reading an int64
-// property or an enum value and doing arithmetic on it dies. Push the double instead:
-// values past 2^53 lose precision, but the number stays usable by a script, and for a
-// scripting layer usable beats exact. UNLUANOVA_TOINT64 still reads both tags back.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
-#define UNLUANOVA_PUSHINT64(L, V) lua_pushnumber(L, (lua_Number)(V))
+#define UNLUANOVA_PUSHINT64(L, V) lua_pushinteger64(L, (int64_t)(V))
+
+// --- integers that fit in 32 bits -------------------------------------------
+// LUA_TINTEGER is the right tag for a genuine 64-bit value and the wrong one for
+// everything smaller. Luau's compiler emits a double (LUA_TNUMBER) for every literal, so a
+// LUA_TINTEGER handed to a script makes `Value + 1` an integer plus a double - a hard
+// runtime error, "attempt to perform arithmetic (add) on integer and number". Scripts read
+// int32 properties and enum values constantly and do arithmetic on them, so those go out as
+// doubles and stay usable; only real 64-bit values keep the integer tag, where keeping the
+// value exact matters more than being able to add 1 to it in a script.
+#define UNLUANOVA_PUSHINT(L, V) lua_pushnumber(L, (lua_Number)(V))
 
 // Luau's lua_tointeger64 reads *only* the 64-bit integer type (LUA_TINTEGER) and hands
 // back 0 for anything else - see lapi.cpp: it tests ttisinteger() and returns 0 from the
@@ -396,6 +399,9 @@ inline int64_t UnLuaNovaToInt64(lua_State* L, int Idx)
 #define UNLUANOVA_TOINT64(L, Idx) UnLuaNovaToInt64(L, Idx)
 #else
 #define UNLUANOVA_PUSHINT64(L, V) lua_pushinteger(L, (lua_Integer)(V))
+// Plain Lua already pushes integers of every width as one numeric type, so both macros
+// collapse to the same thing here.
+#define UNLUANOVA_PUSHINT(L, V) lua_pushinteger(L, (lua_Integer)(V))
 #define UNLUANOVA_TOINT64(L, Idx) ((int64)lua_tointeger(L, Idx))
 #endif
 

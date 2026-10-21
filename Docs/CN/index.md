@@ -33,7 +33,7 @@ description: UnLuaNova 中文文档导航 —— 从新手上手到进阶配置�
 
     [调试](Debugging.md) · [智能提示](IntelliSense.md)
 
-    [测试与自动化](Testing.md) · [测试报告](../test-report.md)
+    [测试与自动化](Testing.md) · [测试报告 Luau](../test-luau-report.md) · [测试报告 Lua](../test-lua-report.md)
 
 - :material-palette: **参考**
 

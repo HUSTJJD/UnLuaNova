@@ -491,7 +491,18 @@ void PushObjectCore(lua_State *L, UObjectBaseUtility *Object)
  */
 static void PushIntegerElement(lua_State *L, FNumericProperty *Property, void *Value)
 {
-    UNLUANOVA_PUSHINT64(L, Property->GetUnsignedIntPropertyValue(Value));
+    const uint64 V = Property->GetUnsignedIntPropertyValue(Value);
+
+    // Same split as the Push() overloads: only a genuine 64-bit property goes out with the
+    // integer tag, everything narrower goes out as a number a script can do arithmetic on.
+    if (Property->IsA<FInt64Property>() || Property->IsA<FUInt64Property>())
+    {
+        UNLUANOVA_PUSHINT64(L, (int64)V);
+    }
+    else
+    {
+        UNLUANOVA_PUSHINT(L, (int32)V);
+    }
 }
 
 /**
@@ -507,7 +518,9 @@ static void PushFloatElement(lua_State *L, FNumericProperty *Property, void *Val
  */
 static void PushEnumElement(lua_State *L, FNumericProperty *Property, void *Value)
 {
-    UNLUANOVA_PUSHINT64(L, Property->GetSignedIntPropertyValue(Value));
+    // An enum's underlying storage may be 64-bit, but its values never come close to 2^53,
+    // and scripts compare and add them constantly - so this goes out as a number.
+    UNLUANOVA_PUSHINT(L, Property->GetSignedIntPropertyValue(Value));
 }
 
 /**

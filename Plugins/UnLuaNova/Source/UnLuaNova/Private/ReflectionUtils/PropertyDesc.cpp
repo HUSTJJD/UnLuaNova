@@ -90,9 +90,14 @@ public:
         {
             PushIntegerArray(L, NumericProperty, (void*)ValuePtr);
         }
+        else if (Property->IsA<FInt64Property>() || Property->IsA<FUInt64Property>())
+        {
+            // Only a genuine 64-bit property keeps the integer tag; see PushIntegerElement.
+            UNLUANOVA_PUSHINT64(L, NumericProperty->GetUnsignedIntPropertyValue(ValuePtr));
+        }
         else
         {
-            UNLUANOVA_PUSHINT64(L, NumericProperty->GetUnsignedIntPropertyValue(ValuePtr));
+            UNLUANOVA_PUSHINT(L, (int32)NumericProperty->GetUnsignedIntPropertyValue(ValuePtr));
         }
     }
 
@@ -188,7 +193,8 @@ public:
         }
         else
         {
-            UNLUANOVA_PUSHINT64(L, EnumProperty->GetUnderlyingProperty()->GetSignedIntPropertyValue(ValuePtr));
+            // As in PushEnumElement: enum values are small and scripts do arithmetic on them.
+            UNLUANOVA_PUSHINT(L, EnumProperty->GetUnderlyingProperty()->GetSignedIntPropertyValue(ValuePtr));
         }
     }
 

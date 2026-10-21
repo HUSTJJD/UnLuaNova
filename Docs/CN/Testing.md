@@ -29,7 +29,7 @@ Plugins/UnLuaNovaTestSuite/
 ## 一键运行
 
 ```powershell
-# 跑全部 UnLuaNova 用例
+# 跑全部 UnLuaNova 用例：先编译，两个后端各跑一遍，各出一份报告
 .\Tools\RunTests.ps1
 
 # 只跑某一类
@@ -37,6 +37,9 @@ Plugins/UnLuaNovaTestSuite/
 
 # 只跑三个可选扩展插件（LuaRapidjson / LuaProtobuf / LuaSocket）
 .\Tools\RunTests.ps1 -Filter UnLuaNova.Extensions
+
+# 只跑一个后端
+.\Tools\RunTests.ps1 -Backend Luau
 
 # 带截图，并把结果发布到文档站
 .\Tools\RunTests.ps1 -Screenshots -Publish
@@ -50,22 +53,57 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
     -ReportExportPath=<dir> -abslog=<dir>\Editor.log
 ```
 
+`-Backend` 默认 `Both`，所以上面那条"跑全部"实际上是**两轮**：改配置 → 编译 → 跑测试 →
+再改回来 → 再编译 → 再跑，然后给出两份互不相干的报告。详见下方"两个后端各一份报告"。
+
 ### 常用参数
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
 | `-EnginePath` | 自动发现 | UE 源码根目录，见下方"路径怎么找" |
 | `-ProjectPath` | 自动发现 | 工程文件，取仓库根目录下第一个 `.uproject` |
-| `-DryRun` | 关 | 只打印将要执行的命令，不启动编辑器 |
+| `-DryRun` | 关 | 只打印将要执行的命令，不启动编辑器、不编译 |
+| `-Backend` | `Both` | 跑哪个 Lua 后端：`Lua`、`Luau` 或 `Both` |
+| `-Platform` / `-Configuration` | `Win64` / `Development` | 传给 UBT 的编译参数 |
+| `-SkipBuild` | 关 | 跳过编译，直接跑现有二进制 |
 | `-Filter` | `UnLuaNova` | 用例过滤器，前缀匹配 |
 | `-Map` | 空 | 场景测试要开哪个关卡；多数用例自建 World，不需要 |
-| `-OutputDir` | `Saved/TestReports/<时间戳>` | 报告输出目录 |
+| `-OutputDir` | `Saved/TestReports/<时间戳>` | 报告输出根目录，每个后端一个子目录 |
 | `-ExtraCommands` | 空 | 跑完追加执行的控制台命令（截图用） |
 | `-Screenshots` | 关 | 保留真实视口并收集截图；不加则 `-NullRHI`，快很多 |
 | `-Publish` | 关 | 把报告和截图复制到 `Docs/`，供 Pages 发布 |
 | `-NoReport` | 关 | 只跑测试，不生成报告 |
 
 有失败用例时脚本退出码为 `1`，可以直接挂到任何调度里。
+
+## 两个后端各一份报告
+
+Lua 后端是**编译期选择**（见[设置项](Settings.md)里的"Lua 后端"）：两个后端导出同样的
+`lua_*` 符号，不可能同时存在于一个构建里。所以"两个后端都测"不是加个开关就行，而是：
+
+```powershell
+.\Tools\RunTests.ps1 -Backend Both -Publish
+```
+
+对每个后端依次做：
+
+1. 写 `Config/DefaultUnLuaNovaEditor.ini` 的 `LuaBackend=<后端>`；
+2. 清掉 `Plugins/UnLuaNova/Intermediate/`（UBT 不会盯着这个 ini，不清就可能把上一个后端的
+   目标文件当成最新的）；
+3. `Engine/Build/BatchFiles/Build.bat <工程>Editor <平台> <配置> -Project=<uproject>`；
+4. 跑测试，结果落到 `Saved/TestReports/<时间戳>/lua` 和 `.../luau`；
+5. 生成报告；跑完把 ini 恢复成原样（`try/finally`，中断也会恢复）。
+
+产物：
+
+| 后端 | 本机报告 | 发布到文档站 |
+|---|---|---|
+| `Lua` | `Saved/TestReports/<时间戳>/lua/report.md` | `Docs/test-lua-report.md` |
+| `Luau` | `Saved/TestReports/<时间戳>/luau/report.md` | `Docs/test-luau-report.md` |
+
+两份报告都带后端标记（标题、结论表里的"Lua 后端"一行），不会看着看着忘了自己看的是哪份。
+只想跑一个后端就用 `-Backend Lua` 或 `-Backend Luau`。
+
 
 ## 路径怎么找
 
@@ -84,21 +122,25 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 
 ## 报告与结论
 
-跑完在 `Saved/TestReports/<时间戳>/` 下：
+跑完在每个后端的目录 `Saved/TestReports/<时间戳>/<后端>/` 下：
 
 | 文件 | 内容 |
 |---|---|
-| `report.md` | 结论：通过率、总数/通过/失败/跳过、失败明细（含错误消息与源码位置）、最慢用例、截图画廊 |
-| `summary.json` | 机器可读的总数，脚本据此决定退出码 |
+| `report.md` | 结论：通过率、总数/通过/失败/跳过、**通过明细**、失败明细（含错误消息与源码位置）、最慢用例、截图画廊 |
+| `summary.json` | 机器可读的总数（含 `backend`），脚本据此决定退出码 |
 | `Editor.log` | 本次运行的完整日志 |
 | `screenshots/` | 测试期间产生的截图 |
 | `*.json` | UE 导出的原始结果 |
 
-`-Publish` 写到 `Docs/test-report.md` 的那份是**要提交进 git** 的，所以它不写本机路径、也不写这一次的时间戳目录名
-（那两个每次跑都变，会让同一份结论在 git 里反复产生无意义 diff）。本机那份 `report.md` 仍然指向原始 JSON 目录，方便回溯。
+`-Publish` 写到 `Docs/test-lua-report.md` / `Docs/test-luau-report.md` 的那两份是**要提交进 git** 的，
+所以它们不写本机路径、也不写这一次的时间戳目录名（那两个每次跑都变，会让同一份结论在
+git 里反复产生无意义 diff）。本机那份 `report.md` 仍然指向原始 JSON 目录，方便回溯。
 
 失败明细会直接列出错误消息和 `文件:行号`，打开报告就能定位，不用回头翻日志。
 如果一条用例被标成 success 但带了 error 记录，报告会按失败处理——那是伪装成通过的失败。
+
+**通过明细同样会列出来**，不只是失败项：改了公共代码之后，"哪些还在正常"和"哪些坏了"一样重要，
+而一个百分比答不了这个问题。通过项按用例名排序，所以结果没变时 git diff 也是干净的。
 
 ## 截图
 
@@ -126,7 +168,7 @@ UnLuaNova 依赖**本地 UE 源码构建**（UE 5.8.3）。GitHub 托管 runner 
 也编译不了它。所以：
 
 - 测试在本机跑；
-- 想上站点就加 `-Publish`，把生成的 `Docs/test-report.md` 和截图提交；
+- 想上站点就加 `-Publish`，把生成的 `Docs/test-lua-report.md`、`Docs/test-luau-report.md` 和截图提交；
 - Actions 只负责把 `Docs/` 渲染发布到 GitHub Pages。
 
 如果你有自托管 Windows runner，把 `Tools/RunTests.ps1` 接进去即可，脚本的退出码已经准备好了。
@@ -142,6 +184,7 @@ UnLuaNova 依赖**本地 UE 源码构建**（UE 5.8.3）。GitHub 托管 runner 
 
 ## 延伸阅读
 
-- [测试报告](../test-report.md) — 最新一次测试报告
+- [测试报告（Lua 后端）](../test-lua-report.md) — 最新一次 Lua 后端测试报告
+- [测试报告（Luau 后端）](../test-luau-report.md) — 最新一次 Luau 后端测试报告
 - [Showcase 示例](Showcase.md) — 由测试产出的示例截图
 - [调试](Debugging.md) — 调试 Lua 脚本

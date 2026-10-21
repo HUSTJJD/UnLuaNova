@@ -84,7 +84,7 @@ int32 Enum_GetMaxValue(lua_State* L)
     }
     lua_pop(L, 1);
 
-    UNLUANOVA_PUSHINT64(L, MaxValue);
+    UNLUANOVA_PUSHINT(L, MaxValue);
     return 1;
 }
 
@@ -180,9 +180,9 @@ int32 CollisionEnum_Index(lua_State* L, int32 (*Converter)(FName))
             UNLUANOVA_LOGWARNING(L, TEXT("%s: Cann't find enum %s!"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(Name));
         }
         lua_pushvalue(L, 2);
-        UNLUANOVA_PUSHINT64(L, Value);
+        UNLUANOVA_PUSHINT(L, Value);
         lua_rawset(L, 1);
-        UNLUANOVA_PUSHINT64(L, Value);
+        UNLUANOVA_PUSHINT(L, Value);
     }
     else
     {
