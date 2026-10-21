@@ -64,10 +64,10 @@ namespace UnLuaNova
         // https://github.com/Tencent/UnLuaNova/issues/534
         const auto Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("Binaries/Win64"));
         FPlatformProcess::PushDllDirectory(*Dir);
-        L = lua_newstate(GetLuaAllocator(), nullptr);
+        L = UNLUANOVA_NEWSTATE(GetLuaAllocator(), nullptr);
         FPlatformProcess::PopDllDirectory(*Dir);
 #else
-        L = lua_newstate(GetLuaAllocator(), nullptr);
+        L = UNLUANOVA_NEWSTATE(GetLuaAllocator(), nullptr);
 #endif
 
         AllEnvs.Add(L, this);

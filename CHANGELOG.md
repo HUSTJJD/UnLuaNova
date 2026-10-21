@@ -15,6 +15,15 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 - **Lua 后端抽象** `LuaBackend.h`：吸收 Lua 5.4 与 Luau 的 API 差异（`UNLUANOVA_LUA_BACKEND` 开关）
 - Luau 以 git submodule 引入（`Source/ThirdParty/Luau`，0.743）+ `Luau.Build.cs`
 - 改名脚本 `Tools/Rename-To-UnLuaNova.ps1`
+- **Luau 能力落地**：
+  - `UnLuaNova.GetBackend()` / `UnLuaNova.HasFeature()`：脚本按能力分支，而不是猜后端
+  - `vector` ↔ `FVector`：`UE.FVector(vector)`、`v:Set(vector)`、`v:ToVector()`，
+    UFUNCTION 的 `FVector` 参数与反射写入路径都能直接收 `vector`
+  - Luau 模块 `UnLuaNova.Vector` / `UnLuaNova.Buffer`（`buffer` ↔ `TArray` 显式转换）
+  - 示例集 `Content/Script/Luau/`（严格类型、沙盒边界、`lua.dbg` 目标、语法速览、vector 互操作），
+    由 `Index.lua` 做后端守卫，Lua 5.5 下一个文件都不会加载
+  - `Tools/CheckLuauTypes.ps1`：用 `luau-analyze` + 生成的 `UnLuaNova.d.lua` 做静态类型检查
+  - 文档：`Docs/CN/Luau.md` 与 `Docs/EN/Luau.md`
 
 ### Changed
 - 引擎基线升到 **UE 5.8.3**：`BuildSettingsVersion.V6` + `IncludeOrderVersion.Latest`
@@ -23,11 +32,19 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 - `EInternalObjectFlags::AsyncLoading` → `EInternalObjectFlags_AsyncLoading`（UE 5.8 已移除该枚举项）
 - `FSoftObjectPtr::operator=` 导出返回类型修正为 `FSoftObjectPtr&`
 - `UNLUA_LOGERROR` 格式串缺参修正（原为未定义行为）
+- **许可变更**：MIT → **Polyform Small Business 1.0.0** + 附加条款
+  （人数 < 10 且营收/融资 < $1M 可免费商用，超出需商业授权，见 `LICENSE` / `COMMERCIAL.md`）；
+  上游组件的 MIT 授权不变，见 `LICENSE-THIRD-PARTY.md`
+- 贡献需要签 CLA（见 `CLA.md` / `CONTRIBUTING.md`），否则商业授权无法向下再许可
+- `UE` 命名空间新增 `__newindex`：脚本改写引擎类型会被直接拒绝
 
 ### Fixed
 - 合并上游 `develop`：PR #700（UE5.4）、#707、#758（UE5.6）、#761、#765
 - 合入社区 PR：#767 #756 #748 #711 #639 #643 #684 #705 #704 #672
 - 合入 PR #771 的测试套件修复（`UnLua::Shutdown()` 前置、`GetUObject` 回读等）
+- 沙盒（`lua.sandbox`）会顺带冻结 `UE` / `Lua` / `package.loaded`，导致类型懒注册与 `require` 失败；
+  现在沙盒后会还回这几张表的写权限，脚本侧写入仍由 `UE` 表的 `__newindex` 拦截
+- 文档把 `lua.sandbox` 写成了可执行命令，实际它是启动期 CVar（每个环境创建时读取一次）
 
 ### Reverted
 - **PR #719**：其守卫会在子类实例上跳过 Lua 覆写（详见 `Docs/Archive/` 说明），

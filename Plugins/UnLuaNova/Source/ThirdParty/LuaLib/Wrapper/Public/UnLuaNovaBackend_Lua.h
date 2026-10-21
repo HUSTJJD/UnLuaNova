@@ -10,17 +10,17 @@
 //   1. this file's name is unique to the backend, so it can never be satisfied by the
 //      other one;
 //   2. the includes below are relative to *this file*, so they can only ever reach
-//      ThirdParty/LuaLib/Lua, whatever else is on the include path. ('..' is LuaLib, so
-//      the submodule is '../Lua'. If these directories are ever moved, the
-//      __has_include check below says so instead of a bare C1083.)
+//      ThirdParty/LuaLib/Lua, whatever else is on the include path. ('..' is LuaLib,
+//      '../..' is LuaLib's parent, so the submodule is '../../Lua'. If these directories
+//      are ever moved, the __has_include check below says so instead of a bare C1083.)
 //
 // Include this instead of "lua.h" / "lua.hpp". Better still, include LuaBackend.h.
 
 #pragma once
 
 #if defined(__has_include)
-#if !__has_include("../Lua/lua.h")
-#error "UnLuaNovaBackend_Lua.h cannot find Lua's lua.h at ../Lua/lua.h. Either the Lua submodule is not checked out (git submodule update --init --recursive) or this wrapper moved relative to it."
+#if !__has_include("../../Lua/lua.h")
+#error "UnLuaNovaBackend_Lua.h cannot find Lua's lua.h at ../../Lua/lua.h. Either the Lua submodule is not checked out (git submodule update --init --recursive) or this wrapper moved relative to it."
 #endif
 #endif
 
@@ -30,9 +30,9 @@
 extern "C" {
 #endif
 
-#include "../Lua/lua.h"
-#include "../Lua/lualib.h"
-#include "../Lua/lauxlib.h"
+#include "../../Lua/lua.h"
+#include "../../Lua/lualib.h"
+#include "../../Lua/lauxlib.h"
 
 #if defined(__cplusplus) && (!defined(LUA_COMPILE_AS_CPP) || !LUA_COMPILE_AS_CPP)
 }

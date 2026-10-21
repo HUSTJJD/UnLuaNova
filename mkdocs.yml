@@ -77,6 +77,7 @@ nav:
           - 测试报告 Luau: test-luau-report.md
       - 参考:
           - Showcase 示例: CN/Showcase.md
+          - 许可与商业授权: CN/License.md
           - 常见问题 FAQ: CN/FAQ.md
   - English Docs:
       - EN/index.md
@@ -84,6 +85,7 @@ nav:
       - Luau Backend: EN/Luau.md
       - API Reference: EN/API.md
       - How To Implement Overriding: EN/How_To_Implement_Overriding.md
+      - License: EN/License.md
       - FAQ: EN/FAQ.md
 
 markdown_extensions:

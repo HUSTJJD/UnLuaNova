@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/HUSTJJD/UnLuaNova/actions/workflows/ci.yml/badge.svg)](https://github.com/HUSTJJD/UnLuaNova/actions/workflows/ci.yml)
 [![Docs](https://github.com/HUSTJJD/UnLuaNova/actions/workflows/docs.yml/badge.svg)](https://hustjjd.github.io/UnLuaNova/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.TXT)
+[![License: Polyform Small Business](https://img.shields.io/badge/License-Polyform%20Small%20Business-0175C2.svg)](LICENSE)
 [![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.8-blueviolet.svg)](https://www.unrealengine.com/)
 [![Lua](https://img.shields.io/badge/Lua-5.5%20%2F%20Luau-blue.svg)](https://www.lua.org/)
 [![GitHub stars](https://img.shields.io/github/stars/HUSTJJD/UnLuaNova?style=social)](https://github.com/HUSTJJD/UnLuaNova/stargazers)
@@ -93,7 +93,7 @@ match the Lua function name (`AnimNotify_xxx`) and the replacement is done — n
 | Engine baseline | **UE 5.8.3** (source build) |
 | Lua backend | **Luau (default)** / Lua 5.5 — both as submodules |
 | Upstream baseline | Tencent/UnLua v2.3.6 + `develop` (2026-04) |
-| License | MIT |
+| License | Polyform Small Business 1.0.0 / paid above threshold |
 
 > ⚠️ Early stage, expect churn. Great for trying out, opening issues and pushing fixes — not yet recommended for production.
 > Known issues: see [CHANGELOG](CHANGELOG.md#known-issues).
@@ -136,11 +136,33 @@ A star is the cheapest way to help ⭐ — also welcome:
 
 - Issues: build problems, engine version porting, API questions
 - PRs: docs fixes, new tests, merging unmerged community fixes from upstream
-- Tests: `.\Tools\RunTests.ps1`, see [测试与自动化](Docs/CN/Testing.md)
+- Tests: `.\Tools\RunTest
 
 ## License
 
-MIT, based on Tencent/UnLua (MIT) — see [LICENSE](LICENSE.TXT).
+UnLuaNova is released under the **[Polyform Small Business License 1.0.0](https://polyformproject.org/licenses/small-business/1.0.0)**,
+with additional terms that tighten the size thresholds (see [LICENSE](LICENSE)):
+
+| Who you are | May you use it? |
+|:---|:---|
+| An individual: learning, hobby projects, open source | Yes, free |
+| An organization: **< 10** employees + contractors **and** **< $1M** revenue/funding in the prior tax year | Yes, free, including commercial use |
+| Anyone above either threshold | Commercial license required, see [COMMERCIAL.md](COMMERCIAL.md) |
+
+Size is counted for the **whole group** — parents, subsidiaries and entities under common
+control count as one, so a small studio owned by a large publisher cannot count only itself.
+
+In short: the source is public, small teams may use it commercially for free, and those who
+make money from it pay.
+
+Contributions require signing the [CLA](CLA.md), which grants the maintainers the right to
+sublicense your contribution to commercial licensees. Without it a commercial license cannot
+be granted cleanly, and there is no revenue to keep the project maintained.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+The upstream components remain MIT-licensed and are unaffected by this change:
+[Tencent/UnLua](https://github.com/Tencent/UnLua), [Lua 5.5](https://www.lua.org/) and
+[Luau](https://github.com/luau-lang/luau) — see [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md).
 
 Lua VM: [Lua 5.5](https://www.lua.org/) (MIT); Luau: [luau-lang/luau](https://github.com/luau-lang/luau) (MIT).
 Both are git submodules — run `git submodule update --init --recursive` after cloning.

@@ -4,11 +4,17 @@
 // pointer, not renaming this module. The pinned version lives in .gitmodules / the
 // submodule checkout, so it is not repeated here.
 //
-// The submodule is checked out at ./Lua, inside this wrapper. This file deliberately
-// lives OUTSIDE it: anything written
-// inside the submodule belongs to lua/lua's own git repository and would never be
-// committed to this project. So this is a wrapper module whose source lives in a sibling
-// directory - the same shape as ../LuauLib for the Luau backend.
+// The submodule is checked out at ../Lua - a SIBLING of this wrapper, not inside it.
+// That is the whole point of the Wrapper/ directory: UBT compiles every .c it finds under
+// a module's directory, and onelua.c is an aggregation of the library, so a submodule
+// sitting inside the module gets compiled once as itself and again through LuaUnity.c -
+// every lua_* symbol defined twice, and LNK2005/LNK1169 at link time. A .ubtignore in the
+// checkout does not keep UBT from doing that for .c files (it does for .cpp, which is why
+// ../LuauLib gets away with the other layout), so the only reliable fix is not to have the
+// submodule under the module directory at all.
+//
+// This file also deliberately lives OUTSIDE the submodule: anything written inside it
+// belongs to lua/lua's own git repository and would never be committed to this project.
 //
 // Upstream ships onelua.c, an aggregation of the whole library, so this compiles it
 // through LuaUnity.c: one translation unit, no external build tool, identical behaviour
@@ -26,13 +32,11 @@ public class Lua : ModuleRules
         bUseUnity = false;
         PCHUsage = PCHUsageMode.NoPCHs;
 
-        var LuaRoot = Path.GetFullPath(Path.Combine(ModuleDirectory, "Lua"));
+        var LuaRoot = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "Lua"));
 
-        // Keep UBT from compiling the submodule's own sources. It now sits inside this
-        // module's directory, and UBT collects .c/.cpp recursively from there - so lua.c
-        // and luac.c (each with a main()) and onelua.c (already included by LuaUnity.c)
-        // would all be compiled on their own. A .ubtignore makes UBT skip a directory
-        // tree entirely.
+        // The submodule is already outside this module, so compilation cannot pick it up.
+        // The .ubtignore is still worth having: it also stops UHT and UBT's metadata
+        // prefetch from walking the whole checkout looking for reflection markup.
         //
         // It has to live inside the checkout, which is the upstream repo's and not ours to
         // commit to, so the wrapper writes it when it is missing.

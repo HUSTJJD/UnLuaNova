@@ -1,0 +1,165 @@
+UnLuaNova
+Copyright (c) 2019-2026 Tencent and the UnLuaNova contributors
+
+UnLuaNova 采用 **Polyform Small Business License 1.0.0**，并附加了下方 ADDITIONAL TERMS
+FROM THE LICENSOR 一节中更严格的规模限定。简单说：
+
+* 个人、爱好者、以及规模低于阈值的组织：可以免费使用，包括商业用途
+* 超过阈值（或想摆脱这些限制）：需要购买商业授权，见 [COMMERCIAL.md](COMMERCIAL.md)
+* 上游组件（Tencent/UnLua、Lua、Luau）仍按它们自己的 MIT 授权可用，
+  不受本次变更影响，见 [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md)
+
+Required Notice: UnLuaNova — Copyright (c) 2019-2026 Tencent and the UnLuaNova
+contributors. Licensed under the Polyform Small Business License 1.0.0 with additional
+terms; commercial licensing: see COMMERCIAL.md.
+
+--------------------------------------------------------------------------------
+
+POLYFORM SMALL BUSINESS LICENSE 1.0.0
+
+https://polyformproject.org/licenses/small-business/1.0.0
+
+
+ACCEPTANCE
+
+In order to get any license under these terms, you must agree to them as both strict
+obligations and conditions to all your licenses.
+
+
+COPYRIGHT LICENSE
+
+The licensor grants you a copyright license for the software to do everything you might do
+with the software that would otherwise infringe the licensor's copyright in it for any
+permitted purpose. However, you may only distribute the software according to Distribution
+License and make changes or new works based on the software according to Changes and New
+Works License.
+
+
+DISTRIBUTION LICENSE
+
+The licensor grants you an additional copyright license to distribute copies of the
+software. Your license to distribute covers distributing the software with changes and new
+works permitted by Changes and New Works License.
+
+
+NOTICES
+
+You must ensure that anyone who gets a copy of any part of the software from you also gets a
+copy of these terms or the URL for them above, as well as copies of any plain-text lines
+beginning with Required Notice: that the licensor provided with the software. For example:
+
+> Required Notice: Copyright Yoyodyne, Inc. (http://example.com)
+
+
+CHANGES AND NEW WORKS LICENSE
+
+The licensor grants you an additional copyright license to make changes and new works based
+on the software for any permitted purpose.
+
+
+PATENT LICENSE
+
+The licensor grants you a patent license for the software that covers patent claims the
+licensor can license, or becomes able to license, that you would infringe by using the
+software.
+
+
+FAIR USE
+
+You may have "fair use" rights for the software under the law. These terms do not limit them.
+
+
+SMALL BUSINESS
+
+Use of the software for the benefit of your company is use for a permitted purpose if your
+company has fewer than 100 total individuals working as employees and independent
+contractors, and less than 1,000,000 USD (2019) total revenue in the prior tax year. Adjust
+this revenue threshold for inflation according to the United States Bureau of Labor
+Statistics' consumer price index for all urban consumers, U.S. city average, for all items,
+not seasonally adjusted, with 1982–1984=100 reference base.
+
+
+NO OTHER RIGHTS
+
+These terms do not allow you to sublicense or transfer any of your licenses to anyone else,
+or prevent the licensor from granting licenses to anyone else. These terms do not imply any
+other licenses.
+
+
+PATENT DEFENSE
+
+If you make any written claim that the software infringes or contributes to infringement of
+any patent, your patent license for the software granted under these terms ends immediately.
+If your company makes such a claim, your patent license ends immediately for work on behalf
+of your company.
+
+
+VIOLATIONS
+
+The first time you are notified in writing that you have violated any of these terms, or done
+anything with the software not covered by your licenses, your licenses can nonetheless
+continue if you come into full compliance with these terms, and take practical steps to
+correct past violations, within 32 days of receiving notice. Otherwise, all your licenses end
+immediately.
+
+
+NO LIABILITY
+
+As far as the law allows, the software comes as is, without any warranty or condition, and
+the licensor will not be liable to you for any damages arising out of these terms or the use
+or nature of the software, under any kind of legal claim.
+
+
+DEFINITIONS
+
+The licensor is the individual or entity offering these terms, and the software is the
+software the licensor makes available under these terms.
+
+You refers to the individual or entity agreeing to these terms.
+
+Your company is any legal entity, sole proprietorship, or other kind of organization that you
+work for, plus all organizations that have control over, are under the control of, or are
+under common control with that organization. Control means ownership of substantially all the
+assets of an entity, or the power to direct its management and policies by vote, contract, or
+otherwise. Control can be direct or indirect.
+
+Your licenses are all the licenses granted to you for the software under these terms.
+
+Use means anything you do with the software requiring one of your licenses.
+
+© PolyForm Project Inc.
+
+--------------------------------------------------------------------------------
+
+ADDITIONAL TERMS FROM THE LICENSOR
+
+The following additional terms apply to UnLuaNova. They **narrow** the license granted above;
+where a provision above and a provision below conflict, the narrower one applies.
+
+1. SMALL BUSINESS, as used above, is limited to an organization that - together with its
+   parents, subsidiaries and every entity under common control with it, counted as one -
+   satisfies **both** of the following:
+
+   (a) fewer than ten (10) individuals working as employees and independent contractors
+       in total, and
+
+   (b) less than 1,000,000 USD in total revenue and funding in the prior tax year.
+
+   Counting organizations together as one matters: a small studio that is a subsidiary of a
+   larger group does not qualify on its own headcount.
+
+2. Any use that is not for the benefit of a SMALL BUSINESS as defined above requires a
+   separate commercial license. That includes, without limitation: use by an organization
+   above either threshold, use by a contractor or agency on behalf of such an organization,
+   and shipping the software inside a commercial product or service that exceeds the
+   thresholds. See [COMMERCIAL.md](COMMERCIAL.md).
+
+3. These additional terms do **not** apply to the third-party components listed in
+   [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md). Those remain available under their own
+   licenses (MIT), granted by their own copyright holders.
+
+4. Nothing in this file limits fair use or any other right that cannot be limited by license.
+
+Required Notice: UnLuaNova — Copyright (c) 2019-2026 Tencent and the UnLuaNova
+contributors. Licensed under the Polyform Small Business License 1.0.0 with additional
+terms; commercial licensing: see COMMERCIAL.md.

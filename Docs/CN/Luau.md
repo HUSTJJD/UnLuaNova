@@ -316,9 +316,13 @@ end
 * 仅 Luau：Luau 语法能编译并求值、`vector` 进出 `FVector`、`UnLuaNova.Vector` 转换、`buffer` 读写、沙盒拦截全局写入、沙盒下类型注册仍可用、断点原语可用、分配回调能收到事件
 * 仅 Lua 5.5：`ToVector()` 降级返回 `nil`
 
-跑法与其他测试一样：
+跑法与其他测试一样，注意后端是编译期选择，脚本会先按 `-Backend` 编译再跑：
 
 ```powershell
+# 只跑 Luau 后端的这一组
+.\Tools\RunTests.ps1 -Backend Luau -Filter UnLuaNova.API.LuaBackend
+
+# 两个后端各跑一遍，各出一份报告（默认就是 Both）
 .\Tools\RunTests.ps1 -Filter UnLuaNova.API.LuaBackend
 ```
 

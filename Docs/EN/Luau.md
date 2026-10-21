@@ -317,9 +317,14 @@ end
   callbacks fire
 * Lua 5.5 only: `ToVector()` degrades to `nil`
 
-Run them like any other test:
+Run them like any other test. The backend is a compile-time choice, so the script builds
+for the `-Backend` you ask for before it runs anything:
 
 ```powershell
+# this group, Luau only
+.\Tools\RunTests.ps1 -Backend Luau -Filter UnLuaNova.API.LuaBackend
+
+# both backends, one report each (Both is the default)
 .\Tools\RunTests.ps1 -Filter UnLuaNova.API.LuaBackend
 ```
 

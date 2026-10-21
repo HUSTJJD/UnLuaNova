@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/HUSTJJD/UnLuaNova/actions/workflows/ci.yml/badge.svg)](https://github.com/HUSTJJD/UnLuaNova/actions/workflows/ci.yml)
 [![Docs](https://github.com/HUSTJJD/UnLuaNova/actions/workflows/docs.yml/badge.svg)](https://hustjjd.github.io/UnLuaNova/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.TXT)
+[![License: Polyform Small Business](https://img.shields.io/badge/License-Polyform%20Small%20Business-0175C2.svg)](LICENSE)
 [![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.8-blueviolet.svg)](https://www.unrealengine.com/)
 [![Lua](https://img.shields.io/badge/Lua-5.5%20%2F%20Luau-blue.svg)](https://www.lua.org/)
 [![GitHub stars](https://img.shields.io/github/stars/HUSTJJD/UnLuaNova?style=social)](https://github.com/HUSTJJD/UnLuaNova/stargazers)
@@ -93,7 +93,7 @@ Lua 函数名对上（`AnimNotify_xxx`）即完成替换，不需要任何辅助
 | 引擎基线 | **UE 5.8.3**（源码版） |
 | Lua 后端 | **Luau（默认）** ／ Lua 5.5 —— 均以子模块引入 |
 | 上游基线 | Tencent/UnLua v2.3.6 + `develop`(2026-04) |
-| 许可 | MIT |
+| 许可 | Polyform Small Business 1.0.0 ／ 商用超阈值需付费 |
 
 > ⚠️ 项目仍在早期阶段，改动会比较频繁；可以拿来尝鲜、提 issue、一起 push，暂不建议直接上生产。
 > 已知事项见 [CHANGELOG](CHANGELOG.md#known-issues)。
@@ -135,11 +135,31 @@ Star 是最省力的支持方式 ⭐ —— 也欢迎：
 
 - 提 issue：编译问题、UE 版本适配、API 疑问都可以
 - 提 PR：修文档、补测试、合入上游未合并的社区修复
-- 跑测试：`.\Tools\RunTests.ps1`，详见[测试与自动化](Docs/CN/Testing.md)
+- 跑测试：`.\Tools\RunT
 
 ## 许可
 
-MIT，基于 Tencent/UnLua（MIT），见 [LICENSE](LICENSE.TXT)。
+UnLuaNova 采用 **[Polyform Small Business 1.0.0](https://polyformproject.org/licenses/small-business/1.0.0)**，
+并附加了更严格的规模限定（见 [LICENSE](LICENSE)）：
+
+| 你的情况 | 能不能用 |
+|:---|:---|
+| 个人学习、业余项目、开源项目 | 可以，免费 |
+| 组织：员工+承包商 **< 10 人** 且 上一财年营收/融资 **< $1M** | 可以，免费，含商用 |
+| 超过其中任一条 | 需要商业授权，见 [COMMERCIAL.md](COMMERCIAL.md) |
+
+规模按集团**合并计算** —— 母公司、子公司、受共同控制的关联实体算作一个主体，
+大厂旗下的小工作室不能只按自己的人数算。
+
+一句话：源码公开、小团队免费商用，赚到钱的付费。
+
+贡献代码需要签 [CLA](CLA.md)：它授予维护者把你的贡献再许可给商业客户的权利。
+没有这份授权，商业授权在法理上卖不干净，项目也就没钱继续维护你写的代码。
+详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+上游组件仍按 MIT 授权、不受本次变更影响：[Tencent/UnLua](https://github.com/Tencent/UnLua)、
+[Lua 5.5](https://www.lua.org/)、[Luau](https://github.com/luau-lang/luau)，
+见 [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md)。
 
 Lua 虚拟机使用 [Lua 5.5](https://www.lua.org/)（MIT）；Luau 使用 [luau-lang/luau](https://github.com/luau-lang/luau)（MIT）。
 两者均以 git 子模块引入，克隆后需执行 `git submodule update --init --recursive`。

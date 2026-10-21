@@ -85,7 +85,7 @@ description: UnLuaNova —— 面向 Unreal Engine 的 Lua 脚本方案，Tencen
 
 - :material-palette: **进阶**
 
-    [自定义模板](CN/CustomTemplate.md) · [Showcase 示例](CN/Showcase.md) · [FAQ](CN/FAQ.md)
+    [自定义模板](CN/CustomTemplate.md) · [Showcase 示例](CN/Showcase.md) · [FAQ](CN/FAQ.md) · [许可与商业授权](CN/License.md)
 
 </div>
 
@@ -108,6 +108,10 @@ description: UnLuaNova —— 面向 Unreal Engine 的 Lua 脚本方案，Tencen
 - :material-call-split: **[How To Implement Overriding](EN/How_To_Implement_Overriding.md)**
 
     How Blueprint events get replaced by Lua implementations.
+
+- :material-scale-balance: **[License](EN/License.md)**
+
+    Polyform Small Business 1.0.0 with tighter size limits; commercial license above threshold.
 
 - :material-help-circle: **[FAQ](EN/FAQ.md)**
 

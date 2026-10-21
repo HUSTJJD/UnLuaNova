@@ -91,6 +91,18 @@ static_assert(sizeof(lua_Integer) == 4, "Luau's lua_Integer is 32-bit; these hea
 static_assert(sizeof(lua_Integer) == 8, "Plain Lua's lua_Integer is 64-bit; these headers are not Lua's, or LUA_INT_TYPE was changed in luaconf.h - UNLUANOVA_PUSHINT64/TOINT64 need rechecking.");
 #endif
 
+// --- creating a state ---------------------------------------------------------
+// Both backends build a lua_State, but not with the same argument list: plain Lua takes a
+// third one, a seed for the string hash (it randomises string hashing so a script cannot
+// force collisions), Luau has no such parameter. The spelling that produces a seed the same
+// way the reference lauxlib does is luaL_makeseed, which is why this is not simply
+// "pass 0" - a fixed seed would undo exactly what the parameter is for.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_NEWSTATE(ALLOC, UD) lua_newstate(ALLOC, UD)
+#else
+#define UNLUANOVA_NEWSTATE(ALLOC, UD) lua_newstate(ALLOC, UD, luaL_makeseed(nullptr))
+#endif
+
 // --- giving a loaded chunk its own environment --------------------------------
 // Plain Lua keeps a chunk's environment in upvalue 1 (_ENV); Luau keeps it on the
 // LClosure itself - `luaF_newLclosure(L, 0, envt, main)` in lvmload.cpp gives the main
