@@ -98,6 +98,12 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 - **Issue288 / Issue295 按新类名取 UMG 类**：资产文件改名成了 `UnLuaNovaTestUMG_Issue288`，
   但里面的 `BlueprintGeneratedClass` 仍是 `UnLuaTestUMG_Issue288_C`（改文件名不会改资产里的类），
   `UE.UClass.Load` 因此拿到 nil、`NewObject` 报 `Invalid class!`。已按资产里真实存在的类取
+- **Luau 下 int64 属性没法跟脚本里的字面量比较**：Luau 的相等是先比 tag 的
+  （`equalobj()` 就是 `ttype(o1) == ttype(o2) && luaV_equalval(...)`），`LUA_TINTEGER` 永远不等于
+  `LUA_TNUMBER`，而 Luau 编译器把每个字面量都编成 number。于是 `self.Integer64Property ~= 3`
+  对"值就是 3"的属性也成立，对它做算术还会报 `attempt to perform arithmetic (add) on integer
+  and number`。现在 `UNLUANOVA_PUSHINT64` 对 |v| ≤ 2^53 的值推 number（double 能精确表示这些整数），
+  只有超出 double 精度的才保留 64 位整型 tag —— 需要精确时仍然精确，其余情况回到脚本可用的状态
 - **`UNLUANOVA_IS_YIELDABLE` 用例按 plain Lua 的语义断言主线程**：Luau 的
   `lua_isyieldable()` 是 `nCcalls <= baseCcalls`，主线程在没跨过 C 边界时回答"可 yield"，
   所以 `== 0` 在 Luau 上必然失败。现在按后端断言，并额外验证"跨过 C 边界后两边都回答不可 yield"
@@ -106,8 +112,22 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 - **PR #719**：其守卫会在子类实例上跳过 Lua 覆写（详见 `Docs/Archive/` 说明），
   需先补「子类实例仍能执行 Lua 覆写」的测试再评估
 
+### Added
+- **`UnLuaNova.Editor.RepairTestAssets`**（`Private/Tests/AssetRepairTest.cpp`）：一个 editor-context
+  的自动化用例，把改名留下的资产损伤修掉 —— 给父类引用丢了的蓝图补回父类（包里的 `ParentClass`
+  导入解析不出来，编译器只说 `has missing or NULL parent class`，这个信息在资产里已经没了，
+  所以按资产写死在用例里）、编译并保存 `/UnLuaNovaTestSuite/` 下所有蓝图（未编译的包里没有
+  `SKEL_*` / `Default__*` / `BlueprintGeneratedClass`，`Class ..._C` 取不到），
+  把 `DataTable_CppTest` / `DataTable_Issue583` 的 RowStruct 与示例行补回去。
+  编译跑两遍，因为调用别蓝图函数的蓝图要等对方先编译好
+  它会改资产，所以**不在默认的 `UnLuaNova.API` 过滤器下**，要显式跑：
+  `Tools\RunTests.ps1 -Backend Luau -Filter UnLuaNova.Editor`
+
 ### Known Issues
-- **剩余测试失败的分类结论**（Luau 23 条失败、Lua 17 条失败，逐条比对 + 直接读 `.uasset` 二进制得出）：
+- **剩余测试失败的分类结论**（Luau 16 条失败、Lua 15 条失败，逐条比对 + 直接读 `.uasset` 二进制得出）：
+  - 上一轮修掉的：Issue288 / Issue295（按资产里真实的类名取 UMG 类）、Issue362（chunk 里
+    `UE.UUNLUANOVATestStub` 大小写）、Issue291（Luau 缺 `collectgarbage`）、Dynamic / Static /
+    Priority 的 `string.format` 与 int64 比较、`UNLUANOVA_IS_YIELDABLE`
   - **资产未编译（3 条，两个后端）**：`Tests/Binding/BP_UnLuaNovaTestActor_StaticBindingChild`
     （Multiple / Overridden）、`Tests/Regression/Issue314/BP_UnLuaNovaTestActor_Issue314_Child`
     （Issue314）、`Tests/Regression/Issue398/BP_Character`（Issue398）这三个 `.uasset` 里既没有

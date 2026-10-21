@@ -129,6 +129,40 @@ ini 是仓库级可变状态、二进制又是编译期产物，两者一旦分�
 只想跑一个后端就用 `-Backend Lua` 或 `-Backend Luau`。
 
 
+## 资产坏了怎么办
+
+改名（UnLua → UnLuaNova）只能改文本，改不了 `.uasset`，所以测试内容里留下了几类**只有编辑器
+能修**的损伤：蓝图存盘时没编译（包里没有 `SKEL_*` / `Default__*` / `BlueprintGeneratedClass`，
+`Class ..._C` 取不到）、DataTable 的 RowStruct 丢了（引擎按 **Error** 级别打
+`Missing RowStruct`，而 UE 的自动化把"测试期间出现 Error 日志"算作失败，于是一串不相干的
+用例跟着挂）。
+
+这些都交给 editor-context 的自动化用例 `UnLuaNova.Editor.RepairTestAssets`
+（`Private/Tests/AssetRepairTest.cpp`）：它编译 `/UnLuaNovaTestSuite/` 下的所有蓝图、把两个
+DataTable 的 RowStruct 与示例行补回去，然后存盘。它**不在默认的 `UnLuaNova.API` 过滤器下**
+（会改资产），要显式跑：
+
+```powershell
+Tools\RunTests.ps1 -Backend Luau -Filter UnLuaNova.Editor
+```
+
+跑一次就够，之后照常 `Tools\RunTests.ps1`。仍然编译不过的资产它会以警告列出来 —— Issue634
+是已知的：它的图里引用了一个已经不存在的结构体资产，得手工删节点。
+
+这条用例**可能显示为 failed 但其实干完了活**：蓝图编译器对编译不过的资产会按 Error 打日志，
+而"测试运行期间出现 Error 日志"在 UE 的自动化里就算失败。看报告里的 Info 行
+（`Repaired: ... Compiled N of M Blueprint(s)`）判断修好了多少。
+
+手工做是同一件事：Content Browser 里右键 `/UnLuaNovaTestSuite/` → Resave All，或逐个打开蓝图
+点 Compile；引擎自带的命令行方案是
+`UnrealEditor-Cmd.exe <uproject> -run=ResavePackages -packagefolder=/UnLuaNovaTestSuite/`
+（不保证会触发蓝图重编译）。
+
+> 用自动化驱动 UI 行不行？UE 有 Automation Driver（`FAutomationDriver`，可以合成输入去点
+> Slate 控件），但那是测**界面行为**的，不是修资产的：修资产的正确入口就是编辑器 API
+> （`FKismetEditorUtilities::CompileBlueprint` + 存包），headless 能跑、可重复、能进 CI，
+> 也不受界面改版影响。
+
 ## 路径怎么找
 
 脚本里**没有任何机器专属路径**，全部按下面顺序推导，所以换个克隆/换台机器都能直接跑：

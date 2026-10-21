@@ -77,7 +77,12 @@ public class UnLuaNovaTestSuite : ModuleRules
 
 		if (Target.bBuildEditor)
 		{
+			// UnrealEd: FKismetEditorUtilities / UEditorLoadingAndSavingUtils, used by the
+			// asset repair test (UnLuaNova.Editor.RepairTestAssets) to compile and resave
+			// the test content. AssetRegistry is named explicitly rather than inherited
+			// from UnrealEd because that test calls IAssetRegistry directly.
 			PrivateDependencyModuleNames.Add("UnrealEd");
+			PrivateDependencyModuleNames.Add("AssetRegistry");
 		}
 
 		DynamicallyLoadedModuleNames.AddRange(

@@ -773,12 +773,17 @@ void FLuaBackendSpec::Define()
             const auto Co = lua_newthread(L);
             TEST_TRUE(UNLUANOVA_IS_YIELDABLE(Co) != 0);
 
-            // The Luau half of the same primitive: inside a C function reached through
-            // pcall, the boundary is crossed and yielding is refused.
+            // Inside a C function reached through pcall the boundary is crossed, and both
+            // backends refuse to yield there - that is the state a latent action has to ask
+            // about, and the only one Luau's "yes" on the main state does not cover.
             lua_pushcfunction(L, SpecYieldableProbe);
             TEST_EQUAL(lua_pcall(L, 0, 1, 0), LUA_OK);
-            TEST_TRUE(UNLUANOVA_IS_YIELDABLE(L) != 0); // back outside, still yes
             TEST_TRUE(lua_toboolean(L, -1));
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+            TEST_TRUE(UNLUANOVA_IS_YIELDABLE(L) != 0); // back outside, yes again
+#else
+            TEST_TRUE(UNLUANOVA_IS_YIELDABLE(L) == 0);
+#endif
             lua_settop(L, Top);
         });
 

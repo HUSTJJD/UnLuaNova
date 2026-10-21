@@ -369,7 +369,27 @@ inline void lua_register(lua_State* L, const char* Name, lua_CFunction Fn)
 // which is what plain Lua does.
 //
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
-#define UNLUANOVA_PUSHINT64(L, V) lua_pushinteger64(L, (int64_t)(V))
+
+// Luau compares by tag first: equalobj() is `ttype(o1) == ttype(o2) && luaV_equalval(...)`
+// (lvm.h), so an LUA_TINTEGER is never equal to an LUA_TNUMBER - and every literal a script
+// writes is a number. An int64 property pushed as an integer is therefore unequal to the
+// constant it is compared against, and arithmetic on it raises "attempt to perform
+// arithmetic (add) on integer and number"; `self.Integer64Property ~= 3` is true for a
+// property that holds 3, which is how the binding tests failed.
+//
+// A double holds every integer up to 2^53 exactly, so those go out as numbers and stay
+// comparable; only what a double cannot hold keeps the integer tag, where being exact beats
+// being usable in a script.
+inline void UnLuaNovaPushInt64(lua_State* L, int64_t V)
+{
+    const int64_t ExactInDouble = int64_t(1) << 53;
+    if (V > ExactInDouble || V < -ExactInDouble)
+        lua_pushinteger64(L, V);
+    else
+        lua_pushnumber(L, (lua_Number)V);
+}
+
+#define UNLUANOVA_PUSHINT64(L, V) UnLuaNovaPushInt64(L, (int64_t)(V))
 
 // --- integers that fit in 32 bits -------------------------------------------
 // LUA_TINTEGER is the right tag for a genuine 64-bit value and the wrong one for

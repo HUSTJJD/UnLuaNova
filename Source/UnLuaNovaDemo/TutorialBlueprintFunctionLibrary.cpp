@@ -5,7 +5,7 @@
 
 static void PrintScreen(const FString& Msg)
 {
-    UKismetSystemLibrary::PrintString(nullptr, Msg, true, false, FLinearColor(0, 0.66, 1), 100);
+    UKismetSystemLibrary::PrintString(nullptr, Msg, true, false, FLinearColor(0, 0.66f, 1), 100);
 }
 
 void UTutorialBlueprintFunctionLibrary::CallLuaByGlobalTable()
