@@ -95,7 +95,12 @@ namespace UnLuaNova
     template <typename T>
     TSharedPtr<T> FObjectRegistry::Get(lua_State* L, int Index)
     {
-        const auto Ptr = lua_touserdata(L, Index);
-        return *static_cast<TSharedPtr<T>*>(Ptr);
+        // Same layout question as ReleaseSharedPtr: NewSmartPointer() placement-news the
+        // TSharedPtr into the payload behind an FUserdataDesc, while FObjectRegistry::Push()
+        // uses a bare lua_newuserdata() where block start and payload coincide.
+        // GetSmartPointer() answers for both, and yields nullptr once the userdata has been
+        // marked released - which lua_touserdata() cannot tell you.
+        const auto Ptr = (TSharedPtr<T>*)GetSmartPointer(L, Index);
+        return Ptr ? *Ptr : TSharedPtr<T>();
     }
 }

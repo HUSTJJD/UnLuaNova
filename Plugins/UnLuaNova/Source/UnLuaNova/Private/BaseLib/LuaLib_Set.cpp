@@ -12,6 +12,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
+#include "LowLevel.h"
 #include "UnLuaNovaEx.h"
 #include "LuaCore.h"
 #include "Containers/LuaSet.h"
@@ -198,6 +199,65 @@ static int32 TSet_ToTable(lua_State* L)
     return 1;
 }
 
+static int TSet_Enumerable(lua_State* L)
+{
+    int32 NumParams = lua_gettop(L);
+    if (NumParams != 2)
+        return luaL_error(L, "invalid parameters");
+
+    FLuaSet::FLuaSetEnumerator** Enumerator = (FLuaSet::FLuaSetEnumerator**)(lua_touserdata(L, 1));
+    if (!Enumerator || !*Enumerator)
+        return luaL_error(L, "invalid enumerator");
+
+    const auto Set = (*Enumerator)->LuaSet;
+    TSet_Guard(L, Set);
+
+    // Sparse, like a map: FScriptSet leaves holes where elements were removed, so walk the
+    // index forward until it lands on a live slot. Yielding (element, true) keeps
+    // `for element in pairs(Set)` reading the way C++ range-for over a TSet does, instead of
+    // handing out a slot index that means nothing once anything has been removed.
+    while ((*Enumerator)->Index < Set->GetMaxIndex())
+    {
+        if (!Set->IsValidIndex((*Enumerator)->Index))
+        {
+            ++(*Enumerator)->Index;
+            continue;
+        }
+
+        Set->ElementInterface->ReadValue(L, Set->GetData((*Enumerator)->Index), false);
+        ++(*Enumerator)->Index;
+        lua_pushboolean(L, true);
+        return 2;
+    }
+
+    return 0;
+}
+
+static int32 TSet_Pairs(lua_State* L)
+{
+    int32 NumParams = lua_gettop(L);
+    if (NumParams != 1)
+        return luaL_error(L, "invalid parameters");
+
+    FLuaSet* Set = (FLuaSet*)GetCppInstanceFast(L, 1);
+    if (!Set)
+        return UnLuaNova::LowLevel::PushEmptyIterator(L);
+
+    TSet_Guard(L, Set);
+
+    lua_pushcfunction(L, TSet_Enumerable);
+    FLuaSet::FLuaSetEnumerator** Enumerator = (FLuaSet::FLuaSetEnumerator**)lua_newuserdata(L, sizeof(FLuaSet::FLuaSetEnumerator*));
+    *Enumerator = new FLuaSet::FLuaSetEnumerator(Set, 0);
+
+    lua_newtable(L);
+    lua_pushcfunction(L, FLuaSet::FLuaSetEnumerator::gc);
+    lua_setfield(L, -2, "__gc");
+    lua_setmetatable(L, -2);
+    lua_pushnil(L);
+
+    return 3;
+}
+
 static const luaL_Reg TSetLib[] =
 {
     {"Length", TSet_Length},
@@ -212,6 +272,9 @@ static const luaL_Reg TSetLib[] =
     {"__gc", TSet_Delete},
 #endif
     {"__call", TSet_New},
+    // __iter on Luau, __pairs on Lua 5.x. TSet used to register neither, so `pairs(Set)`
+    // raised on both backends and ToArray/ToTable were the only way to walk one.
+    UNLUANOVA_ITER_ENTRY(TSet_Pairs),
     {nullptr, nullptr}
 };
 

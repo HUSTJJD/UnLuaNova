@@ -252,6 +252,57 @@ void FUnLuaNovaLibSetSpec::Define()
         });
     });
 
+    Describe(TEXT("pairs"), [this]()
+    {
+        It(TEXT("迭代拿到Set里的每个元素"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // pairs(Set) yields (element, true): a set has no key of its own, so the element
+            // is what a script wants - the same value C++ range-for hands out, and the same
+            // value ToTable() would have given it. TSet registered no iteration entry at all
+            // until now (__iter on Luau, __pairs on Lua 5.x), so this raised on both backends
+            // and ToArray / ToTable were the only way to walk one.
+            const char* Chunk = "\
+            local Set = UE.TSet(0)\
+            Set:Add(1)\
+            Set:Add(2)\
+            local Count = 0\
+            local Sum = 0\
+            for Element, Flag in pairs(Set) do\
+                Count = Count + 1\
+                Sum = Sum + Element\
+            end\
+            return Count, Sum\
+            ";
+            UnLuaNova::RunChunk(L, Chunk);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -2), 2LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 3LL);
+        });
+
+        It(TEXT("删除元素后迭代不会带回空洞"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // A TSet leaves holes where elements were removed, so an iterator that simply
+            // increments the index either hands back dead slots or stops early. Both are
+            // silent - the element just never shows up.
+            const char* Chunk = "\
+            local Set = UE.TSet(0)\
+            Set:Add(1)\
+            Set:Add(2)\
+            Set:Add(3)\
+            Set:Remove(2)\
+            local Count = 0\
+            local Sum = 0\
+            for Element in pairs(Set) do\
+                Count = Count + 1\
+                Sum = Sum + Element\
+            end\
+            return Count, Sum\
+            ";
+            UnLuaNova::RunChunk(L, Chunk);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -2), 2LL);
+            TEST_EQUAL(UNLUANOVA_TOINT64(L, -1), 4LL);
+        });
+    });
+
     AfterEach([this]
     {
         UnLuaNova::Shutdown();

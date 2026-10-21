@@ -9,6 +9,9 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 ## [Unreleased]
 
 ### Added
+- `TSet` 支持 `pairs` 迭代：注册 `UNLUANOVA_ITER_ENTRY(TSet_Pairs)`（Luau 下是 `__iter`、
+  Lua 5.x 下是 `__pairs`），产出 `(元素, true)`；之前 `pairs(Set)` 在两个后端都会报错，
+  只能靠 `ToArray()` / `ToTable()`
 - **静态绑定层** `StaticBinding/`：POD 描述符 + 注册表（延迟解析）+ 自动注册器
 - **`UnLuaStaticBindingGenerator`** Commandlet：构建期为声明类型生成静态绑定表
 - `CallUEFast`：对已解析函数跳过 `GetFunctionCallspace` / 覆写重定向查找 / 接口函数查找
@@ -39,6 +42,15 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 - `UE` 命名空间新增 `__newindex`：脚本改写引擎类型会被直接拒绝
 
 ### Fixed
+- **Lua 5.5 后端一跑就崩**：`TSharedPtr` 的 `__gc`（`ReleaseSharedPtr`）用 `lua_touserdata()` 取到的是
+  块首的 `FUserdataDesc`，而不是 `NewSmartPointer()` 放置智能指针的 payload，于是 `Reset()` 把描述符
+  当成 `TSharedPtr` 拆了 —— 静态导出之后第一个 `lua_close()` 必然破坏堆，整个 Lua 后端跑不出任何一条
+  测试结果。Luau 没有 `__gc`，这条路径在 Luau 下从未执行过，所以一直没暴露。
+  现在改用 `GetSmartPointer()`（按 payload 取），`FObjectRegistry::Get()` 一并修正
+- `UE4File` 的 `Read` / `Write` / `__gc` 同样用 `lua_touserdata()` 取实例，拿到的是块首的
+  `FUserdataDesc` 而不是 `TConstructor` 放置对象的 payload —— 与 `ReleaseSharedPtr` 是同一个
+  布局问题。`UE.File` 目前没有被任何脚本或测试使用，所以还没踩出来；现在三处都改用
+  `GetCppInstanceFast()`（按 payload 取，没有描述符时退回块首）
 - 合并上游 `develop`：PR #700（UE5.4）、#707、#758（UE5.6）、#761、#765
 - 合入社区 PR：#767 #756 #748 #711 #639 #643 #684 #705 #704 #672
 - 合入 PR #771 的测试套件修复（`UnLua::Shutdown()` 前置、`GetUObject` 回读等）

@@ -19,6 +19,33 @@
 class FLuaSet
 {
 public:
+    // Iteration state for pairs(): a set is sparse, so the index has to be walked forward
+    // past the holes FScriptSet leaves behind rather than just incremented. Same shape as
+    // FLuaArrayEnumerator / FLuaMapEnumerator.
+    struct FLuaSetEnumerator
+    {
+        FLuaSetEnumerator(FLuaSet* InLuaSet, const int32 InIndex)
+            : LuaSet(InLuaSet), Index(InIndex)
+        {
+        }
+
+        static int gc(lua_State* L)
+        {
+            if (FLuaSetEnumerator** Enumerator = (FLuaSetEnumerator**)lua_touserdata(L, 1))
+            {
+                (*Enumerator)->LuaSet = nullptr;
+
+                delete* Enumerator;
+            }
+
+            return 0;
+        }
+
+        FLuaSet* LuaSet = nullptr;
+
+        int32 Index = 0;
+    };
+
     enum FScriptSetFlag
     {
         OwnedByOther,   // 'Set' is owned by others
@@ -170,6 +197,23 @@ public:
     }
 
     /**
+     * Is the given slot live? A set keeps holes where elements were removed, so an index
+     * below GetMaxIndex() can still hold nothing.
+     */
+    FORCEINLINE bool IsValidIndex(int32 Index) const
+    {
+        return Set->IsValidIndex(Index);
+    }
+
+    /**
+     * One past the highest slot the set has ever used - the bound an iterator walks to.
+     */
+    FORCEINLINE int32 GetMaxIndex() const
+    {
+        return Set->GetMaxIndex();
+    }
+
+    /**
      * Adds an uninitialized element to the set. The set needs rehashing to make it valid.
      *
      * @return - the index of the added element.
@@ -260,11 +304,6 @@ private:
                 ElementPtr += Stride;
             }
         }
-    }
-
-    FORCEINLINE bool IsValidIndex(int32 Index) const
-    {
-        return Set->IsValidIndex(Index);
     }
 
     FORCEINLINE void ConstructItem(int32 Index)

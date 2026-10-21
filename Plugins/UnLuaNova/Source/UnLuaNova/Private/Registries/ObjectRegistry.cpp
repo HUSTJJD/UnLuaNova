@@ -24,8 +24,20 @@ namespace UnLuaNova
 
     static int ReleaseSharedPtr(lua_State* L)
     {
-        const auto Ptr = (TSharedPtr<void>*)lua_touserdata(L, 1);
-        Ptr->Reset();
+        // The smart pointer lives in the payload, not at the block start. NewSmartPointer()
+        // lays the userdata out as [FUserdataDesc][padding][TSharedPtr], so lua_touserdata()
+        // hands back the descriptor - magic 0x1688 plus a tag - and Reset() would tear those
+        // bytes down instead of the smart pointer. FObjectRegistry::Push() uses a bare
+        // lua_newuserdata(), where block start and payload are the same address;
+        // GetSmartPointer() answers correctly for both, and for userdata already released.
+        //
+        // Only the plain-Lua backend ever reaches this: Luau has no __gc at all, so the
+        // wrong address went unnoticed for as long as the backend existed - the first
+        // lua_close() after static export ran Reset() over a descriptor instead of a
+        // TSharedPtr, which is what took the whole Lua run down.
+        const auto Ptr = (TSharedPtr<void>*)GetSmartPointer(L, 1);
+        if (Ptr)
+            Ptr->Reset();
         return 0;
     }
 
