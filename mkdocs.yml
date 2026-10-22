@@ -81,15 +81,31 @@ nav:
           - 常见问题 FAQ: CN/FAQ.md
   - English Docs:
       - EN/index.md
-      - Features: EN/Features.md
-      - Programming Guide: EN/UnLuaNova_Programming_Guide.md
-      - Luau Backend: EN/Luau.md
-      - API Reference: EN/API.md
-      - How To Implement Overriding: EN/How_To_Implement_Overriding.md
-      - Settings: EN/Settings.md
-      - Console Commands: EN/ConsoleCommand.md
-      - License: EN/License.md
-      - FAQ: EN/FAQ.md
+      - Getting Started:
+          - Quickstart for UE Newcomers: EN/Quickstart_For_UE_Newbie.md
+          - Features: EN/Features.md
+      - Programming:
+          - Programming Guide: EN/UnLuaNova_Programming_Guide.md
+          - Luau Backend: EN/Luau.md
+          - API Reference: EN/API.md
+          - How To Implement Overriding: EN/How_To_Implement_Overriding.md
+          - Static Export and Binding: EN/StaticExportBinding.md
+      - Configuration and Tools:
+          - Settings: EN/Settings.md
+          - Console Commands: EN/ConsoleCommand.md
+          - Custom Lua Templates: EN/CustomTemplate.md
+          - Custom Collision Enums: EN/CollisionEnum.md
+          - Plugins and Modules: EN/Plugins_And_Modules.md
+      - Diagnostics and Quality:
+          - Debugging: EN/Debugging.md
+          - IntelliSense: EN/IntelliSense.md
+          - Testing and Automation: EN/Testing.md
+          - Test report Lua: test-lua-report.md
+          - Test report Luau: test-luau-report.md
+      - Reference:
+          - Showcase Samples: EN/Showcase.md
+          - License: EN/License.md
+          - FAQ: EN/FAQ.md
 
 markdown_extensions:
   - admonition

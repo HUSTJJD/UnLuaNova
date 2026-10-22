@@ -1,10 +1,11 @@
 // Generates compile-time static binding tables for declared UE types.
 //
 //   UnrealEditor-Cmd.exe <Project> -run=UnLuaNovaStaticBindingGenerator
-//       -Types=Actor,Pawn,Character
 //       [-OutputDir=<Project>/Source/<Module>/Generated]
 //
-// Without -Types, every class/struct/enum carrying the `UnLuaNovaExport` metadata tag is used.
+// Type selection is opt-out: every class and struct is exported unless it is filtered out.
+// There is no -Types switch - the only thing a project writes is
+// meta=(UnLuaNovaNoExport) (and meta=(UnLuaNovaExport) to pull a hierarchy back in).
 
 #pragma once
 
@@ -13,7 +14,7 @@
 #include "UnLuaNovaStaticBindingGeneratorCommandlet.generated.h"
 
 UCLASS()
-class UUnLuaNovaStaticBindingGeneratorCommandlet : public UCommandlet
+class UNLUANOVAEDITOR_API UUnLuaNovaStaticBindingGeneratorCommandlet : public UCommandlet
 {
 	GENERATED_BODY()
 

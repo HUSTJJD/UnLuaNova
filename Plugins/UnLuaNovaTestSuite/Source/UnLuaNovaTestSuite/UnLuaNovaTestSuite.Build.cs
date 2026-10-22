@@ -83,6 +83,10 @@ public class UnLuaNovaTestSuite : ModuleRules
 			// (It used to also pull AssetRegistry + BlueprintGraph for the one-off asset
 			// repair test; that test is gone - the assets are fixed and committed.)
 			PrivateDependencyModuleNames.Add("UnrealEd");
+
+			// UnLuaNovaEditor: drives UnLuaNovaStaticBindingGenerator end to end
+			// (Private/Specs/StaticBindingGenerator.spec.cpp). Editor-only, like the module.
+			PrivateDependencyModuleNames.Add("UnLuaNovaEditor");
 		}
 
 		DynamicallyLoadedModuleNames.AddRange(

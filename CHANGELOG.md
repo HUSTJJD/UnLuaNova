@@ -33,9 +33,13 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   永远写着"没有截图"、Showcase 页的四张图一直是注释掉的占位符。
   它们用 `BEGIN_VIEWPORT_TESTSUITE` 注册：无视口就没有画面可截，`-NullRHI` 那一轮把整条剔除，
   而不是记成"截图失败"
-- **录屏**：`FCaptureFramesLatentCommand` 按帧连续截图成帧序列，`Tools/RunTests.ps1 -Video`
-  再用 ffmpeg 编码成 `.mp4` 内嵌进报告；ffmpeg 不在 PATH 上时保留原始帧并在报告里说明，
-  不假装录好了
+- **录屏（默认开，不是选项）**：`FCaptureFramesLatentCommand` 按帧连续截图成帧序列，
+  报告生成时编码成 `.mp4` 内嵌进报告。`-NoVideo` 才不录。
+  编码器按顺序找：`--ffmpeg` → `$FFMPEG` → PATH 上的 `ffmpeg` → **`imageio-ffmpeg` 自带的
+  静态 ffmpeg**（`Tools/requirements.txt` 里一个普通 pip 包，不用装系统级 ffmpeg、不用改 PATH）。
+  编不出来就是失败：写进报告的「视频」一节（带原因）+ 脚本非 0 退出 ——
+  不再"保留帧序列凑合看"，因为凑合看的报告跟"这轮没录上"长得一样。
+  编码时加了 `scale=trunc(iw/2)*2:...`：libx264 不接受奇数宽高，视口尺寸不是测试能决定的
 - **新增规格用例**，补此前完全没有用例覆盖的能力：
   - `UnLuaNova.API.StringEx`：字符串扩展在 `string` 表上可用、`split`/`count` 按字面量
     （传 `"."` 得到按点分隔而不是空表）、两个后端行为一致
@@ -49,6 +53,21 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
     `EnhancedInput`/`HotReload`）必须随插件发布 —— 断言的是**文件在插件目录里**，
     不只是 `require` 得出来（后者在本仓库无论文件放哪都通过）；外加 `Vector` / `Buffer`
     的模块表与 `HasFeature` 一致性、以及后端可用时的实际互转
+  - `UnLuaNova.API.StaticBinding`：注册 / 解析 / 按名字与按 `UStruct` 查找 / 属性与函数解析到
+    真实 `FProperty`、`UFunction` / `GetPropertyKind` 的类型映射。此前**整个静态绑定层没有
+    一条用例**：生成的表是构建产物、不入库，所以正常构建下注册表永远是空的、快速调用路径
+    永远走不到，注册表坏了也没人知道
+  - `UnLuaNova.API.CallUEFast`：预解析路径的分发条件（非网络 / 非 latent / 非接口）成立，
+    且"有静态绑定"与"无静态绑定"两条路径的调用结果一致。两条探针函数是因为
+    `FFunctionDesc` 在**构造时**就把绑定快照下来了，同一个函数在一个进程里走不了两条路
+  - `UnLuaNova.API.DefaultParamCollector`：集合启动后非空（UHT 侧的采集器跑没跑，以前没有任何
+    信号——空集合的表现不是编译错误，而是每个默认参数静默变成零），以及 Lua 省略实参时默认值
+    生效、显式传参会覆盖默认值
+  - `UnLuaNova.Editor.Commands`：`lua.*` 控制台命令全部已注册、六份 Lua 模板随插件发布且带
+    `ClassName` 占位符、脚本根目录指向工程 `Content/Script`、编辑器命令上下文已注册
+  - `UnLuaNova.Editor.StaticBindingGenerator`：端到端跑一次 Commandlet，断言它把
+    `UNLUANOVA_REGISTER_STATIC_BINDING` 写进了 `-OutputDir` 指定的目录（不写默认目录，
+    否则它会变成真的被编译进工程的测试产物）
 - **英文文档补三页**：`Docs/EN/Features.md`、`Settings.md`、`ConsoleCommand.md`
   （此前 EN 只有 7 页，"功能清单 / 设置项 / 控制台命令"这三个英文读者最先找的页面全是缺的）
 
@@ -89,6 +108,22 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   - `Luau.md` 给 buffer ↔ TArray 单独开一节；`StaticExportBinding.md` 补 commandlet 的完整
     调用方式与 `meta=(UnLuaNovaExport/UnLuaNovaNoExport)` 的代码示例
   - `Showcase.md` 写明四张图分别由哪条用例、哪个关卡产出，以及"要出图就不能 `-NullRHI`"
+- **英文文档补齐 9 页**，与中文目录一一对应（此前 EN 只有 10 页，Quickstart / CustomTemplate /
+  CollisionEnum / Plugins_And_Modules / Debugging / IntelliSense / Testing / Showcase /
+  StaticExportBinding 全缺，英文读者点进去就是 404）：
+  `EN/Quickstart_For_UE_Newbie.md`、`CustomTemplate.md`、`CollisionEnum.md`、
+  `Plugins_And_Modules.md`、`Debugging.md`、`IntelliSense.md`、`Testing.md`、`Showcase.md`、
+  `StaticExportBinding.md`。`mkdocs.yml` 的英文导航也按中文同样的分组重排（入门 / 编程 /
+  配置与工具 / 诊断与质量 / 参考）
+- **编码从 `RunTests.ps1` 挪进 `GenerateTestReport.py`**：原来 ps1 里找 PATH 上的 ffmpeg，
+  找不到就散一地 PNG；现在"用哪个编码器"只有一个地方决定，ps1 只管录帧和拷帧。
+  新增 `Tools/requirements.txt`（`imageio-ffmpeg`，自带静态 ffmpeg）
+- **静态类型检查进报告**：`RunTests.ps1` 现在会在每个后端跑完后调 `Tools/CheckLuauTypes.ps1`
+  （新增 `-SummaryPath` 写 `luau-analyze.json`），`GenerateTestReport.py` 把它渲染成
+  「静态类型检查（luau-analyze）」一节，`summary.json` 增加 `typecheck`。
+  之前 `luau-analyze` 只存在于一个独立 ps1 里，跑没跑、过没过在任何报告里都看不到；
+  没装 luau-analyze 时报告写"跳过 + 原因"，不假装查过。新增 `-FailOnTypeErrors`
+  让它成为门禁（默认不，因为它是静态检查不是用例）
 
 ### Fixed
 - **Lua 5.5 后端一跑就崩**：`TSharedPtr` 的 `__gc`（`ReleaseSharedPtr`）用 `lua_touserdata()` 取到的是
@@ -159,6 +194,13 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   插件版成为唯一实现，并补上文档里写了却没有的 `join`
 - **`lua.profiler on` 的日志还在说会顶掉死循环检测**：两者早就都走 `FLuaVmHooks` 分发了，
   这行日志是过期文案，会让人不敢同时开
+- **`Tools/CheckLuauTypes.ps1` 在 Windows PowerShell 5.1 下根本跑不起来**：文件是 UTF-8 无 BOM，
+  而 5.1 默认按 ANSI（GBK）读 `.ps1`，中文注释里的字节被解成别的字符，直接"字符串缺少终止符"
+  语法错（PowerShell 7 读 UTF-8 所以看不出来）。`RunTests.ps1` 同样有中文，只是中文恰好都在
+  `<# #>` 注释块里才没炸。两个脚本都补上了 UTF-8 BOM，5.1 和 7 都按 UTF-8 读
+- **Commandlet 头文件注释里写了不存在的 `-Types=` 参数**：`Main()` 只解析 `-OutputDir=`，
+  类型选择是 opt-out（全部导出，除非被过滤），没有按名字指定的开关。照注释敲会以为筛了三个类型，
+  实际生成的是全量
 - **`UnLuaNova.Vector` / `UnLuaNova.Buffer` 只存在于示例工程，插件里没有**：文档把
   `UnLuaNova.Buffer.FromArray(...)` 当特性在讲，但这两个模块此前放在
   `Content/Script/UnLuaNova/`（工程），而 `package.path` 工程在前 —— 在本仓库能加载，

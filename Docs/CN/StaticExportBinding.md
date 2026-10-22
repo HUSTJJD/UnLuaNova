@@ -52,7 +52,34 @@ UnrealEditor-Cmd.exe <工程>.uproject -run=UnLuaNovaStaticBindingGenerator
 
 在基类上标记一次 `meta=(UnLuaNovaExport)`，它的整个派生体系都会被导出 —— 这对类型数量庞大的项目尤其省事。
 
+```cpp
+// opt-out：默认会被导出，这里显式不要
+UCLASS(meta=(UnLuaNovaNoExport))
+class UMyDebugOnlyType : public UObject
+{
+    GENERATED_BODY()
+};
+
+// 祖先上标一次，整个派生体系都拉回来
+UCLASS(meta=(UnLuaNovaExport))
+class UMyGameplayBase : public UObject
+{
+    GENERATED_BODY()
+};
+```
+
 *注：运行后日志会输出 `selected N types`。若数量大到编译吃力，可以改为只绑定核心模块（如 `/Script/Engine`、`/Script/UMG`）来收窄，项目类型永远位于自己的模块中，不会被误伤。*
+
+### 怎么跑
+
+```
+UnrealEditor-Cmd.exe "<工程目录>/<工程>.uproject" -run=UnLuaNovaStaticBindingGenerator -unattended -NoSplash
+```
+
+生成的代码落在 `Source/<工程模块>/Generated/` 下（在模块目录内才会被 UBT 编译）——
+把生成物放在别处等于没有它：文件不会被编译，构建期省下的反射开销也就没省到。
+
+它是构建期步骤，不是运行期开关：类型集合变了就重跑一次，然后把生成物一起提交。
 
 ## 静态导出
 

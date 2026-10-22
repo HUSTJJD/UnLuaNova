@@ -44,8 +44,11 @@ Plugins/UnLuaNovaTestSuite/
 # 只刷新示例图（快），并发布到文档站
 .\Tools\RunTests.ps1 -Filter UnLuaNova.Showcase -Backend Luau -Publish
 
-# 带录屏，并把结果发布到文档站
-.\Tools\RunTests.ps1 -Video -Publish
+# 录屏默认开着，这里只是额外发布到文档站
+.\Tools\RunTests.ps1 -Publish
+
+# 不录（只截静态图）
+.\Tools\RunTests.ps1 -NoVideo
 ```
 
 脚本封装的就是这条命令，team 里不用再手敲 `-ExecCmds`：
@@ -74,7 +77,7 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `-OutputDir` | `Saved/TestReports/<时间戳>` | 报告输出根目录，每个后端一个子目录 |
 | `-ExtraCommands` | 空 | 跑完追加执行的控制台命令（截图用） |
 | `-NoScreenshots` | 关 | 不收集截图。**默认收集**：文档站和报告画廊都靠它们 |
-| `-Video` | 关 | 额外录帧序列并编码成 `.mp4`（需要 ffmpeg，没有就保留帧） |
+| `-NoVideo` | 关 | 不录帧序列。**默认录**：Showcase 用例会录一段帧序列，报告生成时编码成 `.mp4` |
 | `-NullRHI` | 关 | 无头跑：快，但**不是同一套用例**，且没有画面可截，见下 |
 | `-Publish` | 关 | 把报告和截图复制到 `Docs/`，供 Pages 发布 |
 | `-NoReport` | 关 | 只跑测试，不生成报告 |
@@ -194,8 +197,8 @@ actor 跟着类一起没了。
 | `report.md` | 结论：通过率、总数/通过/失败/跳过、**通过明细**、失败明细（含错误消息与源码位置）、最慢用例、截图画廊 |
 | `summary.json` | 机器可读的总数（含 `backend`），脚本据此决定退出码 |
 | `Editor.log` | 本次运行的完整日志 |
-| `screenshots/` | 测试期间产生的截图（含 `-Video` 的帧序列） |
-| `videos/` | 帧序列编码出的 `.mp4`（`-Video` 且 PATH 上有 ffmpeg） |
+| `screenshots/` | 测试期间产生的截图（含录屏的帧序列 `名字_0001.png` …） |
+| `videos/` | 帧序列编码出的 `.mp4`（编码失败会进报告并让脚本非 0 退出） |
 | `*.json` | UE 导出的原始结果 |
 
 `-Publish` 写到 `Docs/test-lua-report.md` / `Docs/test-luau-report.md` 的那两份是**要提交进 git** 的，
@@ -250,16 +253,39 @@ ADD_LATENT_AUTOMATION_COMMAND(UnLuaNovaTestSuite::FScreenshotLatentCommand(TEXT(
 
 ### 录视频
 
-`-Video` 让上面的 Showcase 用例在静态图之外再录一段**帧序列**
-（`Showcase_Binding_Clip_0001.png` …），脚本再用 ffmpeg 编码成
-`videos/<名字>.mp4`，报告里直接内嵌播放器：
+Showcase 用例除了静态图，还会录一段**帧序列**（`Showcase_Binding_Clip_0001.png` …），
+报告生成时编码成 `videos/<名字>.mp4` 并内嵌播放器。**录屏是默认的，不是选项** ——
+"报告里没有视频"和"报告里有个静态图"看起来差不多，但前者说明这轮没录上。
 
 ```powershell
-.\Tools\RunTests.ps1 -Filter UnLuaNova.Showcase -Video -Publish
+# 只刷新示例的图 + 视频（快），并发布
+.\Tools\RunTests.ps1 -Filter UnLuaNova.Showcase -Backend Luau -Publish
+
+# 不录
+.\Tools\RunTests.ps1 -NoVideo
 ```
 
-ffmpeg 不在 PATH 上也没关系：帧会照常收进报告，报告会说明"只录到了帧序列"，不会假装录好了。
 想改长度就设 `UNLUANOVA_RECORD_FRAMES`（默认 60 帧）。
+
+### 编码器从哪来
+
+引擎不带视频编码器（见下），所以编码放在报告生成器里，按顺序找：
+
+1. `--ffmpeg` 参数；
+2. 环境变量 `FFMPEG`；
+3. PATH 上的 `ffmpeg`；
+4. **`imageio-ffmpeg` 自带的静态 ffmpeg** —— 一个普通 pip 包，不需要装系统级 ffmpeg、
+   不需要它在 PATH 上：`python -m pip install -r Tools/requirements.txt`。
+
+四个都没有时，编码失败会写进报告的「视频」一节（写明原因），并让脚本以非 0 退出 ——
+**不是**"保留帧序列凑合看"。凑合看的结果和"这轮压根没录"在报告里长得一样。
+
+!!! note "为什么不直接用引擎的录屏"
+    UE 能原生产出的是**图像序列**（HighResShot、Movie Render 的 PNG/EXR 序列），
+    不是视频文件；Epic 自己的 Movie Render Pipeline 里那个"Command Line Encoder"
+    要你填一个**外部 ffmpeg 路径** —— 等于官方承认引擎里没有编码器。
+    本机的引擎构建里也没有随附 ffmpeg 可执行文件（只有 AMD AMF 的头文件）。
+    而测试要的是"Case 跑的那几秒"，不是渲一段序列，走测试自己按帧截图反而最可控。
 
 ## 为什么不在 GitHub Actions 上跑
 

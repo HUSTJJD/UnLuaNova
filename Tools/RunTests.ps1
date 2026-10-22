@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Runs the UnLuaNova automation tests and writes a readable report.
 
@@ -78,10 +78,11 @@
     them behind is a run whose report has an empty gallery for no reason anybody can see
     afterwards.
 
-.PARAMETER Video
-    Also record clips: the showcase tests capture a burst of frames when UNLUANOVA_RECORD_FRAMES
-    is set, and this encodes each burst into one .mp4 next to the report. Needs ffmpeg on PATH;
-    without it the frames are kept as-is and the report links the frame sequence instead.
+.PARAMETER NoVideo
+    Skip recording. Recording is on by default: the showcase tests capture a burst of frames
+    and the report generator encodes each burst into one .mp4. No system-wide ffmpeg is
+    needed - it comes from the pip package in Tools/requirements.txt - and a burst that cannot
+    be encoded fails the run instead of quietly leaving a pile of PNGs.
 
 .PARAMETER NullRHI
     Run headless (-NullRHI). Faster, but it is not the same suite: Slate does not tick UMG
@@ -125,11 +126,14 @@ param(
     [string] $OutputDir = "",
     [string] $ExtraCommands = "",
     [switch] $NoScreenshots,
-    [switch] $Video,
+    [switch] $NoVideo,
     [switch] $NullRHI,
     [switch] $Publish,
     [switch] $NoReport,
     [switch] $SkipBuild,
+    # luau-analyze 报出类型错误时让脚本以非 0 退出。默认只记录到报告里，不当作测试失败：
+    # 它是静态检查，不是自动化用例，而且本机未必装了 luau-analyze。
+    [switch] $FailOnTypeErrors,
     [switch] $DryRun
 )
 
@@ -369,15 +373,68 @@ function Show-CrashSummary {
 #   - The directory is not cleaned by the editor. A run that takes no picture at all would
 #     otherwise publish last week's PNGs as this run's gallery, which is worse than an empty
 #     one: nobody can tell the pictures are not from this run. So it is emptied first.
-#   - A clip is a frame sequence (Name_0001.png, Name_0002.png, ...) that only becomes a
-#     video once something encodes it. ffmpeg is not part of a UE checkout, so it is
-#     optional: without it the frames are still collected and the report says so.
+#   - A clip is a frame sequence (Name_0001.png, Name_0002.png, ...) that becomes a video in
+#     the report generator. Encoding is not optional and does not need a system ffmpeg: it
+#     comes from the pip package in Tools/requirements.txt. A burst that cannot be encoded
+#     fails the run rather than passing as a pile of stills.
 
 function Clear-StaleScreenshots {
     $ShotDir = Join-Path $RepoRoot "Saved/Screenshots/WindowsEditor"
     if (-not (Test-Path $ShotDir)) { return }
     Get-ChildItem -Path $ShotDir -Filter "*.png" -File -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
+function Invoke-TypeCheck {
+    param(
+        [Parameter(Mandatory)] [string] $RunDir,
+        [Parameter(Mandatory)] [string] $Backend
+    )
+
+    # The report generator looks for this exact file name next to the automation JSON.
+    $SummaryPath = Join-Path $RunDir "luau-analyze.json"
+
+    function Write-Skip {
+        param([string] $Reason)
+        @{ skipped = $true; reason = $Reason; mode = "strict"; files = 0 } |
+            ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $SummaryPath -Encoding UTF8
+    }
+
+    # The declarations are Luau's (UnLuaNova.d.lua), so checking them against a plain-Lua
+    # build would report nonsense - or nothing.
+    if ($Backend -ne "Luau") {
+        Write-Skip "只在 Luau 后端下有意义：声明文件是 Luau 的，plain Lua 构建不生成它。"
+        return
+    }
+
+    $Checker = Join-Path $ToolsDir "CheckLuauTypes.ps1"
+    if (-not (Test-Path $Checker)) {
+        Write-Skip "没找到 Tools/CheckLuauTypes.ps1。"
+        return
+    }
+
+    # Only the annotated Luau scripts: the rest of Content/Script is written to Lua 5.1 so it
+    # loads on both backends, and strict mode would light up on it for reasons that have
+    # nothing to do with this run.
+    & $Checker -Path "Content/Script/Luau" -Mode strict -SummaryPath $SummaryPath
+
+    if (-not (Test-Path $SummaryPath)) {
+        Write-Skip "类型检查脚本没有写出结果文件（退出码 $LASTEXITCODE）。"
+        return
+    }
+
+    $S = Get-Content $SummaryPath -Raw | ConvertFrom-Json
+    if ($S.skipped) {
+        Write-Host ("TypeCheck : skipped - {0}" -f $S.reason) -ForegroundColor Yellow
+        return
+    }
+
+    $Errors = @($S.errors).Count
+    Write-Host ("TypeCheck : {0} file(s), {1} error(s), {2} warning(s)" -f $S.files, $Errors, @($S.warnings).Count)
+    if ($Errors -gt 0) {
+        Write-Host "TypeCheck : 有类型错误，见报告「静态类型检查」一节。" -ForegroundColor Yellow
+        if ($FailOnTypeErrors) { $script:ExitCode = 1 }
+    }
 }
 
 function Copy-Screenshots {
@@ -390,43 +447,6 @@ function Copy-Screenshots {
     New-Item -ItemType Directory -Path $Dest -Force | Out-Null
     foreach ($F in $Files) { Copy-Item $F.FullName -Destination $Dest -Force -ErrorAction SilentlyContinue }
     return $Files.Count
-}
-
-function Convert-FrameSequences {
-    param([string] $ShotDir, [string] $VideoDir)
-
-    # A clip is every run of <name>_NNNN.png that shares a <name>.
-    $Groups = @{}
-    foreach ($F in (Get-ChildItem -Path $ShotDir -Filter "*.png" -File -ErrorAction SilentlyContinue)) {
-        if ($F.BaseName -match "^(.*)_(\d{4,})$") { $Groups[$Matches[1]] += @($F) }
-    }
-    if ($Groups.Count -eq 0) { return @() }
-
-    $Ffmpeg = Get-Command ffmpeg -ErrorAction SilentlyContinue
-    if (-not $Ffmpeg) {
-        Write-Host "ffmpeg not on PATH - keeping the frame sequences instead of encoding them." -ForegroundColor Yellow
-        return @()
-    }
-
-    New-Item -ItemType Directory -Path $VideoDir -Force | Out-Null
-    $Made = @()
-    foreach ($Name in $Groups.Keys) {
-        $Frames = $Groups[$Name] | Sort-Object Name
-        $Out = Join-Path $VideoDir "$Name.mp4"
-        $Prefix = $Frames[0].BaseName -replace "_\d+$", ""
-        # -framerate: the frames were captured one per rendered frame, so any real frame rate
-        # is a guess; 30 is the honest one for a clip whose point is "it moves".
-        & $Ffmpeg.Source -y -loglevel error -framerate 30 `
-            -i (Join-Path $ShotDir ($Prefix + "_%04d.png")) `
-            -c:v libx264 -pix_fmt yuv420p -crf 23 $Out
-        if ($LASTEXITCODE -eq 0 -and (Test-Path $Out)) {
-            $Made += $Out
-            Write-Host "Clip      : $([System.IO.Path]::GetFileName($Out)) ($($Frames.Count) frames)"
-        } else {
-            Write-Host "ffmpeg failed on '$Name' - its frames are kept." -ForegroundColor Yellow
-        }
-    }
-    return $Made
 }
 
 # --- the Lua backend is a build-time setting ------------------------------------------
@@ -541,7 +561,7 @@ Write-Host "Project      : $ProjectPath"
 Write-Host "Filter       : $Filter"
 Write-Host "Backend(s)   : $($Backends -join ', ')"
 Write-Host "Output       : $OutputDir"
-Write-Host "Media        : $(if ($NoScreenshots) { 'off' } else { 'screenshots' })$(if ($Video -and -not $NoScreenshots) { ' + clips' })"
+Write-Host "Media        : $(if ($NoScreenshots) { 'off' } else { 'screenshots' })$(if ($NoVideo -or $NoScreenshots) { '' } else { ' + clips (encoded by the report generator)' })"
 if ($NullRHI -and -not $NoScreenshots) {
     # Not an error: the suite still runs, it just has nothing to photograph.
     Write-Host "               -NullRHI: no viewport, so no picture will come out of this run." -ForegroundColor Yellow
@@ -636,9 +656,15 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         # publish the previous run's PNGs as its own.
         if (-not $NoScreenshots) { Clear-StaleScreenshots }
 
-        # Read by the showcase tests: they only spend time on frame sequences when the run
-        # is going to use them.
-        if ($Video) { $env:UNLUANOVA_RECORD_FRAMES = "60" } else { $env:UNLUANOVA_RECORD_FRAMES = $null }
+        # Read by the showcase tests: they capture a burst of frames while it is set.
+        # Recording is on unless -NoVideo; the frames are encoded by the report generator.
+        if ($NoVideo) {
+            $env:UNLUANOVA_RECORD_FRAMES = $null
+        } elseif ($env:UNLUANOVA_RECORD_FRAMES) {
+            # already set by the caller - leave it alone
+        } else {
+            $env:UNLUANOVA_RECORD_FRAMES = "60"
+        }
 
         $sw = [System.Diagnostics.Stopwatch]::StartNew()
         & $EditorCmd @RunArgs
@@ -659,10 +685,6 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
                 Write-Host "Media     : no screenshots were taken." -ForegroundColor Yellow
             }
 
-            if ($Video) {
-                $Clips = Convert-FrameSequences -ShotDir $Dest -VideoDir (Join-Path $RunDir "videos")
-                if ($Clips.Count -gt 0) { Write-Host "Media     : $($Clips.Count) clip(s)" }
-            }
         }
 
         $JsonCount = @(Get-ChildItem -Path $RunDir -Filter "*.json" -File -ErrorAction SilentlyContinue).Count
@@ -674,6 +696,13 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         # clue is a half-megabyte log. Show-CrashSummary says nothing unless the log really
         # contains a crash, so calling it on a merely failed run is harmless.
         Show-CrashSummary -LogPath (Join-Path $RunDir "Editor.log")
+
+        # Static type checking is not an automation test, so it never shows up in the JSON the
+        # engine exports - run it here and leave its summary next to the JSON, which is the
+        # only place the report generator will find it.
+        if (-not $NoReport) {
+            Invoke-TypeCheck -RunDir $RunDir -Backend $B
+        }
 
         if (-not $NoReport) {
             $Generator = Join-Path $ToolsDir "GenerateTestReport.py"

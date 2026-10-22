@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     用 luau-analyze 对工程的 Lua 脚本做静态类型检查（Luau 后端）。
 
@@ -43,7 +43,10 @@ param(
     [switch] $Require,
 
     # 只打印将要执行的命令
-    [switch] $DryRun
+    [switch] $DryRun,
+
+    # 把结果写成 JSON，供 Tools/RunTests.ps1 收进测试报告
+    [string] $SummaryPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -56,6 +59,18 @@ function Resolve-InputPath([string] $Candidate)
     if ([System.IO.Path]::IsPathRooted($Candidate)) { return $Candidate }
     return Join-Path $RepoRoot $Candidate
 }
+
+# 结果 JSON。写成文件而不是只打印：报告生成器读的是这个，而控制台输出会被测试的几万行日志淹没。
+function Write-TypeCheckSummary([hashtable] $Result)
+{
+    if (-not $script:SummaryPath) { return }
+
+    $dir = Split-Path -Parent $script:SummaryPath
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    ($Result | ConvertTo-Json -Depth 5) | Set-Content -LiteralPath $script:SummaryPath -Encoding UTF8
+}
+
+# 每条退出路径都要先写 JSON：不写的话，"没跑"和"跑了但没结果"在报告里长得一样。
 
 # ---------------------------------------------------------------- luau-analyze
 function Find-LuauAnalyze
@@ -95,6 +110,13 @@ if (-not $Analyzer)
 详见 Docs/CN/Luau.md
 "@
 
+    Write-TypeCheckSummary @{
+        skipped = $true
+        reason  = "找不到 luau-analyze（下载预编译二进制，或 cmake 构建 Luau 子模块，或设 LUAU_ANALYZE 环境变量）"
+        mode    = $Mode
+        files   = 0
+    }
+
     if ($Require)
     {
         Write-Host $msg
@@ -110,6 +132,7 @@ if (-not $Analyzer)
 $Target = Resolve-InputPath $Path
 if (-not (Test-Path -LiteralPath $Target))
 {
+    Write-TypeCheckSummary @{ skipped = $true; reason = "路径不存在：$Target"; mode = $Mode; files = 0 }
     Write-Host "路径不存在：$Target"
     exit 1
 }
@@ -136,6 +159,7 @@ else
 
 if ($Files.Count -eq 0)
 {
+    Write-TypeCheckSummary @{ skipped = $true; reason = "没有找到 .lua 文件：$Target"; mode = $Mode; files = 0 }
     Write-Host "没有找到 .lua 文件：$Target"
     exit 0
 }
@@ -170,6 +194,17 @@ if ($Lines.Count -gt 0)
 }
 
 Write-Host "类型检查：错误 $(@($Errors).Count) 条，警告 $(@($Warnings).Count) 条。"
+
+Write-TypeCheckSummary @{
+    skipped  = $false
+    analyzer = $Analyzer
+    defs     = $(if ($DefsPath) { $DefsPath } else { $null })
+    mode     = $Mode
+    files    = $Files.Count
+    errors   = @($Errors)
+    warnings = @($Warnings)
+    exit     = $ExitCode
+}
 
 # luau-analyze 对"有类型错误"不一定返回非 0，所以以输出里的错误计数为准
 if ($Errors.Count -gt 0) { exit 1 }

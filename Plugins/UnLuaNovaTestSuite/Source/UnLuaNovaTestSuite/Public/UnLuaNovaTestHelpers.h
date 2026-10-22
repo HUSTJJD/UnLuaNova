@@ -115,6 +115,17 @@ public:
 
     UFUNCTION(BlueprintCallable)
     int32 TestForIssue407(TArray<int32> Array);
+
+    // Two identical functions for UnLuaNova.API.CallUEFast: only the first one ever gets a
+    // static binding registered, so the pre-resolved fast path and the reflective path can
+    // be exercised separately and compared. They exist as two functions rather than one
+    // because FFunctionDesc captures whether a binding exists when *it* is first built -
+    // one function cannot be called through both paths in the same process.
+    UFUNCTION(BlueprintCallable)
+    int32 ProbeWithStaticBinding(int32 In) { return In + 1; }
+
+    UFUNCTION(BlueprintCallable)
+    int32 ProbeWithoutStaticBinding(int32 In) { return In + 1; }
 };
 
 UCLASS()

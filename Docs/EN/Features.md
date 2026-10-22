@@ -104,7 +104,9 @@ See [Console Commands](ConsoleCommand.md) for the exact syntax.
 ### Docs that stay current
 
 * The screenshots on the docs site are produced by the automation suite
-  (`UnLuaNova.Showcase.*`), not by hand; `Tools/RunTests.ps1 -Video` can also record a clip
+  (`UnLuaNova.Showcase.*`), not by hand; recording a clip and encoding it into the report is on
+  by default (`-NoVideo` opts out), and the encoder comes from the `imageio-ffmpeg` pip package -
+  no system-wide ffmpeg needed
 * See [Testing and Automation](../CN/Testing.md)
 
 ---

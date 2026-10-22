@@ -1,0 +1,11 @@
+# Tools/GenerateTestReport.py encodes the frame sequences the tests record into .mp4.
+#
+# imageio-ffmpeg ships a static ffmpeg binary as an ordinary wheel, so there is nothing to
+# install system wide and nothing to put on PATH - which matters because a bug report that
+# says "install ffmpeg first" is a bug report nobody follows.
+#
+#   python -m pip install -r Tools/requirements.txt
+#
+# Everything else the tooling does (GenerateTestReport.py, RunTests.ps1,
+# CheckLuauTypes.ps1) runs on a bare Python / PowerShell with no third-party packages.
+imageio-ffmpeg>=0.4.9

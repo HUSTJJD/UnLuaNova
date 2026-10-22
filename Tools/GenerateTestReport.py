@@ -35,8 +35,10 @@ Usage:
 
 import argparse
 import json
+import os
 import re
 import shutil
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -48,6 +50,14 @@ SKIP_STATES = {"skipped", "skip", "notrun", "notrun", "ignored", "na"}
 
 MAX_MESSAGE_LEN = 400
 SLOWEST_COUNT = 10
+
+# Written by Tools/RunTests.ps1 (which runs Tools/CheckLuauTypes.ps1 with -SummaryPath).
+TYPECHECK_FILE = "luau-analyze.json"
+TYPECHECK_SHOWN = 20
+
+# Frames are captured one per rendered frame, so this is the playback rate chosen for the
+# encoded clip, not a measurement.
+CLIP_FPS = 30
 
 # What a crash looks like in Editor.log. The automation framework exports nothing when the
 # process dies, so the log is the only evidence there is.
@@ -316,13 +326,8 @@ def render_crash(crash):
     return lines
 
 
-def collect_media(shot_dir, video_dir):
-    """Split what the run produced into stills, frame sequences and encoded clips.
-
-    A clip arrives as a burst of <name>_0001.png ... <name>_0060.png. Listing sixty copies of
-    the same scene as if they were sixty different pictures buries the stills, so they are
-    collapsed into one entry per clip; if ffmpeg encoded them there is a real video instead.
-    """
+def find_frame_sequences(shot_dir):
+    """Group a run's PNGs into stills and frame sequences (<name>_0001.png ... <name>_0060.png)."""
     names = sorted(p.name for p in shot_dir.glob("*.png")) if shot_dir.is_dir() else []
 
     sequences = {}
@@ -333,6 +338,86 @@ def collect_media(shot_dir, video_dir):
             sequences.setdefault(m.group(1), []).append(name)
         else:
             stills.append(name)
+
+    return stills, sequences
+
+
+def find_ffmpeg(explicit=None):
+    """Locate an encoder.
+
+    Order: --ffmpeg, $FFMPEG, ffmpeg on PATH, then the static binary imageio-ffmpeg ships.
+    The last one is why no system-wide ffmpeg install is needed: it is an ordinary pip
+    package (Tools/requirements.txt) that carries its own ffmpeg.
+    """
+    candidates = []
+    if explicit:
+        candidates.append(("--ffmpeg", explicit))
+    if os.environ.get("FFMPEG"):
+        candidates.append(("$FFMPEG", os.environ["FFMPEG"]))
+    on_path = shutil.which("ffmpeg")
+    if on_path:
+        candidates.append(("PATH", on_path))
+    try:
+        import imageio_ffmpeg
+
+        candidates.append(("imageio-ffmpeg", imageio_ffmpeg.get_ffmpeg_exe()))
+    except Exception:
+        pass
+
+    for origin, path in candidates:
+        if path and Path(path).is_file():
+            return origin, path
+    return None, None
+
+
+def encode_sequences(shot_dir, video_dir, sequences, ffmpeg, fps=CLIP_FPS):
+    """Encode every frame sequence into one .mp4. Returns a {name: reason} map of failures.
+
+    Recording is part of the run, not an extra, so a burst that cannot be encoded is a
+    failure with a reason - never a silent pile of PNGs the reader has to decode by eye.
+    """
+    failures = {}
+    if not sequences:
+        return failures
+
+    video_dir.mkdir(parents=True, exist_ok=True)
+    for name, frames in sorted(sequences.items()):
+        out = video_dir / f"{name}.mp4"
+        # -framerate: the frames were grabbed one per rendered frame, so any real frame rate
+        # is a guess; 30 is the honest one for a clip whose point is "it moves".
+        cmd = [
+            ffmpeg, "-y", "-loglevel", "error",
+            "-framerate", str(fps),
+            "-i", str(shot_dir / f"{name}_%04d.png"),
+            # libx264 refuses odd dimensions, and a viewport can be any size (a resized
+            # editor window, a custom -ResX/-ResY). Crop the last row/column rather than
+            # letting the encode fail on something that is not the tests' problem.
+            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "23",
+            str(out),
+        ]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        except (OSError, subprocess.SubprocessError) as e:
+            failures[name] = f"编码器跑不起来：{e}"
+            continue
+
+        if proc.returncode != 0 or not out.is_file():
+            # The last line is usually just "Conversion failed!"; the useful line is above it.
+            detail = [line.strip() for line in (proc.stderr or "").strip().splitlines() if line.strip()]
+            failures[name] = " / ".join(detail[-3:]) if detail else f"退出码 {proc.returncode}"
+
+    return failures
+
+
+def collect_media(shot_dir, video_dir):
+    """Split what the run produced into stills, frame sequences and encoded clips.
+
+    A clip arrives as a burst of <name>_0001.png ... <name>_0060.png. Listing sixty copies of
+    the same scene as if they were sixty different pictures buries the stills, so they are
+    collapsed into one entry per clip; if an encoder ran there is a real video instead.
+    """
+    stills, sequences = find_frame_sequences(shot_dir)
 
     clips = []
     if video_dir.is_dir():
@@ -350,6 +435,57 @@ def collect_media(shot_dir, video_dir):
     return stills, clips, uncoded
 
 
+def load_typecheck(reports_dir: Path):
+    """Read the luau-analyze summary RunTests.ps1 left next to the JSON, if any."""
+    path = reports_dir / TYPECHECK_FILE
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        # A broken summary must not take the report down with it.
+        print(f"WARNING: could not read {path}: {e}", file=sys.stderr)
+        return None
+
+
+def render_typecheck(tc) -> list:
+    lines = ["## 静态类型检查（luau-analyze）", ""]
+
+    if tc.get("skipped"):
+        lines.append("**跳过。**")
+        lines.append("")
+        lines.append(tc.get("reason") or "没有说明原因。")
+        lines.append("")
+        return lines
+
+    errors = tc.get("errors") or []
+    warnings = tc.get("warnings") or []
+
+    lines.append("| 指标 | 数值 |")
+    lines.append("|---|---|")
+    lines.append(f"| 检查文件数 | {tc.get('files', 0)} |")
+    lines.append(f"| 模式 | `{tc.get('mode', '-')}` |")
+    lines.append(f"| 错误 | {len(errors)} |")
+    lines.append(f"| 警告 | {len(warnings)} |")
+    lines.append("")
+
+    if errors:
+        lines.append("**有类型错误 ❌** —— 输出到日志里的前几条：")
+        lines.append("")
+        lines.append("```")
+        for line in errors[:TYPECHECK_SHOWN]:
+            lines.append(line[:MAX_MESSAGE_LEN])
+        if len(errors) > TYPECHECK_SHOWN:
+            lines.append(f"... 还有 {len(errors) - TYPECHECK_SHOWN} 条")
+        lines.append("```")
+        lines.append("")
+    else:
+        lines.append("**没有类型错误 ✅**（声明文件由编辑器「导出智能提示」生成。）")
+        lines.append("")
+
+    return lines
+
+
 def render(
     tests,
     screenshots,
@@ -361,6 +497,8 @@ def render(
     crash=None,
     clips=None,
     uncoded=None,
+    typecheck=None,
+    encode_failures=None,
 ):
     total = len(tests)
     failed = [t for t in tests if not t["passed"]]
@@ -516,12 +654,25 @@ def render(
             lines.append("")
             lines.append(f"![{title}]({image_prefix}{seq['first']})")
             lines.append("")
+            # An unencoded burst is a failure, not a fallback: the point of the run was the
+            # clip, and a reader cannot tell "not encoded" from "nothing happened".
+            reason = (encode_failures or {}).get(seq["name"], "编码器没有产出文件。")
             lines.append(
-                f"只录到了帧序列（{seq['frames']} 帧："
-                f"`{seq['name']}_0001.png` … `{seq['name']}_{seq['frames']:04d}.png`）——"
-                "编码需要 ffmpeg 在 PATH 上，没有它 `Tools/RunTests.ps1 -Video` 会保留原始帧。"
+                f"**编码失败 ❌** —— 只拿到帧序列（{seq['frames']} 帧："
+                f"`{seq['name']}_0001.png` … `{seq['name']}_{seq['frames']:04d}.png`）。原因：{reason}"
             )
             lines.append("")
+
+    # Type checking is not an automation test, so it never appears in the JSON the engine
+    # exports - and before this it never appeared in the report either, which left the
+    # Luau declarations and luau-analyze with no result anywhere anyone looks.
+    if typecheck is not None:
+        lines.extend(render_typecheck(typecheck))
+    elif backend == "Luau":
+        lines.append("## 静态类型检查")
+        lines.append("")
+        lines.append("这一轮没有跑：`Tools/RunTests.ps1` 没写 `luau-analyze.json`。")
+        lines.append("")
 
     lines.append("---")
     lines.append("")
@@ -551,6 +702,13 @@ def main() -> None:
         metavar="Lua|Luau",
         help="which Lua backend produced this run; with --publish it selects the destination"
         " (Docs/test-lua-report.md or Docs/test-luau-report.md)",
+    )
+    parser.add_argument(
+        "--ffmpeg",
+        default=None,
+        metavar="PATH",
+        help="encoder to use for the recorded frame sequences; by default $FFMPEG, then "
+        "ffmpeg on PATH, then the binary imageio-ffmpeg ships",
     )
     parser.add_argument(
         "--publish",
@@ -591,7 +749,29 @@ def main() -> None:
 
     shot_dir = out_dir / "screenshots"
     video_dir = out_dir / "videos"
+
+    # Recording is part of the run: the showcase tests capture a burst of frames, and those
+    # bursts are encoded here. Encoding lives in this script rather than in RunTests.ps1 so
+    # that "which encoder" is decided in exactly one place.
+    _, sequences = find_frame_sequences(shot_dir)
+    encode_failures = {}
+    if sequences:
+        origin, ffmpeg = find_ffmpeg(args.ffmpeg)
+        if ffmpeg:
+            print(f"Encoding   : {len(sequences)} clip(s) with ffmpeg from {origin}")
+            encode_failures = encode_sequences(shot_dir, video_dir, sequences, ffmpeg)
+        else:
+            for name in sequences:
+                encode_failures[name] = (
+                    "找不到编码器：`pip install -r Tools/requirements.txt`（imageio-ffmpeg 自带静态 ffmpeg），"
+                    "或把 ffmpeg 放进 PATH，或用 --ffmpeg 指定。"
+                )
+        for name, reason in sorted(encode_failures.items()):
+            print(f"ERROR: clip '{name}' was not encoded: {reason}", file=sys.stderr)
+
     screenshots, clips, uncoded = collect_media(shot_dir, video_dir)
+
+    typecheck = load_typecheck(reports_dir)
 
     generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     total = len(tests)
@@ -610,6 +790,8 @@ def main() -> None:
             crash=crash,
             clips=clips,
             uncoded=uncoded,
+            typecheck=typecheck,
+            encode_failures=encode_failures,
         ),
         encoding="utf-8",
         newline="\n",
@@ -625,12 +807,25 @@ def main() -> None:
         "duration": round(sum(t["duration"] for t in tests if t["duration"] is not None), 3),
         "screenshots": len(screenshots),
         "videos": len(clips),
+        "videos_failed": len(encode_failures),
         "crashed": crash is not None,
         "crash_test": crash["test"] if crash else None,
+        # None when it was not run this round - deliberately not folded into pass/fail,
+        # because it is not an automation test and a skipped check is not a failed test.
+        "typecheck": {
+            "ran": typecheck is not None and not typecheck.get("skipped"),
+            "errors": len(typecheck.get("errors") or []) if typecheck else 0,
+            "warnings": len(typecheck.get("warnings") or []) if typecheck else 0,
+        },
     }
     (out_dir / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n"
     )
+
+    if encode_failures:
+        # Loud, not silent: a report that quietly shows a pile of PNGs looks like a run that
+        # recorded something. Failing here also makes RunTests.ps1 exit non-zero.
+        raise SystemExit(f"{len(encode_failures)} clip(s) could not be encoded; see the report.")
 
     if args.publish:
         repo_root = Path(__file__).resolve().parent.parent

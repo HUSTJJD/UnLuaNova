@@ -1,0 +1,358 @@
+---
+title: "Testing and Automation"
+description: "Running the suite on UE's Automation framework, generating reports and screenshots"
+---
+
+# Testing and Automation
+
+UnLuaNova tests with the **native UE Automation framework** - no third-party framework. Every
+test lives in the `UnLuaNovaTestSuite` plugin, and one run gives you the pass rate, the failure
+reasons and the screenshots.
+
+> This project (`UnLuaNovaDemo`) enables it in its `.uproject`, so the tests are always ready to
+> run. It is a **development tool, not a runtime dependency**, so the plugin keeps
+> `EnabledByDefault: false` - using UnLuaNova in another project does not drag it along; enable
+> it when you want to run the tests.
+
+## Layout
+
+```
+Plugins/UnLuaNovaTestSuite/
+├── Source/UnLuaNovaTestSuite/
+│   ├── Public/                    test infrastructure (latent commands, fixtures, assertion macros)
+│   │   ├── TestCommands.h/.cpp        latent commands: open a level / take a screenshot
+│   │   ├── UnLuaNovaTestCommon.h      test base classes and macros
+│   │   └── UnLuaNovaTestHelpers.h     UObject stubs, assertion macros, static exports
+│   ├── Private/Specs/             unit tests (BDD style, BEGIN_DEFINE_SPEC)
+│   └── Private/Tests/             regression and instance tests (Issue###Test)
+└── Content/Tests/                 levels and assets for the scenario tests
+```
+
+## One command
+
+```powershell
+# every UnLuaNova test: build first, then run both backends, one report each
+.\Tools\RunTests.ps1
+
+# one area only
+.\Tools\RunTests.ps1 -Filter UnLuaNova.API
+
+# just the three optional extension plugins (LuaRapidjson / LuaProtobuf / LuaSocket)
+.\Tools\RunTests.ps1 -Filter UnLuaNova.Extensions
+
+# one backend only
+.\Tools\RunTests.ps1 -Backend Luau
+
+# refresh the sample images only (fast) and publish them to the docs site
+.\Tools\RunTests.ps1 -Filter UnLuaNova.Showcase -Backend Luau -Publish
+
+# recording is on by default - this just publishes the result
+.\Tools\RunTests.ps1 -Publish
+
+# stills only
+.\Tools\RunTests.ps1 -NoVideo
+```
+
+What the script wraps - so nobody has to type `-ExecCmds` by hand:
+
+```
+UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
+    -ExecCmds="Automation RunTests <filter>; Quit"
+    -ReportExportPath=<dir> -abslog=<dir>\Editor.log
+```
+
+`-Backend` defaults to `Both`, so "run everything" above is really **two rounds**: switch the
+setting, build, run, switch back, build, run - then two independent reports. See "One report per
+backend" below.
+
+### Common switches
+
+| Switch | Default | Meaning |
+|---|---|---|
+| `-EnginePath` | auto-discovered | UE source root, see "How paths are resolved" |
+| `-ProjectPath` | auto-discovered | project file: the first `.uproject` under the repo root |
+| `-DryRun` | off | print the commands, do not launch the editor or build |
+| `-Backend` | `Both` | which Lua backend to run: `Lua`, `Luau` or `Both` |
+| `-Platform` / `-Configuration` | `Win64` / `Development` | passed to UBT |
+| `-SkipBuild` | off | skip building and run the existing binaries; **never combined with a backend switch** |
+| `-Filter` | `UnLuaNova` | test filter, prefix matched |
+| `-Map` | empty | which level the scenario tests should open; most tests build their own World |
+| `-OutputDir` | `Saved/TestReports/<timestamp>` | report root, one sub-directory per backend |
+| `-ExtraCommands` | empty | extra console commands to run afterwards (used for screenshots) |
+| `-NoScreenshots` | off | do not collect screenshots. **They are collected by default**: the docs site and the report gallery run on them |
+| `-NoVideo` | off | do not record. **Recording is on by default**: the showcase tests record a frame sequence and the report generator encodes it into an `.mp4` |
+| `-FailOnTypeErrors` | off | exit non-zero when luau-analyze reports type errors (by default they are only recorded) |
+| `-NullRHI` | off | headless: faster, but **not the same set of tests**, and no frames to capture - see below |
+| `-Publish` | off | copy the report and screenshots into `Docs/` for Pages |
+| `-NoReport` | off | run the tests only, generate no report |
+
+The script exits `1` when anything failed, so it can be hooked into any scheduler.
+
+### Tests that need a real viewport
+
+By default the suite runs **with a real viewport** (no `-NullRHI`), which means the whole set
+runs. Under `-NullRHI`, UMG widgets are simply **not ticked** - Slate has nothing to draw, so
+`SObjectWidget::Tick` never runs, and any test that waits for a widget to tick waits forever. It
+looks exactly like "the thing under test is broken"; Issue434 is such a test, because it relies on
+the widget's tick to `Broadcast` a multicast delegate.
+
+Those tests register with `BEGIN_VIEWPORT_TESTSUITE` (which carries
+`EAutomationTestFlags::NonNullRHI`): with `-NullRHI` on the command line the framework drops them
+from that round entirely instead of recording a failure - they did not run, so they are neither
+passed nor failed. `-NullRHI` is therefore the switch for "I want a fast answer", and the price
+is a report whose total is a couple of tests short:
+
+```powershell
+# the full set (default)
+.\Tools\RunTests.ps1
+
+# a quick pass: minus the tests that need a viewport
+.\Tools\RunTests.ps1 -NullRHI
+```
+
+The tests that were not run are not counted as passed - calling "cannot run headless" a pass
+would be a false result.
+
+## One report per backend
+
+The Lua backend is a **build-time choice** (see "Lua backend" in [Settings](Settings.md)): both
+backends export the same `lua_*` symbols and cannot coexist in one build. So "test both backends"
+is not a flag, it is:
+
+```powershell
+.\Tools\RunTests.ps1 -Backend Both -Publish
+```
+
+and for each backend, in order:
+
+1. write `LuaBackend=<backend>` into `Config/DefaultUnLuaNovaEditor.ini`;
+2. clear `Plugins/UnLuaNova/Intermediate/` (UBT does not watch that ini, so without this it may
+   treat the previous backend's object files as up to date);
+3. `Engine/Build/BatchFiles/Build.bat <Project>Editor <platform> <config> -Project=<uproject>`;
+4. run the tests, results into `Saved/TestReports/<timestamp>/lua` and `.../luau`;
+5. generate the report; restore the ini afterwards (`try/finally`, so an interrupt restores it
+   too).
+
+### Switching backends is global state, so the whole sequence is atomic
+
+The ini is repo-level mutable state and the binaries are build-time output; once the two diverge,
+results get filed under the wrong backend (this has happened: a directory called `lua` holding a
+Luau build). Four guards prevent it:
+
+- **Only one `RunTests.ps1` at a time**: `Saved/RunTests.lock` records its holder's PID and a
+  second process exits with an error; a leftover lock whose PID no longer exists is cleared
+  automatically. Without this, the second run's `Build.bat` just waits on UBT's mutex and then
+  runs whatever the first build produced.
+- **A failed build restores the ini immediately**, not at the end of the script: otherwise the
+  ini points at a backend that never built successfully, and the next `-SkipBuild` would test old
+  binaries under that name.
+- **The artefacts are verified before the editor starts**: the script reads
+  `Definitions.UnLuaNova.h` (UBT generates it for the plugin module) and checks
+  `UNLUANOVA_LUA_BACKEND` - the binary on disk, not the directory name or the ini.
+- **`-SkipBuild` may not switch backends**: it would relabel existing binaries without rebuilding,
+  so it is refused outright.
+
+`-SkipBuild` is therefore only useful for rerunning the backend you just built - for example when
+report generation failed and you want to try again.
+
+### A crash still produces a report
+
+When the editor crashes, the automation framework exports no JSON, and the report used to say
+nothing but "0 tests" with no clue where it died. Now: `RunTests.ps1` prints the crash stack to
+the console, `GenerateTestReport.py` digs the **test that was running** and the call stack out of
+`Editor.log` and writes them into a "crash" section, and `summary.json` carries `crashed` /
+`crash_test` (the script exits 1 on it, so CI cannot mistake it for a pass).
+
+Artefacts:
+
+| Backend | Local report | Published to the docs site |
+|---|---|---|
+| `Lua` | `Saved/TestReports/<timestamp>/lua/report.md` | `Docs/test-lua-report.md` |
+| `Luau` | `Saved/TestReports/<timestamp>/luau/report.md` | `Docs/test-luau-report.md` |
+
+Both reports are tagged with their backend (title, and a "Lua backend" row in the verdict table),
+so you cannot lose track of which one you are reading. Use `-Backend Lua` or `-Backend Luau` to
+run just one.
+
+## Test assets
+
+The rename (UnLua -> UnLuaNova) could only rewrite text, not `.uasset`, and it left a few kinds
+of damage behind: Blueprints saved without being compiled (no `SKEL_*` / `Default__*` /
+`BlueprintGeneratedClass` in the package, so `Class ..._C` resolved to nothing), DataTables that
+had lost their RowStruct (the engine logs `Missing RowStruct` at **Error** level), and actors
+that disappeared from levels along with their class.
+
+All of that is **fixed and committed** - no repair step is needed any more, and the one-off
+`UnLuaNova.Editor.RepairTestAssets` test is gone: the test was one-off, the assets are not.
+
+If the same damage ever reappears (say someone edits test assets by hand), the manual procedure
+is still the obvious one: right-click `/UnLuaNovaTestSuite/` in the Content Browser -> Resave All,
+or open each Blueprint and Compile. The command-line equivalent is
+`UnrealEditor-Cmd.exe <uproject> -run=ResavePackages -packagefolder=/UnLuaNovaTestSuite/`
+(not guaranteed to trigger a Blueprint recompile).
+
+## How paths are resolved
+
+There is **no machine specific path** in the script; everything is derived, so a fresh clone on
+another machine just runs:
+
+1. repo root = the parent of the directory holding the script (the parent of `Tools/`);
+2. project file = the first `*.uproject` under the repo root;
+3. UE root, tried in this order:
+   - `-EnginePath` passed explicitly;
+   - the `UNREAL_ENGINE_PATH` environment variable;
+   - **the `EngineAssociation` GUID from the `.uproject` -> the registry key
+     `HKCU:\Software\Epic Games\Unreal Engine\Builds`** (the mapping UnrealVersionSelector
+     maintains, the most authoritative source);
+   - any directory at the repo root or up to 5 levels above that contains
+     `Engine/Binaries/Win64/UnrealEditor-Cmd.exe` (source builds often sit next to the project);
+   - any engine in the registry that has that exe.
+
+If none of that works it fails with the three ways to fix it. Add `-DryRun` to check the
+resolution first.
+
+## Reports and verdicts
+
+After a run, each backend's directory `Saved/TestReports/<timestamp>/<backend>/` holds:
+
+| File | Contents |
+|---|---|
+| `report.md` | the verdict: pass rate, total/passed/failed/skipped, the **passing list**, failure details (message and source location), slowest tests, screenshot gallery |
+| `summary.json` | machine readable totals (including `backend`); the script decides its exit code from it |
+| `luau-analyze.json` | static type check result, rendered into the report as its own section |
+| `Editor.log` | the full log of this run |
+| `screenshots/` | screenshots taken during the run (including the recorded frame sequences `name_0001.png` ...) |
+| `videos/` | `.mp4` encoded from the frames (a failed encode goes into the report and exits non-zero) |
+| `*.json` | the raw results the engine exported |
+
+The two copies `-Publish` writes to `Docs/test-lua-report.md` / `Docs/test-luau-report.md` are
+**committed to git**, so they carry no machine specific path and no per-run directory name (both
+change on every run and would produce meaningless diffs for identical results). The local
+`report.md` still points at the raw JSON directory, for tracing back.
+
+Failure details list the message and `file:line` directly, so you can go straight to it.
+A test marked success but carrying an error record is treated as a failure - that is a failure
+pretending to be a pass.
+
+**Passing tests are listed too**, not just failures: after a change to shared code, "what still
+works" matters as much as "what broke", and a percentage cannot answer that. The list is sorted by
+test name, so an unchanged result produces a clean git diff.
+
+## Screenshots and recordings
+
+The sample images on the docs site (`Docs/CN/Showcase.md`) and the gallery at the bottom of every
+report are **produced by the tests**, not taken by hand. Hand-taken pictures go stale: the code
+moves on and the picture still claims to be current.
+
+### Where the screenshots come from
+
+`UnLuaNova.Showcase.*` (`Private/Tests/ShowcaseTest.cpp`) - four specs, each opening one tutorial
+level (`Content/Tutorials/`), waiting for PIE and taking one shot:
+
+| Spec | Level | Produces |
+|---|---|---|
+| `UnLuaNova.Showcase.Binding` | `01_HelloWorld/HelloWorld` | `Showcase_Binding.png` |
+| `UnLuaNova.Showcase.Override` | `02_OverrideBlueprintEvents/...` | `Showcase_Override.png` |
+| `UnLuaNova.Showcase.Container` | `06_NativeContainers/...` | `Showcase_Container.png` |
+| `UnLuaNova.Showcase.UMG` | `11_ReleaseUMG/ReleaseUMG` | `Showcase_UMG.png` |
+
+They register through `BEGIN_VIEWPORT_TESTSUITE`: with no viewport there is no frame to capture,
+so a `-NullRHI` round drops them entirely rather than recording "screenshot failed". **Do not pass
+`-NullRHI` when you want images.**
+
+Screenshots are collected into the report directory by default (`-NoScreenshots` opts out), and
+the script empties `Saved/Screenshots/WindowsEditor/` first - the editor does not, and stale PNGs
+would be published as this run's images. That is worse than having no image, because nobody can
+tell.
+
+### Adding a shot to a test
+
+```cpp
+ADD_LATENT_AUTOMATION_COMMAND(UnLuaNovaTestSuite::FScreenshotLatentCommand(TEXT("Showcase_Binding")));
+```
+
+The latent command **waits for the PNG to actually land** (screenshots are written
+asynchronously) and has an upper bound: under `-NullRHI` there will never be a PNG, and hanging
+the whole suite is far worse than a missing picture.
+
+### A screenshot without a test
+
+```powershell
+.\Tools\RunTests.ps1 -Map /Game/Tutorials/01_HelloWorld/HelloWorld `
+    -ExtraCommands "UnLuaNovaTest.Screenshot Showcase_Binding"
+```
+
+### Recording video
+
+Besides the still, the Showcase specs record a **frame sequence**
+(`Showcase_Binding_Clip_0001.png` ...), which the report generator encodes into
+`videos/<name>.mp4` and embeds as a player. **Recording is on by default, not an option** -
+"no video in the report" and "one still image in the report" look similar, but the first one
+means this round did not record.
+
+```powershell
+# refresh just the sample images and clips (fast) and publish them
+.\Tools\RunTests.ps1 -Filter UnLuaNova.Showcase -Backend Luau -Publish
+
+# no recording
+.\Tools\RunTests.ps1 -NoVideo
+```
+
+Change the length with `UNLUANOVA_RECORD_FRAMES` (default 60 frames).
+
+### Where the encoder comes from
+
+The engine has no video encoder (see below), so encoding lives in the report generator, which
+looks in this order:
+
+1. the `--ffmpeg` argument;
+2. the `FFMPEG` environment variable;
+3. `ffmpeg` on PATH;
+4. **the static ffmpeg `imageio-ffmpeg` ships** - an ordinary pip package, so there is nothing
+   to install system-wide and nothing to put on PATH:
+   `python -m pip install -r Tools/requirements.txt`.
+
+If none of the four exists, the failure is written into the report's video section (with the
+reason) and the script exits non-zero - **not** "keep the frames and make do". Making do looks
+exactly like "this round recorded nothing".
+
+!!! note "Why not the engine's own recording"
+    What UE produces natively is an **image sequence** (HighResShot, Movie Render's PNG/EXR
+    output), not a video file; Epic's own Movie Render Pipeline has a "Command Line Encoder"
+    setting that asks *you* for an **external ffmpeg path** - which is Epic saying there is no
+    encoder in the engine. This engine build ships no ffmpeg executable either (only AMD AMF
+    headers). And what the tests need is "the few seconds this spec ran", not an offline
+    sequence render, so capturing one frame per rendered frame from the test is both simpler
+    and more controllable.
+
+## Why not on GitHub Actions
+
+UnLuaNova depends on a **local UE source build** (UE 5.8.3). GitHub-hosted runners have no such
+engine and cannot build one. So:
+
+- tests run locally;
+- add `-Publish` when you want them on the site, then commit the generated
+  `Docs/test-lua-report.md`, `Docs/test-luau-report.md` and the screenshots;
+- Actions only renders and publishes `Docs/` to GitHub Pages.
+
+If you have a self-hosted Windows runner, wire `Tools/RunTests.ps1` into it - its exit code is
+already what a CI wants.
+
+## Conventions for new tests
+
+- **Naming**: `UnLuaNova.<area>.<topic>`, for example `UnLuaNova.API.FLuaEnv`. Issue regressions
+  keep their `Issue###` number.
+- **Unit tests** go in `Private/Specs/` using `BEGIN_DEFINE_SPEC`; **scenario / instance tests** go
+  in `Private/Tests/`.
+- Everything is wrapped in `#if WITH_DEV_AUTOMATION_TESTS`, so packaged builds contain no test
+  code.
+- Tests that need a World use `FOpenMapLatentCommand` rather than calling `LoadMap` themselves.
+
+---
+
+## Further reading
+
+- [Test report (Lua backend)](../test-lua-report.md) - the latest Lua backend run
+- [Test report (Luau backend)](../test-luau-report.md) - the latest Luau backend run
+- [Showcase samples](Showcase.md) - the sample screenshots the tests produce
+- [Debugging](Debugging.md) - debugging Lua scripts

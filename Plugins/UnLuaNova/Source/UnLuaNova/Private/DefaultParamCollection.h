@@ -108,6 +108,9 @@ struct FFunctionCollection
     TMap<FName, FParameterCollection> Functions;
 };
 
-extern TMap<FName, FFunctionCollection> GDefaultParamCollection;
+// Exported so the automation suite can assert the collection was actually filled: it is
+// produced by the UHT-side collector at build time, and there was no way to tell from a
+// running editor whether it had run at all.
+UNLUANOVA_API extern TMap<FName, FFunctionCollection> GDefaultParamCollection;
 
-extern void CreateDefaultParamCollection();
+UNLUANOVA_API extern void CreateDefaultParamCollection();

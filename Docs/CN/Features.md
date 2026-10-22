@@ -99,7 +99,8 @@ description: "UnLuaNova 的能力总览，以及相对 UnLua v2.3.6 的增量"
 ### 示例与截图
 
 * 文档站的示例截图由自动化测试产出（`UnLuaNova.Showcase.*`），不是手截的，见[测试与自动化](Testing.md)
-* `Tools/RunTests.ps1 -Video` 还能录一段帧序列并编码成 `.mp4` 嵌进测试报告
+* 录一段帧序列并编码成 `.mp4` 嵌进测试报告（**默认就录**，`-NoVideo` 才不录）；
+  编码器来自 `imageio-ffmpeg` 这个 pip 包，不需要装系统级 ffmpeg
 
 ---
 
