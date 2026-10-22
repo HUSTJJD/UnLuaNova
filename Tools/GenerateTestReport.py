@@ -442,8 +442,8 @@ def render(tests, screenshots, image_prefix, generated, reports_dir, published=F
         lines.append("## 截图")
         lines.append("")
         lines.append(
-            "没有截图。截图需要真实视口，跑的时候加 `-Screenshots`"
-            "（脚本会关掉 `-NullRHI` 并把 `Saved/Screenshots` 收进报告目录）。"
+            "没有截图。渲染默认开着，加 `-Screenshots` 才会把 `Saved/Screenshots` 收进报告目录；"
+            "跑 `-NullRHI`（无头）时没有画面可截。"
         )
         lines.append("")
 

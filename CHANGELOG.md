@@ -44,6 +44,10 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   结果就会被记在错误的后端名下（真发生过：目录叫 `lua`，跑的是 Luau 的二进制）。现在加了
   单实例锁（`Saved/RunTests.lock`，带持有者 PID）、编译失败立刻还原 ini、启动编辑器前按
   UBT 生成的 `Definitions.UnLuaNova.h` 校验磁盘上真正的后端，`-SkipBuild` 与切后端互斥
+- **`Tools/RunTests.ps1` 默认不再 `-NullRHI`**：无头更快，但那不是"同一套用例跑得快一点"——
+  UMG 控件在无渲染时不会被 Tick（Issue434 因此永远等不到委托广播，看着就像绑定坏了），
+  框架会把这类用例整条剔除。默认改成带真实视口跑全套，要快再加 `-NullRHI`（此时报告总数会少
+  几条，那几条是没跑，不是通过）。`-Screenshots` 现在只管"收不收集 PNG"，不再兼管渲染开关
 
 ### Fixed
 - **Lua 5.5 后端一跑就崩**：`TSharedPtr` 的 `__gc`（`ReleaseSharedPtr`）用 `lua_touserdata()` 取到的是
@@ -156,7 +160,7 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
     `BP_CreateEntry` 拿到了 3 个 entry、`:Add(self, M.OnTestDelegate)` 加了 3 个 handler、
     在 `Construct` 里直接 `Broadcast` 时三个 handler 全部命中（`Result1 == 7`）—— 但控件的
     `Tick` 在 `-NullRHI` 下**根本不会被调用**（Slate 无渲染 → `SObjectWidget::Tick` 不跑），
-    委托没人广播，`Result1` 就一直是 0。加 `-Screenshots` 走真实视口，同一条用例通过。
+    委托没人广播，`Result1` 就一直是 0。走真实视口时同一条用例通过。
     已改用 `BEGIN_VIEWPORT_TESTSUITE`（`EAutomationTestFlags::NonNullRHI`）：无头跑时框架把它
     剔除，而不是记一条失败 —— 它没跑，不算通过也不算失败
   - **Luau 独有 1 条**：`创建Actor，指定初始Transform/CollisionHanding/Owner/Instigator`

@@ -73,8 +73,14 @@
     -ExtraCommands "UnLuaNovaTest.Screenshot Showcase_Binding".
 
 .PARAMETER Screenshots
-    Keep rendering enabled and copy Saved/Screenshots into the report. Off by default
-    because it forces a real viewport, which is much slower than -NullRHI.
+    Copy Saved/Screenshots into the report. Rendering is already on by default, so this only
+    controls whether the pictures are collected.
+
+.PARAMETER NullRHI
+    Run headless (-NullRHI). Faster, but it is not the same suite: Slate does not tick UMG
+    without a viewport, so tests that need one - Issue434 waits for a widget's Tick - are
+    skipped by the framework rather than run. Use it when you want a quick answer, not when
+    you want the whole suite.
 
 .PARAMETER Publish
     Copy the generated report.md and its screenshots into Docs/ so the GitHub Pages
@@ -112,6 +118,7 @@ param(
     [string] $OutputDir = "",
     [string] $ExtraCommands = "",
     [switch] $Screenshots,
+    [switch] $NullRHI,
     [switch] $Publish,
     [switch] $NoReport,
     [switch] $SkipBuild,
@@ -446,8 +453,10 @@ function Get-EditorArgs {
         "-ReportExportPath=$ReportDir"
         "-abslog=$LogFile"
     )
-    # Screenshots need a real viewport; without them the run is headless and much faster.
-    if (-not $Screenshots) { $A += "-NullRHI" }
+    # Rendering stays on unless it is explicitly turned off: with -NullRHI the framework
+    # drops the tests that need a viewport, so the run is a different (smaller) suite rather
+    # than the same one done faster. -NullRHI is opt-in for that reason.
+    if ($NullRHI) { $A += "-NullRHI" }
     return $A
 }
 

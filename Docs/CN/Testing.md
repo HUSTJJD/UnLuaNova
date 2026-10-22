@@ -70,7 +70,8 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `-Map` | 空 | 场景测试要开哪个关卡；多数用例自建 World，不需要 |
 | `-OutputDir` | `Saved/TestReports/<时间戳>` | 报告输出根目录，每个后端一个子目录 |
 | `-ExtraCommands` | 空 | 跑完追加执行的控制台命令（截图用） |
-| `-Screenshots` | 关 | 保留真实视口并收集截图；不加则 `-NullRHI`，快很多 |
+| `-Screenshots` | 关 | 把 `Saved/Screenshots` 收进报告目录（渲染本来就是开着的） |
+| `-NullRHI` | 关 | 无头跑：快，但**不是同一套用例**，见下 |
 | `-Publish` | 关 | 把报告和截图复制到 `Docs/`，供 Pages 发布 |
 | `-NoReport` | 关 | 只跑测试，不生成报告 |
 
@@ -78,20 +79,24 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 
 ### 需要真实视口的用例
 
-默认跑法是 `-NullRHI`（不渲染，快很多）。但 UMG 控件在 `-NullRHI` 下**不会被 Tick**——
-Slate 没有东西要画，`SObjectWidget::Tick` 压根不跑，所以任何"等控件 Tick 一次"的用例在
-无头环境里永远等不到，表现和"被测的东西坏了"一模一样。Issue434 就是这种用例：它靠控件的
-Tick 来 `Broadcast` 那个多播委托。
+默认**带真实视口**跑（不加 `-NullRHI`），也就是把整套用例都跑一遍。UMG 控件在无渲染的
+`-NullRHI` 下**不会被 Tick**——Slate 没有东西要画，`SObjectWidget::Tick` 压根不跑，所以任何
+"等控件 Tick 一次"的用例在无头环境里永远等不到，表现和"被测的东西坏了"一模一样。Issue434
+就是这种用例：它靠控件的 Tick 来 `Broadcast` 那个多播委托。
 
-这类用例用 `BEGIN_VIEWPORT_TESTSUITE` 注册，也就是带上 `EAutomationTestFlags::NonNullRHI`：
+这类用例用 `BEGIN_VIEWPORT_TESTSUITE` 注册（带上 `EAutomationTestFlags::NonNullRHI`）：
 命令行有 `-NullRHI` 时，框架直接把它从这一轮里剔除，而不是记一条失败——它没跑，不算通过也
-不算失败。要真的跑到它，就别关渲染：
+不算失败。所以 `-NullRHI` 是**只想要快答案时**才加的开关，代价是报告里的总数会少那么一两条：
 
 ```powershell
-.\Tools\RunTests.ps1 -Screenshots
+# 全套（默认）
+.\Tools\RunTests.ps1
+
+# 快速过一遍：少了需要视口的用例
+.\Tools\RunTests.ps1 -NullRHI
 ```
 
-报告里因此会比用例总数少那么一两条，这不是漏跑：把无头跑不了的条件判成"通过"才是假结果。
+少跑的那几条不会被算成通过——把无头跑不了的条件判成"通过"才是假结果。
 
 ## 两个后端各一份报告
 
@@ -234,8 +239,8 @@ git 里反复产生无意义 diff）。本机那份 `report.md` 仍然指向原�
        -ExtraCommands "UnLuaNovaTest.Screenshot Showcase_Binding"
    ```
 
-截图默认写到 `Saved/Screenshots/WindowsEditor/`，脚本会收进报告目录。
-`-Screenshots` 不能和 `-NullRHI` 同时用——无渲染就没有画面。
+截图默认写到 `Saved/Screenshots/WindowsEditor/`，加 `-Screenshots` 才会收进报告目录。
+`-Screenshots` 和 `-NullRHI` 不要一起用——无渲染就没有画面。
 
 ## 为什么不在 GitHub Actions 上跑
 
