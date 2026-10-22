@@ -92,6 +92,8 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "FileHelpers.h"
+#include "K2Node_EditablePinBase.h"
+#include "K2Node_FunctionResult.h"
 #include "K2Node_MakeStruct.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
@@ -375,6 +377,60 @@ namespace
         return NumRestored;
     }
 
+    // Plugs the struct a function returns back into the result node: the struct node that
+    // makes it on one side, the parameter it is returned through on the other.
+    int32 RelinkStructResult(UEdGraph* Graph, UScriptStruct* Struct)
+    {
+        UK2Node_MakeStruct* MakeStructNode = nullptr;
+        UK2Node_FunctionResult* ResultNode = nullptr;
+        for (UEdGraphNode* Node : Graph->Nodes)
+        {
+            if (!MakeStructNode)
+            {
+                MakeStructNode = Cast<UK2Node_MakeStruct>(Node);
+            }
+            if (!ResultNode)
+            {
+                ResultNode = Cast<UK2Node_FunctionResult>(Node);
+            }
+        }
+
+        if (!MakeStructNode || !ResultNode)
+        {
+            return 0;
+        }
+
+        UEdGraphPin* Output = nullptr;
+        for (UEdGraphPin* Pin : MakeStructNode->Pins)
+        {
+            if (Pin && Pin->Direction == EGPD_Output)
+            {
+                Output = Pin;
+                break;
+            }
+        }
+
+        UEdGraphPin* Input = nullptr;
+        for (UEdGraphPin* Pin : ResultNode->Pins)
+        {
+            if (Pin && Pin->Direction == EGPD_Input
+                && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Struct
+                && Pin->PinType.PinSubCategoryObject.Get() == Struct)
+            {
+                Input = Pin;
+                break;
+            }
+        }
+
+        if (!Output || !Input || Input->LinkedTo.Num() > 0)
+        {
+            return 0; // nothing to wire, or still wired
+        }
+
+        Graph->GetSchema()->TryCreateConnection(Output, Input);
+        return Input->LinkedTo.Num() > 0 ? 1 : 0;
+    }
+
     int32 RestoreMissingStructs(const TMap<FString, UBlueprint*>& BlueprintsByPackage,
         TArray<FString>& Warnings, TArray<FString>& Diagnostics)
     {
@@ -396,6 +452,8 @@ namespace
 
             int32 NumNodes = 0;
             int32 NumPins = 0;
+            int32 NumSignaturePins = 0;
+            int32 NumLinks = 0;
             for (UEdGraph* Graph : Graphs)
             {
                 if (!Graph)
@@ -419,6 +477,41 @@ namespace
                         }
                     }
 
+                    // A function signature keeps its parameters in UserDefinedPins, not in
+                    // the pins themselves - the pins are rebuilt from those, so retyping a
+                    // pin on an entry/result node is undone the next time the node is
+                    // reconstructed. The parameter has to be taken out and put back.
+                    TArray<FName> BrokenParameters;
+                    if (UK2Node_EditablePinBase* Editable = Cast<UK2Node_EditablePinBase>(Node))
+                    {
+                        for (UEdGraphPin* Pin : Node->Pins)
+                        {
+                            if (Pin && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Struct
+                                && !Pin->PinType.PinSubCategoryObject.IsValid()
+                                && Editable->UserDefinedPinExists(Pin->PinName))
+                            {
+                                BrokenParameters.AddUnique(Pin->PinName);
+                            }
+                        }
+
+                        for (const FName& Parameter : BrokenParameters)
+                        {
+                            UEdGraphPin* Old = Editable->FindPin(Parameter);
+                            if (!Old)
+                            {
+                                continue;
+                            }
+
+                            FEdGraphPinType Type = Old->PinType;
+                            Type.PinSubCategoryObject = Struct;
+                            const EEdGraphPinDirection Direction = Old->Direction;
+
+                            Editable->RemoveUserDefinedPinByName(Parameter);
+                            Editable->CreateUserDefinedPin(Parameter, Type, Direction, /*bUseUniqueName=*/false);
+                            ++NumSignaturePins;
+                        }
+                    }
+
                     for (UEdGraphPin* Pin : Node->Pins)
                     {
                         // "struct" with no struct: the pin kept its category and lost the
@@ -434,7 +527,7 @@ namespace
                 }
             }
 
-            if (NumNodes == 0 && NumPins == 0)
+            if (NumNodes == 0 && NumPins == 0 && NumSignaturePins == 0)
             {
                 continue; // already right, or never had a struct to lose
             }
@@ -462,11 +555,21 @@ namespace
                 }
             }
 
+            // Taking a parameter out cuts the wire that fed it, so the value the function
+            // is supposed to return has to be plugged back in.
+            for (UEdGraph* Graph : Graphs)
+            {
+                if (Graph)
+                {
+                    NumLinks += RelinkStructResult(Graph, Struct);
+                }
+            }
+
             FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
             ++NumRepaired;
 
-            Diagnostics.Add(FString::Printf(TEXT("%s: re-typed %d struct node(s) and %d pin(s) to %s"),
-                *Blueprint->GetName(), NumNodes, NumPins, *Struct->GetName()));
+            Diagnostics.Add(FString::Printf(TEXT("%s: re-typed %d struct node(s), %d pin(s) and %d function parameter(s) to %s; re-linked %d wire(s)"),
+                *Blueprint->GetName(), NumNodes, NumPins, NumSignaturePins, *Struct->GetName(), NumLinks));
         }
 
         return NumRepaired;

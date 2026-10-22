@@ -211,6 +211,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, PrettyName, (EAutomationTestFlags::C
 namespace UnLuaNovaTestSuite { \
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, PrettyName, (EAutomationTestFlags::ClientContext | EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter))
 
+// A suite that can only run with a real viewport. UMG widgets are not ticked when the editor
+// runs with -NullRHI - Slate has nothing to render, so SObjectWidget::Tick never runs - and a
+// test that waits for a widget's Tick to happen (Issue434 broadcasts its multicast delegate
+// from there) has nothing to wait for; it looks exactly like the delegate binding being
+// broken. NonNullRHI is how that is told to the framework: with -NullRHI on the command line
+// the test is left out of the run rather than counted as a failure, so RunTests.ps1 reports it
+// only when a viewport is available. Run it with -Screenshots.
+#define BEGIN_VIEWPORT_TESTSUITE(TestClass, PrettyName) \
+namespace UnLuaNovaTestSuite { \
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, PrettyName, (EAutomationTestFlags::ClientContext | EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::NonNullRHI))
+
 #define END_TESTSUITE(TestClass) \
 }
 

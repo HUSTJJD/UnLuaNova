@@ -18,7 +18,10 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_TESTSUITE(FIssue434Test, TEXT("UnLuaNova.Regression.Issue434 MulticastDelegate创建Handler时和self绑定"))
+// The widget drives this test: its Tick broadcasts the delegate, so the three handlers bound
+// with self only ever run while Slate ticks the widget - which it does not do under -NullRHI.
+// See BEGIN_VIEWPORT_TESTSUITE.
+BEGIN_VIEWPORT_TESTSUITE(FIssue434Test, TEXT("UnLuaNova.Regression.Issue434 MulticastDelegate创建Handler时和self绑定"))
 
     bool FIssue434Test::RunTest(const FString& Parameters)
     {

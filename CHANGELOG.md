@@ -118,8 +118,13 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   导入解析不出来，编译器只说 `has missing or NULL parent class`，这个信息在资产里已经没了，
   所以按资产写死在用例里）、编译并保存 `/UnLuaNovaTestSuite/` 下所有蓝图（未编译的包里没有
   `SKEL_*` / `Default__*` / `BlueprintGeneratedClass`，`Class ..._C` 取不到），
-  把 `DataTable_CppTest` / `DataTable_Issue583` 的 RowStruct 与示例行补回去。
-  编译跑两遍，因为调用别蓝图函数的蓝图要等对方先编译好
+  把 `DataTable_CppTest` / `DataTable_Issue583` 的 RowStruct 与示例行补回去、把改名时从关卡里
+  一起丢掉的 actor 放回地图、把 struct 丢失的 `MakeStruct` 节点与函数参数类型补回（连函数签名
+  一起修，并重新接上 struct → 返回值的连线）。
+  编译跑两遍，因为调用别蓝图函数的蓝图要等对方先编译好。
+  扫描时**不加载 World**：加载关卡会编译它的关卡蓝图，而 Issue500 / Issue634 的关卡蓝图有改名
+  留下的坏节点，那些 `LogBlueprint` 的 Error 会记在这条用例头上；真正要写 actor 的关卡是按名字
+  单独加载的
   它会改资产，所以**不在默认的 `UnLuaNova.API` 过滤器下**，要显式跑：
   `Tools\RunTests.ps1 -Backend Luau -Filter UnLuaNova.Editor`
 
@@ -138,15 +143,24 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
     （资产很旧，只剩一个 `RowStructure` 属性名，没有任何 `/Script/...Row` 引用），
     需要设成 `UnLuaNovaTestTableRow` 并补数据；`Tests/Regression/Issue583/DataTable_Issue583.uasset`
     引用的是 `/Script/UnLuaNovaTestSuite.Issue583Row`（结构体还在），但同样需要 resave
-  - **Issue634**：蓝图编译失败，`Issue 634Struct` 已不存在
-  - **值不回传（6 条，两个后端一致，与后端分叉无关）**：Issue286 / 300 / 401 / 434 / 443 / 453。
-    这些蓝图都已编译、`GetModuleName` 的返回值也都在（如 `Tests.Regression.Issue300.TestActor`），
-    地图资产也没有指向旧包路径，所以不是资产问题，而是运行时：Lua 覆写 UFUNCTION 的返回值 /
-    引用参数没写回、蓝图 TMap `FindRef`、MulticastDelegate 的 handler 与 self 绑定。需要运行时定位
+  - **Issue634**：`Test` 函数图里的 `MakeStruct` 节点丢了 struct（改名后模块里已没有
+    `Issue634Struct`），连带的 `NewParam` 参数也丢了类型，蓝图编译不过。现在由 `RepairTestAssets`
+    三级修复：struct 填回节点；参数按 `RemoveUserDefinedPinByName` + `CreateUserDefinedPin` 重建
+    （签名存在 `UserDefinedPins` 里，直接改 pin 的 `PinSubCategoryObject` 会被下次重建覆盖，
+    编译照样说 `had null struct object`）；再把 struct → 返回值的连线接回去。
+    修好后用例通过 —— 之前"一修就崩编辑器"是**半修状态**（签名还是错的）造成的，不是插件 bug
+  - **"值不回传"（6 条，两个后端一致）**：Issue286 / 300 / 401 / 443 / 453 其实不是运行时问题 ——
+    是地图里的 actor 丢了（改名时一起没的），`RepairTestAssets` 按包路径放回去后全部通过。
+    剩下的 Issue434 是另一种情况（见下）
+  - **Issue434（两个后端）**：不是委托绑定坏了。插桩后看得很清楚：`Construct` 跑了、
+    `BP_CreateEntry` 拿到了 3 个 entry、`:Add(self, M.OnTestDelegate)` 加了 3 个 handler、
+    在 `Construct` 里直接 `Broadcast` 时三个 handler 全部命中（`Result1 == 7`）—— 但控件的
+    `Tick` 在 `-NullRHI` 下**根本不会被调用**（Slate 无渲染 → `SObjectWidget::Tick` 不跑），
+    委托没人广播，`Result1` 就一直是 0。加 `-Screenshots` 走真实视口，同一条用例通过。
+    已改用 `BEGIN_VIEWPORT_TESTSUITE`（`EAutomationTestFlags::NonNullRHI`）：无头跑时框架把它
+    剔除，而不是记一条失败 —— 它没跑，不算通过也不算失败
   - **Luau 独有 1 条**：`创建Actor，指定初始Transform/CollisionHanding/Owner/Instigator`
-    （4 个参数版通过，5 个参数版 Translating 取到 `98.451/120.737/1`，Z 对而 X/Y 是脏值，
-    且 `SpawnCollisionHandlingMethod` 也不对）。`UWorld_SpawnActor` 里 `NumParams == 6` 时
-    读 `Transform`（索引 3）与读枚举（索引 4）都不对，像是别名/复用内存，需要运行时确认
+    （5 个参数版 Translating 的 X/Y 是脏值）已随其余一并修好，当前两个后端均通过
 - 尚未在 UE 5.8 上编译验证
 - UCLASS 改名需要 resave 资产与迁移 `Config/*.ini`
 - Luau 后端未接线：`UNLUANOVA_LUA_BACKEND` 默认 0，`LuaCore` 仍依赖 Lua 5.4 内部头

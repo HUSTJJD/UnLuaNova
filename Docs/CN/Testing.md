@@ -76,6 +76,23 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 
 有失败用例时脚本退出码为 `1`，可以直接挂到任何调度里。
 
+### 需要真实视口的用例
+
+默认跑法是 `-NullRHI`（不渲染，快很多）。但 UMG 控件在 `-NullRHI` 下**不会被 Tick**——
+Slate 没有东西要画，`SObjectWidget::Tick` 压根不跑，所以任何"等控件 Tick 一次"的用例在
+无头环境里永远等不到，表现和"被测的东西坏了"一模一样。Issue434 就是这种用例：它靠控件的
+Tick 来 `Broadcast` 那个多播委托。
+
+这类用例用 `BEGIN_VIEWPORT_TESTSUITE` 注册，也就是带上 `EAutomationTestFlags::NonNullRHI`：
+命令行有 `-NullRHI` 时，框架直接把它从这一轮里剔除，而不是记一条失败——它没跑，不算通过也
+不算失败。要真的跑到它，就别关渲染：
+
+```powershell
+.\Tools\RunTests.ps1 -Screenshots
+```
+
+报告里因此会比用例总数少那么一两条，这不是漏跑：把无头跑不了的条件判成"通过"才是假结果。
+
 ## 两个后端各一份报告
 
 Lua 后端是**编译期选择**（见[设置项](Settings.md)里的"Lua 后端"）：两个后端导出同样的
