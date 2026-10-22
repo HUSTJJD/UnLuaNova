@@ -130,19 +130,78 @@ FUnLuaNovaDelegates
 
 * `print` 使用 `UEPrint` 覆盖Lua原生 `print`
 
+### UnLuaNova 全局表（脚本侧）
+`UnLuaNova` 既是 Lua 模块名（`require "UnLuaNova"`）也是运行期注入的全局表：
+
+* `UnLuaNova.GetBackend()` 返回当前构建的 Lua 后端：`"Lua"` 或 `"Luau"`
+* `UnLuaNova.HasFeature(Name)` 查询某项能力在当前后端是否可用。已知的名字：
+
+  | 名字 | 含义 | Lua 5.x | Luau |
+  |---|---|---|---|
+  | `sandbox` | 原生沙盒（`luaL_sandbox`） | 否 | 是 |
+  | `breakpoint` | VM 级断点/单步通道 | 否 | 是 |
+  | `allocCallbacks` | 分类内存回调（`lua.memstats` 的分类视图） | 否 | 是 |
+  | `vector` | 原生 `vector` 与 `FVector` 直接互换 | 否 | 是 |
+  | `buffer` | `buffer` 库 | 否 | 是 |
+
+  未知名字返回 `false` 而不是报错，所以照着更新版本写的脚本在旧构建上是降级而不是崩。
+
+按能力分支，而不是按后端名字分支：同一个后端的不同版本能力会变，名字不会。
+
+### 字符串扩展
+环境启动时自动把下列函数装到全局 `string` 表上，不需要 `require`
+（实现见 `Plugins/UnLuaNova/Content/Script/UnLuaNova/StringEx.lua`）：
+
+| 函数 | 说明 |
+|---|---|
+| `string.split(s, sep)` | 按**字面量**分隔（不是模式），`sep` 默认 `,` |
+| `string.strip(s)` / `string.trim(s)` | 去掉首尾空白 |
+| `string.startswith(s, prefix)` / `string.endswith(s, suffix)` | 前后缀判断，空串恒为真 |
+| `string.count(s, sub)` | 统计不重叠出现次数 |
+
+`join` 只在模块表里（`require("UnLuaNova.StringEx").join(sep, list)`），没有装到 `string` 上。
+
+### 随插件发布的 Lua 模块
+
+下面这些模块都在 `Plugins/UnLuaNova/Content/Script/UnLuaNova/` 下，**跟着插件走**，不是示例工程的
+内容。它们通过 `UnLuaNova.<模块名>` / `Lua.<模块名>` 访问（`UnLuaNova` 是 `Lua` 的别名，
+`__index` 会按需 `require`），也可以直接 `require("UnLuaNova.<模块名>")`：
+
+| 模块 | 说明 |
+|---|---|
+| `StringEx` | 字符串扩展，环境启动时自动 `require`，会把函数装到 `string` 表上 |
+| `Vector` | `vector` 与 `FVector` 互操作（`HasVector()` / `Create` / `ToFVector` / `FromFVector`） |
+| `Buffer` | `buffer` 与 `TArray<uint8>` 互转（`HasBuffer()` / `FromArray` / `ToArray`） |
+| `Input` | 输入绑定 |
+| `EnhancedInput` | 增强输入绑定 |
+| `HotReload` | 热重载：接管 `require`，使已加载模块可以被替换 |
+
+!!! warning "别把这些模块放进工程目录"
+    `package.path` 是 `Content/Script/?.lua;Plugins/UnLuaNova/Content/Script/?.lua`，
+    **工程在前**。放在 `Content/Script/UnLuaNova/` 下的模块在本仓库能加载，
+    但任何只装插件的工程都拿不到它 —— 而且本仓库不会有任何用例失败。
+    `UnLuaNova.API.RuntimeModules` 这条用例就是断言"文件在插件目录里"，防止再犯。
+
 ## 宏定义
 以下宏定义可通过 `UnLuaNova.Build.cs` 修改：
-* `AUTO_UnLuaNova_STARTUP` 是否自动启动UnLuaNova环境，默认**启用**。
+* `AUTO_UNLUA_STARTUP` 是否自动启动UnLuaNova环境，默认**启用**。
 
 * `WITH_UE4_NAMESPACE` 是否提供一个统一的 `UE` 命名空间 `table` 作为对引擎侧类型的访问入口，默认**启用**。
 
-* `SUPPORTS_RPC_CALL` 是否提供对 `_RPC` 远程方法支持，默认**启用**。
-
-* `SUPPORTS_COMMANDLET` 是否提供在 `commandlet` 环境下的UnLuaNova支持，默认**启用**。
-
 * `ENABLE_TYPE_CHECK` 是否启用类型检测，帮助在 `UFunction` 调用时进行参数类型合法性检测，默认**启用**。
 
-* `UnLuaNova_ENABLE_DEBUG` 是否输出UnLuaNova详细的调试日志，默认**禁用**。
+* `ENABLE_PERSISTENT_PARAM_BUFFER` 为每个 `UFunction` 复用一块参数缓存，默认**启用**。
+
+* `ENABLE_CALL_OVERRIDDEN_FUNCTION` 是否支持在 Lua 里通过 `self.Overridden` 调用被覆写的原函数，默认**启用**。
+
+* `UNLUANOVA_ENABLE_FTEXT` 是否以 C++ 对象方式传递 `FText`（否则按 `lua string`），默认**禁用**。
+
+* `LUA_COMPILE_AS_CPP` 是否以 C++ 方式编译 Lua 源码，默认**禁用**。
+
+* `UNLUANOVA_ENABLE_DEBUG` 是否输出UnLuaNova详细的调试日志，默认**禁用**。
+
+* `UNLUANOVA_LUA_BACKEND` 由 `LuaBackend` 设置推导，**不要在代码里直接写**：两个后端导出同样的
+  `lua_*` 符号，写死它等于让代码在另一个后端下编译不过。差异一律走 `LuaBackend.h` 的抽象。
 
 ---
 

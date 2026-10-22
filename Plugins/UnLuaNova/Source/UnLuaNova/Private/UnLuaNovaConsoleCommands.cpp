@@ -238,7 +238,9 @@ namespace UnLuaNova
             if (Arg.Equals(TEXT("on"), ESearchCase::IgnoreCase))
             {
                 Profiler.SetEnabled(true);
-                UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiling on - capture with Unreal Insights. This takes over the VM hook, so DeadLoopCheck is inactive while it runs."));
+                // Not "DeadLoopCheck is inactive": both go through FLuaVmHooks now, which
+                // exists precisely so they stop overwriting each other.
+                UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiling on - capture with Unreal Insights. DeadLoopCheck keeps its hook (both go through FLuaVmHooks)."));
                 return;
             }
             if (Arg.Equals(TEXT("off"), ESearchCase::IgnoreCase))

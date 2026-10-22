@@ -83,8 +83,23 @@ description: "UnLuaNova 的能力总览，以及相对 UnLua v2.3.6 的增量"
 ### 字符串扩展
 
 * 纯 Lua 实现的常用字符串函数（`split` / `strip` / `startswith` / `endswith` / `count` / `join`）
-* `local StringEx = require("UnLuaNova.StringEx")`
-* 以模块形式提供而非写入全局 `string` 表，因此与沙盒模式不冲突
+* 环境启动时自动装到全局 `string` 表上，脚本直接用即可；`join` 只在模块表里
+  （`local StringEx = require("UnLuaNova.StringEx")`）
+* `split` / `count` 按**字面量**分隔，不做模式匹配 —— 传 `"."` 得到的是按点分隔，不是空表
+* 见 [API 参考](API.md#字符串扩展)
+
+### 容器与调用路径
+
+* `TSet` 支持 `pairs` 迭代，产出 `(元素, true)`；此前 `pairs(Set)` 在两个后端都会报错，
+  只能靠 `ToArray()` / `ToTable()`
+* `CallUEFast`：对已解析过的函数跳过 `GetFunctionCallspace` / 覆写重定向查找 / 接口函数查找
+* `LuaScriptCompat` 兼容层：把 Lua 5.x 有而 Luau 没有的东西补上（例如 Luau 的基础库没有
+  `collectgarbage`，只有 `gcinfo()`），脚本不必为后端差异写两套代码
+
+### 示例与截图
+
+* 文档站的示例截图由自动化测试产出（`UnLuaNova.Showcase.*`），不是手截的，见[测试与自动化](Testing.md)
+* `Tools/RunTests.ps1 -Video` 还能录一段帧序列并编码成 `.mp4` 嵌进测试报告
 
 ---
 

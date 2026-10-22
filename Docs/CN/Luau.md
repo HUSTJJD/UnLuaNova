@@ -175,7 +175,9 @@ self:K2_SetActorLocation(vector.create(0, 0, 100), false, false)
     UE 5 的 `FVector` 分量是 double，`vector` 是 float，往返一次会掉精度。
     数学上不敏感的用途（方向、速度、偏移）没问题；需要精确回读的场景仍用 `FVector`。
 
-`buffer` 库同样是 Luau 自带的，可以和 `TArray` 互转：
+### buffer 与 TArray
+
+`buffer` 库是 Luau 自带的（`UnLuaNova.HasFeature("buffer")` 为 true），可以和 `TArray` 互转：
 
 ```lua
 local Bytes = UE.TArray(0)

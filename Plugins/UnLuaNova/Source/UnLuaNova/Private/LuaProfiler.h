@@ -39,7 +39,10 @@ namespace UnLuaNova
      * through FLuaVmHooks, so FDeadLoopCheck stays active alongside it - the two used to
      * overwrite each other, which is exactly what the dispatcher exists to prevent.
      */
-    class FLuaProfiler
+    // Exported (as is everything the console commands and the automation specs drive):
+    // these live in UnLuaNova's Private folder, and a modular build will not let another
+    // module link them otherwise.
+    class UNLUANOVA_API FLuaProfiler
     {
     public:
         static FLuaProfiler& Get();

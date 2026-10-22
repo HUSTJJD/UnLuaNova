@@ -418,7 +418,8 @@ description: "自动化测试产出的通过率、通过明细、失败明细与
 
 ## 截图
 
-没有截图。截图需要真实视口，跑的时候加 `-Screenshots`（脚本会关掉 `-NullRHI` 并把 `Saved/Screenshots` 收进报告目录）。
+没有截图。截图由 `UnLuaNova.Showcase.*` 这几条用例产出（默认就会收进报告目录），
+加 `-NoScreenshots` 或跑 `-NullRHI`（无头）时不会有画面。
 
 ---
 

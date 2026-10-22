@@ -27,6 +27,30 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
     由 `Index.lua` 做后端守卫，Lua 5.5 下一个文件都不会加载
   - `Tools/CheckLuauTypes.ps1`：用 `luau-analyze` + 生成的 `UnLuaNova.d.lua` 做静态类型检查
   - 文档：`Docs/CN/Luau.md` 与 `Docs/EN/Luau.md`
+- **示例截图由测试产出**（`Private/Tests/ShowcaseTest.cpp`）：`UnLuaNova.Showcase.Binding /
+  Override / Container / UMG` 四条用例各打开一个教程关卡（`Content/Tutorials/`）截一张图，
+  文档站 `Docs/CN/Showcase.md` 和每份报告的画廊都用它。此前**没有任何用例截图**，所以报告里
+  永远写着"没有截图"、Showcase 页的四张图一直是注释掉的占位符。
+  它们用 `BEGIN_VIEWPORT_TESTSUITE` 注册：无视口就没有画面可截，`-NullRHI` 那一轮把整条剔除，
+  而不是记成"截图失败"
+- **录屏**：`FCaptureFramesLatentCommand` 按帧连续截图成帧序列，`Tools/RunTests.ps1 -Video`
+  再用 ffmpeg 编码成 `.mp4` 内嵌进报告；ffmpeg 不在 PATH 上时保留原始帧并在报告里说明，
+  不假装录好了
+- **新增规格用例**，补此前完全没有用例覆盖的能力：
+  - `UnLuaNova.API.StringEx`：字符串扩展在 `string` 表上可用、`split`/`count` 按字面量
+    （传 `"."` 得到按点分隔而不是空表）、两个后端行为一致
+  - `UnLuaNova.API.Observability`：CPU 分析开关与"开着也能正常跑脚本"、内存统计的开/关与
+    记账/清零、调试服务的断点登记（重复添加被拒）/ 挂载 / 单步命中并抓到调用栈。
+    此前这三类**只有底层 Hook 有覆盖**，`lua.profiler` 装不上钩子、`lua.memstats` 不记账
+    都不会被任何用例发现
+  - `UnLuaNova.API.LuaScriptCompat`：`collectgarbage` / `load` 在两个后端都存在且行为一致
+    （Issue291 踩过的坑：Luau 基础库没有 `collectgarbage`，脚本直接 `attempt to call a nil value`）
+  - `UnLuaNova.API.RuntimeModules`：运行时 Lua 模块（`StringEx`/`Vector`/`Buffer`/`Input`/
+    `EnhancedInput`/`HotReload`）必须随插件发布 —— 断言的是**文件在插件目录里**，
+    不只是 `require` 得出来（后者在本仓库无论文件放哪都通过）；外加 `Vector` / `Buffer`
+    的模块表与 `HasFeature` 一致性、以及后端可用时的实际互转
+- **英文文档补三页**：`Docs/EN/Features.md`、`Settings.md`、`ConsoleCommand.md`
+  （此前 EN 只有 7 页，"功能清单 / 设置项 / 控制台命令"这三个英文读者最先找的页面全是缺的）
 
 ### Changed
 - 引擎基线升到 **UE 5.8.3**：`BuildSettingsVersion.V6` + `IncludeOrderVersion.Latest`
@@ -48,6 +72,23 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   UMG 控件在无渲染时不会被 Tick（Issue434 因此永远等不到委托广播，看着就像绑定坏了），
   框架会把这类用例整条剔除。默认改成带真实视口跑全套，要快再加 `-NullRHI`（此时报告总数会少
   几条，那几条是没跑，不是通过）。`-Screenshots` 现在只管"收不收集 PNG"，不再兼管渲染开关
+- **`Tools/RunTests.ps1` 默认收集截图**：`-Screenshots` 换成 `-NoScreenshots`。之前默认不收，
+  于是每次报告的画廊都是空的，看的人只能认为"这套测试不产图"。
+  跑之前还会先清空 `Saved/Screenshots/WindowsEditor/`——编辑器不清它，不清就会把上一次的 PNG
+  当成这一次的图发布出去，这比没有图更糟，因为看的人看不出来
+- **`Tools/GenerateTestReport.py` 新增「视频」一节**：帧序列合成一条而不是并列几十张同名图，
+  编码成功就内嵌 `<video>`，没编码就说明"只录到了帧序列"
+- **文档按代码校正**：
+  - 删掉代码里已经没有的东西：`SUPPORTS_RPC_CALL` / `SUPPORTS_COMMANDLET` 两个宏
+    （`API.md`）、「启用Insights分析支持」（`ENABLE_UNREAL_INSIGHTS` 已移除，profiler 现在是
+    运行时开关）和「启用RPC调用支持」两个设置项（`Settings.md`）
+  - `API.md` 补 `UnLuaNova.GetBackend()` / `HasFeature()`（含完整的五個能力名与后端对照表）、
+    字符串扩展一节、以及完整的宏清单（原先只列了 6 个，其中一个已不存在）
+  - `Settings.md` 说清 Lua 后端的默认值（键不存在时是 `Luau`）与"仓库 ini 里的 `Lua` 是上次
+    跑完测试还原出来的，不是项目选择"，避免读者照着文件反推默认值
+  - `Luau.md` 给 buffer ↔ TArray 单独开一节；`StaticExportBinding.md` 补 commandlet 的完整
+    调用方式与 `meta=(UnLuaNovaExport/UnLuaNovaNoExport)` 的代码示例
+  - `Showcase.md` 写明四张图分别由哪条用例、哪个关卡产出，以及"要出图就不能 `-NullRHI`"
 
 ### Fixed
 - **Lua 5.5 后端一跑就崩**：`TSharedPtr` 的 `__gc`（`ReleaseSharedPtr`）用 `lua_touserdata()` 取到的是
@@ -111,26 +152,30 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 - **`UNLUANOVA_IS_YIELDABLE` 用例按 plain Lua 的语义断言主线程**：Luau 的
   `lua_isyieldable()` 是 `nCcalls <= baseCcalls`，主线程在没跨过 C 边界时回答"可 yield"，
   所以 `== 0` 在 Luau 上必然失败。现在按后端断言，并额外验证"跨过 C 边界后两边都回答不可 yield"
+- **`StringEx` 有两份且行为不一致**：`Content/Script/UnLuaNova/`（工程）和
+  `Plugins/UnLuaNova/Content/Script/UnLuaNova/`（插件）各一份，而 package.path 里**工程在前**，
+  于是实际加载的是工程那份 —— 它只返回模块表、**不往 `string` 表上装**，所以文档承诺的
+  "直接用 `string.split`" 根本不成立，而插件那份（会装）永远轮不到。现在删掉工程侧副本，
+  插件版成为唯一实现，并补上文档里写了却没有的 `join`
+- **`lua.profiler on` 的日志还在说会顶掉死循环检测**：两者早就都走 `FLuaVmHooks` 分发了，
+  这行日志是过期文案，会让人不敢同时开
+- **`UnLuaNova.Vector` / `UnLuaNova.Buffer` 只存在于示例工程，插件里没有**：文档把
+  `UnLuaNova.Buffer.FromArray(...)` 当特性在讲，但这两个模块此前放在
+  `Content/Script/UnLuaNova/`（工程），而 `package.path` 工程在前 —— 在本仓库能加载，
+  任何只装插件的工程 `require` 直接失败、`UnLuaNova.Buffer` 是 nil，且本仓库没有任何用例会发现。
+  现在随插件发布到 `Plugins/UnLuaNova/Content/Script/UnLuaNova/`（与 `StringEx` / `Input` /
+  `HotReload` 一致，require 名字不变），并新增 `UnLuaNova.API.RuntimeModules` 断言
+  "这些模块的文件在插件目录里"，而不只是"require 得出来"（后者在本仓库无论放哪都通过）
 
 ### Reverted
 - **PR #719**：其守卫会在子类实例上跳过 Lua 覆写（详见 `Docs/Archive/` 说明），
   需先补「子类实例仍能执行 Lua 覆写」的测试再评估
 
-### Added
-- **`UnLuaNova.Editor.RepairTestAssets`**（`Private/Tests/AssetRepairTest.cpp`）：一个 editor-context
-  的自动化用例，把改名留下的资产损伤修掉 —— 给父类引用丢了的蓝图补回父类（包里的 `ParentClass`
-  导入解析不出来，编译器只说 `has missing or NULL parent class`，这个信息在资产里已经没了，
-  所以按资产写死在用例里）、编译并保存 `/UnLuaNovaTestSuite/` 下所有蓝图（未编译的包里没有
-  `SKEL_*` / `Default__*` / `BlueprintGeneratedClass`，`Class ..._C` 取不到），
-  把 `DataTable_CppTest` / `DataTable_Issue583` 的 RowStruct 与示例行补回去、把改名时从关卡里
-  一起丢掉的 actor 放回地图、把 struct 丢失的 `MakeStruct` 节点与函数参数类型补回（连函数签名
-  一起修，并重新接上 struct → 返回值的连线）。
-  编译跑两遍，因为调用别蓝图函数的蓝图要等对方先编译好。
-  扫描时**不加载 World**：加载关卡会编译它的关卡蓝图，而 Issue500 / Issue634 的关卡蓝图有改名
-  留下的坏节点，那些 `LogBlueprint` 的 Error 会记在这条用例头上；真正要写 actor 的关卡是按名字
-  单独加载的
-  它会改资产，所以**不在默认的 `UnLuaNova.API` 过滤器下**，要显式跑：
-  `Tools\RunTests.ps1 -Backend Luau -Filter UnLuaNova.Editor`
+### Removed
+- **`UnLuaNova.Editor.RepairTestAssets`**（`Private/Tests/AssetRepairTest.cpp`）：一次性用例，
+  改名留下的资产损伤（未编译的蓝图、丢了的 DataTable RowStruct、从关卡里消失的 actor、
+  丢了 struct 的 `MakeStruct` 节点）**已经全部修好并入库**，用例留着只会让人以为每次都要跑它。
+  同类损伤万一重现，手工做法写在 `Docs/CN/Testing.md` 的「测试资产」一节
 
 ### Known Issues
 - **剩余测试失败的分类结论**（Luau 16 条失败、Lua 15 条失败，逐条比对 + 直接读 `.uasset` 二进制得出）：
@@ -148,13 +193,13 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
     需要设成 `UnLuaNovaTestTableRow` 并补数据；`Tests/Regression/Issue583/DataTable_Issue583.uasset`
     引用的是 `/Script/UnLuaNovaTestSuite.Issue583Row`（结构体还在），但同样需要 resave
   - **Issue634**：`Test` 函数图里的 `MakeStruct` 节点丢了 struct（改名后模块里已没有
-    `Issue634Struct`），连带的 `NewParam` 参数也丢了类型，蓝图编译不过。现在由 `RepairTestAssets`
-    三级修复：struct 填回节点；参数按 `RemoveUserDefinedPinByName` + `CreateUserDefinedPin` 重建
+    `Issue634Struct`），连带的 `NewParam` 参数也丢了类型，蓝图编译不过。已按三级修复：
+    struct 填回节点；参数按 `RemoveUserDefinedPinByName` + `CreateUserDefinedPin` 重建
     （签名存在 `UserDefinedPins` 里，直接改 pin 的 `PinSubCategoryObject` 会被下次重建覆盖，
     编译照样说 `had null struct object`）；再把 struct → 返回值的连线接回去。
     修好后用例通过 —— 之前"一修就崩编辑器"是**半修状态**（签名还是错的）造成的，不是插件 bug
   - **"值不回传"（6 条，两个后端一致）**：Issue286 / 300 / 401 / 443 / 453 其实不是运行时问题 ——
-    是地图里的 actor 丢了（改名时一起没的），`RepairTestAssets` 按包路径放回去后全部通过。
+    是地图里的 actor 丢了（改名时一起没的），按包路径放回地图后全部通过。
     剩下的 Issue434 是另一种情况（见下）
   - **Issue434（两个后端）**：不是委托绑定坏了。插桩后看得很清楚：`Construct` 跑了、
     `BP_CreateEntry` 拿到了 3 个 entry、`:Add(self, M.OnTestDelegate)` 加了 3 个 handler、

@@ -18,6 +18,7 @@
 
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
+#include "HAL/PlatformMisc.h"
 #include "Misc/Paths.h"
 #include "UnrealClient.h"
 
@@ -164,7 +165,74 @@ namespace UnLuaNovaTestSuite
         if (IFileManager::Get().FileExists(*Path))
             return true;
 
-        return ++FramesWaited > 120;
+        if (++FramesWaited > 120)
+        {
+            // Not a failure: whether a PNG can be produced at all depends on the run (a
+            // viewport has to exist), and a missing picture must not read as "the showcase
+            // broke". Say it out loud anyway - otherwise the only symptom is an empty
+            // gallery in the report and nobody knows why.
+            UE_LOG(LogTemp, Warning, TEXT("Screenshot '%s' was never written to %s - no viewport, or rendering is off (-NullRHI)."), *Name, *Path);
+            return true;
+        }
+
+        return false;
+    }
+
+    FCaptureFramesLatentCommand::FCaptureFramesLatentCommand(FString ClipName, int32 NumFrames)
+        : Name(MoveTemp(ClipName)), Frames(NumFrames)
+    {
+    }
+
+    bool FCaptureFramesLatentCommand::Update()
+    {
+        if (Captured >= Frames)
+            return true;
+
+        const FString FrameName = FString::Printf(TEXT("%s_%04d"), *Name, Captured + 1);
+        const FString Path = FPaths::ScreenShotDir() / (FrameName + TEXT(".png"));
+
+        if (!bPending)
+        {
+            bPending = true;
+            FramesWaited = 0;
+            FScreenshotRequest::RequestScreenshot(FrameName, false, false);
+            return false;
+        }
+
+        if (IFileManager::Get().FileExists(*Path))
+        {
+            ++Captured;
+            bPending = false;
+            return Captured >= Frames;
+        }
+
+        // Give up on this frame rather than on the whole clip: a dropped frame leaves a
+        // jump in the video, a hang leaves the suite stuck and the report empty.
+        if (++FramesWaited > 120)
+        {
+            ++Captured;
+            bPending = false;
+            return Captured >= Frames;
+        }
+
+        return false;
+    }
+
+    bool IsFrameRecordingEnabled()
+    {
+        const FString Value = FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_RECORD_FRAMES"));
+        return !Value.IsEmpty() && Value != TEXT("0") && !Value.Equals(TEXT("false"), ESearchCase::IgnoreCase);
+    }
+
+    int32 GetFrameRecordingCount()
+    {
+        const FString Value = FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_RECORD_FRAMES"));
+        if (Value.IsEmpty())
+            return 0;
+        const int32 Count = FCString::Atoi(*Value);
+        // A number means "this many frames"; anything else ("1", "on", "true") is the
+        // default clip length.
+        return Count > 0 ? Count : 60;
     }
 
     // Lets a run grab pictures without writing a test for it, e.g.

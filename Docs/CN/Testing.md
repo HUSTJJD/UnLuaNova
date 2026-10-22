@@ -41,8 +41,11 @@ Plugins/UnLuaNovaTestSuite/
 # 只跑一个后端
 .\Tools\RunTests.ps1 -Backend Luau
 
-# 带截图，并把结果发布到文档站
-.\Tools\RunTests.ps1 -Screenshots -Publish
+# 只刷新示例图（快），并发布到文档站
+.\Tools\RunTests.ps1 -Filter UnLuaNova.Showcase -Backend Luau -Publish
+
+# 带录屏，并把结果发布到文档站
+.\Tools\RunTests.ps1 -Video -Publish
 ```
 
 脚本封装的就是这条命令，team 里不用再手敲 `-ExecCmds`：
@@ -70,8 +73,9 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `-Map` | 空 | 场景测试要开哪个关卡；多数用例自建 World，不需要 |
 | `-OutputDir` | `Saved/TestReports/<时间戳>` | 报告输出根目录，每个后端一个子目录 |
 | `-ExtraCommands` | 空 | 跑完追加执行的控制台命令（截图用） |
-| `-Screenshots` | 关 | 把 `Saved/Screenshots` 收进报告目录（渲染本来就是开着的） |
-| `-NullRHI` | 关 | 无头跑：快，但**不是同一套用例**，见下 |
+| `-NoScreenshots` | 关 | 不收集截图。**默认收集**：文档站和报告画廊都靠它们 |
+| `-Video` | 关 | 额外录帧序列并编码成 `.mp4`（需要 ffmpeg，没有就保留帧） |
+| `-NullRHI` | 关 | 无头跑：快，但**不是同一套用例**，且没有画面可截，见下 |
 | `-Publish` | 关 | 把报告和截图复制到 `Docs/`，供 Pages 发布 |
 | `-NoReport` | 关 | 只跑测试，不生成报告 |
 
@@ -151,39 +155,20 @@ ini 是仓库级可变状态、二进制又是编译期产物，两者一旦分�
 只想跑一个后端就用 `-Backend Lua` 或 `-Backend Luau`。
 
 
-## 资产坏了怎么办
+## 测试资产
 
-改名（UnLua → UnLuaNova）只能改文本，改不了 `.uasset`，所以测试内容里留下了几类**只有编辑器
-能修**的损伤：蓝图存盘时没编译（包里没有 `SKEL_*` / `Default__*` / `BlueprintGeneratedClass`，
-`Class ..._C` 取不到）、DataTable 的 RowStruct 丢了（引擎按 **Error** 级别打
-`Missing RowStruct`，而 UE 的自动化把"测试期间出现 Error 日志"算作失败，于是一串不相干的
-用例跟着挂）。
+改名（UnLua → UnLuaNova）只能改文本，改不了 `.uasset`，曾经在测试内容里留下过几类损伤：
+蓝图存盘时没编译（包里没有 `SKEL_*` / `Default__*` / `BlueprintGeneratedClass`，`Class ..._C`
+取不到）、DataTable 的 RowStruct 丢了（引擎按 **Error** 级别打 `Missing RowStruct`）、关卡里的
+actor 跟着类一起没了。
 
-这些都交给 editor-context 的自动化用例 `UnLuaNova.Editor.RepairTestAssets`
-（`Private/Tests/AssetRepairTest.cpp`）：它编译 `/UnLuaNovaTestSuite/` 下的所有蓝图、把两个
-DataTable 的 RowStruct 与示例行补回去，然后存盘。它**不在默认的 `UnLuaNova.API` 过滤器下**
-（会改资产），要显式跑：
+这些已经**全部修好并入库**，仓库里不再需要任何修复步骤，也不再保留
+`UnLuaNova.Editor.RepairTestAssets` 那条一次性用例 —— 用例是一次性的，资产不是。
 
-```powershell
-Tools\RunTests.ps1 -Backend Luau -Filter UnLuaNova.Editor
-```
-
-跑一次就够，之后照常 `Tools\RunTests.ps1`。仍然编译不过的资产它会以警告列出来 —— Issue634
-是已知的：它的图里引用了一个已经不存在的结构体资产，得手工删节点。
-
-这条用例**可能显示为 failed 但其实干完了活**：蓝图编译器对编译不过的资产会按 Error 打日志，
-而"测试运行期间出现 Error 日志"在 UE 的自动化里就算失败。看报告里的 Info 行
-（`Repaired: ... Compiled N of M Blueprint(s)`）判断修好了多少。
-
-手工做是同一件事：Content Browser 里右键 `/UnLuaNovaTestSuite/` → Resave All，或逐个打开蓝图
-点 Compile；引擎自带的命令行方案是
+万一以后又出现同类损伤（比如别人手工改动了测试资产），同一件事的手工做法还在：Content Browser
+里右键 `/UnLuaNovaTestSuite/` → Resave All，或逐个打开蓝图点 Compile；命令行等价物是
 `UnrealEditor-Cmd.exe <uproject> -run=ResavePackages -packagefolder=/UnLuaNovaTestSuite/`
 （不保证会触发蓝图重编译）。
-
-> 用自动化驱动 UI 行不行？UE 有 Automation Driver（`FAutomationDriver`，可以合成输入去点
-> Slate 控件），但那是测**界面行为**的，不是修资产的：修资产的正确入口就是编辑器 API
-> （`FKismetEditorUtilities::CompileBlueprint` + 存包），headless 能跑、可重复、能进 CI，
-> 也不受界面改版影响。
 
 ## 路径怎么找
 
@@ -209,7 +194,8 @@ Tools\RunTests.ps1 -Backend Luau -Filter UnLuaNova.Editor
 | `report.md` | 结论：通过率、总数/通过/失败/跳过、**通过明细**、失败明细（含错误消息与源码位置）、最慢用例、截图画廊 |
 | `summary.json` | 机器可读的总数（含 `backend`），脚本据此决定退出码 |
 | `Editor.log` | 本次运行的完整日志 |
-| `screenshots/` | 测试期间产生的截图 |
+| `screenshots/` | 测试期间产生的截图（含 `-Video` 的帧序列） |
+| `videos/` | 帧序列编码出的 `.mp4`（`-Video` 且 PATH 上有 ffmpeg） |
 | `*.json` | UE 导出的原始结果 |
 
 `-Publish` 写到 `Docs/test-lua-report.md` / `Docs/test-luau-report.md` 的那两份是**要提交进 git** 的，
@@ -222,25 +208,58 @@ git 里反复产生无意义 diff）。本机那份 `report.md` 仍然指向原�
 **通过明细同样会列出来**，不只是失败项：改了公共代码之后，"哪些还在正常"和"哪些坏了"一样重要，
 而一个百分比答不了这个问题。通过项按用例名排序，所以结果没变时 git diff 也是干净的。
 
-## 截图
+## 截图与录屏
 
-两种触发方式：
+文档站上那些示例图（`Docs/CN/Showcase.md`）和每份报告底部的画廊，都是**测试跑出来的**，
+不是手截的。手截的图会过期：代码一改，图还是旧的，读者却以为它是当前的。
 
-1. **测试内部**：把 `FScreenshotLatentCommand` 加到 latent 命令序列里，它会等 PNG 真正落盘再继续。
+### 截图怎么来的
 
-   ```cpp
-   ADD_LATENT_AUTOMATION_COMMAND(UnLuaNovaTestSuite::FScreenshotLatentCommand(TEXT("Showcase_Binding")));
-   ```
+`UnLuaNova.Showcase.*`（`Private/Tests/ShowcaseTest.cpp`）四条用例各打开一个教程关卡
+（`Content/Tutorials/`），等 PIE 起来，截一张图：
 
-2. **不经测试**：跑的时候追加控制台命令。
+| 用例 | 关卡 | 产出 |
+|---|---|---|
+| `UnLuaNova.Showcase.Binding` | `01_HelloWorld/HelloWorld` | `Showcase_Binding.png` |
+| `UnLuaNova.Showcase.Override` | `02_OverrideBlueprintEvents/...` | `Showcase_Override.png` |
+| `UnLuaNova.Showcase.Container` | `06_NativeContainers/...` | `Showcase_Container.png` |
+| `UnLuaNova.Showcase.UMG` | `11_ReleaseUMG/ReleaseUMG` | `Showcase_UMG.png` |
 
-   ```powershell
-   .\Tools\RunTests.ps1 -Map /UnLuaNovaTestSuite/Tests/Misc/YourMap -Screenshots `
-       -ExtraCommands "UnLuaNovaTest.Screenshot Showcase_Binding"
-   ```
+它们用 `BEGIN_VIEWPORT_TESTSUITE` 注册：没有视口就没有画面可截，所以 `-NullRHI` 的那一轮会把
+它们整条剔除，而不是记成"截图失败"。**要出图就不能加 `-NullRHI`。**
 
-截图默认写到 `Saved/Screenshots/WindowsEditor/`，加 `-Screenshots` 才会收进报告目录。
-`-Screenshots` 和 `-NullRHI` 不要一起用——无渲染就没有画面。
+截图默认就收进报告目录（`-NoScreenshots` 才不收）。跑之前脚本会先清空
+`Saved/Screenshots/WindowsEditor/` —— 编辑器不清它，不清就会把上一次的 PNG 当成这一次的图发布
+出去，那比没有图更糟，因为看的人看不出来。
+
+### 在测试里加一张图
+
+```cpp
+ADD_LATENT_AUTOMATION_COMMAND(UnLuaNovaTestSuite::FScreenshotLatentCommand(TEXT("Showcase_Binding")));
+```
+
+这个 latent 命令会**等 PNG 真正落盘**再往下走（截图是异步写的），并且有等待上限：`-NullRHI`
+下永远不会有 PNG，把整套用例挂死比少一张图严重得多。
+
+### 不经测试也要截图
+
+```powershell
+.\Tools\RunTests.ps1 -Map /Game/Tutorials/01_HelloWorld/HelloWorld `
+    -ExtraCommands "UnLuaNovaTest.Screenshot Showcase_Binding"
+```
+
+### 录视频
+
+`-Video` 让上面的 Showcase 用例在静态图之外再录一段**帧序列**
+（`Showcase_Binding_Clip_0001.png` …），脚本再用 ffmpeg 编码成
+`videos/<名字>.mp4`，报告里直接内嵌播放器：
+
+```powershell
+.\Tools\RunTests.ps1 -Filter UnLuaNova.Showcase -Video -Publish
+```
+
+ffmpeg 不在 PATH 上也没关系：帧会照常收进报告，报告会说明"只录到了帧序列"，不会假装录好了。
+想改长度就设 `UNLUANOVA_RECORD_FRAMES`（默认 60 帧）。
 
 ## 为什么不在 GitHub Actions 上跑
 

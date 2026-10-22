@@ -81,10 +81,13 @@ nav:
           - 常见问题 FAQ: CN/FAQ.md
   - English Docs:
       - EN/index.md
+      - Features: EN/Features.md
       - Programming Guide: EN/UnLuaNova_Programming_Guide.md
       - Luau Backend: EN/Luau.md
       - API Reference: EN/API.md
       - How To Implement Overriding: EN/How_To_Implement_Overriding.md
+      - Settings: EN/Settings.md
+      - Console Commands: EN/ConsoleCommand.md
       - License: EN/License.md
       - FAQ: EN/FAQ.md
 

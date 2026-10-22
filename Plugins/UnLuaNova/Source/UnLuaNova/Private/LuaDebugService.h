@@ -43,7 +43,7 @@ namespace UnLuaNova
     // Deliberately does NOT own a socket or a wire protocol - that belongs in the DAP
     // layer, which should talk to this class. Keeping the split means the VM-facing
     // behaviour can be verified on its own.
-    class FLuaDebugService
+    class UNLUANOVA_API FLuaDebugService
     {
     public:
         struct FBreakpoint

@@ -71,10 +71,6 @@ description: "运行时与编辑器全部设置项的含义，含 Lua 后端切�
 
 *注：重启编译后生效*
 
-### 启用Insights分析支持
-
-打开这个选项以获得在Insights的UE调用Lua覆写函数的分析支持。
-
 ### 启用UFunction调用参数持久化缓存
 
 为每个UFunction创建一个缓存块，每次进行UE和Lua交互调用时，重用这块内存，节省反复分配/释放内存的开销，默认启用。
@@ -84,14 +80,6 @@ description: "运行时与编辑器全部设置项的含义，含 Lua 后端切�
 ### 启用类型检查
 
 在每次Lua调用UE时进行参数类型检查，建议本地开发时启用，游戏测试/发布时关闭以获得更好的性能，默认开启。
-
-*注：重启编译后生效*
-
-### 启用RPC调用支持
-
-默认开启，关闭后会默认所有覆盖的函数调用为本地调用，并对Out参数预留缓存，以获得这类函数调用的少许性能提升。如果你的游戏使用了联机特性建议不要关闭这个选项。
-
-*已过时：这个选项将在未来版本中移除。*
 
 *注：重启编译后生效*
 
@@ -125,7 +113,13 @@ LuaBackend=Luau
 | 值 | 说明 |
 |---|---|
 | `Lua` | 官方 Lua（`github.com/lua/lua`），与上游 UnLua 行为一致。版本由子模块指针决定，不体现在名字里 |
-| `Luau` | Luau（`github.com/luau-lang/luau`）**默认**；提供渐进类型、原生沙盒、原生断点调试等能力 |
+| `Luau` | Luau（`github.com/luau-lang/luau`）；提供渐进类型、原生沙盒、原生断点调试等能力 |
+
+**没写这个键时的默认值是 `Luau`**（`UnLuaNova.Build.cs` 读不到键就用它）。
+本仓库 `Config/DefaultUnLuaNovaEditor.ini` 里当前写的是 `Lua`，因为最后一次提交前的全量测试
+跑完把配置还原成了 Lua；`Tools/RunTests.ps1` 每次跑完都会把 ini 恢复原样，所以这个值会跟着
+你本地最后一次跑的后端走，别把它当成"项目选了 Lua"。
+想固定成 Luau 就把这一行删掉，或者显式写 `LuaBackend=Luau`。
 
 两个后端**都以 git 子模块引入**，位于 `Plugins/UnLuaNova/Source/ThirdParty/`：
 

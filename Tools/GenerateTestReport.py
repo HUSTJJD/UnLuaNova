@@ -316,7 +316,52 @@ def render_crash(crash):
     return lines
 
 
-def render(tests, screenshots, image_prefix, generated, reports_dir, published=False, backend=None, crash=None):
+def collect_media(shot_dir, video_dir):
+    """Split what the run produced into stills, frame sequences and encoded clips.
+
+    A clip arrives as a burst of <name>_0001.png ... <name>_0060.png. Listing sixty copies of
+    the same scene as if they were sixty different pictures buries the stills, so they are
+    collapsed into one entry per clip; if ffmpeg encoded them there is a real video instead.
+    """
+    names = sorted(p.name for p in shot_dir.glob("*.png")) if shot_dir.is_dir() else []
+
+    sequences = {}
+    stills = []
+    for name in names:
+        m = re.match(r"^(.+)_(\d{4,})\.png$", name)
+        if m:
+            sequences.setdefault(m.group(1), []).append(name)
+        else:
+            stills.append(name)
+
+    clips = []
+    if video_dir.is_dir():
+        for p in sorted(video_dir.glob("*.mp4")):
+            clips.append({"name": p.stem, "file": p.name, "frames": len(sequences.get(p.stem, []))})
+
+    # A burst that was never encoded is still worth showing: the first frame, and how many
+    # there are, so the reader knows it is a recording and not a duplicate.
+    uncoded = [
+        {"name": key, "first": frames[0], "frames": len(frames)}
+        for key, frames in sorted(sequences.items())
+        if not any(c["name"] == key for c in clips)
+    ]
+
+    return stills, clips, uncoded
+
+
+def render(
+    tests,
+    screenshots,
+    image_prefix,
+    generated,
+    reports_dir,
+    published=False,
+    backend=None,
+    crash=None,
+    clips=None,
+    uncoded=None,
+):
     total = len(tests)
     failed = [t for t in tests if not t["passed"]]
     skipped = [t for t in tests if t["skipped"]]
@@ -429,6 +474,8 @@ def render(tests, screenshots, image_prefix, generated, reports_dir, published=F
             lines.append(f"| `{t['name']}` | {t['duration']:.3f}s |")
         lines.append("")
 
+    clips = clips or []
+    uncoded = uncoded or []
     if screenshots:
         lines.append("## 截图")
         lines.append("")
@@ -442,10 +489,39 @@ def render(tests, screenshots, image_prefix, generated, reports_dir, published=F
         lines.append("## 截图")
         lines.append("")
         lines.append(
-            "没有截图。渲染默认开着，加 `-Screenshots` 才会把 `Saved/Screenshots` 收进报告目录；"
-            "跑 `-NullRHI`（无头）时没有画面可截。"
+            "没有截图。截图由 `UnLuaNova.Showcase.*` 这几条用例产出（默认就会收进报告目录），"
+            "加 `-NoScreenshots` 或跑 `-NullRHI`（无头）时不会有画面。"
         )
         lines.append("")
+
+    if clips or uncoded:
+        lines.append("## 视频")
+        lines.append("")
+        for clip in clips:
+            title = clip["name"].replace("-", " ")
+            lines.append(f"### {title}")
+            lines.append("")
+            # Raw HTML: plain Markdown has no video syntax, and md_in_html is enabled for
+            # exactly this kind of embed.
+            lines.append(
+                f'<video controls muted loop playsinline width="640" src="{image_prefix}{clip["file"]}"></video>'
+            )
+            lines.append("")
+            frames = f"，{clip['frames']} 帧" if clip["frames"] else ""
+            lines.append(f"{frames}，由这些帧编码而成（`Tools/RunTests.ps1 -Video`）。")
+            lines.append("")
+        for seq in uncoded:
+            title = seq["name"].replace("-", " ")
+            lines.append(f"### {title}")
+            lines.append("")
+            lines.append(f"![{title}]({image_prefix}{seq['first']})")
+            lines.append("")
+            lines.append(
+                f"只录到了帧序列（{seq['frames']} 帧："
+                f"`{seq['name']}_0001.png` … `{seq['name']}_{seq['frames']:04d}.png`）——"
+                "编码需要 ffmpeg 在 PATH 上，没有它 `Tools/RunTests.ps1 -Video` 会保留原始帧。"
+            )
+            lines.append("")
 
     lines.append("---")
     lines.append("")
@@ -514,7 +590,8 @@ def main() -> None:
         )
 
     shot_dir = out_dir / "screenshots"
-    screenshots = sorted(p.name for p in shot_dir.glob("*.png")) if shot_dir.is_dir() else []
+    video_dir = out_dir / "videos"
+    screenshots, clips, uncoded = collect_media(shot_dir, video_dir)
 
     generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     total = len(tests)
@@ -523,7 +600,17 @@ def main() -> None:
     passed = total - failed - skipped
 
     (out_dir / "report.md").write_text(
-        render(tests, screenshots, "screenshots/", generated, reports_dir, backend=backend, crash=crash),
+        render(
+            tests,
+            screenshots,
+            "screenshots/",
+            generated,
+            reports_dir,
+            backend=backend,
+            crash=crash,
+            clips=clips,
+            uncoded=uncoded,
+        ),
         encoding="utf-8",
         newline="\n",
     )
@@ -537,6 +624,7 @@ def main() -> None:
         "skipped": skipped,
         "duration": round(sum(t["duration"] for t in tests if t["duration"] is not None), 3),
         "screenshots": len(screenshots),
+        "videos": len(clips),
         "crashed": crash is not None,
         "crash_test": crash["test"] if crash else None,
     }
@@ -554,10 +642,14 @@ def main() -> None:
         page_name = f"test-{tag}-report.md" if tag else "test-report.md"
         image_dir_name = f"tests-{tag}" if tag else "tests"
         images_dir = docs_dir / "Images" / image_dir_name
-        if screenshots:
+        # Everything the run produced, not just the stills: the frame sequences a clip is
+        # made of are images too, and the report links them when ffmpeg is unavailable.
+        if screenshots or clips or uncoded:
             images_dir.mkdir(parents=True, exist_ok=True)
-            for name in screenshots:
+            for name in screenshots + [f for seq in uncoded for f in [seq["first"]]]:
                 shutil.copy2(shot_dir / name, images_dir / name)
+            for clip in clips:
+                shutil.copy2(video_dir / clip["file"], images_dir / clip["file"])
         page_path = docs_dir / page_name
         page_path.write_text(
             strip_machine_paths(
@@ -570,6 +662,8 @@ def main() -> None:
                     published=True,
                     backend=backend,
                     crash=crash,
+                    clips=clips,
+                    uncoded=uncoded,
                 ),
                 repo_root,
             ),

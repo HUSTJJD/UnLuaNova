@@ -72,9 +72,16 @@
     a run that is not driven by a test, e.g.
     -ExtraCommands "UnLuaNovaTest.Screenshot Showcase_Binding".
 
-.PARAMETER Screenshots
-    Copy Saved/Screenshots into the report. Rendering is already on by default, so this only
-    controls whether the pictures are collected.
+.PARAMETER NoScreenshots
+    Do not collect the pictures the tests took. They are collected by default: the docs site
+    shows them (Docs/CN/Showcase.md and the gallery in each report), and a run that leaves
+    them behind is a run whose report has an empty gallery for no reason anybody can see
+    afterwards.
+
+.PARAMETER Video
+    Also record clips: the showcase tests capture a burst of frames when UNLUANOVA_RECORD_FRAMES
+    is set, and this encodes each burst into one .mp4 next to the report. Needs ffmpeg on PATH;
+    without it the frames are kept as-is and the report links the frame sequence instead.
 
 .PARAMETER NullRHI
     Run headless (-NullRHI). Faster, but it is not the same suite: Slate does not tick UMG
@@ -117,7 +124,8 @@ param(
     [string] $Map = "",
     [string] $OutputDir = "",
     [string] $ExtraCommands = "",
-    [switch] $Screenshots,
+    [switch] $NoScreenshots,
+    [switch] $Video,
     [switch] $NullRHI,
     [switch] $Publish,
     [switch] $NoReport,
@@ -353,6 +361,74 @@ function Show-CrashSummary {
     Write-Host ""
 }
 
+# --- screenshots and clips -----------------------------------------------------------
+# Screenshots go to the project's Saved/Screenshots, not next to the JSON the automation
+# framework exports, so they have to be pulled into the run directory for the report to be
+# self-contained. Two things make that more than a copy:
+#
+#   - The directory is not cleaned by the editor. A run that takes no picture at all would
+#     otherwise publish last week's PNGs as this run's gallery, which is worse than an empty
+#     one: nobody can tell the pictures are not from this run. So it is emptied first.
+#   - A clip is a frame sequence (Name_0001.png, Name_0002.png, ...) that only becomes a
+#     video once something encodes it. ffmpeg is not part of a UE checkout, so it is
+#     optional: without it the frames are still collected and the report says so.
+
+function Clear-StaleScreenshots {
+    $ShotDir = Join-Path $RepoRoot "Saved/Screenshots/WindowsEditor"
+    if (-not (Test-Path $ShotDir)) { return }
+    Get-ChildItem -Path $ShotDir -Filter "*.png" -File -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
+function Copy-Screenshots {
+    param([string] $Dest)
+
+    $ShotDir = Join-Path $RepoRoot "Saved/Screenshots/WindowsEditor"
+    $Files = @(Get-ChildItem -Path $ShotDir -Filter "*.png" -File -ErrorAction SilentlyContinue)
+    if ($Files.Count -eq 0) { return 0 }
+
+    New-Item -ItemType Directory -Path $Dest -Force | Out-Null
+    foreach ($F in $Files) { Copy-Item $F.FullName -Destination $Dest -Force -ErrorAction SilentlyContinue }
+    return $Files.Count
+}
+
+function Convert-FrameSequences {
+    param([string] $ShotDir, [string] $VideoDir)
+
+    # A clip is every run of <name>_NNNN.png that shares a <name>.
+    $Groups = @{}
+    foreach ($F in (Get-ChildItem -Path $ShotDir -Filter "*.png" -File -ErrorAction SilentlyContinue)) {
+        if ($F.BaseName -match "^(.*)_(\d{4,})$") { $Groups[$Matches[1]] += @($F) }
+    }
+    if ($Groups.Count -eq 0) { return @() }
+
+    $Ffmpeg = Get-Command ffmpeg -ErrorAction SilentlyContinue
+    if (-not $Ffmpeg) {
+        Write-Host "ffmpeg not on PATH - keeping the frame sequences instead of encoding them." -ForegroundColor Yellow
+        return @()
+    }
+
+    New-Item -ItemType Directory -Path $VideoDir -Force | Out-Null
+    $Made = @()
+    foreach ($Name in $Groups.Keys) {
+        $Frames = $Groups[$Name] | Sort-Object Name
+        $Out = Join-Path $VideoDir "$Name.mp4"
+        $Prefix = $Frames[0].BaseName -replace "_\d+$", ""
+        # -framerate: the frames were captured one per rendered frame, so any real frame rate
+        # is a guess; 30 is the honest one for a clip whose point is "it moves".
+        & $Ffmpeg.Source -y -loglevel error -framerate 30 `
+            -i (Join-Path $ShotDir ($Prefix + "_%04d.png")) `
+            -c:v libx264 -pix_fmt yuv420p -crf 23 $Out
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $Out)) {
+            $Made += $Out
+            Write-Host "Clip      : $([System.IO.Path]::GetFileName($Out)) ($($Frames.Count) frames)"
+        } else {
+            Write-Host "ffmpeg failed on '$Name' - its frames are kept." -ForegroundColor Yellow
+        }
+    }
+    return $Made
+}
+
 # --- the Lua backend is a build-time setting ------------------------------------------
 # Both backends export the same lua_* symbols, so exactly one of them is in a build and it
 # is picked by UnLuaNova.Build.cs reading LuaBackend out of this ini. Running both backends
@@ -465,6 +541,11 @@ Write-Host "Project      : $ProjectPath"
 Write-Host "Filter       : $Filter"
 Write-Host "Backend(s)   : $($Backends -join ', ')"
 Write-Host "Output       : $OutputDir"
+Write-Host "Media        : $(if ($NoScreenshots) { 'off' } else { 'screenshots' })$(if ($Video -and -not $NoScreenshots) { ' + clips' })"
+if ($NullRHI -and -not $NoScreenshots) {
+    # Not an error: the suite still runs, it just has nothing to photograph.
+    Write-Host "               -NullRHI: no viewport, so no picture will come out of this run." -ForegroundColor Yellow
+}
 
 if ($DryRun)
 {
@@ -551,6 +632,14 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         $RunArgs = @(Get-EditorArgs -ReportDir $RunDir)
         Write-Host "Cmd    : $EditorCmd $($RunArgs -join ' ')"
 
+        # The editor does not empty Saved/Screenshots, so a run that takes no picture would
+        # publish the previous run's PNGs as its own.
+        if (-not $NoScreenshots) { Clear-StaleScreenshots }
+
+        # Read by the showcase tests: they only spend time on frame sequences when the run
+        # is going to use them.
+        if ($Video) { $env:UNLUANOVA_RECORD_FRAMES = "60" } else { $env:UNLUANOVA_RECORD_FRAMES = $null }
+
         $sw = [System.Diagnostics.Stopwatch]::StartNew()
         & $EditorCmd @RunArgs
         $EditorExit = $LASTEXITCODE
@@ -561,12 +650,18 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
 
         # Screenshots land in the project's Saved dir, not next to the JSON; pull them in so
         # the report is self-contained.
-        if ($Screenshots) {
-            $ShotDir = Join-Path $RepoRoot "Saved/Screenshots/WindowsEditor"
-            if (Test-Path $ShotDir) {
-                $Dest = Join-Path $RunDir "screenshots"
-                New-Item -ItemType Directory -Path $Dest -Force | Out-Null
-                Copy-Item (Join-Path $ShotDir "*.png") -Destination $Dest -Force -ErrorAction SilentlyContinue
+        if (-not $NoScreenshots) {
+            $Dest = Join-Path $RunDir "screenshots"
+            $Copied = Copy-Screenshots -Dest $Dest
+            if ($Copied -gt 0) {
+                Write-Host "Media     : $Copied screenshot(s) -> $Dest"
+            } else {
+                Write-Host "Media     : no screenshots were taken." -ForegroundColor Yellow
+            }
+
+            if ($Video) {
+                $Clips = Convert-FrameSequences -ShotDir $Dest -VideoDir (Join-Path $RunDir "videos")
+                if ($Clips.Count -gt 0) { Write-Host "Media     : $($Clips.Count) clip(s)" }
             }
         }
 

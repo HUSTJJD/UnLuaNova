@@ -29,7 +29,7 @@ namespace UnLuaNova
      * Off by default (see bEnabled) because the hooks cost a couple of atomics on every
      * single allocation. Enable it with 'lua.memstats on'.
      */
-    class FLuaMemoryStats
+    class UNLUANOVA_API FLuaMemoryStats
     {
     public:
         static FLuaMemoryStats& Get();
