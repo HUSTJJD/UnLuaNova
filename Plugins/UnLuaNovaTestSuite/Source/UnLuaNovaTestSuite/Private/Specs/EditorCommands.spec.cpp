@@ -120,7 +120,7 @@ void FEditorCommandsSpec::Define()
             // Loading by name rather than linking: the editor module's headers are private
             // and its command class is not exported, and this test lives in a module that
             // must also build for game targets.
-            TEST_TRUE(FModuleManager::Get().LoadModulePtr(TEXT("UnLuaNovaEditor")) != nullptr);
+            TEST_TRUE(FModuleManager::Get().LoadModulePtr<IModuleInterface>(TEXT("UnLuaNovaEditor")) != nullptr);
 
             const TSharedPtr<FBindingContext> Context = FInputBindingManager::Get().GetContextByName(TEXT("UnLuaNovaEditor"));
             TEST_TRUE(Context.IsValid());

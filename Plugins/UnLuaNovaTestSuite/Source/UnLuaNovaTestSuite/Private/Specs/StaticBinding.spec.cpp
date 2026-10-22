@@ -83,6 +83,8 @@ void FStaticBindingSpec::Define()
             // Going through the UStruct overload first is what makes the name lookup work.
             const FStaticTypeBinding* ByStruct = Registry.Find(UUnLuaNovaTestStub::StaticClass());
             TEST_TRUE(ByStruct != nullptr);
+            if (!ByStruct)
+                return;
             TEST_TRUE(ByStruct->bResolved);
 
             const FStaticTypeBinding* ByName = Registry.Find(FName(TEXT("UUnLuaNovaTestStub")));
@@ -106,9 +108,13 @@ void FStaticBindingSpec::Define()
             auto& Registry = FStaticBindingRegistry::Get();
             const FStaticTypeBinding* Type = Registry.Find(UUnLuaNovaTestStub::StaticClass());
             TEST_TRUE(Type != nullptr);
+            if (!Type)
+                return;
 
             const FStaticPropBinding* Prop = Registry.FindProp(Type, TEXT("Counter"));
             TEST_TRUE(Prop != nullptr);
+            if (!Prop)
+                return;
 
             const FProperty* Expected = UUnLuaNovaTestStub::StaticClass()->FindPropertyByName(TEXT("Counter"));
             TEST_TRUE(Prop->Property == Expected);
@@ -121,9 +127,13 @@ void FStaticBindingSpec::Define()
             auto& Registry = FStaticBindingRegistry::Get();
             const FStaticTypeBinding* Type = Registry.Find(UUnLuaNovaTestStub::StaticClass());
             TEST_TRUE(Type != nullptr);
+            if (!Type)
+                return;
 
             const FStaticFuncBinding* Func = Registry.FindFunc(Type, TEXT("ProbeWithStaticBinding"));
             TEST_TRUE(Func != nullptr);
+            if (!Func)
+                return;
 
             UFunction* Expected = UUnLuaNovaTestStub::StaticClass()->FindFunctionByName(TEXT("ProbeWithStaticBinding"));
             TEST_TRUE(Func->Function == Expected);
@@ -131,7 +141,7 @@ void FStaticBindingSpec::Define()
 
             // These three are what the call path branches on (see FunctionDesc::CallUE).
             TEST_FALSE(Func->Flags.bIsNet);
-            TEST_FALSE(Func->Flags.bIsLatent);
+            TEST_FALSE(Func->Flags.bLatent);
             TEST_FALSE(Func->Flags.bInterface);
         });
 
@@ -140,6 +150,9 @@ void FStaticBindingSpec::Define()
             auto& Registry = FStaticBindingRegistry::Get();
             const FStaticTypeBinding* Type = Registry.Find(UUnLuaNovaTestStub::StaticClass());
             TEST_TRUE(Type != nullptr);
+            if (!Type)
+                return;
+
             TEST_TRUE(Registry.FindProp(Type, TEXT("NoSuchProperty")) == nullptr);
             TEST_TRUE(Registry.FindFunc(Type, TEXT("NoSuchFunction")) == nullptr);
         });

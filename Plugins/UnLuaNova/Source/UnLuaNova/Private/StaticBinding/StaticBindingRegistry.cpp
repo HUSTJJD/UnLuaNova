@@ -49,7 +49,7 @@ EStaticPropKind FStaticBindingRegistry::GetPropertyKind(const FProperty* Propert
 // be stored in StructToType. It is still looked up so that a known enum does not get
 // reported as unresolved; the caller casts and leaves enum binding to the reflective
 // path.
-static UField* ResolveFieldByName(const FString& Name)
+static UField* FindFieldInMemory(const FString& Name)
 {
 	if (UClass* Class = FindFirstObject<UClass>(*Name))
 		return Class;
@@ -58,12 +58,47 @@ static UField* ResolveFieldByName(const FString& Name)
 	if (UEnum* Enum = FindFirstObject<UEnum>(*Name))
 		return Enum;
 
+	return nullptr;
+}
+
+static UField* LoadFieldByName(const FString& Name)
+{
 	if (UClass* Class = LoadObject<UClass>(nullptr, *Name))
 		return Class;
 	if (UScriptStruct* Struct = LoadObject<UScriptStruct>(nullptr, *Name))
 		return Struct;
 	if (UEnum* Enum = LoadObject<UEnum>(nullptr, *Name))
 		return Enum;
+
+	return nullptr;
+}
+
+// TypeName is a metatable name, and metatable names carry the C++ prefix - UObject,
+// AActor, FVector (see LowLevel::GetMetatableName) - while the UObject system stores the
+// bare name. Generated tables already emit the bare name; hand-written ones use whatever
+// Lua calls the type. The name as written is tried first so that a type which genuinely
+// starts with U/A/F (UnLuaNovaTestStub, ...) is not shadowed by its stripped form.
+// Enums keep their 'E' - same rule as FClassRegistry::RegisterReflectedType.
+static UField* ResolveFieldByName(const FString& Name)
+{
+	FString Candidates[2] = {Name, FString()};
+	int32 NumCandidates = 1;
+
+	if (Name.Len() > 1 && (Name[0] == TEXT('U') || Name[0] == TEXT('A') || Name[0] == TEXT('F')))
+	{
+		Candidates[1] = Name.Mid(1);
+		NumCandidates = 2;
+	}
+
+	// In-memory lookups are silent; loading warns and can pull in a package, so it only
+	// runs once every candidate has been tried against what is already resident.
+	for (int32 i = 0; i < NumCandidates; ++i)
+		if (UField* Field = FindFieldInMemory(Candidates[i]))
+			return Field;
+
+	for (int32 i = 0; i < NumCandidates; ++i)
+		if (UField* Field = LoadFieldByName(Candidates[i]))
+			return Field;
 
 	return nullptr;
 }

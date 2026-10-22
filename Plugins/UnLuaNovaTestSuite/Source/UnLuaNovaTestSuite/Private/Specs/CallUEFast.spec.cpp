@@ -73,11 +73,16 @@ void FCallUEFastSpec::Define()
 
         const FStaticTypeBinding* Type = FStaticBindingRegistry::Get().Find(UUnLuaNovaTestStub::StaticClass());
         TEST_TRUE(Type != nullptr);
+        if (!Type)
+            return;
 
         const FStaticFuncBinding* Func = FStaticBindingRegistry::Get().FindFunc(Type, TEXT("ProbeWithStaticBinding"));
         TEST_TRUE(Func != nullptr);
+        if (!Func)
+            return;
+
         TEST_FALSE(Func->Flags.bIsNet);
-        TEST_FALSE(Func->Flags.bIsLatent);
+        TEST_FALSE(Func->Flags.bLatent);
         TEST_FALSE(Func->Flags.bInterface);
         TEST_TRUE(Func->Function != nullptr);
     });
