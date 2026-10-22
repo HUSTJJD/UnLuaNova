@@ -80,9 +80,13 @@ public class UnLuaNovaTestSuite : ModuleRules
 			// UnrealEd: FKismetEditorUtilities / UEditorLoadingAndSavingUtils, used by the
 			// asset repair test (UnLuaNova.Editor.RepairTestAssets) to compile and resave
 			// the test content. AssetRegistry is named explicitly rather than inherited
-			// from UnrealEd because that test calls IAssetRegistry directly.
+			// from UnrealEd because that test calls IAssetRegistry directly, and
+			// BlueprintGraph because the repair reaches into the graphs themselves
+			// (K2Node_MakeStruct, UEdGraphSchema_K2) - UnrealEd's dependency on it is not
+			// one we inherit.
 			PrivateDependencyModuleNames.Add("UnrealEd");
 			PrivateDependencyModuleNames.Add("AssetRegistry");
+			PrivateDependencyModuleNames.Add("BlueprintGraph");
 		}
 
 		DynamicallyLoadedModuleNames.AddRange(

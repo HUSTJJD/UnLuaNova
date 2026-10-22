@@ -44,14 +44,23 @@
 //   - The three Benchmark Blueprints. Performance fixtures no automation test loads; the
 //     resave took variables and function graphs out of them that cannot be reconstructed
 //     from what is left, so they can only be rebuilt by hand in the editor.
-//   - BP_Issue634Actor. Its MakeStruct node names its struct through the pre-rename module,
-//     so the reference resolves to nothing. Retyping it is worse than leaving it: the
-//     Blueprint then compiles, and the rebuilt function crashes the editor the moment the
-//     level calls it - which takes the whole test run down with it. Better one failing test
-//     than no results at all.
+//   - The Benchmark level, which exists only to hold the three above.
 //
 // They are named rather than detected, because "does not compile" is not a good enough
 // test: it is exactly the state this test exists to get assets out of.
+//
+// Two more kinds of damage are deliberately left alone, for the opposite reason - they
+// belong to assets nothing loads unless this test asks for it, and asking for them is what
+// puts their compiler errors in *this* test's log:
+//
+//   - Levels (Issue500, Issue634) are not loaded by the scan below. Loading one compiles
+//     its level Blueprint, and both of those have nodes the rename left pointing at types
+//     that no longer exist - a Blueprint function library reference in Issue500, and in
+//     Issue634 the actor this test does repair, whose level calls it. Nothing in the scan
+//     needs a World: the levels it writes to are loaded by name further down.
+//   - Issue494 has no test at all - no .cpp, no Lua module - so nothing loads its level
+//     either, and its level Blueprint (a SpawnActor node with no class, an interface call
+//     whose cast lost its type) is left as it is.
 //
 // It is an automation test rather than a commandlet because it then runs through the
 // harness that is already wired up (Tools/RunTests.ps1) and reports what it did and what is
@@ -70,8 +79,10 @@
 
 #include "UnLuaNovaTestHelpers.h" // FUnLuaNovaTestTableRow
 #include "Tests/Issue583Test.h"   // FIssue583Row / FIssue583Record
+#include "Tests/Issue634Test.h"   // FIssue634Struct
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetRegistry/AssetData.h"
+#include "EdGraphSchema_K2.h"
 #include "Engine/Blueprint.h"
 #include "Engine/DataTable.h"
 #include "Components/StaticMeshComponent.h"
@@ -81,6 +92,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "FileHelpers.h"
+#include "K2Node_MakeStruct.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Misc/PackageName.h"
@@ -122,7 +134,6 @@ namespace
         TEXT("/UnLuaNovaTestSuite/Tests/Benchmark/BP_BlueprintBenchmark"),
         TEXT("/UnLuaNovaTestSuite/Tests/Benchmark/BP_BlueprintToBlueprintBenchmark"),
         TEXT("/UnLuaNovaTestSuite/Tests/Benchmark/BP_NativizedBlueprintBenchmark"),
-        TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue634/BP_Issue634Actor"),
     };
 
     static bool IsUnrepairable(const FString& PackagePath)
@@ -156,6 +167,12 @@ namespace
 
     // The Benchmark level is not in here: it is one of the assets past repair (see below),
     // and loading it would compile the three broken Benchmark Blueprints placed in it.
+    //
+    // Issue494 is not in here either, although it lost its actor the same way: there is no
+    // Issue494 test (no .cpp, no Lua module - only the interface its level Blueprint calls
+    // into), so nothing needs the actor back, while loading the level compiles a level
+    // Blueprint with a SpawnActor node that has no class and a cast that lost its type,
+    // and those errors land on this test.
     const FActorRestore GActorRestores[] = {
         {TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue286/Issue286.Issue286"),
          TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue286/BP_UnLuaNovaTestActor_Issue286.BP_UnLuaTestActor_Issue286_C")},
@@ -169,8 +186,6 @@ namespace
          TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue443/BP_UnLuaNovaTestActor_Issue443.BP_UnLuaTestActor_Issue443_C")},
         {TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue453/Issue453.Issue453"),
          TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue453/BP_UnLuaNovaTestActor_Issue453.BP_UnLuaTestActor_Issue453_C")},
-        {TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue494/Issue494.Issue494"),
-         TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue494/BP_UnLuaNovaTestActor_Issue494.BP_UnLuaTestActor_Issue494_C")},
     };
 
     // --- 2c. Components the resave dropped as well ---------------------------------------
@@ -188,6 +203,28 @@ namespace
     const FComponentRestore GComponentRestores[] = {
         {TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue314/BP_UnLuaNovaTestActor_Issue314_Child"),
          TEXT("Cube"), TEXT("/Engine/BasicShapes/Cube.Cube")},
+    };
+
+    // --- 2d. Struct types the rename took out of the graphs -------------------------------
+    // A K2Node_MakeStruct names its struct through the module it was compiled against. The
+    // struct is a C++ one, so renaming the module moved it: the reference in the asset
+    // resolves to nothing, the node has no output pin, the function result pin fed by it has
+    // no type, and the compiler answers "No Struct in Make <unknown struct>" - which is
+    // enough for every test that loads the asset to be marked failed.
+    //
+    // The struct itself is still in the test module, so it can be put back: on the node
+    // (UK2Node_StructOperation::StructType), and on every pin that says "struct" without
+    // saying which one, which is what the function result pin looks like once the node
+    // feeding it lost its type.
+    struct FStructRepair
+    {
+        const TCHAR* PackagePath;
+        UScriptStruct* (*Struct)();
+    };
+
+    const FStructRepair GStructRepairs[] = {
+        {TEXT("/UnLuaNovaTestSuite/Tests/Regression/Issue634/BP_Issue634Actor"),
+         &FIssue634Struct::StaticStruct},
     };
 
     // --- 3. DataTables that lost their RowStruct ---------------------------------------
@@ -338,6 +375,103 @@ namespace
         return NumRestored;
     }
 
+    int32 RestoreMissingStructs(const TMap<FString, UBlueprint*>& BlueprintsByPackage,
+        TArray<FString>& Warnings, TArray<FString>& Diagnostics)
+    {
+        int32 NumRepaired = 0;
+
+        for (const FStructRepair& Repair : GStructRepairs)
+        {
+            UBlueprint* const* Found = BlueprintsByPackage.Find(Repair.PackagePath);
+            UBlueprint* Blueprint = Found ? *Found : nullptr;
+            if (!Blueprint)
+            {
+                Warnings.Add(FString::Printf(TEXT("%s is not a Blueprint - struct not restored."), Repair.PackagePath));
+                continue;
+            }
+
+            UScriptStruct* const Struct = Repair.Struct();
+            TArray<UEdGraph*> Graphs;
+            Blueprint->GetAllGraphs(Graphs);
+
+            int32 NumNodes = 0;
+            int32 NumPins = 0;
+            for (UEdGraph* Graph : Graphs)
+            {
+                if (!Graph)
+                {
+                    continue;
+                }
+
+                for (UEdGraphNode* Node : Graph->Nodes)
+                {
+                    if (!Node)
+                    {
+                        continue;
+                    }
+
+                    if (UK2Node_StructOperation* StructNode = Cast<UK2Node_StructOperation>(Node))
+                    {
+                        if (!StructNode->StructType)
+                        {
+                            StructNode->StructType = Struct;
+                            ++NumNodes;
+                        }
+                    }
+
+                    for (UEdGraphPin* Pin : Node->Pins)
+                    {
+                        // "struct" with no struct: the pin kept its category and lost the
+                        // type it was carrying, which is what a pin fed by a struct node
+                        // that lost its struct looks like.
+                        if (Pin && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Struct
+                            && !Pin->PinType.PinSubCategoryObject.IsValid())
+                        {
+                            Pin->PinType.PinSubCategoryObject = Struct;
+                            ++NumPins;
+                        }
+                    }
+                }
+            }
+
+            if (NumNodes == 0 && NumPins == 0)
+            {
+                continue; // already right, or never had a struct to lose
+            }
+
+            // The pins have to be rebuilt from the struct: a MakeStruct node with no struct
+            // has an empty pin list, so retyping it is only half the repair - the member
+            // pins come back when the node is reconstructed. Links survive it, because the
+            // node recognises its own pins by name (DoPinsMatchForReconstruction).
+            for (UEdGraph* Graph : Graphs)
+            {
+                if (!Graph)
+                {
+                    continue;
+                }
+
+                for (UEdGraphNode* Node : Graph->Nodes)
+                {
+                    if (UK2Node_StructOperation* StructNode = Cast<UK2Node_StructOperation>(Node))
+                    {
+                        if (StructNode->StructType == Struct)
+                        {
+                            StructNode->ReconstructNode();
+                        }
+                    }
+                }
+            }
+
+            FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+            ++NumRepaired;
+
+            Diagnostics.Add(FString::Printf(TEXT("%s: re-typed %d struct node(s) and %d pin(s) to %s"),
+                *Blueprint->GetName(), NumNodes, NumPins, *Struct->GetName()));
+        }
+
+        return NumRepaired;
+    }
+
     int32 RestoreMissingActors(TArray<UPackage*>& DirtyPackages, TArray<FString>& Warnings)
     {
         int32 NumRestored = 0;
@@ -444,6 +578,16 @@ bool FUnLuaNovaRepairTestAssets::RunTest(const FString& Parameters)
             continue;
         }
 
+        // Worlds are left unloaded: loading one compiles its level Blueprint, and two of
+        // the test levels have graphs the rename left pointing at types that are gone. That
+        // is their business - no test of theirs is running - except that the compiler says
+        // so at Error verbosity, and an Error logged while this test runs fails it. Nothing
+        // here needs a World: the levels it puts actors back into are loaded by name below.
+        if (Asset.AssetClassPath == UWorld::StaticClass()->GetClassPathName())
+        {
+            continue;
+        }
+
         if (UBlueprint* Blueprint = Cast<UBlueprint>(Asset.GetAsset()))
         {
             Blueprints.Add(Blueprint);
@@ -489,6 +633,10 @@ bool FUnLuaNovaRepairTestAssets::RunTest(const FString& Parameters)
     }
 
     const int32 NumComponentsRestored = RestoreMissingComponents(BlueprintsByPackage, Warnings, Diagnostics);
+
+    // Before compiling: a struct node without a struct cannot compile, and it takes the pin
+    // it feeds - and any pin it is linked to - down with it.
+    const int32 NumStructsRestored = RestoreMissingStructs(BlueprintsByPackage, Warnings, Diagnostics);
 
     // --- 2. compile every Blueprint in the test content --------------------------------
     // Two passes: a Blueprint that calls a function defined in another one fails until
@@ -562,9 +710,9 @@ bool FUnLuaNovaRepairTestAssets::RunTest(const FString& Parameters)
     }
 
     AddInfo(FString::Printf(
-        TEXT("Repaired: %d parent class(es), %d DataTable(s), %d interface graph(s), %d component(s), %d actor(s). Compiled %d of %d Blueprint(s), skipped %d past repair; saved %d package(s)."),
+        TEXT("Repaired: %d parent class(es), %d DataTable(s), %d interface graph(s), %d component(s), %d struct type(s), %d actor(s). Compiled %d of %d Blueprint(s), skipped %d past repair; saved %d package(s)."),
         NumReparented, NumTablesRepaired, NumInterfaceGraphsRelinked,
-        NumComponentsRestored, NumActorsRestored, NumCompiled, Blueprints.Num(), Skipped.Num(),
+        NumComponentsRestored, NumStructsRestored, NumActorsRestored, NumCompiled, Blueprints.Num(), Skipped.Num(),
         DirtyPackages.Num()));
 
     for (const FString& Path : StillBroken)
