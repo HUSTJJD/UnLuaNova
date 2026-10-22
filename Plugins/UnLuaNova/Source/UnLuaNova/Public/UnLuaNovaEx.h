@@ -203,6 +203,17 @@ namespace UnLuaNova
             // make sure the meta table is on the top of the stack
             lua_pushstring(L, TCHAR_TO_UTF8(*Name));
             const auto Userdata = NewSmartPointer(L, sizeof(TSharedPtr<FExportedProperty>), "TSharedPtr");
+            if (!Userdata)
+            {
+                // NewSmartPointer() answers null when the "TSharedPtr" metatable is missing
+                // from the registry. Placement-new into it is an access violation, and this
+                // runs straight from C++ during startup - so report and skip the field
+                // instead of taking the process down. The failed lookup leaves its userdata
+                // on the stack, hence the two pops.
+                UE_LOG(LogUnLuaNova, Error, TEXT("FExportedProperty::Register: cannot push '%s' - the TSharedPtr metatable is missing."), *Name);
+                lua_pop(L, 2);
+                return;
+            }
             new(Userdata) TSharedPtr<FExportedProperty>(this->AsShared());
             lua_rawset(L, -3);
         }

@@ -21,26 +21,53 @@ namespace UnLuaNova
 {
     int32 FDeadLoopCheck::Timeout = 0;
 
+    // The one polling thread, shared by every environment. See the note on FDeadLoopCheck:
+    // a thread per FLuaEnv is what exhausted the engine's TLS thread pool and hung the
+    // editor mid-suite.
+    static TUniquePtr<FDeadLoopCheck::FRunner> GDeadLoopRunner;
+
+    FDeadLoopCheck::FRunner* FDeadLoopCheck::FindRunner()
+    {
+        return GDeadLoopRunner.Get();
+    }
+
+    FDeadLoopCheck::FRunner* FDeadLoopCheck::GetRunner()
+    {
+        if (Timeout <= 0)
+            return nullptr; // watchdog off: no thread, and no guard to arm either
+
+        if (!GDeadLoopRunner)
+            GDeadLoopRunner = MakeUnique<FRunner>();
+
+        return GDeadLoopRunner.Get();
+    }
+
+    void FDeadLoopCheck::Shutdown()
+    {
+        if (!GDeadLoopRunner)
+            return;
+
+        GDeadLoopRunner->Shutdown();
+        GDeadLoopRunner.Reset();
+    }
+
     FDeadLoopCheck::FDeadLoopCheck(FLuaEnv* Env)
         : Env(Env)
     {
-        Runner = new FRunner();
     }
 
     FDeadLoopCheck::~FDeadLoopCheck()
     {
-        // Nothing outside this object ever stopped the runner, so ~FLuaEnv deleting us
-        // used to leave the thread running with a dangling Env. Join it here instead.
-        if (Runner)
-        {
-            Runner->Shutdown();
-            Runner = nullptr;
-        }
+        // Nothing to join: the runner belongs to the process, not to this environment.
+        // What does have to go is a timeout armed for this environment - the shared runner
+        // outlives it, and would otherwise call SetTimeout() on a destroyed FLuaEnv.
+        if (const auto Runner = FindRunner())
+            Runner->ClearPending(this);
     }
 
     TUniquePtr<FDeadLoopCheck::FGuard> FDeadLoopCheck::MakeGuard()
     {
-        if (Timeout <= 0)
+        if (!GetRunner())
             return TUniquePtr<FGuard>();
         return MakeUnique<FGuard>(this);
     }
@@ -66,12 +93,10 @@ namespace UnLuaNova
             if (TimeoutCounter.GetValue() < Timeout)
                 continue;
 
-            const auto Guard = TimeoutGuard.load();
-            if (Guard)
-            {
-                TimeoutGuard.store(nullptr);
+            // Take the guard before firing it, so a second poll cannot fire it again while
+            // the hook is being installed.
+            if (const auto Guard = TimeoutGuard.exchange(nullptr))
                 Guard->SetTimeout();
-            }
         }
         return 0;
     }
@@ -80,11 +105,6 @@ namespace UnLuaNova
     {
         bRunning = false;
         TimeoutGuard.store(nullptr);
-    }
-
-    void FDeadLoopCheck::FRunner::Exit()
-    {
-        delete this;
     }
 
     void FDeadLoopCheck::FRunner::GuardEnter(FGuard* Guard)
@@ -100,6 +120,13 @@ namespace UnLuaNova
         GuardCounter.Decrement();
     }
 
+    void FDeadLoopCheck::FRunner::ClearPending(const FDeadLoopCheck* Owner)
+    {
+        auto Guard = TimeoutGuard.load();
+        if (Guard && Guard->GetOwner() == Owner)
+            TimeoutGuard.compare_exchange_strong(Guard, nullptr);
+    }
+
     void FDeadLoopCheck::FRunner::Shutdown()
     {
         Stop();
@@ -111,18 +138,21 @@ namespace UnLuaNova
         delete Thread;
         Thread = nullptr;
 
-        // Run() has returned by now, and Exit() deletes the runner on the way out.
+        // Run() has returned by now, so the runner is idle and safe to delete.
     }
 
     FDeadLoopCheck::FGuard::FGuard(FDeadLoopCheck* Owner)
         : Owner(Owner)
     {
-        Owner->Runner->GuardEnter(this);
+        Owner->GetRunner()->GuardEnter(this);
     }
 
     FDeadLoopCheck::FGuard::~FGuard()
     {
-        Owner->Runner->GuardLeave();
+        // FindRunner, not GetRunner: a guard being destroyed must not start the thread back
+        // up after Shutdown() joined it.
+        if (const auto Runner = Owner->FindRunner())
+            Runner->GuardLeave();
     }
 
     void FDeadLoopCheck::FGuard::SetTimeout()

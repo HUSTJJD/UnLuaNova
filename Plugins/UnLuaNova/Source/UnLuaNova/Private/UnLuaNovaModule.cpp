@@ -27,6 +27,7 @@
 #include "UnLuaNovaModule.h"
 #include "DefaultParamCollection.h"
 #include "GameDelegates.h"
+#include "LuaDeadLoopCheck.h"
 #include "LuaEnvLocator.h"
 #include "LuaOverrides.h"
 #include "UnLuaNovaDebugBase.h"
@@ -101,6 +102,11 @@ namespace UnLuaNova
 
             UnregisterSettings();
             SetActive(false);
+
+            // Last: the environments are gone now, so nothing can arm a guard any more and
+            // the watchdog thread can be joined. It is a process-wide thread, so this is
+            // the only place that shuts it down.
+            FDeadLoopCheck::Shutdown();
         }
 
         virtual bool IsActive() override

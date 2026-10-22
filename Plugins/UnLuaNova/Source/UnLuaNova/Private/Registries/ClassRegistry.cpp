@@ -124,15 +124,25 @@ namespace UnLuaNova
                 // unregister invalid metatable
                 Unregister(Ret, true);
             }
-            else if (Ret)
+            else
             {
+                // An existing metatable is the answer whether or not a descriptor stands
+                // behind it. Not every metatable in the registry is a reflected type:
+                // FObjectRegistry registers plain ones - "TSharedPtr" notably - for types
+                // that have no UClass/UStruct/UEnum at all, and TrySetMetatable() only ever
+                // asks for the metatable.
+                //
+                // Falling through for that case instead would resolve the name as a
+                // UClass/UStruct/UEnum, fail, and return false - which NewUserdataWithPadding()
+                // turns into a null userdata that callers placement-new into unchecked
+                // (UnLuaNovaEx.h), i.e. an access violation rather than a Lua error.
+                //
+                // OutClassDesc stays null then, so a caller that needs a descriptor has to
+                // check it - FClassRegistry::Register()'s callers do.
                 if (OutClassDesc)
                     *OutClassDesc = Ret;
                 return true;
             }
-            // else: a metatable exists with no descriptor behind it. Falling through to
-            // re-register is what keeps OutClassDesc non-null on every true return -
-            // callers such as FClassRegistry::Register() dereference it without checking.
         }
         lua_pop(L, 1);
 

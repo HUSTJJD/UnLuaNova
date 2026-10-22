@@ -79,10 +79,18 @@
     afterwards.
 
 .PARAMETER NoVideo
-    Skip recording. Recording is on by default: the showcase tests capture a burst of frames
-    and the report generator encodes each burst into one .mp4. No system-wide ffmpeg is
-    needed - it comes from the pip package in Tools/requirements.txt - and a burst that cannot
-    be encoded fails the run instead of quietly leaving a pile of PNGs.
+    Skip recording entirely - both the whole-run screen recording and the showcase clips.
+    Recording is on by default, and it is two different things: the run records the editor
+    window from start to finish (see -NoSessionVideo), and the showcase tests additionally
+    capture a burst of frames that the report generator encodes into one .mp4 each. No
+    system-wide ffmpeg is needed - it comes from the pip package in Tools/requirements.txt -
+    and a burst that cannot be encoded fails the run instead of quietly leaving a pile of PNGs.
+
+.PARAMETER NoSessionVideo
+    Skip only the whole-run screen recording and keep the showcase clips. The showcase clips
+    are recorded by the tests themselves, so they stop where the showcase tests stop: a hang
+    in Issue430, a crash in a spec, the 40 seconds of editor startup - none of it is in any
+    clip. The session recording is what covers the run end to end.
 
 .PARAMETER NullRHI
     Run headless (-NullRHI). Faster, but it is not the same suite: Slate does not tick UMG
@@ -146,6 +154,10 @@ param(
     [string] $ExtraCommands = "",
     [switch] $NoScreenshots,
     [switch] $NoVideo,
+    # 只关掉"整场录屏"，保留 showcase 剪辑：剪辑是用例自己录的，卡死/崩溃/启动那几十秒都不在里面。
+    [switch] $NoSessionVideo,
+    # 录屏帧率。整场录屏动辄几分钟，15fps 足够看清"卡在哪一帧"，文件也只有一半大。
+    [int] $SessionFps = 15,
     [switch] $NullRHI,
     [switch] $Sound,
     [switch] $Publish,
@@ -431,6 +443,139 @@ function Clear-StaleScreenshots {
         Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
+# --- whole-run screen recording ---------------------------------------------------------
+# The showcase clips are recorded by the tests themselves, so they cover exactly the showcase
+# tests and nothing else: not the 40 seconds of editor startup, not the PIE teardown between
+# two regression tests, and above all not a hang - a run that freezes produces no clip at all,
+# which is the one run everybody wants to watch afterwards.
+#
+# So the run records the editor window end to end: the recorder starts with the editor and is
+# stopped when the editor exits, and the .mp4 lands in <RunDir>/videos/session.mp4, where the
+# report generator already looks for video.
+
+function Resolve-FfmpegExe {
+    $cmd = Get-Command ffmpeg -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+
+    # Same source the report generator uses for its clips, so a machine that can produce a
+    # report can record the run - no system-wide install, nothing on PATH.
+    try {
+        $out = & python -c "import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())" 2>$null
+        if ($LASTEXITCODE -eq 0 -and $out) {
+            $exe = ($out | Select-Object -Last 1).Trim()
+            if ($exe -and (Test-Path -LiteralPath $exe)) { return $exe }
+        }
+    } catch { }
+    return $null
+}
+
+function Wait-EditorWindow {
+    param([string] $ProcessName, [int] $TimeoutSeconds = 90)
+
+    # The window does not exist the moment the process does: the editor spends its first
+    # seconds loading, and gdigrab cannot capture a title that is not there yet. Wait for it
+    # rather than recording forty seconds of desktop.
+    $Deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $Deadline) {
+        $Proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+            Where-Object { $_.MainWindowTitle } | Select-Object -First 1
+        if ($Proc) { return $Proc.MainWindowTitle }
+        Start-Sleep -Milliseconds 500
+    }
+    return $null
+}
+
+function Start-SessionRecording {
+    param(
+        [Parameter(Mandatory)] [string] $OutFile,
+        [Parameter(Mandatory)] [string] $ProcessName,
+        [int] $Fps = 15
+    )
+
+    $Ffmpeg = Resolve-FfmpegExe
+    if (-not $Ffmpeg) {
+        Write-Host "Record    : skipped - 没找到 ffmpeg（pip install -r Tools/requirements.txt，或放进 PATH）" -ForegroundColor Yellow
+        return $null
+    }
+
+    $OutDir = Split-Path -Parent $OutFile
+    if ($OutDir) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
+
+    $Title = Wait-EditorWindow -ProcessName $ProcessName
+    if ($Title) {
+        $Source = "title=$Title"
+        $What = "编辑器窗口「$Title」"
+    } else {
+        # Nothing to attach to after 90s - a headless run, or a window that never came up.
+        # Record the screen instead: a whole run with no picture at all is worse than one that
+        # has the desktop in it.
+        $Source = "desktop"
+        $What = "整个屏幕（90 秒内没等到编辑器窗口，可能这次是无头运行）"
+    }
+
+    # Two things the scale filter buys: it caps the width, because the desktop source is the
+    # whole virtual screen (7680x2160 on a two-monitor box - recording that at 15fps loses
+    # more frames than it keeps), and it forces even dimensions, because yuv420p has no odd
+    # width and an editor window is whatever size it was last dragged to.
+    $Args = "-hide_banner -loglevel error -y -f gdigrab -framerate $Fps -draw_mouse 0 " +
+            "-i `"$Source`" -vf `"scale=2*trunc(min(1920\,iw)/2):-2`" " +
+            "-c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart " +
+            "`"$OutFile`""
+
+    $Psi = New-Object System.Diagnostics.ProcessStartInfo
+    $Psi.FileName = $Ffmpeg
+    $Psi.Arguments = $Args
+    $Psi.UseShellExecute = $false
+    # stdin is how gdigrab is told to stop: 'q' lets ffmpeg finish the file properly, where
+    # killing it leaves an mp4 without a moov atom - i.e. unplayable, and exactly the file
+    # somebody opens after a hang.
+    $Psi.RedirectStandardInput = $true
+
+    $Proc = [System.Diagnostics.Process]::Start($Psi)
+    if (-not $Proc) { return $null }
+
+    Write-Host "Record    : $What -> $OutFile"
+    return [pscustomobject]@{ Process = $Proc; OutFile = $OutFile; Started = (Get-Date) }
+}
+
+function Stop-SessionRecording {
+    param($Recording)
+
+    if (-not $Recording) { return }
+
+    $Proc = $Recording.Process
+    try {
+        if (-not $Proc.HasExited) {
+            $Proc.StandardInput.Write("q")
+            $Proc.StandardInput.Flush()
+            # Encoding a few minutes of 1280x720 is not instant; give it room rather than
+            # killing a file that is one second from being finished.
+            if (-not $Proc.WaitForExit(30000)) {
+                $Proc.Kill()
+                $Proc.WaitForExit(5000)
+            }
+        }
+    } catch {
+        # The recorder dying on its own is not this run's failure - say so and move on.
+    }
+
+    $Size = if (Test-Path -LiteralPath $Recording.OutFile) {
+        (Get-Item -LiteralPath $Recording.OutFile).Length
+    } else { 0 }
+
+    if ($Size -gt 0) {
+        Write-Host ("Record    : 整场录屏 {0}（{1}）" -f $Recording.OutFile, (Format-DataSize $Size))
+    } else {
+        Write-Host "Record    : 录屏没有产出文件（ffmpeg 退出码 $($Proc.ExitCode)）。" -ForegroundColor Yellow
+    }
+}
+
+function Format-DataSize {
+    param([long] $Bytes)
+    if ($Bytes -ge 1MB) { return "{0:N1} MB" -f ($Bytes / 1MB) }
+    return "{0:N0} KB" -f ($Bytes / 1KB)
+}
+
 function Invoke-TypeCheck {
     param(
         [Parameter(Mandatory)] [string] $RunDir,
@@ -451,7 +596,12 @@ function Invoke-TypeCheck {
         # Only the annotated Luau scripts: the rest of Content/Script is written to Lua 5.1
         # so it loads on both backends, and strict mode would light up on it for reasons
         # that have nothing to do with this run.
-        $CheckerArgs = @("-Path", "Content/Script/Luau", "-Mode", "strict", "-SummaryPath", $SummaryPath)
+        # A hashtable, not an array: splatting an array of "-Name", "Value" pairs binds
+        # positionally against these scripts (both take [CmdletBinding()]), which made
+        # -CheckLevel swallow "-SummaryPath" and fail the ValidateSet - the type check then
+        # aborted before writing its summary, with a parameter-binding error rather than
+        # anything about the scripts.
+        $CheckerArgs = @{ Path = "Content/Script/Luau"; Mode = "strict"; SummaryPath = $SummaryPath }
     } else {
         $SummaryPath = Join-Path $RunDir "lua-analyze.json"
         $CheckerName = "CheckLuaTypes.ps1"
@@ -459,7 +609,7 @@ function Invoke-TypeCheck {
         $CheckerLabel = "LuaLS"
         # The whole script root minus Content/Script/Luau (Luau syntax, never loaded by the
         # Lua backend) - Warning and above, so type hints do not bury real errors.
-        $CheckerArgs = @("-Path", "Content/Script", "-CheckLevel", "Warning", "-SummaryPath", $SummaryPath)
+        $CheckerArgs = @{ Path = "Content/Script"; CheckLevel = "Warning"; SummaryPath = $SummaryPath }
     }
 
     $Skip = {
@@ -744,9 +894,30 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
             $env:UNLUANOVA_RECORD_FRAMES = "60"
         }
 
+        # Launched with Start-Process and not with `&` on purpose: `&` blocks until the editor
+        # exits, and by then there is nothing left to record. Handing the recorder the live
+        # process is what makes "from the first second to the last" possible.
+        $EditorProcessName = [System.IO.Path]::GetFileNameWithoutExtension($EditorCmd)
+        $WantSessionVideo = -not $NoVideo -and -not $NoSessionVideo -and -not $NullRHI
+        $Recording = $null
+
         $sw = [System.Diagnostics.Stopwatch]::StartNew()
-        & $EditorCmd @RunArgs
-        $EditorExit = $LASTEXITCODE
+        $EditorProc = Start-Process -FilePath $EditorCmd -ArgumentList $RunArgs -NoNewWindow -PassThru
+        try {
+            if ($WantSessionVideo) {
+                $Recording = Start-SessionRecording -OutFile (Join-Path $RunDir "videos/session.mp4") `
+                    -ProcessName $EditorProcessName -Fps $SessionFps
+            } elseif ($NullRHI -and -not $NoVideo -and -not $NoSessionVideo) {
+                Write-Host "Record    : skipped - -NullRHI 没有画面可录。" -ForegroundColor Yellow
+            }
+
+            $EditorProc.WaitForExit()
+        } finally {
+            # Always stop it: a hung editor is exactly the run that has to end up on disk, and
+            # it is stopped from here - not by the editor, which is the thing that hung.
+            Stop-SessionRecording -Recording $Recording
+        }
+        $EditorExit = $EditorProc.ExitCode
         $sw.Stop()
 
         Write-Host "Editor exited with $EditorExit in $('{0:N1}' -f $sw.Elapsed.TotalSeconds)s"

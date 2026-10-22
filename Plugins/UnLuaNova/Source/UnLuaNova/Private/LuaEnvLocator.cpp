@@ -84,7 +84,11 @@ void ULuaEnvLocator_ByGameInstance::HotReload()
 void ULuaEnvLocator_ByGameInstance::Reset()
 {
     Env.Reset();
-    for (auto Pair : Envs)
+    // By reference: a copy would only drop the copy's reference and leave the map holding
+    // the environment, so the release below would be the only thing that actually freed
+    // them - and any step added between the two would work on environments that are still
+    // alive.
+    for (auto& Pair : Envs)
         Pair.Value.Reset();
     Envs.Empty();
 }

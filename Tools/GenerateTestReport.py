@@ -64,6 +64,13 @@ SKIP_STATES = {"skipped", "skip", "notrun", "notrun", "ignored", "na"}
 MAX_MESSAGE_LEN = 400
 SLOWEST_COUNT = 10
 
+# The whole-run recording written by Tools/RunTests.ps1 (it starts a gdigrab capture with the
+# editor and stops it when the editor exits). It lives in the same videos/ directory as the
+# showcase clips, which are recorded by the tests themselves - so it has to be told apart by
+# name and is shown on its own, above everything else: the clips stop where the showcase
+# tests stop, and a hung or crashed run produces no clip at all.
+SESSION_VIDEO_STEM = "session"
+
 # Written by Tools/RunTests.ps1. Which checker runs depends on the backend - Luau scripts
 # are checked with luau-analyze, Lua scripts with LuaLS - and each one writes its summary
 # under its own name next to the automation JSON.
@@ -444,13 +451,22 @@ def collect_media(shot_dir, video_dir):
     A clip arrives as a burst of <name>_0001.png ... <name>_0060.png. Listing sixty copies of
     the same scene as if they were sixty different pictures buries the stills, so they are
     collapsed into one entry per clip; if an encoder ran there is a real video instead.
+
+    One mp4 in there is not a clip: session.mp4 is the whole run, recorded by the runner. It
+    is returned separately so the report can lead with it - the clips are recorded by the
+    tests, so they are silent exactly when something goes wrong.
     """
     stills, sequences = find_frame_sequences(shot_dir)
 
     clips = []
+    session = None
     if video_dir.is_dir():
         for p in sorted(video_dir.glob("*.mp4")):
-            clips.append({"name": p.stem, "file": p.name, "frames": len(sequences.get(p.stem, []))})
+            entry = {"name": p.stem, "file": p.name, "frames": len(sequences.get(p.stem, []))}
+            if p.stem == SESSION_VIDEO_STEM:
+                session = entry
+            else:
+                clips.append(entry)
 
     # A burst that was never encoded is still worth showing: the first frame, and how many
     # there are, so the reader knows it is a recording and not a duplicate.
@@ -460,7 +476,7 @@ def collect_media(shot_dir, video_dir):
         if not any(c["name"] == key for c in clips)
     ]
 
-    return stills, clips, uncoded
+    return stills, clips, uncoded, session
 
 
 def load_typecheck(reports_dir: Path, backend=None):
@@ -621,6 +637,7 @@ def render(
     backend=None,
     crash=None,
     clips=None,
+    session=None,
     uncoded=None,
     typecheck=None,
     encode_failures=None,
@@ -740,6 +757,33 @@ def render(
 
     clips = clips or []
     uncoded = uncoded or []
+
+    # 整场录屏放在最前面：它是唯一能把"卡在第几秒"说清楚的东西。
+    if session:
+        lines.append("## 整场录屏")
+        lines.append("")
+        lines.append(
+            "不是 showcase 的剪辑——剪辑是用例自己录的，只覆盖 showcase 那几个测试；"
+            "跑挂了的那一轮往往一个剪辑都没有。这一段是 `Tools/RunTests.ps1` 在启动编辑器的同时"
+            "开始录、编辑器退出时结束，从第一条测试到最后一条都在里面（窗口出现前的几秒除外）。"
+        )
+        lines.append("")
+        lines.append(
+            f'<video controls muted playsinline width="640" '
+            f'src="{image_prefix}{session["file"]}"></video>'
+        )
+        lines.append("")
+        lines.append(f"[打不开播放器的话：直接下载这个 mp4（标准 H.264）]({image_prefix}{session['file']})")
+        lines.append("")
+    else:
+        lines.append("## 整场录屏")
+        lines.append("")
+        lines.append(
+            "这一轮没有整场录屏：`-NoVideo` / `-NoSessionVideo` / `-NullRHI` 会关掉它，"
+            "找不到 ffmpeg（没装 imageio-ffmpeg，见 `Tools/requirements.txt`）时也不会录。"
+        )
+        lines.append("")
+
     if screenshots:
         lines.append("## 截图")
         lines.append("")
@@ -997,7 +1041,7 @@ def main() -> None:
         for name, reason in sorted(encode_failures.items()):
             print(f"ERROR: clip '{name}' was not encoded: {reason}", file=sys.stderr)
 
-    screenshots, clips, uncoded = collect_media(shot_dir, video_dir)
+    screenshots, clips, uncoded, session = collect_media(shot_dir, video_dir)
 
     typecheck = load_typecheck(reports_dir, backend)
 
@@ -1021,6 +1065,7 @@ def main() -> None:
             backend=backend,
             crash=crash,
             clips=clips,
+            session=session,
             uncoded=uncoded,
             typecheck=typecheck,
             encode_failures=encode_failures,
@@ -1040,6 +1085,9 @@ def main() -> None:
         "duration": round(sum(t["duration"] for t in tests if t["duration"] is not None), 3),
         "screenshots": len(screenshots),
         "videos": len(clips),
+        # The whole-run recording is not a clip and does not count as one: it is one file
+        # whatever the run did, including the runs that produced no clip at all.
+        "session_recording": session["file"] if session else None,
         "videos_failed": len(encode_failures),
         "crashed": crash is not None,
         "crash_test": crash["test"] if crash else None,
@@ -1107,12 +1155,14 @@ def main() -> None:
         images_dir = docs_dir / "Images" / image_dir_name
         # Everything the run produced, not just the stills: the frame sequences a clip is
         # made of are images too, and the report links them when ffmpeg is unavailable.
-        if screenshots or clips or uncoded:
+        if screenshots or clips or uncoded or session:
             images_dir.mkdir(parents=True, exist_ok=True)
             for name in screenshots + [f for seq in uncoded for f in [seq["first"]]]:
                 shutil.copy2(shot_dir / name, images_dir / name)
             for clip in clips:
                 shutil.copy2(video_dir / clip["file"], images_dir / clip["file"])
+            if session:
+                shutil.copy2(video_dir / session["file"], images_dir / session["file"])
         page_path = docs_dir / page_name
         page_path.write_text(
             strip_machine_paths(
@@ -1126,6 +1176,7 @@ def main() -> None:
                     backend=backend,
                     crash=crash,
                     clips=clips,
+                    session=session,
                     uncoded=uncoded,
                     benchmark=benchmark,
                 ),
