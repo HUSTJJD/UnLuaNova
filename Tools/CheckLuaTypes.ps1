@@ -264,8 +264,20 @@ if ($DryRun)
 # ---------------------------------------------------------------- run
 # --check 收的是工作目录而不是单个文件（3.8 之后传文件等于没检查），结果写进 logpath/check.json。
 # LuaLS 不管有没有诊断都返回 0，所以下面以 check.json 里的条目数为准。
-$Output = & $Analyzer "--check=$Target" "--checklevel=$CheckLevel" "--logpath=$LogDir" "--metapath=$MetaDir" "--configpath=$ConfigPath" 2>&1
-$ExitCode = $LASTEXITCODE
+# Same trap as in CheckLuauTypes.ps1: anything the server writes to stderr becomes an
+# ErrorRecord, and with $ErrorActionPreference='Stop' the first one ends the script before the
+# results are parsed. LuaLS's own verdict lives in check.json, read below.
+$SavedPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try
+{
+    $Output = & $Analyzer "--check=$Target" "--checklevel=$CheckLevel" "--logpath=$LogDir" "--metapath=$MetaDir" "--configpath=$ConfigPath" 2>&1
+    $ExitCode = $LASTEXITCODE
+}
+finally
+{
+    $ErrorActionPreference = $SavedPreference
+}
 
 $Lines = @($Output | ForEach-Object { $_.ToString() })
 

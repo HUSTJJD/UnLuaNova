@@ -28,7 +28,11 @@ public:
     }
 
     static TSharedRef<FUnLuaNovaIntelliSenseGenerator> Get();
-    
+
+    /** Export root; the two dialect directories live under it. Read by the commandlet to log
+     * where it wrote, and by anything that wants to tell a user where to look. */
+    const FString& GetOutputDir() const { return OutputDir; }
+
     // Update all Blueprints from command
     void UpdateAll();
 

@@ -423,6 +423,25 @@ function Show-CrashSummary {
     Write-Host ""
 }
 
+# The other way a run produces nothing: the editor comes up, announces it is ready, and then
+# never queues a test. It looks exactly like a hang - the process is alive, ticking, logging
+# nothing - and it is what an unquoted -ExecCmds does, because "Automation RunTests X" then
+# reaches the editor as the bare command "Automation". Say it out loud and echo the command
+# line the editor actually saw, which is where the missing quotes are plain to see.
+function Show-NoTestsQueuedHint {
+    param([string] $LogPath)
+
+    if (-not (Test-Path $LogPath)) { return }
+    $Lines = Get-Content $LogPath -Encoding UTF8 -ErrorAction SilentlyContinue
+    if (-not $Lines) { return }
+    if (-not ($Lines | Select-String -SimpleMatch "Ready to start automation" -Quiet)) { return }
+    if ($Lines | Select-String -SimpleMatch "Automation: RunTests=" -Quiet) { return }
+
+    Write-Host "Hint      : 编辑器到了 'Ready to start automation' 却一条测试都没排队 —— 大概率是 -ExecCmds 的引号没传进去。" -ForegroundColor Yellow
+    $Lines | Select-String -SimpleMatch "LogInit: Command Line:" | Select-Object -First 1 |
+        ForEach-Object { Write-Host "           $($_.Line)" -ForegroundColor Yellow }
+}
+
 # --- screenshots and clips -----------------------------------------------------------
 # Screenshots go to the project's Saved/Screenshots, not next to the JSON the automation
 # framework exports, so they have to be pulled into the run directory for the report to be
@@ -479,10 +498,87 @@ function Wait-EditorWindow {
     while ((Get-Date) -lt $Deadline) {
         $Proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
             Where-Object { $_.MainWindowTitle } | Select-Object -First 1
-        if ($Proc) { return $Proc.MainWindowTitle }
+        if ($Proc) { return $Proc }
+
+        # Nothing left to wait for - the editor died on startup. Sitting out the rest of the
+        # timeout only delays the desktop fallback.
+        if (-not (Get-Process -Name $ProcessName -ErrorAction SilentlyContinue)) { return $null }
+
         Start-Sleep -Milliseconds 500
     }
     return $null
+}
+
+if (-not ("UnLuaNova.WindowTools" -as [type])) {
+    Add-Type -Namespace UnLuaNova -Name WindowTools -MemberDefinition @'
+        public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+        [DllImport("user32.dll")] public static extern bool IsIconic(System.IntPtr hWnd);
+        [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr hWnd);
+        [DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
+        [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr hWnd, out RECT r);
+        [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
+        [DllImport("user32.dll")] public static extern System.IntPtr SetThreadDpiAwarenessContext(System.IntPtr context);
+'@
+}
+
+function Restore-EditorWindow {
+    param($Process)
+
+    # A minimized window is the one case that has to be fixed before recording: gdigrab exits
+    # with -5 and writes no file at all, while MainWindowTitle stays non-empty, so "the window
+    # exists" is not enough to go on. Restore it - no focus stealing, no foreground business,
+    # nobody's typing is interrupted.
+    $Handle = $Process.MainWindowHandle
+    if (-not $Handle -or $Handle -eq [System.IntPtr]::Zero) { return $false }
+
+    if ([UnLuaNova.WindowTools]::IsIconic($Handle)) {
+        [void] [UnLuaNova.WindowTools]::ShowWindow($Handle, 9) # SW_RESTORE
+        Start-Sleep -Milliseconds 500
+        if ([UnLuaNova.WindowTools]::IsIconic($Handle)) { return $false }
+    }
+
+    return [UnLuaNova.WindowTools]::IsWindowVisible($Handle)
+}
+
+function Get-WindowCaptureRegion {
+    param($Process)
+
+    # The editor window's rectangle in *physical* pixels, clamped to the virtual screen.
+    #
+    # Physical, because gdigrab works in real device pixels while PowerShell - DPI-unaware by
+    # default - reports scaled ones: on a 150% display the rect would come back 2/3 of its
+    # real size and the capture would be of the wrong part of the screen. Per-monitor-v2
+    # awareness for this thread fixes the numbers without touching the rest of the session.
+    $Handle = $Process.MainWindowHandle
+    if (-not $Handle -or $Handle -eq [System.IntPtr]::Zero) { return $null }
+
+    $Saved = [UnLuaNova.WindowTools]::SetThreadDpiAwarenessContext([System.IntPtr](-4))
+    try {
+        $Rect = New-Object UnLuaNova.WindowTools+RECT
+        if (-not [UnLuaNova.WindowTools]::GetWindowRect($Handle, [ref] $Rect)) { return $null }
+
+        # gdigrab's desktop source starts at (0,0) whatever the virtual screen's origin is, so
+        # a monitor sitting left of / above the primary one would give negative offsets.
+        $OriginX = [UnLuaNova.WindowTools]::GetSystemMetrics(76) # SM_XVIRTUALSCREEN
+        $OriginY = [UnLuaNova.WindowTools]::GetSystemMetrics(77) # SM_YVIRTUALSCREEN
+        $ScreenW = [UnLuaNova.WindowTools]::GetSystemMetrics(78) # SM_CXVIRTUALSCREEN
+        $ScreenH = [UnLuaNova.WindowTools]::GetSystemMetrics(79) # SM_CYVIRTUALSCREEN
+
+        $X = [Math]::Max($Rect.Left - $OriginX, 0)
+        $Y = [Math]::Max($Rect.Top - $OriginY, 0)
+        $W = [Math]::Min($Rect.Right - $OriginX, $ScreenW) - $X
+        $H = [Math]::Min($Rect.Bottom - $OriginY, $ScreenH) - $Y
+
+        # A maximized window hangs a few pixels over the screen edge; yuv420p has no odd
+        # dimensions either. Both are cheaper to fix here than to let gdigrab refuse.
+        if ($W -lt 16 -or $H -lt 16) { return $null }
+        if ($W % 2) { $W-- }
+        if ($H % 2) { $H-- }
+
+        return [pscustomobject]@{ X = $X; Y = $Y; Width = $W; Height = $H }
+    } finally {
+        [void] [UnLuaNova.WindowTools]::SetThreadDpiAwarenessContext($Saved)
+    }
 }
 
 function Start-SessionRecording {
@@ -501,23 +597,38 @@ function Start-SessionRecording {
     $OutDir = Split-Path -Parent $OutFile
     if ($OutDir) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
 
-    $Title = Wait-EditorWindow -ProcessName $ProcessName
-    if ($Title) {
-        $Source = "title=$Title"
-        $What = "编辑器窗口「$Title」"
-    } else {
-        # Nothing to attach to after 90s - a headless run, or a window that never came up.
-        # Record the screen instead: a whole run with no picture at all is worse than one that
-        # has the desktop in it.
+    # Recording starts when the window is up - the forty seconds of editor startup are not
+    # worth the megabytes, and the run is only interesting from the first test on.
+    $Proc = Wait-EditorWindow -ProcessName $ProcessName
+    $Region = if ($Proc -and (Restore-EditorWindow -Process $Proc)) { Get-WindowCaptureRegion -Process $Proc } else { $null }
+    if ($Region) {
+        # NOT "-i title=<window>": gdigrab reads the window's own surface, and for a
+        # D3D-composited window that surface is black. Measured on this machine, capturing a
+        # 3840x2088 editor window that way: 8 KB of black frames per 2 seconds, with ffmpeg
+        # repeating the last good frame for the rest of the run ("Failed to capture image
+        # (error 8)"), i.e. a 333 KB "video" of one still frame. The same window area read off
+        # the composed desktop is 1.2 MB per 2 seconds of real picture.
+        #
+        # So: capture the desktop and crop it to the window. Same pixels, minus the failure.
+        # The trade-off is that another window dragged over the editor is now in the video -
+        # unavoidable, since the desktop is what the compositor hands out.
         $Source = "desktop"
-        $What = "整个屏幕（90 秒内没等到编辑器窗口，可能这次是无头运行）"
+        $Crop = " -offset_x $($Region.X) -offset_y $($Region.Y) -video_size $($Region.Width)x$($Region.Height)"
+        $What = "编辑器窗口区域 $($Region.Width)x$($Region.Height) @ $($Region.X),$($Region.Y)（整屏裁切）"
+    } else {
+        $Crop = ""
+        # No window to crop to: a headless run, a window that never came up, or one that
+        # stayed minimized. Record the whole screen instead - a run with no picture at all is
+        # worse than one with the desktop in it. Mind the gap: nothing before this point is on
+        # tape, which is why the wait is not longer.
+        $What = "整个屏幕（没等到可用的编辑器窗口：无头运行 / 窗口没起来 / 最小化后没还原）—— 开头的几十秒不在录像里"
     }
 
-    # Two things the scale filter buys: it caps the width, because the desktop source is the
-    # whole virtual screen (7680x2160 on a two-monitor box - recording that at 15fps loses
-    # more frames than it keeps), and it forces even dimensions, because yuv420p has no odd
-    # width and an editor window is whatever size it was last dragged to.
-    $Args = "-hide_banner -loglevel error -y -f gdigrab -framerate $Fps -draw_mouse 0 " +
+    # Two things the scale filter buys: it caps the width, because the source is the whole
+    # virtual screen (7680x2160 on a two-monitor box - recording that at 15fps loses more
+    # frames than it keeps), and it forces even dimensions, because yuv420p has no odd width
+    # and an editor window is whatever size it was last dragged to.
+    $Args = "-hide_banner -loglevel error -y -f gdigrab -framerate $Fps -draw_mouse 0$Crop " +
             "-i `"$Source`" -vf `"scale=2*trunc(min(1920\,iw)/2):-2`" " +
             "-c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart " +
             "`"$OutFile`""
@@ -574,6 +685,46 @@ function Format-DataSize {
     param([long] $Bytes)
     if ($Bytes -ge 1MB) { return "{0:N1} MB" -f ($Bytes / 1MB) }
     return "{0:N0} KB" -f ($Bytes / 1KB)
+}
+
+function Export-IntelliSense {
+    # The type check is only as good as the declarations it reads, and those are produced by
+    # the editor - UnLuaNova.d.lua for luau-analyze, the EmmyLua annotations for LuaLS. They
+    # used to be reachable only from the editor toolbar, so a machine where nobody ever
+    # clicked that button ran the check against nothing: luau-analyze turned every UE type
+    # into "Unknown global 'UnLuaNova'", and LuaLS skipped the run outright. Both still
+    # looked like a passing run.
+    #
+    # So the run exports them itself, with the commandlet the toolbar button calls. One extra
+    # editor launch (~40s), and only when the type check is actually going to run.
+    $LuauDir = Join-Path $RepoRoot "Plugins/UnLuaNova/Intermediate/IntelliSense/Luau"
+    $DeclsFile = Join-Path $LuauDir "UnLuaNova.d.lua"
+
+    Write-Host "Decl      : 导出智能提示（$EditorCmd -run=UnLuaNovaIntelliSense -BP=1）"
+
+    $Psi = New-Object System.Diagnostics.ProcessStartInfo
+    $Psi.FileName = $EditorCmd
+    # Quoted like the test run's own arguments: an unquoted project path splits at the first
+    # space and the commandlet is asked to open a project that does not exist.
+    $Psi.Arguments = '"' + $ProjectPath + '" -run=UnLuaNovaIntelliSense -BP=1 -unattended -NoSplash -stdout'
+    $Psi.UseShellExecute = $false
+    $Proc = [System.Diagnostics.Process]::Start($Psi)
+    $Proc.WaitForExit()
+
+    if ($Proc.ExitCode -ne 0) {
+        Write-Host "Decl      : commandlet 退出码 $($Proc.ExitCode)，声明文件可能没写出来。" -ForegroundColor Yellow
+    }
+
+    if (-not (Test-Path -LiteralPath $DeclsFile) -or (Get-Item -LiteralPath $DeclsFile).Length -eq 0) {
+        Write-Host "Decl      : 没生成 $DeclsFile —— luau-analyze 会把每个 UE 类型都报成 unknown global。" -ForegroundColor Yellow
+        return $false
+    }
+
+    $Size = (Get-Item -LiteralPath $DeclsFile).Length
+    $EmmyLuaCount = @(Get-ChildItem -Path (Join-Path $RepoRoot "Plugins/UnLuaNova/Intermediate/IntelliSense/EmmyLua") `
+        -Filter "*.lua" -File -ErrorAction SilentlyContinue).Count
+    Write-Host ("Decl      : {0}（{1}），EmmyLua 注解 {2} 个" -f $DeclsFile, (Format-DataSize $Size), $EmmyLuaCount)
+    return $true
 }
 
 function Invoke-TypeCheck {
@@ -739,6 +890,22 @@ function Restore-IniBackend {
 $Backends = if ($Backend -eq "Both") { @("Lua", "Luau") } else { @($Backend) }
 $TargetName = ([System.IO.Path]::GetFileNameWithoutExtension($ProjectPath)) + "Editor"
 
+function Format-EditorArg {
+    param([string] $Arg)
+
+    # Start-Process hands -ArgumentList to the child as one command line and quotes nothing
+    # itself, unlike `&`, which used to do it for us when the editor was launched inline.
+    # Anything holding a space has to arrive quoted, or the child reads it as two arguments.
+    #
+    # -ExecCmds is the bad one: unquoted, "Automation RunTests UnLuaNova; Quit" reaches the
+    # editor as the exec command "Automation" - which queues no test - plus a stray "Quit"
+    # argument. The editor then sits there ticking forever: no crash, no error, no test, and
+    # a log that stops at "Ready to start automation".
+    if ($Arg.Contains('"')) { return $Arg } # already quoted - see -ExecCmds below
+    if ($Arg -match '\s') { return '"' + $Arg + '"' }
+    return $Arg
+}
+
 function Get-EditorArgs {
     param([string] $ReportDir)
 
@@ -758,7 +925,10 @@ function Get-EditorArgs {
         "-unattended"
         "-NoSplash"
         "-stdout"
-        "-ExecCmds=$($Cmds -join '; ')"
+        # Quoted on purpose: the value is one argument holding spaces and a semicolon. UE
+        # reads -ExecCmds out of the raw command line, so the quotes have to be part of the
+        # string the child sees (Format-EditorArg leaves an already-quoted argument alone).
+        "-ExecCmds=`"$($Cmds -join '; ')`""
         "-ReportExportPath=$ReportDir"
         "-abslog=$LogFile"
     )
@@ -793,7 +963,8 @@ if ($DryRun)
         Write-Host ""
         Write-Host "--- $B -> $RunDir"
         Write-Host "Build  : $BuildBat $TargetName $Platform $Configuration -Project=`"$ProjectPath`""
-        Write-Host "Cmd    : $EditorCmd $((Get-EditorArgs -ReportDir $RunDir) -join ' ')"
+        $ArgLine = ((Get-EditorArgs -ReportDir $RunDir) | ForEach-Object { Format-EditorArg $_ }) -join ' '
+        Write-Host "Cmd    : $EditorCmd $ArgLine"
     }
     Write-Host ""
     Write-Host "Dry run - nothing was executed."
@@ -807,6 +978,9 @@ if ($BuildOnly -and $SkipBuild) {
 $ExitCode = 0
 $CurrentBackend = Get-IniBackend
 $IniOriginal = $CurrentBackend
+# The declarations are backend-independent, so the run exports them once and both backends
+# read the same files (see the call site next to Invoke-TypeCheck).
+$IntelliSenseExported = $false
 
 # Taken only now: -DryRun exits above without touching anything, and must not leave a lock
 # behind for the next run to trip over.
@@ -877,8 +1051,8 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         New-Item -ItemType Directory -Path $RunDir -Force | Out-Null
         [System.IO.File]::WriteAllText((Join-Path $RunDir "backend.txt"), $B,
             (New-Object System.Text.UTF8Encoding($false)))
-        $RunArgs = @(Get-EditorArgs -ReportDir $RunDir)
-        Write-Host "Cmd    : $EditorCmd $($RunArgs -join ' ')"
+        $RunArgLine = ((Get-EditorArgs -ReportDir $RunDir) | ForEach-Object { Format-EditorArg $_ }) -join ' '
+        Write-Host "Cmd    : $EditorCmd $RunArgLine"
 
         # The editor does not empty Saved/Screenshots, so a run that takes no picture would
         # publish the previous run's PNGs as its own.
@@ -902,7 +1076,19 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         $Recording = $null
 
         $sw = [System.Diagnostics.Stopwatch]::StartNew()
-        $EditorProc = Start-Process -FilePath $EditorCmd -ArgumentList $RunArgs -NoNewWindow -PassThru
+        # ProcessInfo + Process.Start, not Start-Process:
+        #  - the arguments are one pre-joined, pre-quoted string, because Start-Process joins
+        #    an array with spaces and adds no quoting of its own - that is how -ExecCmds lost
+        #    its quotes once and the editor came up without a single test queued;
+        #  - UseShellExecute=false, because a process started through ShellExecute does not
+        #    report its exit code. Start-Process reported none, so "Editor exited with  in
+        #    234.0s" and a failing run could pass as success.
+        # It is also what -NoNewWindow did: the child keeps this console.
+        $EditorPsi = New-Object System.Diagnostics.ProcessStartInfo
+        $EditorPsi.FileName = $EditorCmd
+        $EditorPsi.Arguments = $RunArgLine
+        $EditorPsi.UseShellExecute = $false
+        $EditorProc = [System.Diagnostics.Process]::Start($EditorPsi)
         try {
             if ($WantSessionVideo) {
                 $Recording = Start-SessionRecording -OutFile (Join-Path $RunDir "videos/session.mp4") `
@@ -939,6 +1125,7 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         $JsonCount = @(Get-ChildItem -Path $RunDir -Filter "*.json" -File -ErrorAction SilentlyContinue).Count
         if ($JsonCount -eq 0) {
             Write-Host "No automation JSON in '$RunDir' - check '$(Join-Path $RunDir 'Editor.log')'." -ForegroundColor Yellow
+            Show-NoTestsQueuedHint -LogPath (Join-Path $RunDir "Editor.log")
         }
 
         # A crash exports nothing, so without this the run looks like "0 tests" and the only
@@ -950,6 +1137,13 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         # engine exports - run it here and leave its summary next to the JSON, which is the
         # only place the report generator will find it.
         if (-not $NoReport) {
+            # Declarations first, and only once per run: the commandlet writes both dialects
+            # whatever the backend is, so the second backend would pay another editor launch
+            # for the same files.
+            if (-not $IntelliSenseExported) {
+                $IntelliSenseExported = Export-IntelliSense
+            }
+
             Invoke-TypeCheck -RunDir $RunDir -Backend $B
         }
 

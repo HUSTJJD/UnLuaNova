@@ -181,8 +181,22 @@ if ($DryRun)
     exit 0
 }
 
-$Output = & $Analyzer $ArgList 2>&1
-$ExitCode = $LASTEXITCODE
+# luau-analyze writes every diagnostic to stderr, and PowerShell turns those into ErrorRecords -
+# with $ErrorActionPreference='Stop' the first one ends the script right here, before the
+# summary is written and before the exit code is read. The run then looks like the type check
+# never happened. Both are needed below, neither needs PowerShell's help, so it stays quiet
+# for the duration of the call.
+$SavedPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try
+{
+    $Output = & $Analyzer $ArgList 2>&1
+    $ExitCode = $LASTEXITCODE
+}
+finally
+{
+    $ErrorActionPreference = $SavedPreference
+}
 
 $Lines = @($Output | ForEach-Object { $_.ToString() })
 $Errors = @($Lines | Where-Object { $_ -match '(?i)error' })

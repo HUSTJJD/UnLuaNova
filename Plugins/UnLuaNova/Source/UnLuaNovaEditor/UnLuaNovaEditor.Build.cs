@@ -79,7 +79,10 @@ public class UnLuaNovaEditor : ModuleRules
                 "Networking",
                 "Sockets",
                 "UnLuaNova",
-                "ToolMenus"
+                "ToolMenus",
+                // The IntelliSense generator and its commandlet read blueprint assets out of
+                // the registry (and wait for its scan) instead of relying on the cache alone.
+                "AssetRegistry"
             }
         );
 

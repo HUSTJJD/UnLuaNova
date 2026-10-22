@@ -14,6 +14,7 @@
 
 #include "Commandlets/UnLuaNovaIntelliSenseCommandlet.h"
 
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "Binding.h"
 #include "Misc/FileHelper.h"
 #include "UnLuaNovaIntelliSenseGenerator.h"
@@ -24,6 +25,14 @@ UUnLuaNovaIntelliSenseCommandlet::UUnLuaNovaIntelliSenseCommandlet(const FObject
     //IntermediateDir = FPaths::ProjectIntermediateDir();
     IntermediateDir = FPaths::ProjectPluginsDir();
     IntermediateDir += TEXT("UnLuaNova/Intermediate/");
+
+    // The flags the other commandlets in here set, and which this one needs too: it loads the
+    // asset registry and touches blueprint assets - editor-only territory - and it is meant to
+    // be driven from a command line (Tools/RunTests.ps1 runs it unattended, no window).
+    IsClient = false;
+    IsServer = false;
+    IsEditor = true;
+    LogToConsole = true;
 }
 
 int32 UUnLuaNovaIntelliSenseCommandlet::Main(const FString &Params)
@@ -104,11 +113,32 @@ int32 UUnLuaNovaIntelliSenseCommandlet::Main(const FString &Params)
     TMap<FString, FString> ParamsMap;
     ParseCommandLine(*Params, Tokens, Switches, ParamsMap);
     FString BPKey = TEXT("BP");
-    if (ParamsMap.Contains(BPKey) && ParamsMap[BPKey] == TEXT("1"))
+    // -BP=1 is the documented form; a bare -BP asks for the same thing and is accepted so a
+    // caller that forgets the "=1" does not silently get a run with no .d.lua at the end.
+    const bool bExportBlueprints = (ParamsMap.Contains(BPKey) && ParamsMap[BPKey] == TEXT("1"))
+        || Switches.Contains(BPKey);
+
+    if (bExportBlueprints)
     {
+        // The scan a commandlet starts with is still running when Main() is entered. Without
+        // this GetAssets() returns whatever the cache held, and the blueprint half of the
+        // export comes out empty on a cold cache. Native types are collected by reflection,
+        // so UnLuaNova.d.lua would still be written - just without anything that exists only
+        // as a blueprint.
+        FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
+        AssetRegistryModule.Get().WaitForCompletion();
+
         auto Generator = FUnLuaNovaIntelliSenseGenerator::Get();
         Generator->Initialize();
         Generator->UpdateAll();
+
+        // The caller cannot see inside UpdateAll(), and "did it write anything" is the whole
+        // question when the type check comes up empty.
+        UE_LOG(LogTemp, Display, TEXT("[IntelliSense] exported to %s"), *Generator->GetOutputDir());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Display, TEXT("[IntelliSense] static exports only - pass -BP=1 to write UnLuaNova.d.lua."));
     }
 
     return 0;
