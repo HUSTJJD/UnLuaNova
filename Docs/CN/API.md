@@ -193,7 +193,7 @@ FUnLuaNovaDelegates
 
 * `WITH_UE4_NAMESPACE` 是否提供一个统一的 `UE` 命名空间 `table` 作为对引擎侧类型的访问入口，默认**启用**。
 
-* `ENABLE_TYPE_CHECK` 是否启用类型检测，帮助在 `UFunction` 调用时进行参数类型合法性检测，默认**启用**。
+* `ENABLE_TYPE_CHECK` 是否启用类型检测，帮助在 `UFunction` 调用时进行参数类型合法性检测，默认**启用**。检测到实参类型不合法时抛 Lua error（`pcall` 可捕获），而不是写入一个默认值后继续调用。
 
 * `ENABLE_PERSISTENT_PARAM_BUFFER` 为每个 `UFunction` 复用一块参数缓存，默认**启用**。
 

@@ -9,11 +9,53 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 ## [Unreleased]
 
 ### Added
+- **架构与 C++ API 两页文档**：`Docs/CN|EN/Architecture.md`（目录结构、双后端抽象、
+  绑定与覆写、静态绑定全链路、如何新增 LuaLib 类型）与 `Docs/CN|EN/CxxApi.md`
+  （`FLuaEnv` / `IUnLuaNovaModule` / 定位器 / 导出与注册 / 静态绑定注册表 / `LowLevel` /
+  覆写 / 调试类型，签名逐条抄自头文件）。两页已挂进 `mkdocs.yml` 导航
 - **三个新 spec，共 30 条用例**：`UnLuaNova.API.ErrorHandling`（10 条：编译错误、运行时错误、
   栈平衡、引擎侧错误、错误消息不含机器路径）、`UnLuaNova.API.Lifetime`（6 条：释放标记、
   脚本持有对象的回收语义、手动引用、环境销毁）、`UnLuaNova.API.FLuaEnv` 由 2 条扩到 14 条
   （多环境隔离、DoString 失败路径、GC/HotReload、loader 优先级、require 失败、启动模块、
   OnCreated/OnDestroyed、GetAll/FindEnv）
+- **七个新 spec**：
+  - `UnLuaNova.API.Overrides`（8 条）：可覆写性判定、`GetOverridableFunctions`、
+    覆写与 `RestoreOverrides`、分发是否走 Lua、Suspend/Resume、两个对象互相独立、
+    覆写内部 `error()` 不崩。为此新增 `UUnLuaNovaTestStubForOverrides`
+    （`IUnLuaNovaInterface` + `BlueprintImplementableEvent`）
+  - `UnLuaNova.API.Latent`（2 条）：把"主线程调用 latent"的报错文案固化成契约
+  - `UnLuaNova.API.Locators`（7 条）：默认 / `ByPackage` / 自定义模块与环境定位器
+  - `UnLuaNova.Editor.ConsoleCommands`（7 条）：`lua.do` / `lua.gc` / `lua.profiler` /
+    `lua.memstats` / `lua.dbg` / `lua.sandbox` 的**行为**（原来只验"命令存在"）
+  - `UnLuaNova.Settings.General`（5 条）：启动模块名、诊断开关、定位器类"改了看得见效果"，
+    且必须能还原
+  - `UnLuaNova.Editor.IntelliSense`（5 条）：生成的类型声明内容与函数级辅助
+  - `UnLuaNova.Lua`：新增 Lua 侧自测框架 `Content/Script/Tests/Lua/Spec.lua`
+    （`describe` / `it` / `equal`，不引第三方）+ `StringEx.spec.lua`；C++ 侧逐条
+    `TestTrue` 搬回结果，失败带 Lua 文件名与行号
+- **性能基线**：`UnLuaNova.Perf.Benchmark` 跑 Native / 反射 / Lua 三种调用，写 CSV 到
+  `Saved/Benchmark/{latest,previous}.csv`；`GenerateTestReport.py` 读出来做环比，
+  劣化超 ±30% 标 ⚠️ 并在 stderr 提示，**不判定失败**（计时受机器负载影响）
+- **容器迭代中增删用例**：`TArray` / `TMap` / `TSet` 各补两条（迭代中 Add / Remove 不崩，
+  且改动真的生效）
+- `Docs/EN/TestReports.md`：说明两份测试报告是自动生成的中文页、以及为什么不做翻译，
+  英文导航改为挂这一页
+
+### Changed
+- `GenerateTestReport.py` 新增 `load_benchmark` / `compare_benchmark` / `render_benchmark`，
+  报告里多一节「性能环比」
+- `Tools/Install-NightlyTask.ps1` 优先用 `pwsh.exe`，找不到时退回 `powershell.exe`
+  （原来硬编码 `pwsh.exe`：只装了 Windows PowerShell 5.1 的机器会注册一个永远跑不起来的任务）
+- `Docs/CN|EN/Testing.md` 新增「用例清单」表（三列：注册名 / 覆盖什么 / 备注），
+  由 `Private/` 下的注册宏生成
+- `Docs/EN/API.md` 补上中文有而英文没有的三节（脚本侧 `UnLuaNova` 全局表、字符串扩展、
+  随插件发布的 Lua 模块）；`Docs/EN/Settings.md` 补「Lua 环境分配器」「检查新版本」，
+  并把合并成一节的四项兼容开关拆开
+- CI 的 `mkdocs build` 恢复 `--strict`：两份测试报告已作为占位页入库，首次克隆也能干净构建
+- `.codebuddy/PROJECT_PLAN.md` 修正重复的 §11 编号（前者改为 §10.5）
+
+### Removed
+- `.codebuddy/_scan_log.py`：被并发进程误提交进 `11301173` 的临时脚本，已从索引移除
 - **`Tools/RunTests.ps1 -BuildOnly`**：只编译不跑（编完退出，不启动编辑器、不生成报告），
   与 `-SkipBuild` 互斥。让"测试代码编译不过"这类问题能在一天内被发现
 - **`Tools/Install-NightlyTask.ps1`**：注册/删除"每晚编译一次测试代码"的 Windows 计划任务
@@ -173,6 +215,12 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   `IntelliSense/Luau/UnLuaNova.d.lua`
 
 ### Fixed
+- **传错类型的 UFunction 实参不再只是打日志**：`ENABLE_TYPE_CHECK` 打开时这类错误过去只
+  `UE_LOG(Error)` 一行然后**照常发起调用** —— 那个参数保持初始值，于是脚本拿到一个自己从没
+  传过的 0，真正的错误要到后面以"数字不对"的形式才暴露。现在改为抛 Lua error：`pcall` 能捕获，
+  没捕获的照旧由 `ReportLuaCallError` 打出来，诊断只是推迟到了能判断"这次调用该不该失败"的人
+  手里。**少传实参**的那一路仍然只打日志：那个栈位在调用者提供的最后一个实参之后，没有"传错的
+  值"可以归责，而声明了默认值的函数由 UE 自己补齐
 - **`UnLuaNovaEditor` 模块编不过**：`UnLuaNovaShowcaseDressingCommandlet.cpp` 里的
   `#include "Engine/SkyAtmosphere.h"` 在本引擎（UE 5.8.3 源码构建）中不存在 ——
   `ASkyAtmosphere` 声明在 `Components/SkyAtmosphereComponent.h`。改掉后整个 `UnLuaNovaEditor`

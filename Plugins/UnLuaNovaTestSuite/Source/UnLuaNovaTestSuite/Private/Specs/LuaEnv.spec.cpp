@@ -125,6 +125,12 @@ void FLuaEnvSpec::Define()
             //
             // So this asserts what *is* observable: the module is not in the require
             // cache, i.e. it genuinely did not run, rather than having been faked.
+            //
+            // The log is still declared expected, because it is the other half of the
+            // contract and an undeclared Error-level log fails the case on its own: a
+            // missing startup module has to be reported, not swallowed.
+            AddExpectedError(TEXT("SpecNoSuchStartupModule"), EAutomationExpectedErrorFlags::Contains);
+
             UnLuaNova::FLuaEnv Env1;
             TMap<FString, UObject*> Args;
             Env1.Start(TEXT("SpecNoSuchStartupModule"), Args);

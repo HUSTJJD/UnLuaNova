@@ -156,7 +156,9 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `UnLuaNova.API.FVector` | 构造 / `Set` / `Normalize` / 四则运算 / `unm` / `tostring()` | |
 | `UnLuaNova.API.FVector2D` | 同上 | |
 | `UnLuaNova.API.FVector4` | 同上 | |
+| `UnLuaNova.API.Latent` | 主线程调用 latent 的报错文案、报错后环境仍可用 | 文案即契约，改一个字用例即失败 |
 | `UnLuaNova.API.Lifetime` | 释放标记、脚本持有对象的回收、手动引用、环境销毁 | |
+| `UnLuaNova.API.Locators` | 默认 / ByPackage / 自定义模块定位器与环境定位器 | 改全局设置，`AfterEach` 还原 |
 | `UnLuaNova.API.LuaBackend` | 后端适配层、能力对齐、Luau 专属能力、整数类型、协程、Profiler 与调试 | 后端相关 |
 | `UnLuaNova.API.LuaScriptCompat` | `collectgarbage` / `load` 等脚本层兼容 | 后端相关 |
 | `UnLuaNova.API.Observability` | CPU 性能分析、内存统计、调试服务 | |
@@ -172,10 +174,15 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `UnLuaNova.API.UE` | 全局 `UE` 命名空间 | |
 | `UnLuaNova.API.UObject` | `Load` / `IsValid` / `GetName` / `GetOuter` / `GetClass` / `GetWorld` / `IsA` / `Release` | |
 | `UnLuaNova.API.World` | `SpawnActor` | |
+| `UnLuaNova.API.Overrides` | 可覆写性判定、覆写与还原、Suspend/Resume、分发是否走 Lua、覆写内报错 | 改 UClass，`AfterEach` 还原 |
 | `UnLuaNova.Binding` | Scoped Enum、Enum Class | |
 | `UnLuaNova.Editor.Commands` | 控制台命令、Lua 模板、编辑器命令 | 仅编辑器 |
+| `UnLuaNova.Editor.ConsoleCommands` | `lua.do` / `lua.gc` / `lua.profiler` / `lua.memstats` / `lua.dbg` / `lua.sandbox` 的实际行为 | 仅编辑器 |
+| `UnLuaNova.Editor.IntelliSense` | 类型声明生成的内容与函数级辅助 | 仅编辑器 |
 | `UnLuaNova.Editor.StaticBindingGenerator` | 静态绑定生成器 | 仅编辑器 |
 | `UnLuaNova.Extensions` | LuaRapidjson / LuaProtobuf / LuaSocket | 需可选扩展插件 |
+| `UnLuaNova.Lua` | 执行 `Content/Script/Tests/Lua/*.spec.lua`，把每条 Lua 侧结果搬回 C++ | 失败带 Lua 文件名与行号 |
+| `UnLuaNova.Perf.Benchmark` | Native / 反射 / Lua 三种调用耗时，写 CSV 到 `Saved/Benchmark/` | 报告里做环比，只告警不判定 |
 | `UnLuaNova.Regression.Issue276` | 游戏世界暂停后 `coroutine delay` 不工作 | |
 | `UnLuaNova.Regression.Issue286` | 蓝图 `TMap FindRef` 错误 | |
 | `UnLuaNova.Regression.Issue295` | 动态绑定的 UMG 对象切换地图时 Destruct 崩溃 | |
@@ -194,6 +201,7 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `UnLuaNova.Regression.Issue660` | UnLua 函数绑定多个代理导致崩溃 | |
 | `UnLuaNova.Regression.IssueOverrides` | 覆写引起的问题 | |
 | `UnLuaNova.Settings` | 死循环看门狗等设置项的实际行为 | 改全局设置，`AfterEach` 还原 |
+| `UnLuaNova.Settings.General` | 启动模块名、诊断开关、定位器类：改了看得见效果，并必须能还原 | 改全局设置，`AfterEach` 还原 |
 | `UnLuaNova.Showcase.Binding` | 静态绑定示例截图 | **需真实视口** |
 | `UnLuaNova.Showcase.Container` | 容器访问示例截图 | **需真实视口** |
 | `UnLuaNova.Showcase.Override` | 蓝图事件覆写示例截图 | **需真实视口** |

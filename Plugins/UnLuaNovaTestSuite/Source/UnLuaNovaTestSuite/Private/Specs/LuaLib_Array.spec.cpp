@@ -723,8 +723,50 @@ void FUnLuaNovaLibArraySpec::Define()
 
             TEST_EQUAL(Result1, 1);
             TEST_EQUAL(Result2, 2);
-        });
-    });
-}
+            });
+            });
+
+            Describe(TEXT("迭代中修改"), [this]()
+            {
+            It(TEXT("迭代中追加元素不崩，且追加真的生效"), EAsyncExecution::TaskGraphMainThread, [this]
+            {
+            // Appending can reallocate the array's storage while an iterator holds an
+            // index into it. What is contractual is that the walk survives and the
+            // container ends up correct - not how many elements the walk visited.
+            const auto Chunk = R"(
+            local Array = UE.TArray(0)
+            Array:Add(1)
+            Array:Add(2)
+            for i, v in pairs(Array) do
+               if v == 1 then Array:Add(99) end
+            end
+            return Array:Length(), Array:Contains(99)
+            )";
+            TEST_TRUE(Env->DoString(Chunk));
+
+            TEST_EQUAL((int32)lua_tointeger(L, -2), 3);
+            TEST_TRUE(lua_toboolean(L, -1));
+            });
+
+            It(TEXT("迭代中删除元素不崩，且删除真的生效"), EAsyncExecution::TaskGraphMainThread, [this]
+            {
+            const auto Chunk = R"(
+            local Array = UE.TArray(0)
+            Array:Add(1)
+            Array:Add(2)
+            Array:Add(3)
+            for i, v in pairs(Array) do
+               if v == 2 then Array:RemoveItem(2) end
+            end
+            return Array:Length(), Array:Contains(2), Array:Contains(1)
+            )";
+            TEST_TRUE(Env->DoString(Chunk));
+
+            TEST_EQUAL((int32)lua_tointeger(L, -3), 2);
+            TEST_FALSE(lua_toboolean(L, -2));
+            TEST_TRUE(lua_toboolean(L, -1));
+            });
+            });
+            }
 
 #endif

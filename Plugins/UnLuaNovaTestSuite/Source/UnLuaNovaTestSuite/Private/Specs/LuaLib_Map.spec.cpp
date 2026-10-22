@@ -384,8 +384,50 @@ void FUnLuaNovaLibMapSpec::Define()
 
             TEST_EQUAL(Result1, 1);
             TEST_EQUAL(Result2, 2);
-        });
-    });
-}
+            });
+            });
+
+            Describe(TEXT("迭代中修改"), [this]()
+            {
+            It(TEXT("迭代中删除当前键不崩，且删除真的生效"), EAsyncExecution::TaskGraphMainThread, [this]
+            {
+            // Removing from a map mid-walk can invalidate the slot the iterator is about to
+            // step to. The contract is that the walk survives and the map ends up
+            // consistent - not how many pairs the walk happened to visit.
+            const auto Chunk = R"(
+            local Map = UE.TMap(0, 0)
+            Map:Add(1, 10)
+            Map:Add(2, 20)
+            Map:Add(3, 30)
+            for k, v in pairs(Map) do
+               if k == 2 then Map:Remove(2) end
+            end
+            return Map:Length(), Map:Contains(2), Map:Find(1)
+            )";
+            TEST_TRUE(Env->DoString(Chunk));
+
+            TEST_EQUAL((int32)lua_tointeger(L, -3), 2);
+            TEST_FALSE(lua_toboolean(L, -2));
+            TEST_EQUAL((int32)lua_tointeger(L, -1), 10);
+            });
+
+            It(TEXT("迭代中新增键不崩，且新增真的生效"), EAsyncExecution::TaskGraphMainThread, [this]
+            {
+            const auto Chunk = R"(
+            local Map = UE.TMap(0, 0)
+            Map:Add(1, 10)
+            Map:Add(2, 20)
+            for k, v in pairs(Map) do
+               if k == 1 then Map:Add(99, 990) end
+            end
+            return Map:Contains(99), Map:Length()
+            )";
+            TEST_TRUE(Env->DoString(Chunk));
+
+            TEST_TRUE(lua_toboolean(L, -2));
+            TEST_EQUAL((int32)lua_tointeger(L, -1), 3);
+            });
+            });
+            }
 
 #endif

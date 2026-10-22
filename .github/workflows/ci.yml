@@ -67,8 +67,8 @@ jobs:
       - name: Install MkDocs Material
         run: pip install mkdocs-material
 
-      # Not --strict: Docs/test-lua-report.md and Docs/test-luau-report.md only exist once
-      # someone has run Tools/RunTests.ps1 -Backend Both -Publish, and a missing page must
-      # not break the build before that.
+      # --strict is back: Docs/test-lua-report.md and Docs/test-luau-report.md are now
+      # committed placeholders, so a first clone builds clean and any broken link or
+      # missing nav entry turns the job red.
       - name: Build docs
-        run: mkdocs build --site-dir _site
+        run: mkdocs build --strict --site-dir _site

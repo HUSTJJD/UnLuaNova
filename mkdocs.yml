@@ -61,6 +61,8 @@ nav:
           - 编程指南: CN/UnLuaNova_Programming_Guide.md
           - Luau 后端: CN/Luau.md
           - API 参考: CN/API.md
+          - C++ API 参考: CN/CxxApi.md
+          - 架构: CN/Architecture.md
           - 如何实现覆写: CN/How_To_Implement_Overriding.md
           - 静态导出绑定: CN/StaticExportBinding.md
       - 配置与工具:
@@ -88,6 +90,8 @@ nav:
           - Programming Guide: EN/UnLuaNova_Programming_Guide.md
           - Luau Backend: EN/Luau.md
           - API Reference: EN/API.md
+          - C++ API Reference: EN/CxxApi.md
+          - Architecture: EN/Architecture.md
           - How To Implement Overriding: EN/How_To_Implement_Overriding.md
           - Static Export and Binding: EN/StaticExportBinding.md
       - Configuration and Tools:
@@ -100,8 +104,7 @@ nav:
           - Debugging: EN/Debugging.md
           - IntelliSense: EN/IntelliSense.md
           - Testing and Automation: EN/Testing.md
-          - Test report Lua: test-lua-report.md
-          - Test report Luau: test-luau-report.md
+          - Test reports: EN/TestReports.md
       - Reference:
           - Showcase Samples: EN/Showcase.md
           - License: EN/License.md

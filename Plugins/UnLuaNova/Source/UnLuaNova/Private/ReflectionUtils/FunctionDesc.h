@@ -109,8 +109,21 @@ public:
 
 private:
     typedef TStaticBitArray<64U> FFlagArray;
-    void PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex, FFlagArray& CleanupFlags, void* Params, void* Userdata = nullptr);
+
+    /**
+     * Prepare values of properties for the UFunction.
+     *
+     * @param OutError - optional; filled with the message when the return value is false
+     * @return - false when a supplied argument fails its type check. Nothing has been
+     *           marshalled past that point, but the parameter buffer is still held: the
+     *           caller has to release it before raising, because raising does not return.
+     */
+    bool PreCall(lua_State* L, int32 NumParams, int32 FirstParamIndex, FFlagArray& CleanupFlags, void* Params, void* Userdata = nullptr, FString* OutError = nullptr);
+
     int32 PostCall(lua_State* L, int32 NumParams, int32 FirstParamIndex, void* Params, const FFlagArray& CleanupFlags);
+
+    /** Destroy the values PostCall would destroy, without touching the Lua stack. */
+    void DestroyParams(void* Params, const FFlagArray& CleanupFlags) const;
 
     bool CallLuaInternal(lua_State *L, void *InParams, FOutParmRec *OutParams, void *RetValueAddress) const;
 

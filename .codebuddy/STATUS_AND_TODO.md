@@ -178,12 +178,14 @@ Luau 子模块增删文件后，重新运行 `python LuauLib/GenerateWrappers.py
 - [ ] 跑 `UnLuaTestSuite`（Session Frontend → Automation），重点是容器与数学类型相关 spec
 - [ ] 回退预案：`git revert 36bb8291`（只撤 LuaCore 解耦）/ `git reset --hard f7e615b0`（撤全部解耦）
 
-### P1 · 文档同步
+### P1 · 文档同步 ✅ 全部完成
 
-- [ ] `README.md` 三处 Lua 5.4 → Lua 5.5 + Luau 双后端
-- [ ] `Docs/CN/Settings.md` 删除「自定义Lua版本」节，改写到后端切换（说明 `LuaBackend=Lua55|Luau`）
-- [ ] README 加子模块 clone 说明
-- [ ] `PROJECT_PLAN.md` 修 §11 重复编号（建议：L802 → §10.5，L840 保留为 §11）
+- [x] `README.md` 三处 Lua 5.4 → Lua 5.5 + Luau 双后端（L30 / L94 / L164）
+- [x] `Docs/CN/Settings.md` 删除「自定义Lua版本」节，改写到后端切换（现为 L142 的一句注）
+- [x] README 加子模块 clone 说明（L52 与 L165）
+- [x] `PROJECT_PLAN.md` 修 §11 重复编号：L829 → §10.5（含 10.5.1–10.5.4），L867 保留为 §11
+- [x] 顺带修了 T9 的残留：`README.md` / `README_EN.md` 里 `.\Tools\RunTests.ps1` 少了反引号、
+      路径写成 `\Tools\...`
 
 ### P2 · Feature（按 `PORT_EXTERNAL_PLAN.md`）
 
@@ -202,8 +204,14 @@ Luau 子模块增删文件后，重新运行 `python LuauLib/GenerateWrappers.py
 - [ ] 删除备份 refs 并回收本地敏感对象（**建议确认编译无误后**）：
       `git branch -D backup/master-before-filter` / `git tag -d backup/pre-lua55-cleanup`
       `git reflog expire --expire=now --all && git gc --prune=now --aggressive`
-- [ ] 决定 D1（目录改名 vs `__index` 前缀改名）
-- [ ] 决定 `.codebuddy/` 是否随仓库分发（当前**不在** `.gitignore` 里，这三份文档会被提交）
+      —— **不可逆，且文档自己写的前提（"确认编译无误后"）还没满足**（本机没有 UE 引擎），
+      所以没有动。要执行请显式说一声
+- [x] ~~决定 D1（目录改名 vs `__index` 前缀改名）~~ —— 已在上方 §2.5 标为已解决（`7c6b509f` + `715affda`），
+      这条是遗留的重复项
+- [ ] 决定 `.codebuddy/` 是否随仓库分发（当前**不在** `.gitignore` 里，这些文档会被提交）
+      —— 建议**保留跟踪**：`AUDIT_PROGRESS.md` / `AUDIT_TASKS.md` 是跨会话的交接真相，
+      进 `.gitignore` 之后下次重开会话就丢了。若坚持不外发，正确的做法是加进 `.gitignore`
+      并**同时** `git rm --cached .codebuddy/`
 
 ---
 

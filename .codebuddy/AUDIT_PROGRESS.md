@@ -8,9 +8,19 @@
 
 ## 0. 一句话状态
 
-批次 1、2 已提交完成；批次 3 完成 3/4（T12 / T14 / T15 已编译并实跑，30 条新用例 28 通过）；
-**T13 未做**。剩余批次 4/5/6 未开始。
-两个尾巴必须收掉：**复跑确认两处修正**、**`-UpdateBaseline` 刷新基线**。
+批次 1–6 全部做完（T13 按下面 §2 的做法落地，T16–T26 见 §3）。**但全部都没编译过**：
+本机没有 UE 源码引擎（`Get-ChildItem D:\ -Filter UnrealBuildTool.exe` 零命中），
+所以这一轮交付的是"照现有 spec 模式写出来的代码 + 文档"，**必须先
+`.\Tools\RunTests.ps1 -Backend Both -BuildOnly` 过一遍编译**，再看行为。
+
+已收掉的尾巴：`_scan_log.py` 已 `git rm --cached`；`Config/DefaultUnLuaNovaEditor.ini`
+的 `LuaBackend=Luau` 确认是**当前 HEAD 的原值**（`f88325ea` 引入，且 Luau 已改为 UBT
+源码编译，`ThirdParty/LuauLib/Generated/` 有 61 个文件），不是被中断的运行留下的脏值。
+
+**仍未收掉**（都需要引擎，本机做不了）：
+1. 复跑确认 T15 / T12 那两处实测修正；
+2. `-UpdateBaseline` 刷新基线（新增约 40 条用例，护栏会正常报漂移）；
+3. 提交本轮改动。
 
 ---
 
@@ -86,7 +96,19 @@
 > （`AddExpectedError` 匹配不到）。原清单"断言有明确错误/日志"无法实现，改为断言
 > "模块没进 require 缓存（确实没跑）"，注释里记下这个静默失败行为。
 
-### T13 `Overrides.spec.cpp` ❌ 未做 —— 理由与做法
+### T13 `Overrides.spec.cpp` ✅ 已写（8 条，未编译验证）
+
+按下面"做法"落地，两处与清单的偏离已记在文件注释里：
+
+- 新增 `UUnLuaNovaTestStubForOverrides`（`Public/UnLuaNovaTestHelpers.h`）——清单说"不要新建
+  UCLASS"，但 §2 里那四条约束在实测下无解，且给 `UUnLuaNovaTestStub` 加 `IUnLuaNovaInterface`
+  会让约 20 个现有用例开始尝试绑定，风险更大。所以按清单自己的结论新增了专用 stub。
+- 覆写内部 `error()` 那条**没有**用第二个 stub / 模块，而是让夹具读一个全局开关
+  `_G.OverridesStubShouldError`：要验的是"引擎对抛出的覆写作何反应"，不是"抛出本身"。
+
+---
+
+### T13 当时的理由与做法（存档）
 
 **为什么没做**（实测约束，不是跳过）：
 1. 覆写的**分发行为**（Override 后走 Lua / Restore 后回原实现 / Suspend-Resume /
@@ -118,7 +140,33 @@
 
 ---
 
-## 3. 未完成 TODO（批次 4 / 5 / 6）
+## 3. 批次 4 / 5 / 6 —— 已全部落地（未编译验证）
+
+| 任务 | 落地情况 |
+|---|---|
+| **T16** Latent | `Private/Specs/Latent.spec.cpp` / `UnLuaNova.API.Latent`，2 条。**只覆盖了两条报错文案**：挂起恢复、回调只触发一次、世界暂停后 delay 仍推进都需要真 World 与 latent action manager，那正是 `UnLuaNova.Regression.Issue276` 已经在做的事，重复一遍保真度更低。清单里的"从 C 回调进入的线程不可 yield"没有可靠触发手段，未做 |
+| **T17** Locators | `Private/Specs/Locators.spec.cpp` / `UnLuaNova.API.Locators`，7 条。两个自定义定位器子类（`USpecModuleLocator` / `USpecEnvLocator`）放在 `UnLuaNovaTestHelpers.h`——**UHT 不收 .cpp 里声明的 UCLASS** |
+| **T18** ConsoleCommands | `Private/Specs/ConsoleCommands.spec.cpp` / `UnLuaNova.Editor.ConsoleCommands`，7 条。先 grep 过真实命令名：**没有 `lua.sandbox` 命令**，它是 `LuaEnv.cpp:185` 注册的 CVar，所以那条用例走 `FindConsoleVariable` |
+| **T19** Settings | `Private/Specs/Settings.spec.cpp` / `UnLuaNova.Settings.General`，5 条。注册名没复用 `UnLuaNova.Settings`（已被 `LuaDeadLoopCheck.spec.cpp` 占用），用 `.General` 后缀，前缀过滤照样命中 |
+| **T20** 生成器 + IntelliSense | `StaticBindingGenerator.spec.cpp` 扩到 4 条（内容断言 / opt-out / 幂等）；新增 `IntelliSense.spec.cpp` / `UnLuaNova.Editor.IntelliSense`，5 条。**清单第 5 条（生成的表能被 `Register` 且 `Find/FindFunc` 命中）做不了**——那要求把生成的 `.cpp` 编进某个模块，单元测试里不可能 |
+| **T21** Lua 侧自测 | `Content/Script/Tests/Lua/Spec.lua`（极简 `describe/it/equal`，行号用 `debug.info` / `debug.getinfo` 两种探测，两个后端都能跑）+ `StringEx.spec.lua`；C++ 侧 `Private/Specs/LuaSpecs.spec.cpp` / `UnLuaNova.Lua` |
+| **T22** 性能基线 | `Private/Specs/Benchmark.spec.cpp` / `UnLuaNova.Perf.Benchmark`，写 `Saved/Benchmark/{latest,previous}.csv`；`GenerateTestReport.py` 增加 `load_benchmark` / `compare_benchmark` / `render_benchmark`，报告里多一节「性能环比」，超 ±30% 标 ⚠️ 且只 warn |
+| **T23** 容器增强 | `TArray` / `TMap` / `TSet` 各补 2 条"迭代中 Add / Remove 不崩且生效"。**嵌套容器未做**：`UE.TArray(UE.TArray(0))` 这种写法能否成立没有代码依据，盲写不如不写 |
+| **T5** Testing.md 用例清单 | CN/EN 都加了「用例清单」三列表，**由注册宏生成，实际 74 行**（不是清单里写的 37 行）；CN 补了 `luau-analyze.json` 产物行 |
+| **T24** Architecture.md | `Docs/CN|EN/Architecture.md`，已挂 `mkdocs.yml` 导航 |
+| **T25** CxxApi.md | `Docs/CN|EN/CxxApi.md`，签名逐条抄自头文件。三处与清单不同：没有 `IUnLuaNovaModule.h`（只有 `UnLuaNovaModule.h`）；`Binding.h` **没有宏**（宏在 `UnLuaNovaEx.h`）；`PushUObject` / `RunChunk` / `Call` **不在** `LowLevel` 里 |
+| **T26** 中英收敛 + strict | EN `API.md` 补 3 节、EN `Settings.md` 补 2 节并拆开合并的 4 项；新增 `Docs/EN/TestReports.md` 说明报告是生成的中文页；CI 恢复 `mkdocs build --strict`（**本机实测通过**：`python -m mkdocs build --strict` 零警告） |
+
+### 仍需要引擎才能收尾
+
+1. `.\Tools\RunTests.ps1 -Backend Both -BuildOnly` —— 过编译，按报错修
+2. 复跑确认 T15（参数类型错误改 `ProbeWithoutStaticBinding` + table）与 T12（`Start` 缺失模块）
+3. `.\Tools\RunTests.ps1 -Backend Both -UpdateBaseline` —— 刷新基线（新增约 40 条用例）
+4. 提交
+
+---
+
+## 3.5 未完成 TODO（批次 4 / 5 / 6）—— 历史存档
 
 ### 批次 4（~2.5 天）
 | 任务 | 文件 / 注册名 | 要点 | 工作量 |

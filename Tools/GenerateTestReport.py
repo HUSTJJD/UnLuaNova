@@ -531,6 +531,86 @@ def render_typecheck(tc) -> list:
     return lines
 
 
+BENCHMARK_FILE = "latest.csv"
+BENCHMARK_PREVIOUS = "previous.csv"
+# Benchmarks are timed on whatever machine ran them, so a tight threshold would make the
+# report cry wolf on every loaded build machine. 30% is deliberately loose: it is there to
+# catch "this change made calls twice as slow", not to police noise.
+BENCHMARK_DRIFT = 0.30
+
+
+def load_benchmark(repo_root: Path):
+    """Read Saved/Benchmark: this run's CSV and, if there is one, the run before it.
+
+    Returns (rows, previous). Both are dicts of Case -> per-op microseconds. Missing
+    files are not an error: the benchmark is its own automation case, and a run that did
+    not execute it should lose the section, not fail the report.
+    """
+    import csv
+
+    bench_dir = repo_root / "Saved" / "Benchmark"
+
+    def read(name):
+        path = bench_dir / name
+        if not path.is_file():
+            return None
+        try:
+            with path.open(newline="", encoding="utf-8") as handle:
+                return {
+                    row["Case"]: float(row["PerOpUs"])
+                    for row in csv.DictReader(handle)
+                    if row.get("Case") and row.get("PerOpUs")
+                }
+        except (OSError, ValueError, KeyError):
+            # A half-written CSV must not take the report down with it.
+            return None
+
+    return read(BENCHMARK_FILE), read(BENCHMARK_PREVIOUS)
+
+
+def compare_benchmark(rows, previous):
+    """Pair each case with its change against the previous run, if there was one."""
+    if not rows:
+        return []
+    out = []
+    for case in sorted(rows):
+        now = rows[case]
+        if previous and case in previous and previous[case] > 0:
+            before = previous[case]
+            change = (now - before) / before
+            out.append({"case": case, "now": now, "before": before, "change": change})
+        else:
+            out.append({"case": case, "now": now, "before": None, "change": None})
+    return out
+
+
+def render_benchmark(comparison) -> list:
+    lines = ["## 性能环比", ""]
+    if not comparison:
+        lines.append("这一轮没有性能数据（`Saved/Benchmark/latest.csv` 不存在）。")
+        lines.append("")
+        return lines
+
+    lines.append("| 用例 | 本次（µs/次） | 上次（µs/次） | 变化 |")
+    lines.append("|---|---|---|---|")
+    for row in comparison:
+        if row["change"] is None:
+            lines.append(f"| {row['case']} | {row['now']:.4f} | — | 无上次数据 |")
+            continue
+        pct = row["change"] * 100.0
+        flag = " ⚠️" if abs(row["change"]) > BENCHMARK_DRIFT else ""
+        lines.append(
+            f"| {row['case']} | {row['now']:.4f} | {row['before']:.4f} | {pct:+.1f}%{flag} |"
+        )
+    lines.append("")
+    lines.append(
+        f"> 超过 ±{int(BENCHMARK_DRIFT * 100)}% 会标 ⚠️，但**不会**让这轮失败："
+        "计时受机器负载影响，这里只做提示，不做判定。"
+    )
+    lines.append("")
+    return lines
+
+
 def render(
     tests,
     screenshots,
@@ -544,6 +624,7 @@ def render(
     uncoded=None,
     typecheck=None,
     encode_failures=None,
+    benchmark=None,
 ):
     total = len(tests)
     failed = [t for t in tests if not t["passed"]]
@@ -723,6 +804,9 @@ def render(
         lines.append("")
         lines.append(f"这一轮没有跑：`Tools/RunTests.ps1` 没写 `{TYPECHECK_FILES[backend]}`。")
         lines.append("")
+
+    if benchmark is not None:
+        lines.extend(render_benchmark(benchmark))
 
     lines.append("---")
     lines.append("")
@@ -917,6 +1001,10 @@ def main() -> None:
 
     typecheck = load_typecheck(reports_dir, backend)
 
+    repo_root = Path(__file__).resolve().parent.parent
+    bench_rows, bench_previous = load_benchmark(repo_root)
+    benchmark = compare_benchmark(bench_rows, bench_previous) if bench_rows else None
+
     generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     total = len(tests)
     failed = sum(1 for t in tests if not t["passed"])
@@ -936,6 +1024,7 @@ def main() -> None:
             uncoded=uncoded,
             typecheck=typecheck,
             encode_failures=encode_failures,
+            benchmark=benchmark,
         ),
         encoding="utf-8",
         newline="\n",
@@ -1038,6 +1127,7 @@ def main() -> None:
                     crash=crash,
                     clips=clips,
                     uncoded=uncoded,
+                    benchmark=benchmark,
                 ),
                 repo_root,
             ),
@@ -1045,6 +1135,17 @@ def main() -> None:
             newline="\n",
         )
         print(f"published to {page_path}")
+
+    if benchmark:
+        # Warn only. Timings depend on the machine, so a regression here is a signal to
+        # look at, never a reason to fail a run - see BENCHMARK_DRIFT.
+        for row in benchmark:
+            if row["change"] is not None and abs(row["change"]) > BENCHMARK_DRIFT:
+                print(
+                    f"BENCHMARK: {row['case']} {row['change'] * 100:+.1f}% "
+                    f"({row['before']:.4f} -> {row['now']:.4f} us/op) - warn only",
+                    file=sys.stderr,
+                )
 
     label = f"[{backend}] " if backend else ""
     print(

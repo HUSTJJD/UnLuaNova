@@ -164,7 +164,9 @@ under `Private/` (`BEGIN_DEFINE_SPEC` / `IMPLEMENT_SIMPLE_AUTOMATION_TEST` /
 | `UnLuaNova.API.FVector` | construct / `Set` / `Normalize` / arithmetic / `unm` / `tostring()` | |
 | `UnLuaNova.API.FVector2D` | same as above | |
 | `UnLuaNova.API.FVector4` | same as above | |
+| `UnLuaNova.API.Latent` | the message a main-thread latent call produces, and that the env survives it | the wording is the contract - rewording fails the case |
 | `UnLuaNova.API.Lifetime` | release tag, collection of script-held objects, manual references, env teardown | |
+| `UnLuaNova.API.Locators` | the default / ByPackage / custom module and environment locators | mutates global settings, restored in `AfterEach` |
 | `UnLuaNova.API.LuaBackend` | the backend shim, capability parity, Luau-only features, integer types, coroutines, profiler and debug | backend specific |
 | `UnLuaNova.API.LuaScriptCompat` | `collectgarbage` / `load` and other script-level compatibility | backend specific |
 | `UnLuaNova.API.Observability` | CPU profiling, memory stats, debug service | |
@@ -180,10 +182,15 @@ under `Private/` (`BEGIN_DEFINE_SPEC` / `IMPLEMENT_SIMPLE_AUTOMATION_TEST` /
 | `UnLuaNova.API.UE` | the global `UE` namespace | |
 | `UnLuaNova.API.UObject` | `Load` / `IsValid` / `GetName` / `GetOuter` / `GetClass` / `GetWorld` / `IsA` / `Release` | |
 | `UnLuaNova.API.World` | `SpawnActor` | |
+| `UnLuaNova.API.Overrides` | what is overridable, override and restore, suspend/resume, whether dispatch reaches Lua, a raise inside an override | mutates the UClass, restored in `AfterEach` |
 | `UnLuaNova.Binding` | scoped enums and enum classes | |
 | `UnLuaNova.Editor.Commands` | console commands, Lua templates, editor commands | editor only |
+| `UnLuaNova.Editor.ConsoleCommands` | actual behaviour of `lua.do` / `lua.gc` / `lua.profiler` / `lua.memstats` / `lua.dbg` / `lua.sandbox` | editor only |
+| `UnLuaNova.Editor.IntelliSense` | the generated declarations and the function-level helpers | editor only |
 | `UnLuaNova.Editor.StaticBindingGenerator` | the static binding generator | editor only |
 | `UnLuaNova.Extensions` | LuaRapidjson / LuaProtobuf / LuaSocket | needs the optional extension plugins |
+| `UnLuaNova.Lua` | runs `Content/Script/Tests/Lua/*.spec.lua` and lifts each Lua result into C++ | failures carry the Lua file name and line |
+| `UnLuaNova.Perf.Benchmark` | native / reflective / Lua call timings, written as CSV under `Saved/Benchmark/` | compared run over run in the report, warn only |
 | `UnLuaNova.Regression.Issue276` | `coroutine delay` stops working once the game world is paused | |
 | `UnLuaNova.Regression.Issue286` | wrong Blueprint `TMap FindRef` | |
 | `UnLuaNova.Regression.Issue295` | dynamically bound UMG object crashes in Destruct on map change | |
@@ -202,6 +209,7 @@ under `Private/` (`BEGIN_DEFINE_SPEC` / `IMPLEMENT_SIMPLE_AUTOMATION_TEST` /
 | `UnLuaNova.Regression.Issue660` | crash binding one UnLua function to several delegates | |
 | `UnLuaNova.Regression.IssueOverrides` | problems caused by overriding | |
 | `UnLuaNova.Settings` | actual behaviour of settings such as the dead-loop watchdog | mutates global settings, restored in `AfterEach` |
+| `UnLuaNova.Settings.General` | startup module name, diagnostic switches, locator classes: a change has to be visible, and has to be undoable | mutates global settings, restored in `AfterEach` |
 | `UnLuaNova.Showcase.Binding` | static binding sample screenshot | **needs a real viewport** |
 | `UnLuaNova.Showcase.Container` | container access sample screenshot | **needs a real viewport** |
 | `UnLuaNova.Showcase.Override` | Blueprint event override sample screenshot | **needs a real viewport** |

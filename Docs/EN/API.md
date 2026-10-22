@@ -140,12 +140,76 @@ FUnLuaNovaDelegates
 
 * `print` Override origin `print` by `UEPrint`
 
+### The UnLuaNova global table (script side)
+
+`UnLuaNova` is both a Lua module name (`require "UnLuaNova"`) and a global table injected at
+runtime:
+
+* `UnLuaNova.GetBackend()` returns the Lua backend this build was compiled against: `"Lua"` or
+  `"Luau"`.
+
+* `UnLuaNova.HasFeature(Name)` asks whether a capability is available on the current backend. The
+  known names:
+
+  | Name | Meaning | Lua 5.x | Luau |
+  |---|---|---|---|
+  | `sandbox` | native sandbox (`luaL_sandbox`) | no | yes |
+  | `breakpoint` | VM level breakpoint / single-step channel | no | yes |
+  | `allocCallbacks` | categorised memory callbacks (the breakdown view of `lua.memstats`) | no | yes |
+  | `vector` | native `vector` and `FVector` convert directly | no | yes |
+  | `buffer` | the `buffer` library | no | yes |
+
+  An unknown name returns `false` rather than raising, so a script written against a newer version
+  degrades instead of crashing on an older build.
+
+Branch on capability, not on the backend name: capabilities change between versions of the same
+backend, the name does not.
+
+### String extensions
+
+When the environment starts, the functions below are installed onto the global `string` table - no
+`require` needed (see `Plugins/UnLuaNova/Content/Script/UnLuaNova/StringEx.lua`):
+
+| Function | Meaning |
+|---|---|
+| `string.split(s, sep)` | splits on a **literal** separator (not a pattern); `sep` defaults to `,` |
+| `string.strip(s)` / `string.trim(s)` | trims leading and trailing whitespace |
+| `string.startswith(s, prefix)` / `string.endswith(s, suffix)` | prefix/suffix test; the empty string is always true |
+| `string.count(s, sub)` | counts non-overlapping occurrences |
+
+`join` lives only in the module table (`require("UnLuaNova.StringEx").join(sep, list)`); it is not
+installed onto `string`.
+
+### Lua modules shipped with the plugin
+
+These modules live under `Plugins/UnLuaNova/Content/Script/UnLuaNova/` and **travel with the
+plugin** - they are not part of the sample project. Reach them as `UnLuaNova.<Module>` /
+`Lua.<Module>` (`UnLuaNova` is an alias of `Lua`, and `__index` requires on demand), or
+`require("UnLuaNova.<Module>")` directly:
+
+| Module | Meaning |
+|---|---|
+| `StringEx` | string extensions; required automatically at env startup, installs onto `string` |
+| `Vector` | `vector` <-> `FVector` interop (`HasVector()` / `Create` / `ToFVector` / `FromFVector`) |
+| `Buffer` | `buffer` <-> `TArray<uint8>` conversion (`HasBuffer()` / `FromArray` / `ToArray`) |
+| `Input` | input binding |
+| `EnhancedInput` | enhanced input binding |
+| `HotReload` | hot reload: takes over `require` so already loaded modules can be replaced |
+
+!!! warning "Do not put these modules in the project directory"
+
+    `package.path` is `Content/Script/?.lua;Plugins/UnLuaNova/Content/Script/?.lua` - **the project
+    comes first**. A module placed under `Content/Script/UnLuaNova/` loads fine in this repository,
+    but any project that installs only the plugin will not find it - and no case here will fail.
+    `UnLuaNova.API.RuntimeModules` asserts "the file lives in the plugin directory" precisely to
+    stop that from happening again.
+
 ## Macros in UnLuaNova module
 * `AUTO_UNLUA_STARTUP` Macro for whether to automatically start or not, default is true
 
 * `WITH_UE4_NAMESPACE` Macro for whether to use `UE` to access Unreal Class's in Lua or not , default is true
 
-* `ENABLE_TYPE_CHECK` Macro for whether to check arguments' type is correct or not while calling C++ from Lua, default is true
+* `ENABLE_TYPE_CHECK` Macro for whether to check arguments' type is correct or not while calling C++ from Lua, default is true. A supplied argument of the wrong type raises a Lua error (catchable with `pcall`) instead of the call proceeding with a substituted value.
 
 * `UNLUANOVA_ENABLE_DEBUG` Macro for whether to output UnLuaNova's debugging log, default is false.
 

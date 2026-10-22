@@ -30,6 +30,17 @@ C++-to-Lua call completes.
 
 Dumps the stack of every Lua environment to the log when a crash is caught. On by default.
 
+### Lua environment allocator
+
+The default allocator puts every `UObject` into the same Lua environment, which suits the large
+majority of projects.
+
+Sometimes you want isolation instead: everything under one `GameInstance` in its own environment,
+released in one go when that game instance exits; or a Lua UI framework that was not designed for
+several game instances in one process and collides when you run more than one. `ULuaEnvLocator_ByGameInstance`
+is the built-in answer. You can also subclass `ULuaEnvLocator` for your own rule - but note that
+isolation is not a sandbox, objects in other environments are still reachable through UE.
+
 ### Lua environment locator
 
 By default every `UObject` lands in one environment. Choose `ULuaEnvLocator_ByGameInstance`
@@ -140,10 +151,32 @@ git submodule update --init --recursive
 Compatibility for older code that reaches the namespace as `UE4` (it is `UE` now).
 *Requires a recompile.*
 
-### Return value order / Blueprint path suffix / UTF-8 BOM / argument passing
+### Return value order
 
-Legacy compatibility switches for older UnLua projects; each is documented in the UI and
-*requires a recompile*.
+Compatibility for older code that expects out parameters before the return value.
+*Requires a recompile.*
+
+### Blueprint path suffix
+
+Compatibility for older code that expects `_C` to be appended automatically when loading a Blueprint
+asset path. *Requires a recompile.*
+
+### Tolerating a UTF-8 BOM
+
+Off by default. Older versions tolerated Lua files that start with a BOM, at the cost of a check on
+every load; prefer a tool that guarantees the encoding is right. When the option is off the editor
+still tolerates a BOM but logs a warning. *Requires a recompile.*
+
+### Argument passing
+
+When UE calls a Lua-overridden `UFunction`, object parameters (containers, structs) used to be passed
+as pointers, so modifying them from Lua needed an explicit copy (`ToTable` or `Copy`). That works
+well for the common read-only case and is faster, but it is extra mental load. Turning this off makes
+copying the default.
+
+### Check for new version
+
+Prints a note to the console when a newer version is available.
 
 ---
 

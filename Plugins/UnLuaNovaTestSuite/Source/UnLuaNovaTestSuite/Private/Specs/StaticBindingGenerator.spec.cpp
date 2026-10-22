@@ -37,6 +37,21 @@
 BEGIN_DEFINE_SPEC(FStaticBindingGeneratorSpec, "UnLuaNova.Editor.StaticBindingGenerator", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 END_DEFINE_SPEC(FStaticBindingGeneratorSpec)
 
+// Runs the commandlet into a scratch directory and hands back the generated text.
+// Shared by every case below so that "what the generator produced" is defined once.
+static bool SpecGenerate(const FString& OutputDir, FString& OutContent)
+{
+    IFileManager::Get().DeleteDirectory(*OutputDir, false, true);
+
+    UUnLuaNovaStaticBindingGeneratorCommandlet* Commandlet = NewObject<UUnLuaNovaStaticBindingGeneratorCommandlet>();
+    const FString Params = FString::Printf(TEXT("-OutputDir=%s"), *OutputDir);
+    if (Commandlet->Main(Params) != 0)
+        return false;
+
+    const FString Generated = OutputDir / TEXT("UnLuaNovaStaticBinding_Generated.cpp");
+    return FFileHelper::LoadFileToString(OutContent, *Generated);
+}
+
 void FStaticBindingGeneratorSpec::Define()
 {
     It(TEXT("生成静态绑定表到 -OutputDir 指定的目录"), EAsyncExecution::TaskGraphMainThread, [this]()
@@ -65,6 +80,55 @@ void FStaticBindingGeneratorSpec::Define()
         TestFalse(*Generated, Content.Contains(TEXT("REINST_")));
 
         IFileManager::Get().DeleteDirectory(*OutputDir, false, true);
+    });
+
+    It(TEXT("生成的是真实内容，而不只是创建了一个文件"), EAsyncExecution::TaskGraphMainThread, [this]()
+    {
+        // "The file exists" passes for a generator that emits an empty file, which would
+        // leave the registry empty and the fast call path dead with a green suite. So the
+        // assertion is on the *contents* for a type this suite owns.
+        const FString OutputDir = FPaths::ProjectSavedDir() / TEXT("StaticBindingGeneratorSpec");
+        FString Content;
+        TEST_TRUE(SpecGenerate(OutputDir, Content));
+
+        TestTrue(TEXT("类型被选中"), Content.Contains(TEXT("UUnLuaNovaTestStub")));
+        TestTrue(TEXT("成员函数被导出"), Content.Contains(TEXT("ProbeWithStaticBinding")));
+        TestTrue(TEXT("属性带上了种类"), Content.Contains(TEXT("EStaticPropKind::")));
+        TestTrue(TEXT("类型描述符已生成"), Content.Contains(TEXT("TypeBinding_UUnLuaNovaTestStub")));
+
+        IFileManager::Get().DeleteDirectory(*OutputDir, false, true);
+    });
+
+    It(TEXT("opt-out 的类型不会出现在输出里"), EAsyncExecution::TaskGraphMainThread, [this]()
+    {
+        // Selection is opt-out, which makes this the only rule a project actually writes.
+        // If the tag were ignored, every type a project deliberately excluded would be
+        // compiled into the binding table - and nothing would fail.
+        const FString OutputDir = FPaths::ProjectSavedDir() / TEXT("StaticBindingGeneratorSpec");
+        FString Content;
+        TEST_TRUE(SpecGenerate(OutputDir, Content));
+
+        TestFalse(TEXT("带 UnLuaNovaNoExport 的类型被排除"), Content.Contains(TEXT("SpecNoExportType")));
+
+        IFileManager::Get().DeleteDirectory(*OutputDir, false, true);
+    });
+
+    It(TEXT("连续两次生成结果一致"), EAsyncExecution::TaskGraphMainThread, [this]()
+    {
+        // The generated file is committed in real projects, so a generator that is not
+        // deterministic produces a diff on every run and buries real changes.
+        const FString First = FPaths::ProjectSavedDir() / TEXT("StaticBindingGeneratorSpecA");
+        const FString Second = FPaths::ProjectSavedDir() / TEXT("StaticBindingGeneratorSpecB");
+
+        FString A;
+        FString B;
+        TEST_TRUE(SpecGenerate(First, A));
+        TEST_TRUE(SpecGenerate(Second, B));
+
+        TEST_TRUE(A == B);
+
+        IFileManager::Get().DeleteDirectory(*First, false, true);
+        IFileManager::Get().DeleteDirectory(*Second, false, true);
     });
 }
 

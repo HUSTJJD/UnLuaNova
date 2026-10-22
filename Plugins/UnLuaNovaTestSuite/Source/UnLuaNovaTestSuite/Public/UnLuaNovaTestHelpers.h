@@ -21,6 +21,8 @@
 #include "GameFramework/Character.h"
 #include "UnLuaNova.h"
 #include "UnLuaNovaInterface.h"
+#include "LuaEnvLocator.h"
+#include "LuaModuleLocator.h"
 #include "UnLuaNovaTestHelpers.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FUnLuaNovaTestSimpleEvent);
@@ -153,6 +155,44 @@ public:
     }
 };
 
+// A dedicated stub for the override spec.
+//
+// Overriding needs an object that actually binds: ULuaModuleLocator::Locate() returns an empty
+// module name for a class that does not implement IUnLuaNovaInterface, so neither
+// UUnLuaNovaTestStub nor AUnLuaTestActor can be bound and the dispatch behaviour - Lua
+// implementation, original implementation, suspend/resume - has nothing to observe.
+//
+// It is deliberately its own class rather than an extra member on UUnLuaNovaTestStub: adding
+// IUnLuaNovaInterface there would make roughly twenty existing NewObject calls try to bind,
+// which is a much larger blast radius than one new type.
+UCLASS()
+class UNLUANOVATESTSUITE_API UUnLuaNovaTestStubForOverrides : public UObject, public IUnLuaNovaInterface
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY()
+    int32 Counter;
+
+    UUnLuaNovaTestStubForOverrides()
+    {
+        Counter = 0;
+    }
+
+    virtual FString GetModuleName_Implementation() const override
+    {
+        return TEXT("Tests.Specs.Overrides.OverridesStub");
+    }
+
+    // An event: overridable from Lua.
+    UFUNCTION(BlueprintImplementableEvent)
+    int32 Overridable();
+
+    // A plain callable: not an event, so overriding must reject it.
+    UFUNCTION(BlueprintCallable)
+    int32 NotOverridable() { return 7; }
+};
+
 UCLASS()
 class UNLUANOVATESTSUITE_API AUnLuaTestActor : public AActor
 {
@@ -167,6 +207,41 @@ public:
 
     UFUNCTION(BlueprintImplementableEvent)
     TSubclassOf<UUserWidget> TestForIssue445(int32 Index);
+};
+
+// Locator subclasses for the locators spec. They have to live in a header: UHT does not
+// pick up a UCLASS declared inside a .cpp.
+// Opts out of static binding generation, so the generator spec can assert that the opt-out
+// tag is honoured. Without a type that actually carries the metadata, "excluded types are
+// excluded" is not observable.
+UCLASS(meta = (UnLuaNovaNoExport))
+class UNLUANOVATESTSUITE_API USpecNoExportType : public UObject
+{
+    GENERATED_BODY()
+};
+
+UCLASS()
+class UNLUANOVATESTSUITE_API USpecModuleLocator : public ULuaModuleLocator
+{
+    GENERATED_BODY()
+
+public:
+    virtual FString Locate(const UObject* Object) override
+    {
+        return TEXT("Spec.Module.FromCustomLocator");
+    }
+};
+
+UCLASS()
+class UNLUANOVATESTSUITE_API USpecEnvLocator : public ULuaEnvLocator
+{
+    GENERATED_BODY()
+
+public:
+    virtual UnLuaNova::FLuaEnv* Locate(const UObject* Object) override
+    {
+        return Env.Get();
+    }
 };
 
 USTRUCT(BlueprintType)
