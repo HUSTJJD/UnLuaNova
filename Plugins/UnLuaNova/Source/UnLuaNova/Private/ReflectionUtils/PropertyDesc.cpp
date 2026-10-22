@@ -1321,7 +1321,7 @@ public:
                 return false;
             }
 
-            FClassDesc* CurrentClassDesc = UnLuaNova::FLuaEnv::FindEnv(L)->GetClassRegistry()->Find(MetatableName);
+            FClassDesc* CurrentClassDesc = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetClassRegistry()->Find(MetatableName);
             if (!CurrentClassDesc)
             {
                 ErrorMsg = FString::Printf(TEXT("metatable of userdata needed in registry but got no found"));

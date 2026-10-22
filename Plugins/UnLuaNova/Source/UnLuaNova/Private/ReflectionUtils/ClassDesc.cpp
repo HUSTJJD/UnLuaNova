@@ -27,7 +27,7 @@
  * Class descriptor constructor
  */
 FClassDesc::FClassDesc(UnLuaNova::FLuaEnv* Env, UStruct* InStruct, const FString& InName)
-    : Struct(InStruct), ClassName(InName), UserdataPadding(0), Size(0), Env(Env), FunctionCollection(nullptr)
+    : StructPtr(InStruct), Struct(InStruct), ClassName(InName), UserdataPadding(0), Size(0), Env(Env), FunctionCollection(nullptr)
 {
     bIsScriptStruct = InStruct->IsA(UScriptStruct::StaticClass());
     bIsClass = InStruct->IsA(UClass::StaticClass());
@@ -168,6 +168,7 @@ void FClassDesc::Load()
         Found = LoadObject<UStruct>(nullptr, *Name);
 
     Struct = Found;
+    StructPtr = Found;
 }
 
 void FClassDesc::UnLoad()
@@ -177,4 +178,5 @@ void FClassDesc::UnLoad()
     Functions.Empty();
 
     Struct.Reset();
+    StructPtr = nullptr;
 }

@@ -330,6 +330,12 @@ static int32 TMap_ToTable(lua_State* L)
 
     void* MemData = FMemory::Malloc(sizeof(FLuaArray), alignof(FLuaArray));
     FLuaArray* Keys = Map->Keys(MemData);
+    if (!Keys)
+    {
+        FMemory::Free(MemData);
+        return luaL_error(L, "invalid map");
+    }
+
     Keys->Inner->Initialize(Keys->ElementCache);
     lua_newtable(L);
     for (int32 i = 0; i < Keys->Num(); ++i)
@@ -354,6 +360,11 @@ static int32 TMap_ToTable(lua_State* L)
         Map->ValueInterface->Destruct(ValueCache);
     }
     Keys->Inner->Destruct(Keys->ElementCache);
+
+    // Keys() placement-constructs an owned FLuaArray over MemData (its own FScriptArray
+    // plus an element cache), so the destructor has to run before the block is freed -
+    // TArray_Delete is the other place that does this pairing.
+    Keys->~FLuaArray();
     FMemory::Free(MemData);
     return 1;
 }

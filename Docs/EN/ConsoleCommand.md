@@ -114,6 +114,11 @@ an ini so it applies at startup:
 lua.sandbox=1
 ```
 
+The CVar itself exists on both backends, so `lua.sandbox` can be read and written anywhere -
+a backend that cannot honour it answers "off" rather than "no such command". Whether setting
+it actually does anything is a separate question, and scripts ask that one with
+`UnLuaNova.HasFeature('sandbox')`.
+
 *Off by default, because it changes the behaviour of existing scripts. It relies on Luau's
 native sandbox and is unsupported on the Lua 5.5 backend.*
 

@@ -27,6 +27,17 @@ namespace UnLuaNova
         Runner = new FRunner();
     }
 
+    FDeadLoopCheck::~FDeadLoopCheck()
+    {
+        // Nothing outside this object ever stopped the runner, so ~FLuaEnv deleting us
+        // used to leave the thread running with a dangling Env. Join it here instead.
+        if (Runner)
+        {
+            Runner->Shutdown();
+            Runner = nullptr;
+        }
+    }
+
     TUniquePtr<FDeadLoopCheck::FGuard> FDeadLoopCheck::MakeGuard()
     {
         if (Timeout <= 0)
@@ -87,6 +98,20 @@ namespace UnLuaNova
     void FDeadLoopCheck::FRunner::GuardLeave()
     {
         GuardCounter.Decrement();
+    }
+
+    void FDeadLoopCheck::FRunner::Shutdown()
+    {
+        Stop();
+
+        if (!Thread)
+            return;
+
+        Thread->WaitForCompletion();
+        delete Thread;
+        Thread = nullptr;
+
+        // Run() has returned by now, and Exit() deletes the runner on the way out.
     }
 
     FDeadLoopCheck::FGuard::FGuard(FDeadLoopCheck* Owner)

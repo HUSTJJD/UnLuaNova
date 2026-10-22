@@ -202,6 +202,12 @@ namespace UnLuaNova
                 // what it loaded, so the next script to ask for a new type errors out.
                 UnLuaNova::RestoreTablesAfterSandbox(L);
             }
+#else
+            // Nothing to enforce here: this backend has no read-only tables, so the
+            // global table cannot be frozen however the switch is set. Reading the
+            // value anyway keeps the registration above from being dead code on this
+            // build - and keeps both backends compiling the same shape.
+            (void)SandboxCVar->GetInt();
 #endif
         }
 
@@ -543,7 +549,14 @@ namespace UnLuaNova
         const int32 Code = luaL_loadbufferx(InL, Buffer, Size, InName, nullptr);
         if (Code != LUA_OK)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to call luaL_loadbufferx, error code: %d"), Code);
+            // One report per failure, and it is the compiler's: ReportLuaCallError logs the
+            // message below, which carries the chunk name and the line. The status code on
+            // its own - 3 is LUA_ERRSYNTAX - carries neither, so it goes out at Verbose for
+            // whoever is debugging the loader instead of as a second line at Warning. That
+            // second line is what a test that feeds LoadBuffer a broken chunk on purpose
+            // trips over: it declares the Error-level message expected, and the Warning is
+            // still there, unnamed and unmatched.
+            UE_LOG(LogUnLuaNova, Verbose, TEXT("Failed to call luaL_loadbufferx for '%s', error code: %d"), UTF8_TO_TCHAR(InName), Code);
             ReportLuaCallError(InL); // report pcall error
             lua_pushnil(InL); /* error (message is on top of the stack) */
             lua_insert(InL, -2); /* put before error message */

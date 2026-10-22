@@ -97,7 +97,11 @@ namespace UnLuaNova
         int32 Code = luaL_loadbufferx(L, Chunk, ChunkSize, ChunkName, Mode);        // loads the buffer as a Lua chunk
         if (Code != LUA_OK)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to call luaL_loadbufferx, error code: %d"), Code);
+            // ReportLuaCallError logs the compiler's own message - chunk name, line, what
+            // it expected - which is the part worth reading. The status code says none of
+            // that, so it stays at Warning: a second line at Warning would only repeat the
+            // failure without naming the chunk that failed. See FLuaEnv::LoadBuffer.
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to call luaL_loadbufferx for '%s', error code: %d"), UTF8_TO_TCHAR(ChunkName), Code);
             ReportLuaCallError(L);                          // report pcall error
         }
 
@@ -266,7 +270,7 @@ namespace UnLuaNova
             if (!bAlwaysCreate)
             {
                 // cache the new userdata in 'StructMap
-                FLuaEnv::FindEnv(L)->GetDanglingCheck()->CaptureStruct(L, Value);
+                FLuaEnv::FindEnvChecked(L).GetDanglingCheck()->CaptureStruct(L, Value);
                 lua_pushlightuserdata(L, Value);
                 lua_pushvalue(L, -2);
                 lua_rawset(L, -4);

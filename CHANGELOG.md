@@ -358,6 +358,62 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   `HotReload` 一致，require 名字不变），并新增 `UnLuaNova.API.RuntimeModules` 断言
   "这些模块的文件在插件目录里"，而不只是"require 得出来"（后者在本仓库无论放哪都通过）
 
+### Fixed
+- **`TSet:ToTable()` / `TMap:ToTable()` 每次调用泄漏两块内存**：两者都在 `FMemory::Malloc`
+  出来的块上 placement-new 一个**自持有**的 `FLuaArray`（`ToArray()` / `Keys()` 内部
+  `new FScriptArray` + `malloc(ElementCache)`），但结尾只 `FMemory::Free` 了那块裸内存，
+  从不调用 `~FLuaArray()` —— 而 `FLuaArray` 持有的两个分配**只有**析构函数会还回去。
+  现在两处都补上 `->~FLuaArray()`（与 `TArray` 的 `TArray_Delete` 同一套配对），
+  并给 `ToArray`/`Keys` 返回 null 的情况加了受控报错（元素接口缺失时原来会直接解引用空指针）
+- **死循环看门狗的线程永不退出**：`FDeadLoopCheck` 构造时 `new FRunner()` 起一条每秒轮询的
+  后台线程，而 `FRunner::Stop()` 全仓库没有任何调用点，`~FDeadLoopCheck` 也不存在 ——
+  于是 `~FLuaEnv` 的 `delete DeadLoopCheck` 只是把壳删了：**每个 Lua 环境留一条线程，
+  且那条线程还持有已经析构的 `Env`**（`FGuard::SetTimeout()` 会 `Env->GetMainState()`）。
+  默认 `DeadLoopCheck=0`（关闭）时线程照样起，所以测试里每建一个 env 就漏一条。
+  现在加了 `~FDeadLoopCheck` → `FRunner::Shutdown()`（`Stop()` + `WaitForCompletion()`）；
+  线程对象由 `Shutdown()` 释放，`FRunner` 自己仍由 `Exit()` 的 `delete this` 回收
+- **`FClassRegistry::Register(名字)` 会在成功路径上返回空**：`PushMetatable` 有一个
+  "元表在 Lua 注册表里但 `Name2Classes` 里没有描述符" 的分支，原来照样 `return true`，
+  把 `*OutClassDesc` 留在 null。`GetFieldInternal` 拿到它直接 `->RegisterField()`。
+  现在该分支改为落到重新注册的路径上，保证"返回 true 时 `OutClassDesc` 一定非空"；
+  调用侧仍补了空检查（受控 Lua error 好过空指针解引用）
+- **一批 `FindEnv(L)->` 未判空**：`TryToSetMetatable` 把空检查加在了**下一层**结果上
+  （`if (!Registry)`），解引用发生在检查之前；`PushFunction` / `LuaLib_Enum` /
+  `LuaLib_Class` / `UnLuaNovaBase` / `PropertyDesc` 同样直接解引用 `FindEnv` 的返回值，
+  而它明确会返回 nullptr。现已分别改为判空提前返回或 `FindEnvChecked`（后者与同文件
+  既有写法一致，失败是断言而不是静默空指针）
+- **`ULuaFunction` 的两处 `Cast<ULuaOverridesClass>(GetOuter())` 未判空后即解引用**：
+  `Restore()` 与 `SetActive()` 里都是先 `->GetOwner()` 再判结果 —— 判的是**返回值**，
+  不是 `Cast` 的结果。改为复用 `GetOverriddenUClass()`（它本来就做了这个判空）。
+  `Override()` 里 `Get(Function)` 同样可能是空，改为先取值再 `check`，断言直接点名真实原因
+- **`FLuaRetValues(FLuaEnv*, int32)` 与 `FLuaRetValues(lua_State*, int32)` 行为不一致**：
+  前者只初始化 `L`，**不登记返回值**，于是 `Num()` 恒为 0、`Pop()` 永远不弹栈。
+  现在改为委托给 `lua_State*` 版本，两个构造函数语义一致。
+  五个调用点原本全是 `INDEX_NONE`（所以没爆），且其中 `Call` / `CallTableFunc` 在
+  `L == nullptr` 时会把 `FindEnv(nullptr)` 的空结果喂进去、在构造函数里解引用 ——
+  现统一改用 `lua_State*` 版本提前返回（`INDEX_NONE` 路径不碰 `L`）
+- **模块卸载不摘委托**：`StartupModule` 用 `AddRaw` 注册了 `PostLoadMapWithWorld` 与四个
+  PIE/EndPlayMap 回调，但 `ShutdownModule` 只做 `UnregisterSettings()` + `SetActive(false)`。
+  Live Coding 重载或编辑器关模块之后，这些委托仍指向已析构的 module 对象。
+  现在保存 `FDelegateHandle` 并在 `ShutdownModule` 里逐一 `Remove`（与 `SetActive(false)`
+  里对 `OnHandleSystemError` / `OnHandleSystemEnsure` 已有的做法一致）
+- **`NotifyUObjectCreated` 未判空**：同一文件 `PostLoadMapWithWorld` 对 `EnvLocator->Locate()`
+  判空，这条路径没有，直接 `Env->TryBind()`。已补
+- **`FRuntimeEnumParamValue::GetValue()` 解引用 `FindFirstObject<UEnum>` 的空结果**：
+  枚举所在包没加载时返回 nullptr，下一行无条件 `->GetValueByIndex()`。
+  改为取不到就返回 0 且**不**标记已初始化（下次调用会重试），而不是崩在第一次
+  用到这个默认参数的函数上
+- **`ReleaseManualRef` 未判 `lua_touserdata` 结果**：同文件紧邻的 `ReleaseSharedPtr`
+  对同类取值判了空，这里没有。已补
+
+### Changed
+- **`PeekTableElement` 去掉 8 处 `check(true)`**：这是 `TraverseTable` 的 worker 签名，
+  但全仓库没有调用点，且函数体里 8 个分支全是 `check(true)` + 一个谁也不读的局部变量
+  —— 恒真的假断言，只为消掉未使用变量警告。现在只保留真正有行为的那一支
+  （值是非原生 UStruct 的 userdata 时返回 false），行为与原来完全一致。
+  顺带说明：key 那一路会对 `lua_next` 正在用的 key 调 `lua_tostring`，在 Lua 5.x 上
+  会把 key **就地**转成字符串 —— 一旦这个函数真被当成 worker 挂上去，就会破坏遍历本身
+
 ### Reverted
 - **PR #719**：其守卫会在子类实例上跳过 Lua 覆写（详见 `Docs/Archive/` 说明），
   需先补「子类实例仍能执行 Lua 覆写」的测试再评估

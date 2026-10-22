@@ -124,12 +124,15 @@ namespace UnLuaNova
                 // unregister invalid metatable
                 Unregister(Ret, true);
             }
-            else
+            else if (Ret)
             {
                 if (OutClassDesc)
                     *OutClassDesc = Ret;
                 return true;
             }
+            // else: a metatable exists with no descriptor behind it. Falling through to
+            // re-register is what keeps OutClassDesc non-null on every true return -
+            // callers such as FClassRegistry::Register() dereference it without checking.
         }
         lua_pop(L, 1);
 

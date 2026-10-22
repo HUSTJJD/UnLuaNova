@@ -692,10 +692,12 @@ namespace UnLuaNova
     template <typename... T>
     FLuaRetValues Call(lua_State* L, const char* FuncName, T&&... Args)
     {
-        const auto Env = FLuaEnv::FindEnv(L);
+        // The env overload cannot be used here: it dereferences the env, and on this path
+        // L may be null, which is exactly what makes FindEnv answer null. The lua_State
+        // overload with INDEX_NONE touches nothing, so it is safe on the way out.
         if (!L || !FuncName)
         {
-            return FLuaRetValues(Env, INDEX_NONE);
+            return FLuaRetValues(L, INDEX_NONE);
         }
 
         lua_pushcfunction(L, ReportLuaCallError);
@@ -717,10 +719,9 @@ namespace UnLuaNova
     template <typename... T>
     FORCEINLINE_DEBUGGABLE FLuaRetValues CallTableFunc(lua_State* L, const char* TableName, const char* FuncName, T&&... Args)
     {
-        const auto Env = FLuaEnv::FindEnv(L);
         if (!L || !TableName || !FuncName)
         {
-            return FLuaRetValues(Env, INDEX_NONE);
+            return FLuaRetValues(L, INDEX_NONE);
         }
 
         lua_pushcfunction(L, ReportLuaCallError);
@@ -730,14 +731,14 @@ namespace UnLuaNova
         {
             UE_LOG(LogUnLuaNova, Warning, TEXT("Global table %s doesn't exist!"), UTF8_TO_TCHAR(TableName));
             lua_pop(L, 2);
-            return FLuaRetValues(Env, INDEX_NONE);
+            return FLuaRetValues(L, INDEX_NONE);
         }
         Type = lua_getfield(L, -1, FuncName);
         if (Type != LUA_TFUNCTION)
         {
             UE_LOG(LogUnLuaNova, Warning, TEXT("Function %s of global table %s doesn't exist!"), UTF8_TO_TCHAR(FuncName), UTF8_TO_TCHAR(TableName));
             lua_pop(L, 3);
-            return FLuaRetValues(Env, INDEX_NONE);
+            return FLuaRetValues(L, INDEX_NONE);
         }
         lua_remove(L, -2);
 
@@ -753,7 +754,7 @@ namespace UnLuaNova
         const auto Env = FLuaEnv::FindEnv(L);
         if (!Env || !FuncName)
         {
-            return FLuaRetValues(Env, INDEX_NONE);
+            return FLuaRetValues(L, INDEX_NONE);
         }
 
         lua_pushcfunction(L, ReportLuaCallError);

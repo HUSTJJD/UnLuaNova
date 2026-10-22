@@ -185,6 +185,12 @@ static int32 TSet_ToTable(lua_State* L)
 
     void* MemData = FMemory::Malloc(sizeof(FLuaArray), alignof(FLuaArray));
     FLuaArray* Array = Set->ToArray(MemData);
+    if (!Array)
+    {
+        FMemory::Free(MemData);
+        return luaL_error(L, "invalid set");
+    }
+
     Array->Inner->Initialize(Array->ElementCache);
     lua_newtable(L);
     for (int32 i = 0; i < Array->Num(); ++i)
@@ -195,6 +201,11 @@ static int32 TSet_ToTable(lua_State* L)
         lua_rawset(L, -3);
     }
     Array->Inner->Destruct(Array->ElementCache);
+
+    // ToArray() placement-constructs an owned FLuaArray over MemData: it news an
+    // FScriptArray and mallocs an element cache, and only ~FLuaArray() gives those
+    // back. Freeing the block without running it leaks both on every ToTable() call.
+    Array->~FLuaArray();
     FMemory::Free(MemData);
     return 1;
 }

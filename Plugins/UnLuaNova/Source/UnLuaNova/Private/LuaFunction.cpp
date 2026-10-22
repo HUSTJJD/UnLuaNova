@@ -156,8 +156,11 @@ void ULuaFunction::Override(UFunction* Function, UClass* Class, bool bAddNew)
     {
         // 目标UFunction可能已经被覆写过了
         const auto LuaFunction = Get(Function);
-        Overridden = LuaFunction->GetOverridden();
-        check(Overridden);
+        Overridden = LuaFunction ? LuaFunction->GetOverridden() : nullptr;
+        // Both are invariants of the "already overridden" path: the previous
+        // implementation is kept in the function's own script data, so a null here means
+        // that data was rewritten underneath us - not merely an override that is missing.
+        check(LuaFunction && Overridden);
     }
     else
     {
@@ -177,7 +180,10 @@ void ULuaFunction::Restore()
 {
     if (bAdded)
     {
-        if (const auto OverriddenClass = Cast<ULuaOverridesClass>(GetOuter())->GetOwner())
+        // GetOverriddenUClass() rather than Cast<...>(GetOuter())->GetOwner(): the outer
+        // is not necessarily a ULuaOverridesClass, and this is the teardown path, where
+        // a bad cast would turn into a crash on the way out.
+        if (const auto OverriddenClass = GetOverriddenUClass())
             OverriddenClass->RemoveFunctionFromFunctionMap(this);
     }
     else
@@ -207,7 +213,7 @@ void ULuaFunction::SetActive(const bool bActive)
     if (!Function)
         return;
 
-    const auto Class = Cast<ULuaOverridesClass>(GetOuter())->GetOwner();
+    const auto Class = GetOverriddenUClass();
     if (!Class)
         return;
     

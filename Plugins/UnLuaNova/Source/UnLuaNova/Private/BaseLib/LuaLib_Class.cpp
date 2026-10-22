@@ -66,7 +66,7 @@ int32 UClass_Load(lua_State* L)
     if (!Class)
         return 0;
 
-    if (!UnLuaNova::FLuaEnv::FindEnv(L)->GetClassRegistry()->Register(Class))
+    if (!UnLuaNova::FLuaEnv::FindEnvChecked(L).GetClassRegistry()->Register(Class))
         return 0;
 
     UnLuaNova::PushUObject(L, Class);

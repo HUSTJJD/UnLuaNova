@@ -45,6 +45,9 @@ namespace UnLuaNova
     {
         auto& Env = FLuaEnv::FindEnvChecked(L);
         const auto Proxy = (FManualRefProxy*)lua_touserdata(L, 1);
+        if (!Proxy)
+            return 0;
+
         const auto Object = Proxy->Object.Get();
         if (!Object)
             return 0;

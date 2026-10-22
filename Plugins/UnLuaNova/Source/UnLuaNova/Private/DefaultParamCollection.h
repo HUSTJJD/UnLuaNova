@@ -55,8 +55,12 @@ public:
         if (!bInitialized)
         {
             UEnum* Enum = FindFirstObject<UEnum>(*TypeName);
-            Value = Enum->GetValueByIndex(Index);
-            bInitialized = true;
+            // The enum's package need not be loaded when the collection is built, and a
+            // null enum here used to be dereferenced on the spot. Leave the value zero and
+            // let the next call retry rather than crash the first UFunction that defaults
+            // to this parameter.
+            Value = Enum ? Enum->GetValueByIndex(Index) : 0;
+            bInitialized = Enum != nullptr;
         }
         return &Value;
     }

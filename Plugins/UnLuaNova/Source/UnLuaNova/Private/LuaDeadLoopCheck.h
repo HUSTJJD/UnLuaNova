@@ -57,6 +57,16 @@ namespace UnLuaNova
 
             void GuardLeave();
 
+            /**
+             * Ask the poll loop to finish and wait for it.
+             *
+             * The thread deletes the runner itself from Exit() once Run() returns, so this
+             * must not delete Runner afterwards - it only joins and releases the thread
+             * object. Without it every FLuaEnv leaves a one-second polling thread behind,
+             * and that thread still holds Env, which is about to be destroyed with it.
+             */
+            void Shutdown();
+
         private:
             FThreadSafeBool bRunning;
             FRunnableThread* Thread;
@@ -66,6 +76,8 @@ namespace UnLuaNova
         };
         
         explicit FDeadLoopCheck(FLuaEnv* Env);
+
+        ~FDeadLoopCheck();
 
         TUniquePtr<FGuard> MakeGuard();
 

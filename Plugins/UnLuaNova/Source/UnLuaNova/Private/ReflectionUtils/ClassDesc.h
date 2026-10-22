@@ -86,6 +86,20 @@ public:
     void UnLoad();
 
 private:
+    // Not decoration and not dead state - this is part of the ABI.
+    //
+    // A class table (UE.UMyClass) is what a script hands over where a UObject is expected:
+    // NewObject(UE.UMyClass, self), any UObject* parameter filled from UE.UMyClass. For such
+    // a table LowLevel::GetUserdata() answers with the FClassDesc pointer (it reads the
+    // table's "ClassDesc" light userdata) and flags it a two level pointer, so
+    // GetCppInstance() then dereferences it: *(void**)Desc. What sits at that address has to
+    // *be* the UObject/UStruct pointer - anything else gets read as one, and the weak
+    // pointer's object index + serial number read as an address crashes on first use.
+    //
+    // Kept in step with Struct below, and nulled by UnLoad() so a stale class reads as null
+    // rather than as a pointer to something that is gone.
+    UStruct* StructPtr = nullptr;
+
     TWeakObjectPtr<UStruct> Struct;
 
     FString ClassName;
@@ -106,3 +120,4 @@ private:
 
     struct FFunctionCollection *FunctionCollection;
 };
+

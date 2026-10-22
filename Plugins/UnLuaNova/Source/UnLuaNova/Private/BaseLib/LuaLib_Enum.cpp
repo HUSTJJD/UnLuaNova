@@ -38,7 +38,7 @@ int32 Enum_Index(lua_State *L)
     lua_rawget(L, 1);
     check(lua_isstring(L, -1));
 
-    const auto Enum = UnLuaNova::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(lua_tostring(L, -1));
+    const auto Enum = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetEnumRegistry()->Find(lua_tostring(L, -1));
     if (!Enum)
     {
         lua_pop(L, 1);
@@ -70,7 +70,7 @@ int32 Enum_GetMaxValue(lua_State* L)
 		if (Type == LUA_TSTRING)
 		{
 			const char* EnumName = lua_tostring(L, -1);
-            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(EnumName);
+            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetEnumRegistry()->Find(EnumName);
 			if (EnumDesc)
 			{
 				UEnum* Enum = EnumDesc->GetEnum();
@@ -108,7 +108,7 @@ int32 Enum_GetNameStringByValue(lua_State* L)
         if (Type == LUA_TSTRING)
         {
             const char* EnumName = lua_tostring(L, -1);
-            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(EnumName);
+            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetEnumRegistry()->Find(EnumName);
             if (EnumDesc)
             {
                 UEnum* Enum = EnumDesc->GetEnum();
@@ -147,7 +147,7 @@ int32 Enum_GetDisplayNameTextByValue(lua_State* L)
         if (Type == LUA_TSTRING)
         {
             const char* EnumName = lua_tostring(L, -1);
-            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnv(L)->GetEnumRegistry()->Find(EnumName);
+            const auto EnumDesc = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetEnumRegistry()->Find(EnumName);
             if (EnumDesc)
             {
                 UEnum* Enum = EnumDesc->GetEnum();

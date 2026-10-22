@@ -261,11 +261,13 @@ void* GetUserdataFast(lua_State *L, int32 Index, bool *OutTwoLvlPtr)
  */
 bool TryToSetMetatable(lua_State* L, const char* MetatableName, UObject* Object)
 {
-    const auto Registry = UnLuaNova::FLuaEnv::FindEnv(L)->GetClassRegistry();
-    if (!Registry)
+    // The guard has to sit on FindEnv's result: FindEnv answers null for a state that
+    // belongs to no known environment, and GetClassRegistry() cannot be reached through it.
+    const auto Env = UnLuaNova::FLuaEnv::FindEnv(L);
+    if (!Env)
         return false;
 
-    return Registry->TrySetMetatable(L, MetatableName);
+    return Env->GetClassRegistry()->TrySetMetatable(L, MetatableName);
 }
 
 /**
@@ -372,7 +374,8 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
         lua_pushlightuserdata(L, Key);
         lua_pushvalue(L, -2);
         lua_rawset(L, -4);                                  // cache it in 'ScriptContainerMap'
-        UnLuaNova::FLuaEnv::FindEnv(L)->GetDanglingCheck()->CaptureContainer(L, Key);
+        if (const auto Env = UnLuaNova::FLuaEnv::FindEnv(L))
+            Env->GetDanglingCheck()->CaptureContainer(L, Key);
     }
 #if UE_BUILD_DEBUG
     else
@@ -407,7 +410,8 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
         lua_pushlightuserdata(L, Key);
         lua_pushvalue(L, -2);
         lua_rawset(L, -4);                                  // cache it in 'ScriptContainerMap'
-        UnLuaNova::FLuaEnv::FindEnv(L)->GetDanglingCheck()->CaptureContainer(L, Key);
+        if (const auto Env = UnLuaNova::FLuaEnv::FindEnv(L))
+            Env->GetDanglingCheck()->CaptureContainer(L, Key);
     }
 
     lua_remove(L, -2);
@@ -787,7 +791,12 @@ int32 PushFunction(lua_State *L, UObjectBaseUtility *Object, const char *Functio
 {
     int32 N = lua_gettop(L);
     lua_pushcfunction(L, UnLuaNova::ReportLuaCallError);
-    const auto& Env = UnLuaNova::FLuaEnv::FindEnv(L);
+    const auto Env = UnLuaNova::FLuaEnv::FindEnv(L);
+    if (!Env)
+    {
+        lua_pop(L, 1);
+        return LUA_NOREF;
+    }
     const auto Ref = Env->GetObjectRegistry()->GetBoundRef((UObject*)Object);
     if (Ref != LUA_NOREF)
     {
@@ -906,6 +915,14 @@ static void GetFieldInternal(lua_State* L)
 
     const auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
     FClassDesc* ClassDesc = Env.GetClassRegistry()->Register(ClassName);
+    if (!ClassDesc)
+    {
+        // The name came from a metatable that is already on the stack, so reaching here
+        // means the registry and the Lua registry disagree. Bail out rather than hand a
+        // null descriptor to RegisterField - a Lua error beats a null dereference.
+        luaL_error(L, "class %s is not registered", ClassName);
+        return;
+    }
     TSharedPtr<FFieldDesc> Field = ClassDesc->RegisterField(FieldName, ClassDesc);
     if (Field && Field->IsValid())
     {
@@ -988,85 +1005,24 @@ FORCEINLINE static int32 GetField(lua_State* L)
 }
 
 /**
- * Debug only...
+ * Traverse worker: answers false for a value that is a native UStruct userdata.
+ *
+ * Debug only. The rest of the key/value type switch used to be filled with check(true)
+ * and locals nobody read - eight assertions that could never fire, kept only to silence
+ * unused-variable warnings. Removed: they asserted nothing, and the key branch also called
+ * lua_tostring on the key, which during a lua_next walk would convert the key in place and
+ * corrupt the iteration this worker is meant to participate in.
  */
 bool PeekTableElement(lua_State *L, void*)
 {
-    int32 KeyType = lua_type(L, -2);
-    switch (KeyType)
+    if (lua_type(L, -1) == LUA_TUSERDATA && lua_checkstack(L, 2))
     {
-    case LUA_TBOOLEAN:
+        UObject *p = UnLuaNova::GetUObject(L, -1);
+        UStruct *Struct = Cast<UStruct>(p);
+        if (Struct && Struct->IsNative())
         {
-            int32 b = lua_toboolean(L, -2);
-            check(b >= 0);
+            return false;
         }
-        break;
-    case LUA_TLIGHTUSERDATA:
-        {
-            const void *p = lua_topointer(L, -2);
-            check(true);
-        }
-        break;
-    case LUA_TNUMBER:
-        {
-            float f = lua_tonumber(L, -2);
-            check(true);
-        }
-        break;
-    case LUA_TSTRING:
-        {
-            const char *s = lua_tostring(L, -2);
-            check(true);
-        }
-        break;
-    case LUA_TUSERDATA:
-        {
-            const void *p = lua_topointer(L, -2);
-            check(true);
-        }
-        break;
-    }
-    int32 ValueType = lua_type(L, -1);
-    switch (ValueType)
-    {
-    case LUA_TBOOLEAN:
-        {
-            int32 b = lua_toboolean(L, -1);
-            check(b >= 0);
-        }
-        break;
-    case LUA_TLIGHTUSERDATA:
-        {
-            const void *p = lua_topointer(L, -1);
-            check(true);
-        }
-        break;
-    case LUA_TNUMBER:
-        {
-            float f = lua_tonumber(L, -1);
-            check(true);
-        }
-        break;
-    case LUA_TSTRING:
-        {
-            const char *s = lua_tostring(L, -1);
-            check(true);
-        }
-        break;
-    case LUA_TUSERDATA:
-        {
-            if (lua_checkstack(L, 2))
-            {
-                UObject *p = UnLuaNova::GetUObject(L, -1);
-                UStruct *Struct = Cast<UStruct>(p);
-                if (Struct && Struct->IsNative())
-                {
-                    return false;
-                }
-                check(true);
-            }
-        }
-        break;
     }
     return true;
 }
