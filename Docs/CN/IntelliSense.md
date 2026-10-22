@@ -7,7 +7,12 @@ description: "生成引擎类型符号，让 VSCode 等 IDE 对 UE API 提供补
 ## 1. 生成智能提示信息
 ![生成智能提示信息](../Images/generate_intellisense.png)
 
-打开UnLuaNova工具栏，点击导出智能提示，会在`{UE工程}/Plugins/UnLuaNova/Intermediate`下生成`IntelliSense`的目录。
+打开UnLuaNova工具栏，点击导出智能提示，会在`{UE工程}/Plugins/UnLuaNova/IntelliSense`下生成声明文件。
+
+这个目录是每台机器自己生成的产物（已 gitignore）：内容取决于本机装了哪些插件和模块，入库
+会让它每次都变。它不在 `Intermediate/` 里 —— 那是 UBT 的构建中间产物目录，随时可能被清掉，
+而这里是给 IDE 和静态检查器看的东西（注意别和 `Content/IntelliSense` 搞混：后者是手写的
+注解源文件，是要入库的）。
 
 ## 2. 加入到LuaIDE
 
@@ -30,7 +35,7 @@ description: "生成引擎类型符号，让 VSCode 等 IDE 对 UE API 提供补
 一次导出产出**两种方言，分两个目录**：
 
 ```
-Plugins/UnLuaNova/Intermediate/IntelliSense/
+Plugins/UnLuaNova/IntelliSense/
 ├── EmmyLua/             Lua 方言，给 IDE 补全 + LuaLS（Lua 后端静态检查）
 │   ├── UE.lua           引擎类型的聚合入口
 │   ├── UnLuaNova.lua    UnLuaNova 自己的 API（从插件 Content 拷入）

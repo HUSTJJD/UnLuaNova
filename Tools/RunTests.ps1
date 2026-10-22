@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Runs the UnLuaNova automation tests and writes a readable report.
 
@@ -697,7 +697,7 @@ function Export-IntelliSense {
     #
     # So the run exports them itself, with the commandlet the toolbar button calls. One extra
     # editor launch (~40s), and only when the type check is actually going to run.
-    $LuauDir = Join-Path $RepoRoot "Plugins/UnLuaNova/Intermediate/IntelliSense/Luau"
+    $LuauDir = Join-Path $RepoRoot "Plugins/UnLuaNova/IntelliSense/Luau"
     $DeclsFile = Join-Path $LuauDir "UnLuaNova.d.lua"
 
     Write-Host "Decl      : 导出智能提示（$EditorCmd -run=UnLuaNovaIntelliSense -BP=1）"
@@ -721,7 +721,7 @@ function Export-IntelliSense {
     }
 
     $Size = (Get-Item -LiteralPath $DeclsFile).Length
-    $EmmyLuaCount = @(Get-ChildItem -Path (Join-Path $RepoRoot "Plugins/UnLuaNova/Intermediate/IntelliSense/EmmyLua") `
+    $EmmyLuaCount = @(Get-ChildItem -Path (Join-Path $RepoRoot "Plugins/UnLuaNova/IntelliSense/EmmyLua") `
         -Filter "*.lua" -File -ErrorAction SilentlyContinue).Count
     Write-Host ("Decl      : {0}（{1}），EmmyLua 注解 {2} 个" -f $DeclsFile, (Format-DataSize $Size), $EmmyLuaCount)
     return $true

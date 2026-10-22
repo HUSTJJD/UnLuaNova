@@ -200,7 +200,7 @@ local Back = UnLuaNova.Buffer.ToArray(Buf)      -- buffer -> TArray
 **生成**：UnLuaNova 工具栏 → 导出智能提示，产物落在
 
 ```
-Plugins/UnLuaNova/Intermediate/IntelliSense/
+Plugins/UnLuaNova/IntelliSense/
 ├── EmmyLua/             Lua 方言，给 IDE 补全 + LuaLS
 └── Luau/                Luau 方言，给 luau-analyze
     └── UnLuaNova.d.lua

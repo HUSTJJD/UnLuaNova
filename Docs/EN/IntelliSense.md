@@ -9,8 +9,13 @@ description: "Generating engine type symbols so VSCode and friends can complete 
 
 ![Generating IntelliSense](../Images/generate_intellisense.png)
 
-Open the UnLuaNova toolbar and click **Export IntelliSense**. It writes an `IntelliSense`
-directory under `{UEProject}/Plugins/UnLuaNova/Intermediate`.
+Open the UnLuaNova toolbar and click **Export IntelliSense**. It writes the declarations to
+`{UEProject}/Plugins/UnLuaNova/IntelliSense`.
+
+That directory is generated per machine and gitignored - its contents depend on which plugins and
+modules this machine has. It is not under `Intermediate/`: that is UBT's build scratch and can be
+wiped at any time, while this is input for the IDE and the type checkers. Do not confuse it with
+`Content/IntelliSense`, which holds the hand-written annotations and *is* checked in.
 
 ## 2. Add them to your Lua IDE
 
@@ -35,7 +40,7 @@ The same export also produces `UnLuaNova.d.lua`:
 One export produces **two dialects in two directories**:
 
 ```
-Plugins/UnLuaNova/Intermediate/IntelliSense/
+Plugins/UnLuaNova/IntelliSense/
 ├── EmmyLua/             Lua dialect, for IDE completion + LuaLS (Lua backend static check)
 │   ├── UE.lua           aggregate entry point for engine types
 │   ├── UnLuaNova.lua    UnLuaNova's own API (copied from the plugin's Content)

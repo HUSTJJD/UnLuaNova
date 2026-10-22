@@ -1,10 +1,10 @@
-﻿<#
+<#
 .SYNOPSIS
     用 LuaLS（lua-language-server）对工程的 Lua 脚本做静态检查（Lua 后端）。
 
 .DESCRIPTION
     Luau 后端那条链是：编辑器导出 UnLuaNova.d.lua（Luau 声明）→ luau-analyze 检查。
-    这条是它在 Lua 后端的对应物：编辑器导出 Plugins/UnLuaNova/Intermediate/IntelliSense/*.lua
+    这条是它在 Lua 后端的对应物：编辑器导出 Plugins/UnLuaNova/IntelliSense/*.lua
     （EmmyLua 注解）→ lua-language-server --check 检查。产物不同、分析器也不同，因为
     两边语言不同：
 
@@ -41,7 +41,7 @@ param(
 
     # EmmyLua 声明目录；默认取编辑器导出的那一份（Luau 声明在并列的 Luau/ 子目录，
     # 两种方言分开导出，所以这里不会有 .d.lua）
-    [string] $Defs = "Plugins/UnLuaNova/Intermediate/IntelliSense/EmmyLua",
+    [string] $Defs = "Plugins/UnLuaNova/IntelliSense/EmmyLua",
 
     # 仓库里自带的 EmmyLua 注解（UnLuaNova 自己的 API），总是作为库加入
     [string] $BuiltinDefs = "Plugins/UnLuaNova/Content/IntelliSense",
@@ -271,7 +271,10 @@ $SavedPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 try
 {
-    $Output = & $Analyzer "--check=$Target" "--checklevel=$CheckLevel" "--logpath=$LogDir" "--metapath=$MetaDir" "--configpath=$ConfigPath" 2>&1
+    # --check_format defaults to 'pretty' - the diagnostics go to stdout and check.json is
+    # never written. Then the summary below has nothing to read and reports 0 errors, i.e. a
+    # green light for a run that diagnosed 700 problems. Ask for the JSON file explicitly.
+    $Output = & $Analyzer "--check=$Target" "--checklevel=$CheckLevel" "--check_format=json" "--logpath=$LogDir" "--metapath=$MetaDir" "--configpath=$ConfigPath" 2>&1
     $ExitCode = $LASTEXITCODE
 }
 finally
@@ -397,10 +400,13 @@ if (Test-Path -LiteralPath $CheckJson)
         $Lines += "check.json 解析失败：$($_.Exception.Message)"
     }
 }
-elseif ($ExitCode -eq 0)
+else
 {
-    # 退出码是 0 却没有结果文件，说明它其实什么都没检查（早期版本传文件就这表现）
-    $Lines += "LuaLS 没有写出 $CheckJson —— 这一轮没有实际检查任何文件。"
+    # 没有结果文件就没有"通过"这回事：它要么什么都没检查（早期版本传文件就这表现），要么
+    # 结果没落到我们读的路径上。以前这里只往输出里加一行，summary 仍然写 0/0，报告上就是
+    # 一个绿灯 —— 检查一下其实没跑和检查通过，在报告里必须长得不一样。
+    $NoResultReason = "LuaLS 没有写出 $CheckJson（退出码 $ExitCode）—— 这一轮没有实际检查任何文件。"
+    $Lines += $NoResultReason
 }
 
 $Errors = New-Object System.Collections.Generic.List[string]
@@ -431,7 +437,8 @@ if ($Lines.Count -gt 0)
 Write-Host "静态检查：错误 $($Errors.Count) 条，警告 $($Warnings.Count) 条。"
 
 Write-TypeCheckSummary @{
-    skipped  = $false
+    skipped  = [bool] $NoResultReason
+    reason   = $(if ($NoResultReason) { $NoResultReason } else { $null })
     checker  = "LuaLS"
     analyzer = $Analyzer
     defs     = $DefsPath
@@ -440,6 +447,14 @@ Write-TypeCheckSummary @{
     errors   = @($Errors)
     warnings = @($Warnings)
     exit     = $ExitCode
+}
+
+# 没结果不能算通过：报告里必须能区分"检查通过"和"检查没跑"。
+if ($NoResultReason)
+{
+    if ($Require) { exit 1 }
+    Write-Host "跳过静态检查（加 -Require 可以在这种情况下报错）。"
+    exit 0
 }
 
 if ($Errors.Count -gt 0) { exit 1 }

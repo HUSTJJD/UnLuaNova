@@ -24,7 +24,7 @@
 // nothing and the run still looked green. Tools/RunTests.ps1 runs this before the type check.
 //
 // -BP=1 is what turns on the second half: without it only the static exports under
-// Intermediate/IntelliSense/StaticallyExports are refreshed, and no .d.lua is written at all.
+// IntelliSense/StaticallyExports are refreshed, and no .d.lua is written at all.
 
 #pragma once
 
@@ -42,5 +42,5 @@ public:
 private:
     void SaveFile(const FString &ModuleName, const FString &FileName, const FString &GeneratedFileContent);
 
-    FString IntermediateDir;
+    FString GeneratedDir;
 };

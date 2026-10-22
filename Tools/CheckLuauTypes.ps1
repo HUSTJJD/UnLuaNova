@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     用 luau-analyze 对工程的 Lua 脚本做静态类型检查（Luau 后端）。
 
@@ -27,7 +27,7 @@ param(
     [string] $Path = "Content/Script",
 
     # Luau 声明文件；默认取编辑器导出的那一份（EmmyLua 在 EmmyLua/ 子目录，两种方言分开导出）
-    [string] $Defs = "Plugins/UnLuaNova/Intermediate/IntelliSense/Luau/UnLuaNova.d.lua",
+    [string] $Defs = "Plugins/UnLuaNova/IntelliSense/Luau/UnLuaNova.d.lua",
 
     # luau-analyze 的路径；不传就按下面的顺序找
     [string] $LuauAnalyze,
@@ -148,6 +148,37 @@ if (-not (Test-Path -LiteralPath $DefsPath))
     $DefsPath = $null
 }
 
+# 有文件不等于喂得进去：上游把 luau-analyze 的 --defs 删了，vendored 的 Luau 又不是我们能改的
+# 代码。先问一句再传 —— 传了不认识的选项，整个检查会以 "Unrecognized option" 收场，真诊断
+# 一条都看不到（比没有声明还糟）。和 Lua 后端缺 EmmyLua 声明时是同一个道理：喂不进声明就
+# 等于每个 UE.xxx 都是 Unknown global，报告全是假错，所以跳过而不是硬跑。
+$SupportsDefs = $false
+if ($DefsPath)
+{
+    $SavedEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $HelpText = (& $Analyzer --help 2>&1 | ForEach-Object { $_.ToString() }) -join "`n" }
+    catch { $HelpText = "" }
+    finally { $ErrorActionPreference = $SavedEap }
+
+    $SupportsDefs = $HelpText -match '--defs'
+
+    if (-not $SupportsDefs)
+    {
+        Write-TypeCheckSummary @{
+            skipped  = $true
+            reason   = "这个 luau-analyze 不支持 --defs，声明文件喂不进去（上游删了这个选项，vendored 的 Luau 不归我们改）"
+            analyzer = $Analyzer
+            defs     = $DefsPath
+            mode     = $Mode
+            files    = 0
+        }
+        Write-Warning "这个 luau-analyze 不支持 --defs：$Analyzer"
+        Write-Warning "声明文件 $DefsPath 喂不进去，缺了它每个 UE.xxx 都会报 Unknown global，报告全是假错，所以跳过。"
+        exit 0
+    }
+}
+
 if ((Get-Item -LiteralPath $Target).PSIsContainer)
 {
     # .d.lua 是声明，不是脚本，不参与检查
@@ -167,7 +198,7 @@ if ($Files.Count -eq 0)
 }
 
 $ArgList = New-Object System.Collections.Generic.List[string]
-if ($DefsPath) { $ArgList.Add("--defs=$DefsPath") }
+if ($DefsPath -and $SupportsDefs) { $ArgList.Add("--defs=$DefsPath") }
 $ArgList.Add("--mode=$Mode")
 foreach ($a in $ExtraArgs) { if ($a) { $ArgList.Add($a) } }
 foreach ($f in $Files) { $ArgList.Add($f.FullName) }

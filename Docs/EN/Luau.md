@@ -203,7 +203,7 @@ class of UE API misuse (wrong function name, wrong arity, wrong argument type) b
 **Generate**: UnLuaNova toolbar → export IntelliSense. Output:
 
 ```
-Plugins/UnLuaNova/Intermediate/IntelliSense/
+Plugins/UnLuaNova/IntelliSense/
 ├── EmmyLua/             Lua dialect, for IDE completion + LuaLS
 └── Luau/                Luau dialect, for luau-analyze
     └── UnLuaNova.d.lua

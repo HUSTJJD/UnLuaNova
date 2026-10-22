@@ -5,55 +5,550 @@ description: "自动化测试产出的通过率、通过明细、失败明细与
 
 # 测试报告（Lua 后端）
 
-> 由 `Tools/GenerateTestReport.py` 自动生成于 2026-10-22 21:59:40。请勿手工编辑。
-
-## 崩溃
-
-**测试进程崩了** —— 自动化框架没来得及导出任何 JSON，所以下面的统计不是这次运行的真实结果。
-
-- 崩溃时正在跑：`UMG UMG 与 Lua 生命周期示例截图`
-
-```
-[2026.10.22-13.58.14:519][438]LogWindows: Error: === Critical error: ===
-[2026.10.22-13.58.14:519][438]LogWindows: Error: Fatal error!
-[2026.10.22-13.58.14:520][438]LogWindows: Error: Unhandled Exception: EXCEPTION_ACCESS_VIOLATION reading address 0x0000000080000084
-```
-
-<details><summary>调用栈</summary>
-
-```
-[2026.10.22-13.58.14:520][438]LogWindows: Error: [Callstack] 0x00007ffe85b20d78 UnrealEditor-Core.dll!mi_usable_size() [<UE>\Engine\Source\ThirdParty\mimalloc\2.0.0\src\alloc.c:549]
-[2026.10.22-13.58.14:520][438]LogWindows: Error: [Callstack] 0x00007ffe85b19ef0 UnrealEditor-Core.dll!mi_heap_realloc_zero_aligned_at() [<UE>\Engine\Source\ThirdParty\mimalloc\2.0.0\src\alloc-aligned.c:122]
-[2026.10.22-13.58.14:520][438]LogWindows: Error: [Callstack] 0x00007ffe85b1d043 UnrealEditor-Core.dll!mi_realloc_aligned() [<UE>\Engine\Source\ThirdParty\mimalloc\2.0.0\src\alloc-aligned.c:188]
-[2026.10.22-13.58.14:520][438]LogWindows: Error: [Callstack] 0x00007ffe853c0b9e UnrealEditor-Core.dll!FMallocMimalloc::Realloc() [<UE>\Engine\Source\Runtime\Core\Private\HAL\MallocMimalloc.cpp:227]
-[2026.10.22-13.58.14:520][438]LogWindows: Error: [Callstack] 0x00007ffe853c100b UnrealEditor-Core.dll!FMemory::Realloc() [<UE>\Engine\Source\Runtime\Core\Private\HAL\UnrealMemory.cpp:685]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffe8528fab8 UnrealEditor-Core.dll!TSizedHeapAllocator<32,FMemory>::ForAnyElementType::ResizeAllocation() [<UE>\Engine\Source\Runtime\Core\Public\Containers\ContainerAllocationPolicies.h:863]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffe72878f53 UnrealEditor-D3D12RHI.dll!UE::Core::Private::ReallocGrow<3,TSizedHeapAllocator<32,FMemory>::ForAnyElementType>() [<UE>\Engine\Source\Runtime\Core\Public\Containers\Array.h:625]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffe729752b1 UnrealEditor-D3D12RHI.dll!TArray<FColor,TSizedDefaultAllocator<32> >::SetNumUninitialized() [<UE>\Engine\Source\Runtime\Core\Public\Containers\Array.h:2597]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffe7296e6f7 UnrealEditor-D3D12RHI.dll!FD3D12DynamicRHI::RHIReadSurfaceData() [<UE>\Engine\Source\Runtime\D3D12RHI\Private\D3D12RenderTarget.cpp:633]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffec085c7cb UnrealEditor-SlateRHIRenderer.dll!FRHICommandListImmediate::ReadSurfaceData() [<UE>\Engine\Source\Runtime\RHI\Public\RHICommandList.h:4619]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffec0836c81 UnrealEditor-SlateRHIRenderer.dll!TRDGLambdaPass<FReadbackTextureParameters,`FSlateRHIRenderer::DrawWindowViewport_RenderThread'::`77'::<lambda_2> >::Execute() [<UE>\Engine\Source\Runtime\RenderCore\Public\RenderGraphPass.h:704]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffebb7e213d UnrealEditor-RenderCore.dll!FRDGBuilder::ExecutePass() [<UE>\Engine\Source\Runtime\RenderCore\Private\RenderGraphBuilder.cpp:3525]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffebb7e299b UnrealEditor-RenderCore.dll!FRDGBuilder::ExecuteSerialPass() [<UE>\Engine\Source\Runtime\RenderCore\Private\RenderGraphBuilder.cpp:3549]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffebb7e0772 UnrealEditor-RenderCore.dll!FRDGBuilder::Execute() [<UE>\Engine\Source\Runtime\RenderCore\Private\RenderGraphBuilder.cpp:2157]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffec083469b UnrealEditor-SlateRHIRenderer.dll!FSlateRHIRenderer::DrawWindows_RenderThread() [<UE>\Engine\Source\Runtime\SlateRHIRenderer\Private\SlateRHIRenderer.cpp:1493]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffec0815418 UnrealEditor-SlateRHIRenderer.dll!`FSlateRHIRenderer::DrawWindows_Private'::`76'::<lambda_3>::operator()() [<UE>\Engine\Source\Runtime\SlateRHIRenderer\Private\SlateRHIRenderer.cpp:1752]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffebb8546d3 UnrealEditor-RenderCore.dll!ExecuteCommand() [<UE>\Engine\Source\Runtime\RenderCore\Private\RenderingThread.cpp:1533]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffebb814f2c UnrealEditor-RenderCore.dll!UE::RenderCommandPipe::FCommandList::ConsumeCommands<`FRenderThreadCommandPipe::ExecuteCommands'::`2'::<lambda_1> >() [<UE>\Engine\Source\Runtime\RenderCore\Public\RenderingThread.h:335]
-[2026.10.22-13.58.14:521][438]LogWindows: Error: [Callstack] 0x00007ffebb83d101 UnrealEditor-RenderCore.dll!`FRenderThreadCommandPipe::EnqueueAndLaunch'::`5'::<lambda_1>::operator()() [<UE>\Engine\Source\Runtime\RenderCore\Private\RenderingThread.cpp:1928]
-[2026.10.22-13.58.14:523][438]LogWindows: Error: [Callstack] 0x00007ffebb854f3c UnrealEditor-RenderCore.dll!TGraphTask<TFunctionGraphTaskImpl<void __cdecl(void),1> >::ExecuteTask() [<UE>\Engine\Source\Runtime\Core\Public\Async\TaskGraphInterfaces.h:703]
-[2026.10.22-13.58.14:523][438]LogWindows: Error: [Callstack] 0x00007ffe85144fb3 UnrealEditor-Core.dll!UE::Tasks::Private::FTaskBase::TryExecuteTask() [<UE>\Engine\Source\Runtime\Core\Public\Tasks\TaskPrivate.h:524]
-[2026.10.22-13.58.14:523][438]LogWindows: Error: [Callstack] 0x00007ffe851388fd UnrealEditor-Core.dll!FNamedTaskThread::ProcessTasksNamedThread() [<UE>\Engine\Source\Runtime\Core\Private\Async\TaskGraph.cpp:807]
-[2026.10.22-13.58.14:523][438]LogWindows: Error: [Callstack] 0x00007ffe85138c6e UnrealEditor-Core.dll!FNamedTaskThread::ProcessTasksUntilQuit() [<UE>\Engine\Source\Runtime\Core\Private\Async\TaskGraph.cpp:696]
-[2026.10.22-13.58.14:523][438]LogWindows: Error: [Callstack] 0x00007ffebb883623 UnrealEditor-RenderCore.dll!RenderingThreadMain() [<UE>\Engine\Source\Runtime\RenderCore\Private\RenderingThread.cpp:261]
-[2026.10.22-13.58.14:523][438]LogWindows: Error: [Callstack] 0x00007ffebb8852a4 UnrealEditor-RenderCore.dll!FRenderingThread::Run() [<UE>\Engine\Source\Runtime\RenderCore\Private\RenderingThread.cpp:390]
-```
-
-</details>
+> 由 `Tools/GenerateTestReport.py` 自动生成于 2026-10-22 23:36:52。请勿手工编辑。
 
 ## 结论
 
-**没有找到任何自动化测试结果：进程崩溃，见上面的「崩溃」一节。**
+**全部通过 ✅** — 通过率 100.0%
+
+| 指标 | 数值 |
+|---|---|
+| 用例总数 | 509 |
+| 通过 | 509 |
+| 失败 | 0 |
+| 跳过 | 0 |
+| 总耗时 | 192.79s |
+| 截图 | 4 |
+| Lua 后端 | `Lua` |
+
+## 通过明细（509 项）
+
+| 用例 | 来源 | 耗时 |
+|---|---|---|
+| `* 全部已注册` | `index.json` | 0.083s |
+| `64 位整数读写不截断` | `index.json` | 0.067s |
+| `AddManualObjectReference 让对象不被 GC` | `index.json` | 0.252s |
+| `Binding 静态绑定示例截图` | `index.json` | 19.203s |
+| `BlueprintImplementableEvent 可覆写，BlueprintCallable 不可覆写` | `index.json` | 0.100s |
+| `ByPackage 对原生类返回类名，与默认不同` | `index.json` | 0.082s |
+| `Container 容器访问示例截图` | `index.json` | 17.943s |
+| `DanglingCheck 可设置且能还原` | `index.json` | 0.112s |
+| `DeadLoopCheck 可设置且能还原` | `index.json` | 0.105s |
+| `DoString 返回 false 并把栈还原` | `index.json` | 0.074s |
+| `DoString 返回 false，且之后的环境仍可用` | `index.json` | 0.083s |
+| `Dynamic 动态绑定，SpawnActor时指定脚本路径` | `index.json` | 0.090s |
+| `F1` | `index.json` | 0.081s |
+| `Full 返回全部Out参数` | `index.json` | 0.040s |
+| `GC 之后环境仍然可用` | `index.json` | 0.074s |
+| `GC 设置可用，且两参数的 lua_gc 能取到数值` | `index.json` | 0.070s |
+| `Get` | `index.json` | 0.095s |
+| `Get` | `index.json` | 0.083s |
+| `GetAll 与 FindEnv 能找到新环境` | `index.json` | 0.078s |
+| `GetOverridableFunctions 只列出可覆写的函数` | `index.json` | 0.100s |
+| `GetTypeName 对属性给出非空类型名` | `index.json` | 0.074s |
+| `HasBuffer 与 HasFeature('buffer') 一致` | `index.json` | 0.082s |
+| `HasFeature 与编译期能力一致` | `index.json` | 0.073s |
+| `HasVector 与 HasFeature('vector') 一致` | `index.json` | 0.075s |
+| `HotReload 之后环境仍然可用` | `index.json` | 0.084s |
+| `HotReload 能加载模块，而不是静默降级` | `index.json` | 0.082s |
+| `IsReleasedPtr 只认那一个哨兵值` | `index.json` | 0.095s |
+| `IsValid 区分可导出与不可导出的函数` | `index.json` | 0.088s |
+| `Issue276 游戏世界暂停后，coroutine delay 功能不工作` | `index.json` | 7.731s |
+| `Issue279 lua覆写蓝图的同名函数之后，无法将特定类型的函数参数保存到lua对象中` | `index.json` | 0.100s |
+| `Issue284 require不存在的lib会崩` | `index.json` | 0.107s |
+| `Issue286 蓝图 TMap FindRef 错误` | `index.json` | 1.154s |
+| `Issue288 UMG里Image用到的Texture内存泄漏` | `index.json` | 0.408s |
+| `Issue289 UClass在被UEGC后没有释放相应的绑定` | `index.json` | 0.347s |
+| `Issue291 delegate绑定本身不在lua里有引用的object，在绑定后触发gc会导致无法调用绑定的函数` | `index.json` | 0.113s |
+| `Issue292 actor调用K2_DestroyActor后，立刻调用IsValid会返回true` | `index.json` | 0.106s |
+| `Issue293 关闭RPC会导致部分函数在非Editor模式下crash` | `index.json` | 0.096s |
+| `Issue294 AutoCreateRefTerm标记的参数需要生成默认值` | `index.json` | 0.110s |
+| `Issue295 动态绑定的UMG对象，在切换地图回调Destruct导致崩溃` | `index.json` | 2.386s |
+| `Issue300 LUA覆写的函数返回给蓝图的值错误` | `index.json` | 1.186s |
+| `Issue303 部分情况下为TArray创建拷贝至lua时会产生崩溃` | `index.json` | 0.073s |
+| `Issue304 Lua中监听delegate，接收TArray参数，使用Get获取其中元素导致崩溃` | `index.json` | 0.095s |
+| `Issue314 访问过父类不存在的字段，后续在子类中也只能取到nil` | `index.json` | 0.147s |
+| `Issue321 同名蓝图加载冲突` | `index.json` | 0.122s |
+| `Issue322 绑定中文名字的蓝图会报错` | `index.json` | 0.114s |
+| `Issue323 一些默认参数的写法没有分析出来` | `index.json` | 0.086s |
+| `Issue328 C++调用LUA覆写带返回值的函数会崩溃` | `index.json` | 0.115s |
+| `Issue331 UENUM的某一项为表达式时，默认值没有分析出来` | `index.json` | 0.099s |
+| `Issue344 在Lua中对UClass_Load出来的对象写入属性后，GC的时候会Crash` | `index.json` | 0.120s |
+| `Issue346 BlueprintFunctionLibrary无法静态绑定到lua文件` | `index.json` | 0.492s |
+| `Issue362 TArray引用做委托参数在lua中修改不生效` | `index.json` | 0.099s |
+| `Issue366 使用ADD_SHARED_PTR_CONSTRUCTOR后启动直接崩溃` | `index.json` | 0.100s |
+| `Issue367 类型元表被LuaGC时，可能意外导致正在使用的FClassDesc被错误delete` | `index.json` | 0.267s |
+| `Issue372 Actor调用K2_DestroyActor销毁时，lua部分会在注册表残留` | `index.json` | 0.956s |
+| `Issue375 子类被销毁时，可能会令父类的Lua绑定失效` | `index.json` | 0.145s |
+| `Issue376 引用参数传递失败` | `index.json` | 0.079s |
+| `Issue398 接口列表从lua传到c++/蓝图层会丢失一半信息` | `index.json` | 0.092s |
+| `Issue400 不同实例的多播委托绑定相同实例函数，清理时崩溃` | `index.json` | 0.148s |
+| `Issue401 LUA覆写导致数组传参错误` | `index.json` | 0.903s |
+| `Issue407 无法在lua中将一个TMap调用Keys的结果传给C++` | `index.json` | 0.080s |
+| `Issue430 动画通知调用组件Lua覆写函数崩溃` | `index.json` | 5.819s |
+| `Issue432 Lua调用的函数返回蓝图结构体会check` | `index.json` | 0.249s |
+| `Issue434 MulticastDelegate创建Handler时和self绑定` | `index.json` | 1.395s |
+| `Issue443 在某些代码块内无法调用蓝图函数` | `index.json` | 1.844s |
+| `Issue445 TSubclassOf作为函数返回值，从lua传回C++为空` | `index.json` | 0.091s |
+| `Issue446 实现了FTickableGameObject的对象在Tick里调用自身被Lua覆写的方法会崩溃` | `index.json` | 1.430s |
+| `Issue453 从Lua按引用传递到蓝图的TArray引用变成了空Array` | `index.json` | 0.816s |
+| `Issue455 CacheScriptContainer导致的崩溃` | `index.json` | 3.145s |
+| `Issue471 FScriptDelegate解绑无效` | `index.json` | 1.938s |
+| `Issue473 FName类型参数中文乱码` | `index.json` | 0.062s |
+| `Issue476 通过NewObject接口添加的UObject引用无法释放` | `index.json` | 0.156s |
+| `Issue477 遍历蓝图结构体的DataTable会发生拷贝错误` | `index.json` | 0.423s |
+| `Issue517 Actor的Struct成员变量在Lua里引用，释放后仍旧可以访问` | `index.json` | 0.166s |
+| `Issue539 Lua覆写Out返回值时无法返回nil` | `index.json` | 0.069s |
+| `Issue554 访问非TArray的结构体数组报错` | `index.json` | 0.076s |
+| `Issue556 Lua覆写的函数接收数组参数时可能无效` | `index.json` | 0.063s |
+| `Issue561 访问UStruct内部的委托会check` | `index.json` | 0.071s |
+| `Issue562 容器元素为蓝图类型时，在蓝图Class被提前UE回收后，会导致容器在luagc时报错` | `index.json` | 0.171s |
+| `Issue566 多次传递委托类型的参数到同一函数时，可能因为Owner失效而无法回调` | `index.json` | 0.161s |
+| `Issue583 在Lua中遍历TMap字段的Values接口返回值时引起的崩溃` | `index.json` | 0.070s |
+| `Issue585 蓝图枚举无法被UnLuaRef` | `index.json` | 0.227s |
+| `Issue595 Lua无法调用Interface中函数` | `index.json` | 0.068s |
+| `Issue603 在Lua监听的事件中再次触发事件会导致崩溃` | `index.json` | 6.115s |
+| `Issue634 覆写非ReturnValue的C++结构体返回值会导致崩溃` | `index.json` | 1.899s |
+| `Issue660 Unlua函数绑定多个代理导致崩溃` | `index.json` | 6.104s |
+| `Issue668 在Lua中调用TArray的Add接口时内存对齐引起的问题` | `index.json` | 0.059s |
+| `IssueOverrides 覆写引起的问题` | `index.json` | 1.324s |
+| `Key不存在，新增` | `index.json` | 0.079s |
+| `Key不存在，返回false` | `index.json` | 0.080s |
+| `Key存在，移除并返回true` | `index.json` | 0.073s |
+| `Key存在，覆盖` | `index.json` | 0.110s |
+| `Lua 侧用例全部通过` | `index.json` | 0.129s |
+| `Lua 侧的 64 位字面量能完整取回` | `index.json` | 0.073s |
+| `Multiple 多重绑定：同一个Lua脚本绑定到不同类` | `index.json` | 0.094s |
+| `Num` | `index.json` | 0.084s |
+| `OnCreated 与 OnDestroyed 各触发一次` | `index.json` | 0.078s |
+| `Overridden 覆写：同一个Lua脚本绑定到不同类` | `index.json` | 0.074s |
+| `Override 蓝图事件覆写示例截图` | `index.json` | 18.012s |
+| `PUSHINT 推入的值能在脚本里参与算术` | `index.json` | 0.085s |
+| `PUSHINT64 推入的值被认作整数且能完整读回` | `index.json` | 0.080s |
+| `Partial 返回部分Out参数，剩余部分使用传入参数填充` | `index.json` | 0.042s |
+| `Priority 绑定冲突：静态绑定优先于动态绑定` | `index.json` | 0.083s |
+| `RemoveManualObjectReference 后可以被 GC` | `index.json` | 0.148s |
+| `Reset 清零` | `index.json` | 0.073s |
+| `RestoreOverrides 之后不再是覆写状态` | `index.json` | 0.106s |
+| `Set` | `index.json` | 0.087s |
+| `Set` | `index.json` | 0.089s |
+| `Static 静态绑定，继承UnLuaInterface::GetModuleName指定脚本路径` | `index.json` | 0.074s |
+| `Suspend 后走原实现，Resume 后又走 Lua` | `index.json` | 0.102s |
+| `UCLASS 的声明包含它的名字` | `index.json` | 0.086s |
+| `UMG UMG 与 Lua 生命周期示例截图` | `index.json` | 22.424s |
+| `UNLUANOVA_IS_YIELDABLE 区分主线程与协程` | `index.json` | 0.072s |
+| `UNLUANOVA_LOAD 能加载并执行 chunk` | `index.json` | 0.077s |
+| `UNLUANOVA_RESUME 能恢复协程并带回结果` | `index.json` | 0.080s |
+| `UnLuaNovaIsIntegralNumber 区分整数与非整数` | `index.json` | 0.082s |
+| `VM hook 能安装、收到事件并按 owner 撤回` | `index.json` | 0.072s |
+| `attach / detach` | `index.json` | 0.079s |
+| `collect 返回 0，与 plain Lua 一致` | `index.json` | 0.081s |
+| `core 也能单独 require 到` | `index.json` | 0.141s |
+| `count 返回 KBytes 数字` | `index.json` | 0.077s |
+| `dbg 状态查询是幂等的` | `index.json` | 0.077s |
+| `debug 提供 upvalue / local / registry 访问` | `index.json` | 0.083s |
+| `decode 能解析出字段` | `index.json` | 0.122s |
+| `encode/decode 往返一致` | `index.json` | 0.126s |
+| `gc 之后 Lua 值仍然可用` | `index.json` | 0.078s |
+| `gc 执行后环境仍可用` | `index.json` | 0.072s |
+| `gettime 返回递增的数字，不依赖网络` | `index.json` | 0.135s |
+| `getupvalue 能读到闭包捕获的值` | `index.json` | 0.083s |
+| `load 返回 nil 与错误信息，而不是抛出` | `index.json` | 0.078s |
+| `luaL_newmetatable 建的元表带 __name` | `index.json` | 0.080s |
+| `luaL_newmetatable 第二次调用返回 0` | `index.json` | 0.099s |
+| `luaL_ref / luaL_unref 往返一致` | `index.json` | 0.078s |
+| `memstats 各子命令都不崩` | `index.json` | 0.073s |
+| `opt-out 的类型不会出现在输出里` | `index.json` | 4.369s |
+| `package 同时提供 loaded 和 searchers` | `index.json` | 0.072s |
+| `pcall 捕获后错误不逃逸，后续调用照常` | `index.json` | 0.071s |
+| `profiler 开关是可重复的` | `index.json` | 0.071s |
+| `protoc 加载内联 proto 后编解码一致` | `index.json` | 0.919s |
+| `require 不存在的模块报错，而不是返回 nil` | `index.json` | 0.087s |
+| `require 也能拿到模块表` | `index.json` | 0.094s |
+| `require 入口在两个后端下都安全返回` | `index.json` | 0.075s |
+| `require 拿到 socket 模块` | `index.json` | 0.129s |
+| `require 拿到可用的 pb 模块` | `index.json` | 0.135s |
+| `require 拿到带 decode/encode 的模块表` | `index.json` | 0.149s |
+| `sandbox 是一个可写的 CVar` | `index.json` | 0.086s |
+| `setupvalue 能给 chunk 设环境` | `index.json` | 0.079s |
+| `trim 是 strip 的别名` | `index.json` | 0.099s |
+| `一段错误脚本不会让环境失效` | `index.json` | 0.111s |
+| `不匹配时为假` | `index.json` | 0.082s |
+| `不同类得到不同的声明` | `index.json` | 0.083s |
+| `不含机器绝对路径` | `index.json` | 0.065s |
+| `不增加重复的元素` | `index.json` | 0.096s |
+| `不存在的枚举值返回nil` | `index.json` | 0.081s |
+| `不存在的枚举值返回nil` | `index.json` | 0.091s |
+| `不相等` | `index.json` | 0.086s |
+| `两个后端都存在` | `index.json` | 0.076s |
+| `两个后端都能从字符串加载 chunk` | `index.json` | 0.064s |
+| `两个定位器类都能切换并还原` | `index.json` | 0.118s |
+| `两个对象的覆写互不影响` | `index.json` | 0.086s |
+| `两个环境互不影响` | `index.json` | 0.088s |
+| `两点相乘` | `index.json` | 0.090s |
+| `两点相减` | `index.json` | 0.076s |
+| `两点相加` | `index.json` | 0.092s |
+| `两点相除` | `index.json` | 0.091s |
+| `为空时 Start 什么都不跑` | `index.json` | 0.104s |
+| `交换两个索引位置的元素` | `index.json` | 0.088s |
+| `使用[]获取` | `index.json` | 0.076s |
+| `使用[]赋值` | `index.json` | 0.084s |
+| `元素不存在，新增` | `index.json` | 0.095s |
+| `元素不存在，返回false` | `index.json` | 0.087s |
+| `元素存在，移除并返回true` | `index.json` | 0.091s |
+| `关闭后不再记账` | `index.json` | 0.075s |
+| `内建 loader 能提供模块` | `index.json` | 0.092s |
+| `函数解析到真实的 UFunction 并填好 flag` | `index.json` | 0.075s |
+| `分别指定Pitch/Yaw/Roll` | `index.json` | 0.084s |
+| `分别指定X/Y` | `index.json` | 0.069s |
+| `分别指定X/Y/Z` | `index.json` | 0.084s |
+| `分别指定X/Y/Z` | `index.json` | 0.080s |
+| `分别指定X/Y/Z/W` | `index.json` | 0.107s |
+| `分别指定X和Y` | `index.json` | 0.080s |
+| `分发条件：非网络 / 非 latent / 非接口函数会走预解析路径` | `index.json` | 0.084s |
+| `分隔符按字面量处理，不是模式` | `index.json` | 0.078s |
+| `创建Actor，仅指定Actor类型` | `index.json` | 0.127s |
+| `创建Actor，指定初始Transform` | `index.json` | 0.111s |
+| `创建Actor，指定初始Transform/CollisionHanding/Owner` | `index.json` | 0.118s |
+| `创建Actor，指定初始Transform/CollisionHanding/Owner/Instigator` | `index.json` | 0.147s |
+| `创建Actor，指定初始Transform/CollisionHanding/Owner/Instigator/LuaModule` | `index.json` | 0.142s |
+| `创建Actor，指定初始Transform/CollisionHandling` | `index.json` | 0.112s |
+| `创建Actor，自定义构造参数` | `index.json` | 0.136s |
+| `删除元素后迭代不会带回空洞` | `index.json` | 0.123s |
+| `判断对象是否为指定类型` | `index.json` | 0.109s |
+| `前缀` | `index.json` | 0.069s |
+| `加载一个对象` | `index.json` | 0.114s |
+| `单步能停下来并抓到调用栈` | `index.json` | 0.393s |
+| `原生后端下可以往返 FVector` | `index.json` | 0.081s |
+| `原生：调用的函数本身有返回值，先返回返回值再依次返回参数` | `index.json` | 0.098s |
+| `原生：调用的函数本身没有返回值，依次返回参数` | `index.json` | 0.088s |
+| `去掉首尾空白` | `index.json` | 0.093s |
+| `参数类型错误是受控错误` | `index.json` | 0.089s |
+| `取反向量` | `index.json` | 0.099s |
+| `取反向量` | `index.json` | 0.095s |
+| `取反向量` | `index.json` | 0.070s |
+| `取反向量` | `index.json` | 0.069s |
+| `取消注册后查不到` | `index.json` | 0.074s |
+| `取相反数` | `index.json` | 0.088s |
+| `只能够对空数组进行预留空间操作` | `index.json` | 0.088s |
+| `只被 Lua 引用的对象会被引擎 GC 回收` | `index.json` | 0.175s |
+| `只追加不重复的元素` | `index.json` | 0.085s |
+| `可以 require 到模块表` | `index.json` | 0.082s |
+| `可以 require 到模块表` | `index.json` | 0.078s |
+| `合法位置索引返回true` | `index.json` | 0.077s |
+| `同时指定Pitch/Yaw/Roll` | `index.json` | 0.101s |
+| `同时指定X/Y` | `index.json` | 0.083s |
+| `同时指定X/Y/Z` | `index.json` | 0.079s |
+| `同时指定X/Y/Z` | `index.json` | 0.082s |
+| `同时指定X和Y` | `index.json` | 0.081s |
+| `后缀` | `index.json` | 0.093s |
+| `向量乘` | `index.json` | 0.074s |
+| `向量乘以数字` | `index.json` | 0.070s |
+| `向量乘以整数` | `index.json` | 0.087s |
+| `向量乘以浮点数` | `index.json` | 0.108s |
+| `向量相减` | `index.json` | 0.087s |
+| `向量相减` | `index.json` | 0.094s |
+| `向量相减` | `index.json` | 0.086s |
+| `向量相减` | `index.json` | 0.085s |
+| `向量相加` | `index.json` | 0.082s |
+| `向量相加` | `index.json` | 0.118s |
+| `向量相加` | `index.json` | 0.077s |
+| `向量相加` | `index.json` | 0.079s |
+| `向量除` | `index.json` | 0.073s |
+| `向量除以数字` | `index.json` | 0.078s |
+| `向量除以整数` | `index.json` | 0.092s |
+| `向量除以浮点数` | `index.json` | 0.152s |
+| `启动时已填充，且至少有一个函数带默认值` | `index.json` | 0.076s |
+| `启动模块不存在时不会被记成已加载` | `index.json` | 0.089s |
+| `启动脚本能取到多个参数` | `index.json` | 0.073s |
+| `四元数乘以浮点数` | `index.json` | 0.098s |
+| `在主线程里调用 latent 函数会报出契约里的那条消息` | `index.json` | 0.074s |
+| `声明包含真实的 UFUNCTION 与 UPROPERTY` | `index.json` | 0.095s |
+| `多个环境之间的全局变量互不可见` | `index.json` | 0.075s |
+| `大于等于容差，归一化` | `index.json` | 0.086s |
+| `大于等于容差，归一化` | `index.json` | 0.074s |
+| `大于等于容差，归一化并返回true` | `index.json` | 0.123s |
+| `对 nil 引擎对象调用方法是受控错误` | `index.json` | 0.076s |
+| `对象被标记销毁后，从 Lua 访问是受控错误` | `index.json` | 0.174s |
+| `将Map内容转为LuaTable` | `index.json` | 0.080s |
+| `将Set内容转为LuaTable` | `index.json` | 0.092s |
+| `将当前Transform与目标Transform混合` | `index.json` | 0.102s |
+| `将当前Transform与目标两个Transform混合` | `index.json` | 0.111s |
+| `将数组内容转为LuaTable` | `index.json` | 0.090s |
+| `小于容差，不归一化` | `index.json` | 0.090s |
+| `小于容差，不归一化` | `index.json` | 0.078s |
+| `小于容差，直接返回false` | `index.json` | 0.124s |
+| `属性解析到真实的 FProperty` | `index.json` | 0.077s |
+| `常见 UProperty 映射到对应的 Kind` | `index.json` | 0.079s |
+| `广播事件` | `index.json` | 0.116s |
+| `开关可切换， detach 之后关闭` | `index.json` | 0.068s |
+| `开启后统计分配次数与字节数` | `index.json` | 0.073s |
+| `开启后脚本仍能正常执行` | `index.json` | 0.077s |
+| `执行失败返回false` | `index.json` | 0.090s |
+| `执行委托` | `index.json` | 0.090s |
+| `执行委托：从Lua返回值` | `index.json` | 0.084s |
+| `执行委托：赋值` | `index.json` | 0.089s |
+| `执行成功返回true` | `index.json` | 0.096s |
+| `执行的脚本真的生效` | `index.json` | 0.085s |
+| `扩容，使用默认元素填充` | `index.json` | 0.084s |
+| `找到元素，返回索引位置` | `index.json` | 0.079s |
+| `把调用耗时写入 Saved/Benchmark` | `index.json` | 0.169s |
+| `报错之后环境仍然可用` | `index.json` | 0.071s |
+| `拷贝指定索引位置的元素` | `index.json` | 0.083s |
+| `指定ColorValue` | `index.json` | 0.091s |
+| `指定RGB` | `index.json` | 0.092s |
+| `指定RGB` | `index.json` | 0.082s |
+| `指定RGBA` | `index.json` | 0.092s |
+| `指定RGBA` | `index.json` | 0.085s |
+| `指定Rotation(FQuat)` | `index.json` | 0.100s |
+| `指定Rotation(FQuat)/Translation` | `index.json` | 0.096s |
+| `指定Rotation(FQuat)/Translation/Scale` | `index.json` | 0.098s |
+| `指定Rotation(FRotator)` | `index.json` | 0.097s |
+| `指定Rotation(FRotator)/Translation` | `index.json` | 0.094s |
+| `指定Rotation(FRotator)/Translation/Scale` | `index.json` | 0.093s |
+| `指定Translation` | `index.json` | 0.109s |
+| `指定X` | `index.json` | 0.067s |
+| `指定X/Y` | `index.json` | 0.079s |
+| `指定X/Y/Z` | `index.json` | 0.074s |
+| `指定X/Y/Z/W` | `index.json` | 0.086s |
+| `指定轴与角度` | `index.json` | 0.103s |
+| `按引用获取元素（原生）` | `index.json` | 0.076s |
+| `按引用获取元素（原生）` | `index.json` | 0.087s |
+| `按引用获取元素（蓝图）` | `index.json` | 0.076s |
+| `按引用获取元素（蓝图）` | `index.json` | 0.084s |
+| `换成自定义子类后用的是子类的结果` | `index.json` | 0.082s |
+| `插入元素到指定位置` | `index.json` | 0.085s |
+| `搜索路径命中 Content/Script 下的真实模块` | `index.json` | 0.076s |
+| `支持启动脚本和参数` | `index.json` | 0.075s |
+| `支持多个Lua环境` | `index.json` | 0.083s |
+| `支持多参数传入和传出` | `index.json` | 0.109s |
+| `数组不包含指定元素返回false` | `index.json` | 0.073s |
+| `数组包含指定元素返回true` | `index.json` | 0.077s |
+| `文件系统优先于内建 loader` | `index.json` | 0.070s |
+| `断点登记` | `index.json` | 0.079s |
+| `显式传参会覆盖默认值` | `index.json` | 0.083s |
+| `有 buffer 的后端下 TArray 往返保持内容` | `index.json` | 0.076s |
+| `有静态绑定时出参与返回值都正确` | `index.json` | 0.081s |
+| `有静态绑定时，Lua 调用结果正确` | `index.json` | 0.079s |
+| `未知选项报错而不是静默` | `index.json` | 0.082s |
+| `构造TArray<FString>` | `index.json` | 0.087s |
+| `构造TArray<FVector>` | `index.json` | 0.085s |
+| `构造TArray<UStruct>` | `index.json` | 0.073s |
+| `构造TArray<bool>` | `index.json` | 0.087s |
+| `构造TArray<int32>` | `index.json` | 0.082s |
+| `构造TMap<FString,FString>` | `index.json` | 0.076s |
+| `构造TMap<FVector,bool>` | `index.json` | 0.072s |
+| `构造TMap<UStruct,UStruct>` | `index.json` | 0.083s |
+| `构造TMap<int32,int32>` | `index.json` | 0.071s |
+| `构造TSet<FString>` | `index.json` | 0.099s |
+| `构造TSet<FVector>` | `index.json` | 0.087s |
+| `构造TSet<UScriptStruct>` | `index.json` | 0.102s |
+| `构造TSet<int32>` | `index.json` | 0.087s |
+| `枚举默认值也生效` | `index.json` | 0.072s |
+| `查找Key不存在，返回nil` | `index.json` | 0.098s |
+| `查找Key不存在，返回nil` | `index.json` | 0.094s |
+| `查找Key存在，返回Value的引用` | `index.json` | 0.092s |
+| `查找Key存在，返回Value的拷贝` | `index.json` | 0.090s |
+| `查找元素不存在，返回false` | `index.json` | 0.101s |
+| `查找元素存在，返回true` | `index.json` | 0.097s |
+| `栈帧能取到源码行，Profiler 键稳定且唯一` | `index.json` | 0.079s |
+| `正确传入FName到Lua堆栈` | `index.json` | 0.090s |
+| `正确传入FString到Lua堆栈` | `index.json` | 0.095s |
+| `正确传入UObject到Lua堆栈` | `index.json` | 0.082s |
+| `正确传入bool到Lua堆栈` | `index.json` | 0.093s |
+| `正确传入const char*到Lua堆栈` | `index.json` | 0.090s |
+| `正确传入double到Lua堆栈` | `index.json` | 0.110s |
+| `正确传入float到Lua堆栈` | `index.json` | 0.092s |
+| `正确传入int16到Lua堆栈` | `index.json` | 0.093s |
+| `正确传入int32到Lua堆栈` | `index.json` | 0.085s |
+| `正确传入int64到Lua堆栈` | `index.json` | 0.084s |
+| `正确传入int8到Lua堆栈` | `index.json` | 0.082s |
+| `正确传入struct到Lua堆栈` | `index.json` | 0.092s |
+| `正确传入uint16到Lua堆栈` | `index.json` | 0.089s |
+| `正确传入uint32到Lua堆栈` | `index.json` | 0.095s |
+| `正确传入uint64到Lua堆栈` | `index.json` | 0.085s |
+| `正确传入uint8到Lua堆栈` | `index.json` | 0.084s |
+| `正确传入void*到Lua堆栈` | `index.json` | 0.096s |
+| `正确传入中文FString到Lua堆栈` | `index.json` | 0.088s |
+| `正确判断子类` | `index.json` | 0.096s |
+| `正确加载蓝图类` | `index.json` | 0.089s |
+| `正确获取类默认对象` | `index.json` | 0.103s |
+| `没有分隔符时返回整串` | `index.json` | 0.081s |
+| `没有原生 vector 时 ToVector 降级为 nil` | `index.json` | 0.069s |
+| `没有实现接口的对象得到空串` | `index.json` | 0.067s |
+| `没有找到元素，返回0` | `index.json` | 0.075s |
+| `没有静态绑定时，同一个调用的结果一致` | `index.json` | 0.084s |
+| `注册后能按 USTRUCT 和名字查到同一个表` | `index.json` | 0.090s |
+| `添加绑定` | `index.json` | 0.123s |
+| `添加绑定：UFunction` | `index.json` | 0.239s |
+| `添加绑定：赋值` | `index.json` | 0.123s |
+| `清理所有的绑定` | `index.json` | 0.107s |
+| `清除数组，移除所有元素` | `index.json` | 0.072s |
+| `清除，移除所有元素` | `index.json` | 0.096s |
+| `清除，移除所有键值对` | `index.json` | 0.098s |
+| `环境启动后即可直接用` | `index.json` | 0.097s |
+| `生成的是真实内容，而不只是创建了一个文件` | `index.json` | 4.255s |
+| `生成静态绑定表到 -OutputDir 指定的目录` | `index.json` | 4.444s |
+| `用分隔符拼接并转字符串` | `index.json` | 0.082s |
+| `相等` | `index.json` | 0.080s |
+| `省略的 C++ 默认参数照样生效` | `index.json` | 0.077s |
+| `移除指定元素` | `index.json` | 0.078s |
+| `移除指定索引处的元素` | `index.json` | 0.066s |
+| `移除绑定` | `index.json` | 0.107s |
+| `移除绑定：UFunction` | `index.json` | 0.101s |
+| `空串恒为真` | `index.json` | 0.100s |
+| `空的子串返回 0 而不是死循环` | `index.json` | 0.082s |
+| `空表得到空串` | `index.json` | 0.075s |
+| `绑定` | `index.json` | 0.078s |
+| `绑定后 Overridable 被换成了 ULuaFunction` | `index.json` | 0.094s |
+| `绑定：UFunction` | `index.json` | 0.074s |
+| `绑定：赋值` | `index.json` | 0.084s |
+| `统计不重叠出现次数` | `index.json` | 0.080s |
+| `编译期能力位与后端一致` | `index.json` | 0.073s |
+| `编辑器模块可加载且命令上下文已注册` | `index.json` | 0.085s |
+| `缩容，移除多余元素` | `index.json` | 0.089s |
+| `缺少参数时给用法提示而不是崩` | `index.json` | 0.081s |
+| `脚本依赖的标准库在两个后端都在` | `index.json` | 0.078s |
+| `脚本改写 UE 命名空间被拦截` | `index.json` | 0.076s |
+| `脚本根目录指向工程的 Content/Script` | `index.json` | 0.079s |
+| `脚本能问到当前后端` | `index.json` | 0.071s |
+| `自定义 loader 能提供文件系统里没有的模块` | `index.json` | 0.067s |
+| `自定义子类把对象定位到指定环境` | `index.json` | 0.080s |
+| `获取Map长度` | `index.json` | 0.080s |
+| `获取Set长度` | `index.json` | 0.096s |
+| `获取对象所在的World` | `index.json` | 0.112s |
+| `获取对象的名称` | `index.json` | 0.129s |
+| `获取对象的外部对象` | `index.json` | 0.106s |
+| `获取对象的有效状态` | `index.json` | 0.224s |
+| `获取对象的类型` | `index.json` | 0.111s |
+| `获取平方后的长度` | `index.json` | 0.078s |
+| `获取所有Key的数组` | `index.json` | 0.075s |
+| `获取所有Value的数组` | `index.json` | 0.078s |
+| `获取所有元素的数组` | `index.json` | 0.087s |
+| `获取指定索引位置的元素引用` | `index.json` | 0.087s |
+| `获取数据表中指定行的数据（C++）` | `index.json` | 0.106s |
+| `获取数据表中指定行的数据（蓝图）` | `index.json` | 0.092s |
+| `获取数组分配的内存指针` | `index.json` | 0.077s |
+| `获取数组最后一个元素的索引位置` | `index.json` | 0.086s |
+| `获取数组长度` | `index.json` | 0.070s |
+| `获取枚举的名称` | `index.json` | 0.076s |
+| `获取枚举的本地化文本` | `index.json` | 0.076s |
+| `获取枚举类型的最大值` | `index.json` | 0.091s |
+| `蓝图：调用的函数本身有返回值，先返回返回值再依次返回参数` | `index.json` | 0.087s |
+| `蓝图：调用的函数本身没有返回值，依次返回参数` | `index.json` | 0.086s |
+| `表里写了不存在的成员时跳过而不是崩` | `index.json` | 0.078s |
+| `覆写内部报错不会崩，之后对象仍可调用` | `index.json` | 0.112s |
+| `覆写后调用走 Lua 实现` | `index.json` | 0.093s |
+| `解绑` | `index.json` | 0.089s |
+| `设置Pitch` | `index.json` | 0.117s |
+| `设置Pitch/Yaw` | `index.json` | 0.102s |
+| `设置Pitch/Yaw/Roll` | `index.json` | 0.099s |
+| `设置R` | `index.json` | 0.077s |
+| `设置R` | `index.json` | 0.086s |
+| `设置RG` | `index.json` | 0.073s |
+| `设置RG` | `index.json` | 0.078s |
+| `设置RGB` | `index.json` | 0.079s |
+| `设置RGB` | `index.json` | 0.088s |
+| `设置RGBA` | `index.json` | 0.078s |
+| `设置RGBA` | `index.json` | 0.086s |
+| `设置X` | `index.json` | 0.079s |
+| `设置X` | `index.json` | 0.082s |
+| `设置X` | `index.json` | 0.089s |
+| `设置X` | `index.json` | 0.105s |
+| `设置X` | `index.json` | 0.094s |
+| `设置X` | `index.json` | 0.073s |
+| `设置X/Y` | `index.json` | 0.085s |
+| `设置X/Y` | `index.json` | 0.070s |
+| `设置X/Y` | `index.json` | 0.108s |
+| `设置X/Y` | `index.json` | 0.078s |
+| `设置X/Y` | `index.json` | 0.065s |
+| `设置X/Y/Z` | `index.json` | 0.079s |
+| `设置X/Y/Z` | `index.json` | 0.096s |
+| `设置X/Y/Z` | `index.json` | 0.071s |
+| `设置X/Y/Z/W` | `index.json` | 0.073s |
+| `设置X/Y/Z/W` | `index.json` | 0.082s |
+| `设置XY` | `index.json` | 0.083s |
+| `设置后 Start 会执行那个模块` | `index.json` | 0.109s |
+| `设置指定索引位置的元素` | `index.json` | 0.087s |
+| `设置防止无限循环的超时时间` | `index.json` | 1.126s |
+| `设置项切换后可写回原值` | `index.json` | 0.085s |
+| `访问反射枚举` | `index.json` | 0.068s |
+| `访问反射类` | `index.json` | 0.070s |
+| `访问导出类` | `index.json` | 0.077s |
+| `语法错误返回 false，且之后仍可用` | `index.json` | 0.082s |
+| `调用不存在的 UFunction 是受控错误` | `index.json` | 0.076s |
+| `调用失败，返回值被标记为无效` | `index.json` | 0.089s |
+| `调用失败，返回值被标记为无效` | `index.json` | 0.106s |
+| `调用成功，返回正确的返回值` | `index.json` | 0.094s |
+| `调用成功，返回正确的返回值` | `index.json` | 0.103s |
+| `转为字符串` | `index.json` | 0.079s |
+| `转为字符串` | `index.json` | 0.100s |
+| `转为字符串` | `index.json` | 0.092s |
+| `转为字符串` | `index.json` | 0.087s |
+| `转为字符串` | `index.json` | 0.103s |
+| `转为字符串` | `index.json` | 0.082s |
+| `转为字符串` | `index.json` | 0.097s |
+| `转为字符串` | `index.json` | 0.093s |
+| `转为字符串` | `index.json` | 0.076s |
+| `转为字符串` | `index.json` | 0.072s |
+| `运行时模块都在插件的 Content/Script 下` | `index.json` | 0.079s |
+| `运行时错误返回 false 且不污染栈顶` | `index.json` | 0.079s |
+| `连续三次错误后栈顶不变` | `index.json` | 0.067s |
+| `连续两次生成结果一致` | `index.json` | 8.269s |
+| `迭代中删除元素不崩，且删除真的生效` | `index.json` | 0.080s |
+| `迭代中删除元素不崩，且删除真的生效` | `index.json` | 0.098s |
+| `迭代中删除当前键不崩，且删除真的生效` | `index.json` | 0.085s |
+| `迭代中新增元素不崩，且新增真的生效` | `index.json` | 0.090s |
+| `迭代中新增键不崩，且新增真的生效` | `index.json` | 0.086s |
+| `迭代中追加元素不崩，且追加真的生效` | `index.json` | 0.067s |
+| `迭代元方法注册在后端认识的名字下` | `index.json` | 0.077s |
+| `迭代拿到Set里的每个元素` | `index.json` | 0.092s |
+| `迭代获取Key与Value` | `index.json` | 0.085s |
+| `迭代获取数组索引与元素` | `index.json` | 0.069s |
+| `追加元素到数组末尾` | `index.json` | 0.091s |
+| `追加另外一个数组的所有元素到数组末尾` | `index.json` | 0.088s |
+| `释放对象在LuaVM的引用` | `index.json` | 0.118s |
+| `销毁环境不会顺手销毁被引用的对象` | `index.json` | 0.149s |
+| `销毁环境会跑完所有 __gc，且不破坏内存` | `index.json` | 0.090s |
+| `错误信息带上 chunk 名与行号` | `index.json` | 0.073s |
+| `随插件发布且带 ClassName 占位符` | `index.json` | 0.080s |
+| `随机打乱数组元素位置` | `index.json` | 0.096s |
+| `非整数读回为 0，而不是被截断` | `index.json` | 0.079s |
+| `非法位置索引返回false` | `index.json` | 0.098s |
+| `预留N个数组元素的空间` | `index.json` | 0.079s |
+| `颜色相乘` | `index.json` | 0.072s |
+| `颜色相减` | `index.json` | 0.091s |
+| `颜色相加` | `index.json` | 0.087s |
+| `颜色相加` | `index.json` | 0.079s |
+| `颜色相除` | `index.json` | 0.085s |
+| `默认参数` | `index.json` | 0.083s |
+| `默认参数` | `index.json` | 0.081s |
+| `默认参数` | `index.json` | 0.084s |
+| `默认参数` | `index.json` | 0.096s |
+| `默认参数` | `index.json` | 0.090s |
+| `默认参数` | `index.json` | 0.082s |
+| `默认参数` | `index.json` | 0.109s |
+| `默认参数` | `index.json` | 0.081s |
+| `默认参数` | `index.json` | 0.078s |
+| `默认参数` | `index.json` | 0.080s |
+| `默认定位器对实现了接口的对象返回 GetModuleName 的结果` | `index.json` | 0.086s |
+| `默认环境定位器返回的是非空环境` | `index.json` | 0.080s |
+| `默认逗号分隔` | `index.json` | 0.108s |
+## 最慢的用例
+
+| 用例 | 耗时 |
+|---|---|
+| `UMG UMG 与 Lua 生命周期示例截图` | 22.424s |
+| `Binding 静态绑定示例截图` | 19.203s |
+| `Override 蓝图事件覆写示例截图` | 18.012s |
+| `Container 容器访问示例截图` | 17.943s |
+| `连续两次生成结果一致` | 8.269s |
+| `Issue276 游戏世界暂停后，coroutine delay 功能不工作` | 7.731s |
+| `Issue603 在Lua监听的事件中再次触发事件会导致崩溃` | 6.115s |
+| `Issue660 Unlua函数绑定多个代理导致崩溃` | 6.104s |
+| `Issue430 动画通知调用组件Lua覆写函数崩溃` | 5.819s |
+| `生成静态绑定表到 -OutputDir 指定的目录` | 4.444s |
+
 ## 整场录屏
 
 不是 showcase 的剪辑——剪辑是用例自己录的，只覆盖 showcase 那几个测试；跑挂了的那一轮往往一个剪辑都没有。这一段是 `Tools/RunTests.ps1` 在启动编辑器的同时开始录、编辑器退出时结束，从第一条测试到最后一条都在里面（窗口出现前的几秒除外）。
@@ -112,7 +607,7 @@ description: "自动化测试产出的通过率、通过明细、失败明细与
 
 [播放不了？直接打开视频文件（标准 H.264 mp4）](Images/tests-lua/Showcase_UMG_Clip.mp4)
 
-，15 帧，由这些帧编码而成（`Tools/RunTests.ps1 -Video`）。
+，60 帧，由这些帧编码而成（`Tools/RunTests.ps1 -Video`）。
 
 ## 静态类型检查
 
@@ -122,9 +617,9 @@ description: "自动化测试产出的通过率、通过明细、失败明细与
 
 | 用例 | 本次（µs/次） | 上次（µs/次） | 变化 |
 |---|---|---|---|
-| Lua | 1.8601 | 1.6709 | +11.3% |
-| Native | 0.0001 | — | 无上次数据 |
-| Reflection | 0.5225 | 0.8428 | -38.0% ⚠️ |
+| Lua | 1.8154 | 2.0306 | -10.6% |
+| Native | 0.0001 | 0.0001 | +0.0% |
+| Reflection | 0.5633 | 0.5909 | -4.7% |
 
 > 超过 ±30% 会标 ⚠️，但**不会**让这轮失败：计时受机器负载影响，这里只做提示，不做判定。
 

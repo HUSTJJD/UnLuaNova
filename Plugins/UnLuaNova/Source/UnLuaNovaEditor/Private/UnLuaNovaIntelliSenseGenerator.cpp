@@ -45,7 +45,11 @@ void FUnLuaNovaIntelliSenseGenerator::Initialize()
     if (bInitialized)
         return;
 
-    OutputDir = IPluginManager::Get().FindPlugin("UnLuaNova")->GetBaseDir() + "/Intermediate/IntelliSense";
+    // Its own directory next to the plugin, not Intermediate/: Intermediate is UBT's build
+    // scratch - wiped without notice, and nobody looks inside it - while these files are the
+    // IDE's and the type checkers' input (see UnLuaNovaDemo.code-workspace). It is gitignored:
+    // what ends up in here depends on the machine's plugins and modules.
+    OutputDir = IPluginManager::Get().FindPlugin("UnLuaNova")->GetBaseDir() + "/IntelliSense";
 
     // Two dialects, two directories. The EmmyLua annotations are Lua and are read by LuaLS;
     // UnLuaNova.d.lua is Luau and is read by luau-analyze. Neither analyzer can parse the
@@ -198,7 +202,24 @@ void FUnLuaNovaIntelliSenseGenerator::ExportLuauDecls(const TArray<const UField*
 {
     // LuauDecl lives inside namespace UnLuaNova (see UnLuaNovaLuauDecls.h); this
     // function is defined at global scope, so the name has to be qualified.
-    const FString Content = UnLuaNova::LuauDecl::Generate(Types);
+    FString Content = UnLuaNova::LuauDecl::Generate(Types);
+
+    // The engine half is reflected, the script-facing API is not: it is a Lua table the runtime
+    // injects. Its Luau declaration sits in Content/IntelliSense next to the EmmyLua one, is
+    // checked in, and is appended here - one place to edit per API change, two dialects served.
+    const FString ApiDir = IPluginManager::Get().FindPlugin(TEXT("UnLuaNova"))->GetContentDir() / TEXT("IntelliSense");
+    const FString ApiFile = ApiDir / TEXT("UnLuaNova.d.lua");
+
+    FString ApiDecl;
+    if (FFileHelper::LoadFileToString(ApiDecl, *ApiFile) && !ApiDecl.IsEmpty())
+    {
+        Content += TEXT("\n-- From ") + ApiFile + TEXT(" - the script-facing API, hand-written.\n");
+        Content += ApiDecl;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[IntelliSense] %s not found - the Luau declarations have no UnLuaNova API in them."), *ApiFile);
+    }
 
     IFileManager& FileManager = IFileManager::Get();
     if (!FileManager.DirectoryExists(*LuauDir))

@@ -290,8 +290,10 @@ namespace UnLuaNova
             // Two different UObjects can carry the same name (a struct in one module and a
             // class in another, say), and Luau only allows one type per name - the second is
             // "Redefinition of type X". First one wins; the alternative is a file the analyzer
-            // refuses to load at all.
+            // refuses to load at all. The array keeps the order so the UE namespace below, and
+            // with it the whole file, comes out identical on every run.
             TSet<FString> Declared;
+            TArray<FString> DeclaredNames;
 
             for (const UField* Field : Types)
             {
@@ -309,31 +311,40 @@ namespace UnLuaNova
                 {
                     Out += EnumDecl(Enum);
                     Declared.Add(Field->GetName());
+                    DeclaredNames.Add(Field->GetName());
                 }
                 else if (const UScriptStruct* ScriptStruct = Cast<UScriptStruct>(Field))
                 {
                     Out += StructDecl(ScriptStruct);
                     Declared.Add(Field->GetName());
+                    DeclaredNames.Add(Field->GetName());
                 }
                 else if (const UClass* Class = Cast<UClass>(Field))
                 {
                     Out += StructDecl(Class);
                     Declared.Add(Field->GetName());
+                    DeclaredNames.Add(Field->GetName());
                 }
             }
 
-            // The two globals the runtime injects, neither of which is reflected: UnLuaNova is
-            // the script-facing API (see Content/IntelliSense/UnLuaNova.lua) and UE is the
-            // namespace the generated types are reached through. Without them every script
-            // opens with "Unknown global", and nothing else gets checked at all.
+            // How a script reaches the engine: UE.FVector(1, 2, 3), UE.UClass.Load("..."),
+            // UE.UKismetSystemLibrary.Delay(...). One member per type, each a constructor - so
+            // UE.FVector(...) *is* an FVector and everything done with the result is checked
+            // against the extern types above. `...any` because the constructors are not
+            // reflected: UnLua accepts several spellings for the same type (three numbers, a
+            // native vector, nothing at all), and pretending otherwise would invent errors.
             //
-            // They are declared as an opaque table on purpose. Modelling the API surface is its
-            // own job, and a wrong declaration is worse than a vague one: it turns real errors
-            // into silence. Scripts that want types annotate them - `local V: FVector` - and
-            // those are checked against the extern types above.
-            Out += TEXT("\n-- Injected by the runtime; see Content/IntelliSense/UnLuaNova.lua for the API.\n");
-            Out += TEXT("declare UnLuaNova: { [string]: any }\n");
-            Out += TEXT("declare UE: { [string]: any }\n");
+            // Deliberately not modelled: UE.EAttachmentRule.SnapToTarget, i.e. reading an enum
+            // member off the namespace. An enum is a string union here, and there is no way to
+            // declare "and also indexable by member name" - so enums are reachable as types
+            // (`local R: EAttachmentRule`) but not through UE.<Enum>.<Member>.
+            Out += TEXT("\ndeclare extern type UENamespace with\n");
+            for (const FString& Name : DeclaredNames)
+            {
+                Out += FString::Printf(TEXT("\t%s: (...any) -> %s\n"), *Name, *Name);
+            }
+            Out += TEXT("end\n");
+            Out += TEXT("\ndeclare UE: UENamespace\n");
 
             return Out;
         }

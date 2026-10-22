@@ -22,9 +22,11 @@
 UUnLuaNovaIntelliSenseCommandlet::UUnLuaNovaIntelliSenseCommandlet(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
-    //IntermediateDir = FPaths::ProjectIntermediateDir();
-    IntermediateDir = FPaths::ProjectPluginsDir();
-    IntermediateDir += TEXT("UnLuaNova/Intermediate/");
+    // Same root the generator uses (see FUnLuaNovaIntelliSenseGenerator::Initialize): the
+    // declarations are IDE/type-checker input, not build scratch, so they go to the plugin's
+    // own IntelliSense/ directory. SaveFile() appends "IntelliSense/<module>" to this.
+    GeneratedDir = FPaths::ProjectPluginsDir();
+    GeneratedDir += TEXT("UnLuaNova/");
 
     // The flags the other commandlets in here set, and which this one needs too: it loads the
     // asset registry and touches blueprint assets - editor-only territory - and it is meant to
@@ -147,7 +149,7 @@ int32 UUnLuaNovaIntelliSenseCommandlet::Main(const FString &Params)
 void UUnLuaNovaIntelliSenseCommandlet::SaveFile(const FString &ModuleName, const FString &FileName, const FString &GeneratedFileContent)
 {
     IFileManager &FileManager = IFileManager::Get();
-    FString Directory = FString::Printf(TEXT("%sIntelliSense/%s"), *IntermediateDir, *ModuleName);
+    FString Directory = FString::Printf(TEXT("%sIntelliSense/%s"), *GeneratedDir, *ModuleName);
     if (!FileManager.DirectoryExists(*Directory))
     {
         FileManager.MakeDirectory(*Directory);
