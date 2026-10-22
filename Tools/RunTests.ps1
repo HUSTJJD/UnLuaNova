@@ -790,7 +790,10 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
 
             $Summary = Join-Path $RunDir "summary.json"
             if (Test-Path $Summary) {
-                $S = Get-Content $Summary -Raw | ConvertFrom-Json
+                # -Encoding UTF8: the summary carries test names in Chinese, and the
+                # default encoding mangles them badly enough that ConvertFrom-Json throws
+                # before the totals are ever read - a crash report then loses its verdict.
+                $S = Get-Content $Summary -Raw -Encoding UTF8 | ConvertFrom-Json
                 Write-Host ""
                 Write-Host ("Result ($B) : {0} passed, {1} failed, {2} total" -f $S.passed, $S.failed, $S.total)
                 Write-Host ("Report ($B) : {0}" -f (Join-Path $RunDir "report.md"))

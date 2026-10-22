@@ -201,8 +201,9 @@ local Back = UnLuaNova.Buffer.ToArray(Buf)      -- buffer -> TArray
 
 ```
 Plugins/UnLuaNova/Intermediate/IntelliSense/
-├── *.lua                EmmyLua 注解，给 IDE 补全用，也给 LuaLS 做 Lua 后端的静态检查
-└── UnLuaNova.d.lua      Luau 声明，给 luau-analyze 做 Luau 后端的静态检查用
+├── EmmyLua/             Lua 方言，给 IDE 补全 + LuaLS
+└── Luau/                Luau 方言，给 luau-analyze
+    └── UnLuaNova.d.lua
 ```
 
 !!! note "产物是 `.d.lua`，不是给脚本 require 的"

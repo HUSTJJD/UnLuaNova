@@ -153,11 +153,15 @@ void FErrorHandlingSpec::Define()
         It(TEXT("参数类型错误是受控错误"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             // ENABLE_TYPE_CHECK is on by default; without it this would coerce the
-            // string to 0 and the call would succeed, which is exactly the regression
-            // this pins.
+            // argument to 0 and the call would succeed, which is the regression this
+            // pins.
+            //
+            // ProbeWithoutStaticBinding, deliberately: the two probes exist so the
+            // reflective path and the pre-resolved fast path can be exercised
+            // separately, and type checking belongs to the reflective one.
             UnLuaNova::RunChunk(L, R"(
                 local S = NewObject(UE.UUnLuaNovaTestStub)
-                local Ok, Err = pcall(S.ProbeWithStaticBinding, S, 'not a number')
+                local Ok, Err = pcall(S.ProbeWithoutStaticBinding, S, {})
                 return Ok
             )");
             TEST_FALSE(lua_toboolean(L, -1));

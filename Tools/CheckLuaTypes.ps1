@@ -39,8 +39,9 @@ param(
     # 要检查的目录，默认工程的脚本根目录（Lua 后端加载的就是它）
     [string] $Path = "Content/Script",
 
-    # EmmyLua 声明目录；默认取编辑器导出的那一份
-    [string] $Defs = "Plugins/UnLuaNova/Intermediate/IntelliSense",
+    # EmmyLua 声明目录；默认取编辑器导出的那一份（Luau 声明在并列的 Luau/ 子目录，
+    # 两种方言分开导出，所以这里不会有 .d.lua）
+    [string] $Defs = "Plugins/UnLuaNova/Intermediate/IntelliSense/EmmyLua",
 
     # 仓库里自带的 EmmyLua 注解（UnLuaNova 自己的 API），总是作为库加入
     [string] $BuiltinDefs = "Plugins/UnLuaNova/Content/IntelliSense",
@@ -52,7 +53,8 @@ param(
     [ValidateSet("Error", "Warning", "Information", "Hint")]
     [string] $CheckLevel = "Warning",
 
-    # 声明给 LuaLS 的 Lua 版本。后端是 5.5，LuaLS 目前最高认到 5.4
+    # 声明给 LuaLS 的 Lua 版本。后端是 5.5（LuaLS 也支持 "Lua 5.5"）；默认给 5.4 是因为
+    # 工程脚本本身是 5.1 兼容写法，4/5 之差对诊断没有影响，而 5.4 连老版本 LuaLS 都认
     [string] $RuntimeVersion = "Lua 5.4",
 
     # 额外关掉的诊断名，例如 "undefined-doc-name"、"different-requires"
@@ -127,6 +129,11 @@ function Find-LuaLS
 
     if ($env:LUA_LANGUAGE_SERVER -and (Test-Path -LiteralPath $env:LUA_LANGUAGE_SERVER)) { return $env:LUA_LANGUAGE_SERVER }
 
+    # 仓库自带的那个（子模块 Tools/lua-language-server，由 Tools/Build-LuaLS.ps1 构建）。
+    # 排在 PATH 前面：固定版本优先于机器上碰巧装的那个。
+    $built = Resolve-InputPath "Tools/lua-language-server/bin/lua-language-server.exe"
+    if (Test-Path -LiteralPath $built) { return $built }
+
     $cmd = Get-Command lua-language-server -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
 
@@ -150,11 +157,12 @@ if (-not $Analyzer)
 {
     Write-Skip @"
 找不到 lua-language-server（LuaLS）。三种拿法：
-  1. 从 Releases 下载 lua-language-server 压缩包，解压后用 -LuaLS 传进来
+  1. 用仓库自带的子模块构建（推荐，版本固定）：Tools\Build-LuaLS.ps1
+     需要 Ninja + MSVC，且要在 Developer PowerShell 里跑
   2. 装 VS Code 的 Lua 扩展（sumneko.lua），脚本会自动找到它自带的 server
   3. 设置环境变量 LUA_LANGUAGE_SERVER 指向可执行文件
 
-详见 Docs/CN/IntelliSense.md
+详见 Docs/CN/Testing.md
 "@
 }
 
@@ -178,6 +186,20 @@ if (-not (Test-Path -LiteralPath $DefsPath))
 # ---------------------------------------------------------------- config
 # 配置写在 Saved/ 而不是仓库里：它带着本机绝对路径，入库会让这个文件每次运行都变。
 if (-not (Test-Path -LiteralPath $WorkDir)) { New-Item -ItemType Directory -Path $WorkDir -Force | Out-Null }
+
+# 分目录之后这里只应该有 EmmyLua。万一还是旧的混合导出（*.lua 与 .d.lua 同目录），
+# 直接指过去会让 LuaLS 去解析 `declare class` —— 那不是合法 Lua。这种产物是拆分之前
+# 导出的，让人重导一次比在这里猜着过滤更清楚。
+$StaleDecls = @(Get-ChildItem -LiteralPath $DefsPath -Recurse -Filter *.d.lua -File -ErrorAction SilentlyContinue)
+if ($StaleDecls.Count -gt 0)
+{
+    Write-Skip @"
+声明目录里混着 $($StaleDecls.Count) 个 .d.lua（Luau 声明）：$DefsPath
+
+这是按方言分目录之前导出的旧产物。请在编辑器里重新执行一次
+UnLuaNova 工具栏 → 导出智能提示。
+"@
+}
 
 $Libs = New-Object System.Collections.Generic.List[string]
 $Libs.Add($DefsPath)
@@ -228,6 +250,7 @@ if (Test-Path -LiteralPath $CheckJson) { Remove-Item -LiteralPath $CheckJson -Fo
 
 Write-Host "lua-language-server: $Analyzer"
 Write-Host "检查 $($Files.Count) 个文件（checklevel=$CheckLevel，runtime=$RuntimeVersion）"
+Write-Host "声明库：$DefsPath"
 
 if ($DryRun)
 {

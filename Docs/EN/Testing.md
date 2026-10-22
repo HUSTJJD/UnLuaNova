@@ -36,6 +36,8 @@ The companion scripts live in `Tools/` and are invoked from the repository root:
 | `Tools/GenerateTestReport.py` | Turns the JSON the automation framework exported into the Markdown/HTML report (`RunTests.ps1` calls it) |
 | `Tools/CheckLuauTypes.ps1` | Luau backend: static type check via `luau-analyze` plus the generated `UnLuaNova.d.lua` |
 | `Tools/CheckLuaTypes.ps1` | Lua backend: static check via LuaLS (`lua-language-server`) plus the generated EmmyLua annotations |
+| `Tools/Build-LuauAnalyze.ps1` | cmake-builds `luau-analyze` from the Luau submodule (it is in there; UBT just skips `CLI/`) |
+| `Tools/Build-LuaLS.ps1` | Builds LuaLS from the `Tools/lua-language-server` submodule; pulls its 21 nested submodules on first run |
 | `Tools/Rename-To-UnLuaNova.ps1` | Migration script: bulk-renames an UnLua project/codebase to `UnLuaNova` (`UnLua` → `UnLuaNova`, `UUnLuaSettings` → `UUnLuaNovaSettings`, …). Run it once when migrating; not part of running tests |
 | `Tools/Install-NightlyTask.ps1` | Registers / removes the Windows scheduled task that compiles the test code once a night (`-BuildOnly`), see "Compile at least once a day" below |
 

@@ -34,6 +34,8 @@ Plugins/UnLuaNovaTestSuite/
 | `Tools/GenerateTestReport.py` | 把自动化框架导出的 JSON 转成 Markdown/HTML 报告（`RunTests.ps1` 会调） |
 | `Tools/CheckLuauTypes.ps1` | Luau 后端：用 `luau-analyze` + 生成的 `UnLuaNova.d.lua` 做静态类型检查 |
 | `Tools/CheckLuaTypes.ps1` | Lua 后端：用 LuaLS（`lua-language-server`）+ 生成的 EmmyLua 注解做静态检查 |
+| `Tools/Build-LuauAnalyze.ps1` | 从 Luau 子模块 cmake 构建 `luau-analyze`（它就在子模块里，只是 UBT 不编 `CLI/`） |
+| `Tools/Build-LuaLS.ps1` | 从 `Tools/lua-language-server` 子模块构建 LuaLS；首次会拉它的 21 个嵌套子模块 |
 | `Tools/Rename-To-UnLuaNova.ps1` | 迁移脚本：把一份 UnLua 工程/代码批量改名到 `UnLuaNova`（`UnLua` → `UnLuaNova`、`UUnLuaSettings` → `UUnLuaNovaSettings` 等）。只在迁移时用一次，跑测试不需要它 |
 | `Tools/Install-NightlyTask.ps1` | 注册/删除"每晚编译一次测试代码"的 Windows 计划任务（`-BuildOnly`），见下方"每晚至少编一次" |
 

@@ -27,15 +27,24 @@ description: "生成引擎类型符号，让 VSCode 等 IDE 对 UE API 提供补
 
 同一次导出还会额外生成一个 `UnLuaNova.d.lua`：
 
+一次导出产出**两种方言，分两个目录**：
+
 ```
 Plugins/UnLuaNova/Intermediate/IntelliSense/
-├── *.lua                EmmyLua 注解，给 IDE 补全用，也给 LuaLS 做 Lua 后端的静态检查
-└── UnLuaNova.d.lua      Luau 声明，给 luau-analyze 做 Luau 后端的静态检查用
+├── EmmyLua/             Lua 方言，给 IDE 补全 + LuaLS（Lua 后端静态检查）
+│   ├── UE.lua           引擎类型的聚合入口
+│   ├── UnLuaNova.lua    UnLuaNova 自己的 API（从插件 Content 拷入）
+│   └── <模块>/<类型>.lua 按 UE 包名分目录，如 Script/Engine/、Game/Foo/
+└── Luau/                Luau 方言，给 luau-analyze（Luau 后端静态检查）
+    └── UnLuaNova.d.lua
 ```
 
-前者是给 IDE 看的类型注解，后者是给静态检查器看的 `declare class` / `declare function` 声明 ——
-**不要 `require` 它**，它只在检查阶段被引用。把 `.d.lua` 放进脚本工程、脚本头部写 `--!strict`，
-就可以用 `luau-analyze` 把 UE API 误用提前暴露出来。
+分开是因为两个分析器解析不了对方的语言：把 `declare class` 喂给 LuaLS 只会得到语法错误。
+
+`EmmyLua/` 是给 IDE 和 LuaLS 看的类型注解，`Luau/UnLuaNova.d.lua` 是给静态检查器看的
+`declare class` / `declare function` 声明 —— **不要 `require` 它**，它只在检查阶段被引用。
+把 `.d.lua` 放进脚本工程、脚本头部写 `--!strict`，就可以用 `luau-analyze` 把 UE API 误用
+提前暴露出来。
 
 详见[Luau 后端](Luau.md#三类型声明与-luau-analyze)。
 

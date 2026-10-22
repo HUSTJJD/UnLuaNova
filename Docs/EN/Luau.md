@@ -204,8 +204,9 @@ class of UE API misuse (wrong function name, wrong arity, wrong argument type) b
 
 ```
 Plugins/UnLuaNova/Intermediate/IntelliSense/
-├── *.lua                EmmyLua annotations, for IDE completion and for LuaLS on the Lua backend
-└── UnLuaNova.d.lua      Luau declarations, for luau-analyze on the Luau backend
+├── EmmyLua/             Lua dialect, for IDE completion + LuaLS
+└── Luau/                Luau dialect, for luau-analyze
+    └── UnLuaNova.d.lua
 ```
 
 !!! note "It is a `.d.lua`, not something to require"

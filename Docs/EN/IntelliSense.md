@@ -32,16 +32,26 @@ appears, check that your IDE's Lua language extension is installed and enabled.
 
 The same export also produces `UnLuaNova.d.lua`:
 
+One export produces **two dialects in two directories**:
+
 ```
 Plugins/UnLuaNova/Intermediate/IntelliSense/
-├── *.lua                EmmyLua annotations, for IDE completion and for LuaLS on the Lua backend
-└── UnLuaNova.d.lua      Luau declarations, for static checking with luau-analyze on the Luau backend
+├── EmmyLua/             Lua dialect, for IDE completion + LuaLS (Lua backend static check)
+│   ├── UE.lua           aggregate entry point for engine types
+│   ├── UnLuaNova.lua    UnLuaNova's own API (copied from the plugin's Content)
+│   └── <module>/<type>.lua  by UE package, e.g. Script/Engine/, Game/Foo/
+└── Luau/                Luau dialect, for luau-analyze (Luau backend static check)
+    └── UnLuaNova.d.lua
 ```
 
-The first is type annotation for an IDE, the second is `declare class` / `declare function`
-declarations for a static checker - **do not `require` it**, it is only referenced at check
-time. Put the `.d.lua` next to your scripts and start the file with `--!strict`, and
-`luau-analyze` will surface UE API misuse before you run anything.
+They are split because neither analyzer can parse the other's language - feeding
+`declare class` to LuaLS only produces syntax errors.
+
+`EmmyLua/` is type annotation for an IDE and for LuaLS; `Luau/UnLuaNova.d.lua` is
+`declare class` / `declare function` declarations for a static checker - **do not `require`
+it**, it is only referenced at check time. Put the `.d.lua` next to your scripts and start
+the file with `--!strict`, and `luau-analyze` will surface UE API misuse before you run
+anything.
 
 See [Luau backend](Luau.md).
 

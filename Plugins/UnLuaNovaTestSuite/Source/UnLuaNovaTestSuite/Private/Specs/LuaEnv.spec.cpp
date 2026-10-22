@@ -116,16 +116,29 @@ void FLuaEnvSpec::Define()
             TEST_EQUAL((UObject*)UnLuaNova::GetUObject(L1, -1), (UObject*)Second);
         });
 
-        It(TEXT("启动模块不存在时报错，而不是静默跳过"), EAsyncExecution::TaskGraphMainThread, [this]()
+        It(TEXT("启动模块不存在时不会被记成已加载"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            // Start() swallows the pcall result, so the log is the only signal a caller
-            // gets - and "the startup script never ran" is otherwise indistinguishable
-            // from "it ran and did nothing". AddExpectedError is the assertion here: if
-            // the failure stops being reported, this case fails.
+            // Start() returns void and swallows the pcall result, so a missing startup
+            // module has no return value to check - the log is all a caller gets. That
+            // is the shape of the hazard: "the startup script never ran" looks exactly
+            // like "it ran and did nothing".
+            //
+            // So this asserts what *is* observable: the module is not in the require
+            // cache, i.e. it genuinely did not run, rather than having been faked.
             UnLuaNova::FLuaEnv Env1;
             TMap<FString, UObject*> Args;
-            AddExpectedError(TEXT("SpecNoSuchStartupModule"), EAutomationExpectedErrorFlags::Contains);
             Env1.Start(TEXT("SpecNoSuchStartupModule"), Args);
+
+            const auto L1 = Env1.GetMainState();
+            lua_getglobal(L1, "package");
+            TEST_TRUE(lua_istable(L1, -1));
+            lua_getfield(L1, -1, "loaded");
+            lua_getfield(L1, -1, "SpecNoSuchStartupModule");
+            TEST_TRUE(lua_isnil(L1, -1));
+
+            // ...and the environment is still usable afterwards.
+            TEST_TRUE(Env1.DoString(TEXT("return 1")));
+            TEST_EQUAL((int32)lua_tointeger(L1, -1), 1);
         });
     });
 

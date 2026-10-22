@@ -13,3 +13,17 @@
 	# Same as above: Luau.Build.cs generates a .ubtignore so UBT only builds the wrappers
 	# in LuauLib/Generated and not Analysis/, CLI/, tests/ etc.
 	ignore = untracked
+	# luau-analyze (the Luau backend's static checker) is part of this submodule -
+	# CLI/src/Analyze.cpp - but UBT excludes CLI/, so Tools/Build-LuauAnalyze.ps1
+	# builds just the Luau.Analyze.CLI target with cmake. No separate dependency.
+[submodule "Tools/lua-language-server"]
+	path = Tools/lua-language-server
+	url = https://github.com/LuaLS/lua-language-server.git
+	# The Lua backend's static checker (Tools/CheckLuaTypes.ps1). Pinned to a tag rather
+	# than tracked on master: the point of vendoring it is that everyone checks with the
+	# same version.
+	# A tool, not a library to link - it lives under Tools/ so UBT never sees it.
+	# Build: Tools/Build-LuaLS.ps1 (needs Ninja + MSVC). It also has 21 nested submodules
+	# (3rd/* for the build, meta/3rd/* for other frameworks' API metadata); the build
+	# script pulls them. bin/, build/, log/ and meta/ are build output.
+	ignore = untracked

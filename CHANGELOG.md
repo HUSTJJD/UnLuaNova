@@ -150,6 +150,23 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   报告里两个后端都会出一节「静态类型检查」；没装 LuaLS、或没导出过智能提示时明确写
   "跳过 + 原因"，不硬跑出几百条假错
 
+- **静态检查器以子模块引入**：`luau-analyze` 本来就在 Luau 子模块里
+  （`CLI/src/Analyze.cpp`，只是 UBT 用 `.ubtignore` 排除了 `CLI/`），新增
+  `Tools/Build-LuauAnalyze.ps1` 只构建 `Luau.Analyze.CLI` 这一个 target；
+  LuaLS 新增子模块 `Tools/lua-language-server`（固定在 tag 3.9.3，不是跟着 master），
+  配套 `Tools/Build-LuaLS.ps1`（要 Ninja + MSVC，首次会拉它的 21 个嵌套子模块）。
+  两个检查脚本都优先用仓库里构建出来的那份，而不是 PATH 上碰巧装的那个 ——
+  固定版本才是把依赖放进仓库的意义
+
+### Changed
+- **IntelliSense 产物按方言分目录**：`Intermediate/IntelliSense/` 下拆成
+  `EmmyLua/`（Lua 方言，`UE.lua` / `UnLuaNova.lua` / `<模块>/<类型>.lua`）和
+  `Luau/`（Luau 方言，`UnLuaNova.d.lua`）。之前两种方言混在一个目录里，
+  把整个目录当库喂给 LuaLS 就会让它去解析 `declare class` —— 那不是合法 Lua。
+  **破坏性改动**：之前的产物要重新导出一次，IDE 的 `workspace.library` 要改指到
+  `IntelliSense/EmmyLua`，`Tools/CheckLuauTypes.ps1` 的默认 `-Defs` 同步改成
+  `IntelliSense/Luau/UnLuaNova.d.lua`
+
 ### Fixed
 - **「静态类型检查」这一节从来没出现过**：`RunTests.ps1` 写摘要用的是
   `Set-Content -Encoding UTF8`（PowerShell 会加 BOM），而 `GenerateTestReport.py` 用

@@ -26,8 +26,8 @@ param(
     # 要检查的目录或文件，默认工程的脚本根目录
     [string] $Path = "Content/Script",
 
-    # Luau 声明文件；默认取编辑器导出的那一份
-    [string] $Defs = "Plugins/UnLuaNova/Intermediate/IntelliSense/UnLuaNova.d.lua",
+    # Luau 声明文件；默认取编辑器导出的那一份（EmmyLua 在 EmmyLua/ 子目录，两种方言分开导出）
+    [string] $Defs = "Plugins/UnLuaNova/Intermediate/IntelliSense/Luau/UnLuaNova.d.lua",
 
     # luau-analyze 的路径；不传就按下面的顺序找
     [string] $LuauAnalyze,
@@ -82,8 +82,9 @@ function Find-LuauAnalyze
     $cmd = Get-Command luau-analyze -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
 
-    # Luau 子模块用 cmake 编出来的常见位置（Windows）
+    # Luau 子模块用 cmake 编出来的位置（Tools/Build-LuauAnalyze.ps1 走的就是第一条）
     $candidates = @(
+        "Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau/build/Release/luau-analyze.exe",
         "Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau/build/release/luau-analyze.exe",
         "Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau/build/RelWithDebInfo/luau-analyze.exe",
         "Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau/build/luau-analyze.exe"
@@ -103,8 +104,9 @@ if (-not $Analyzer)
 {
     $msg = @"
 找不到 luau-analyze。三种拿法：
-  1. 下载预编译二进制（Releases 里的 luau-analyze），再用 -LuauAnalyze 传进来
-  2. cmake 构建 Luau 子模块：Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau
+  1. 从 Luau 子模块构建：Tools\Build-LuauAnalyze.ps1
+     （luau-analyze 就在子模块里，UBT 只是不编它）
+  2. cmake 自己构建 Luau 子模块：Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau
   3. 设置环境变量 LUAU_ANALYZE 指向可执行文件
 
 详见 Docs/CN/Luau.md

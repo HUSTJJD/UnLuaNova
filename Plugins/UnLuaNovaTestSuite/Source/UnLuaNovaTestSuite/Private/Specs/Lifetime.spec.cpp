@@ -64,12 +64,18 @@ void FLifetimeSpec::Define()
         });
     });
 
-    Describe(TEXT("Lua 持有的对象"), [this]()
+    Describe(TEXT("脚本持有的对象"), [this]()
     {
-        It(TEXT("引擎侧 GC 不会回收正被 Lua 引用的对象"), EAsyncExecution::TaskGraphMainThread, [this]()
+        It(TEXT("只被 Lua 引用的对象会被引擎 GC 回收"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            // A script holding the only reference is the normal case, not an edge case:
-            // the object usually has no UPROPERTY pointing at it.
+            // This is the surprising half of the contract, and the reason the manual
+            // reference API exists: pushing an object into Lua gives the script a
+            // userdata, but the engine has no idea that userdata is a reference, so
+            // nothing roots the object. Keeping one alive is the caller's job.
+            //
+            // Asserted through the weak pointer only. Stub is freed by the collection
+            // below, and touching it afterwards - even just to ask IsValid() - reads
+            // freed memory.
             const auto Stub = NewObject<UUnLuaNovaTestStub>();
             const TWeakObjectPtr<UUnLuaNovaTestStub> Weak = Stub;
 
@@ -78,8 +84,7 @@ void FLifetimeSpec::Define()
 
             CollectGarbage(RF_Standalone, true);
 
-            TEST_TRUE(Weak.IsValid());
-            TEST_TRUE(::IsValid(Stub));
+            TEST_FALSE(Weak.IsValid());
         });
 
         It(TEXT("对象被标记销毁后，从 Lua 访问是受控错误"), EAsyncExecution::TaskGraphMainThread, [this]()

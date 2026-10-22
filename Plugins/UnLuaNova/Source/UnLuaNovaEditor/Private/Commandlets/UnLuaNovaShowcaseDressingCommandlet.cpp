@@ -3,6 +3,7 @@
 #include "Components/DirectionalLightComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SkyAtmosphereComponent.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/Level.h"
 #include "Engine/SkyLight.h"
@@ -57,12 +58,33 @@ namespace
 		return Actor;
 	}
 
+	// Find-or-create one piece of the dressing, keyed by its label. This is what makes the run
+	// safe to re-run after the set of pieces grows: existing levels only gain what is missing,
+	// instead of being skipped forever or accumulating duplicate suns.
+	template <class T>
+	T* EnsureDressing(ULevel* Level, const FVector& Location, const FRotator& Rotation, const FString& Label)
+	{
+		for (AActor* Actor : Level->Actors)
+		{
+			if (Actor && Actor->ActorHasTag(GDressingTag) && Actor->GetActorLabel() == Label)
+				return Cast<T>(Actor);
+		}
+		return SpawnDressing<T>(Level, Location, Rotation, Label);
+	}
+
 	bool DressLevel(ULevel* Level)
 	{
+		// A sky. Without it the world above the horizon is a black void, and a real-time-capture
+		// sky light has nothing to capture: the engine then paints a red warning across every
+		// screenshot. SkyAtmosphere is the engine's procedural sky, so the skylight gets a source
+		// and the upper half of every shot stops being pure black.
+		EnsureDressing<ASkyAtmosphere>(Level, FVector::ZeroVector, FRotator::ZeroRotator,
+			TEXT("UnLuaNovaShowcase_Atmosphere"));
+
 		// A floor to catch the light. The basic plane is 1m across, so 40x is a 40m room.
 		if (UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, GPlaneAsset))
 		{
-			if (AStaticMeshActor* Floor = SpawnDressing<AStaticMeshActor>(
+			if (AStaticMeshActor* Floor = EnsureDressing<AStaticMeshActor>(
 					Level, FVector(0.f, 0.f, 0.f), FRotator::ZeroRotator, TEXT("UnLuaNovaShowcase_Floor")))
 			{
 				Floor->GetStaticMeshComponent()->SetStaticMesh(Plane);
@@ -83,7 +105,7 @@ namespace
 
 			for (int32 Index = 0; Index < UE_ARRAY_COUNT(Spots); ++Index)
 			{
-				if (AStaticMeshActor* Box = SpawnDressing<AStaticMeshActor>(Level, Spots[Index],
+				if (AStaticMeshActor* Box = EnsureDressing<AStaticMeshActor>(Level, Spots[Index],
 						FRotator(0.f, Index * 25.f, 0.f), FString::Printf(TEXT("UnLuaNovaShowcase_Cube_%d"), Index + 1)))
 				{
 					Box->GetStaticMeshComponent()->SetStaticMesh(Cube);
@@ -92,7 +114,7 @@ namespace
 			}
 		}
 
-		if (ADirectionalLight* Sun = SpawnDressing<ADirectionalLight>(Level, FVector(0.f, 0.f, 400.f),
+		if (ADirectionalLight* Sun = EnsureDressing<ADirectionalLight>(Level, FVector(0.f, 0.f, 400.f),
 				FRotator(-55.f, 30.f, 0.f), TEXT("UnLuaNovaShowcase_Sun")))
 		{
 			if (UDirectionalLightComponent* Component = Sun->GetComponent())
@@ -105,7 +127,7 @@ namespace
 			}
 		}
 
-		if (ASkyLight* Sky = SpawnDressing<ASkyLight>(Level, FVector(0.f, 0.f, 400.f),
+		if (ASkyLight* Sky = EnsureDressing<ASkyLight>(Level, FVector(0.f, 0.f, 400.f),
 				FRotator::ZeroRotator, TEXT("UnLuaNovaShowcase_Sky")))
 		{
 			if (USkyLightComponent* Component = Sky->GetLightComponent())
@@ -119,7 +141,7 @@ namespace
 
 		// Without a PlayerStart PIE spawns at the origin looking nowhere in particular, which
 		// makes the framing of every shot accidental.
-		SpawnDressing<APlayerStart>(Level, FVector(-300.f, 0.f, 100.f), FRotator::ZeroRotator,
+		EnsureDressing<APlayerStart>(Level, FVector(-300.f, 0.f, 100.f), FRotator::ZeroRotator,
 			TEXT("UnLuaNovaShowcase_PlayerStart"));
 
 		return IsDressed(Level);
@@ -187,12 +209,8 @@ int32 UUnLuaNovaShowcaseDressingCommandlet::Main(const FString& Params)
 			continue;
 		}
 
-		if (!bUndo && IsDressed(Level))
-		{
-			UE_LOG(LogTemp, Display, TEXT("[ShowcaseDressing] %s: already dressed, left alone."), *Map);
-			continue;
-		}
-
+		// DressLevel is find-or-create per piece, so re-running after the set of pieces grows
+		// only adds what is missing - no duplicate suns, no reason to skip a dressed level.
 		if (!(bUndo ? UndressLevel(Level) : DressLevel(Level)))
 		{
 			UE_LOG(LogTemp, Error, TEXT("[ShowcaseDressing] %s: nothing was %s."), *Map,

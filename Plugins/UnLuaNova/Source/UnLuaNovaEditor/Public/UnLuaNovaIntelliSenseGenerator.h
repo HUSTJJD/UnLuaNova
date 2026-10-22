@@ -49,7 +49,7 @@ private:
 
     void ExportUnLua();
 
-    /** Writes UnLuaNova.d.lua - Luau declarations for luau-analyze. See LuauDecl. */
+    /** Writes UnLuaNova.d.lua under LuauDir - Luau declarations for luau-analyze. See LuauDecl. */
     void ExportLuauDecls(const TArray<const UField*> Types);
 
     void CollectTypes(TArray<const UField*> &Types);
@@ -64,6 +64,10 @@ private:
     void OnAssetRenamed(const FAssetData& AssetData, const FString& OldPath);
     void OnAssetUpdated(const FAssetData& AssetData);
 
+    // OutputDir is the export root; everything a script-facing consumer reads lives under
+    // one of the two dialect directories below, never directly under OutputDir.
     FString OutputDir;
+    FString EmmyLuaDir;
+    FString LuauDir;
     bool bInitialized;
 };
