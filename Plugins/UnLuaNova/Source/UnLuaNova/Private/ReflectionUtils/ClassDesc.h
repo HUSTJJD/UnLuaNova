@@ -86,7 +86,6 @@ public:
     void UnLoad();
 
 private:
-    UStruct* RawStructPtr; // TODO:refactor
     TWeakObjectPtr<UStruct> Struct;
 
     FString ClassName;

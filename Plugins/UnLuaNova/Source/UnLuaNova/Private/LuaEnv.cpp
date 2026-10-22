@@ -176,16 +176,22 @@ namespace UnLuaNova
 
         UELib::Open(L);
 
-#if UNLUANOVA_HAS_SANDBOX
         // Sandbox only after UnLua has published its own globals - otherwise we would be
         // locking the very table we are about to write to. Off by default: hardening the
         // globals is a behaviour change for existing scripts, so it has to be opted into.
+        //
+        // The CVar itself is registered on every backend, not just the sandboxing one. It
+        // is the switch a project reads and sets, so a backend that cannot honour it has
+        // to answer "off" - not "no such command", which is what an operator typing
+        // `lua.sandbox 1` gets when it is compiled away. Whether it does anything is a
+        // separate question, and scripts ask that one with HasFeature('sandbox').
         {
             static auto SandboxCVar = IConsoleManager::Get().RegisterConsoleVariable(
                 TEXT("lua.sandbox"),
                 0,
-                TEXT("Harden the Lua global table once startup finishes (Luau backend only). 0=off, 1=on."),
+                TEXT("Harden the Lua global table once startup finishes. 0=off, 1=on. No effect on the plain-Lua backend, which has no read-only tables - see UnLuaNova.HasFeature('sandbox')."),
                 ECVF_Default);
+#if UNLUANOVA_HAS_SANDBOX
             if (SandboxCVar->GetInt() != 0)
             {
                 UNLUANOVA_SANDBOX(L);
@@ -196,8 +202,8 @@ namespace UnLuaNova
                 // what it loaded, so the next script to ask for a new type errors out.
                 UnLuaNova::RestoreTablesAfterSandbox(L);
             }
-        }
 #endif
+        }
 
         ObjectRegistry = new FObjectRegistry(this);
         ClassRegistry = new FClassRegistry(this);
@@ -517,8 +523,11 @@ namespace UnLuaNova
 
     bool FLuaEnv::LoadBuffer(lua_State* InL, const char* Buffer, const size_t Size, const char* InName)
     {
-        // TODO: env support
-        // TODO: return value support
+        // Chunks are always compiled against the global environment - there is no _ENV
+        // override - so the sandbox applies to every chunk the same way. On success the
+        // compiled chunk is left on the stack for the caller to pcall (see RunChunk); on a
+        // syntax error the message goes through ReportLuaCallError and nil is pushed
+        // underneath it.
 
 #if UNLUANOVA_LEGACY_ALLOW_BOM || WITH_EDITOR
         if (Size > 3 && Buffer[0] == static_cast<char>(0xEF) && Buffer[1] == static_cast<char>(0xBB) && Buffer[2] == static_cast<char>(0xBF))

@@ -90,6 +90,13 @@
     skipped by the framework rather than run. Use it when you want a quick answer, not when
     you want the whole suite.
 
+.PARAMETER Sound
+    Keep audio on. It is off by default (-nosound): every map test ends the previous test's
+    PIE session, and shutting that session down means shutting its audio device down. On a
+    machine whose device is slow to stop, that teardown can block the editor's main thread
+    for good - one run sat on a single frame for 40 minutes and never moved again. Nothing
+    in this suite listens to audio, so the device is simply not created.
+
 .PARAMETER Publish
     Copy the generated report.md and its screenshots into Docs/ so the GitHub Pages
     build picks them up.
@@ -140,6 +147,7 @@ param(
     [switch] $NoScreenshots,
     [switch] $NoVideo,
     [switch] $NullRHI,
+    [switch] $Sound,
     [switch] $Publish,
     [switch] $NoReport,
     [switch] $SkipBuild,
@@ -608,6 +616,11 @@ function Get-EditorArgs {
     # drops the tests that need a viewport, so the run is a different (smaller) suite rather
     # than the same one done faster. -NullRHI is opt-in for that reason.
     if ($NullRHI) { $A += "-NullRHI" }
+    # Audio is the other way round: off unless asked for. Opening a map ends the previous
+    # test's PIE session, which tears an audio device down, and a device that is slow to
+    # stop takes the editor's main thread with it - a run once froze inside
+    # FAudioMixerWasapi::StopAudioStream() and never ticked again.
+    if (-not $Sound) { $A += "-nosound" }
     return $A
 }
 
@@ -621,6 +634,7 @@ if ($NullRHI -and -not $NoScreenshots) {
     # Not an error: the suite still runs, it just has nothing to photograph.
     Write-Host "               -NullRHI: no viewport, so no picture will come out of this run." -ForegroundColor Yellow
 }
+Write-Host "Audio        : $(if ($Sound) { 'on (-Sound)' } else { 'off (-nosound)' })"
 
 if ($DryRun)
 {

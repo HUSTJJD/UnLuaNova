@@ -57,12 +57,6 @@ Note: those debuggers need `luasocket`, which UnLuaNova ships through the extens
 If the connection fails, check that `{UEProject}/Plugins/UnLuaNovaExtensions` exists and is
 enabled.
 
-## LuaBooster
-
-TODO.
-
----
-
 ## Further reading
 
 - [IntelliSense](IntelliSense.md) - teaching your IDE the UE API

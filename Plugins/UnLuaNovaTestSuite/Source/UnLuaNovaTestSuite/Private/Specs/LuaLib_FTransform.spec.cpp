@@ -44,9 +44,8 @@ void FUnLuaNovaLibFTransformSpec::Define()
             TEST_TRUE(Actual.Equals(Expected));
         });
 
-        xIt(TEXT("指定Translation"), EAsyncExecution::TaskGraphMainThread, [this]()
+        It(TEXT("指定Translation"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            // TODO: not supported currently
             const char* Chunk = "\
             local Translation = UE.FVector(0,0,1)\
             return UE.FTransform(Translation)\
@@ -69,9 +68,8 @@ void FUnLuaNovaLibFTransformSpec::Define()
             TEST_TRUE(Actual.Equals(Expected));
         });
 
-        xIt(TEXT("指定Rotation(FRotator)"), EAsyncExecution::TaskGraphMainThread, [this]()
+        It(TEXT("指定Rotation(FRotator)"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            // TODO: not supported currently
             const char* Chunk = "\
             local Rotation = UE.FRotator(0,0,0)\
             return UE.FTransform(Rotation)\
@@ -95,9 +93,8 @@ void FUnLuaNovaLibFTransformSpec::Define()
             TEST_TRUE(Actual.Equals(Expected));
         });
 
-        xIt(TEXT("指定Rotation(FRotator)/Translation"), EAsyncExecution::TaskGraphMainThread, [this]()
+        It(TEXT("指定Rotation(FRotator)/Translation"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            // TODO: not supported currently
             const char* Chunk = "\
             local Rotation = UE.FRotator(0,0,0)\
             local Translation = UE.FVector(0,0,1)\
@@ -123,13 +120,12 @@ void FUnLuaNovaLibFTransformSpec::Define()
             TEST_TRUE(Actual.Equals(Expected));
         });
 
-        xIt(TEXT("指定Rotation(FRotator)/Translation/Scale"), EAsyncExecution::TaskGraphMainThread, [this]()
+        It(TEXT("指定Rotation(FRotator)/Translation/Scale"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            // TODO: not supported currently
             const char* Chunk = "\
             local Rotation = UE.FRotator(0,0,0)\
             local Translation = UE.FVector(0,0,1)\
-            local Scale = UE.FVector(0,0,1) * 2\
+            local Scale = UE.FVector(1,1,1) * 2\
             return UE.FTransform(Rotation, Translation, Scale)\
             ";
             UnLuaNova::RunChunk(L, Chunk);

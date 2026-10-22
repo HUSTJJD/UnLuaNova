@@ -19,6 +19,7 @@
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
+#include "HAL/PlatformTime.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
 #include "Misc/FileHelper.h"
@@ -36,6 +37,23 @@
 
 namespace UnLuaNovaTestSuite
 {
+    // A PIE session is "running" for as long as any PIE world is still around, which is
+    // what tells us whether a previous test's session has really finished ending or is only
+    // being torn down.
+    static bool IsPIERunning()
+    {
+        if (!GEngine)
+            return false;
+
+        for (const FWorldContext& Context : GEngine->GetWorldContexts())
+        {
+            if (Context.WorldType == EWorldType::PIE && Context.World())
+                return true;
+        }
+
+        return false;
+    }
+
     FOpenMapLatentCommand::FOpenMapLatentCommand(FString MapName, bool bForceReload)
         : MapName(MapName), bForceReload(bForceReload)
     {
@@ -43,11 +61,54 @@ namespace UnLuaNovaTestSuite
 
     bool FOpenMapLatentCommand::Update()
     {
-        if (WaitForMapToLoad)
-            return WaitForMapToLoad->Update();
+#if !WITH_EDITOR
+        return true;
+#else
+        // Phase 1: an earlier test left a session running (see FEndPlayMapCommand). End it
+        // and wait until it is gone - starting the new one on top of a teardown is what
+        // loses the request, and it is also the moment the old session's audio device comes
+        // apart inside this frame.
+        if (bEndingPreviousSession)
+        {
+            if (IsPIERunning())
+                return false;
 
-        LoadMap();
+            bEndingPreviousSession = false;
+        }
+
+        if (!WaitForMapToLoad)
+        {
+            if (IsPIERunning())
+            {
+                GEditor->EndPlayMap();
+                bEndingPreviousSession = true;
+                return false;
+            }
+
+            LoadMap();
+            return false;
+        }
+
+        // Phase 2: wait for this map to be up. Matched by name, not just "some game
+        // world", so a session that is still shutting down cannot stand in for it.
+        if (WaitForMapToLoad->Update())
+            return true;
+
+        if (FPlatformTime::Seconds() > WaitDeadline)
+        {
+            // Give up rather than wait forever: the test that asked for this map will fail
+            // on its own assertions with a clear reason here in the log, and the rest of the
+            // suite still runs. Ending the session keeps the next test from inheriting a
+            // half-started one.
+            UE_LOG(LogTemp, Error, TEXT("PIE never came up for '%s' after %.0fs - ending the session and moving on. Check the log above for why the play session did not start (a lost request, or PIE being ended mid-start)."),
+                *MapName, WaitTimeoutSeconds);
+            if (IsPIERunning())
+                GEditor->EndPlayMap();
+            return true;
+        }
+
         return false;
+#endif
     }
 
     void FOpenMapLatentCommand::LoadMap()
@@ -133,7 +194,11 @@ namespace UnLuaNovaTestSuite
         GEditor->StartQueuedPlaySessionRequest();
 
         check(FailHandler.CanProceed());
-        WaitForMapToLoad = MakeUnique<FWaitForMapToLoadCommand>();
+
+        // Waited for by name: FWaitForMapToLoadCommand answers for any game world, and a
+        // session that is still ending would otherwise be accepted as "the map is loaded".
+        WaitForMapToLoad = MakeUnique<FWaitForSpecifiedMapToLoadCommand>(MapName);
+        WaitDeadline = FPlatformTime::Seconds() + WaitTimeoutSeconds;
 #endif
     }
 

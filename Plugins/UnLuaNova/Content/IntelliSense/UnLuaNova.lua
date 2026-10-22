@@ -174,6 +174,14 @@ end
 function TMap:Num()
 end
 
+---Returns true if the map contains the provided key. Unlike Find, the answer does not
+---depend on the value: Find returns nil both for a missing key and for a key whose
+---value is nil.
+---@param Key any @The key that will be used to look the value up
+---@return boolean @True if the key is present in the map
+function TMap:Contains(Key)
+end
+
 ---Adds a key and value to the map. If something already uses the provided key it will be overwritten with the new value.
 ---After calling Key is guaranteed to be associated with Value until a subsequent mutation of the Map.
 ---@param Key TKey @The key that will be used to look the value up

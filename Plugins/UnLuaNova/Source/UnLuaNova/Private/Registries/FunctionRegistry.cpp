@@ -19,14 +19,22 @@ namespace UnLuaNova
         LuaFunctions.Remove(Function);
     }
 
-    void FFunctionRegistry::Invoke(ULuaFunction* Function, UObject* Context, FFrame& Stack, RESULT_DECL)
+    // An override can be called before anything bound its owner: binding is lazy, and an
+    // earlier attempt may simply have failed. Bind on the way in, then take whatever
+    // reference the registry holds - which is the same value either way.
+    static int32 GetOrBindSelfRef(FLuaEnv* Env, UObject* Context)
     {
-        // TODO: refactor
         if (UNLIKELY(!Env->GetObjectRegistry()->IsBound(Context)))
             Env->TryBind(Context);
 
         const auto SelfRef = Env->GetObjectRegistry()->GetBoundRef(Context);
-        check(SelfRef!=LUA_NOREF);
+        check(SelfRef != LUA_NOREF);
+        return SelfRef;
+    }
+
+    void FFunctionRegistry::Invoke(ULuaFunction* Function, UObject* Context, FFrame& Stack, RESULT_DECL)
+    {
+        const auto SelfRef = GetOrBindSelfRef(Env, Context);
 
         const auto L = Env->GetMainState();
         lua_Integer FuncRef;

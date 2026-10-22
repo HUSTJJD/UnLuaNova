@@ -146,14 +146,34 @@ void FUnLuaNovaLibWorldSpec::Define()
             TEST_EQUAL(Actor->GetInstigator(), InstigatorPawn);
         });
 
-        xIt(TEXT("创建Actor，指定初始Transform/CollisionHanding/Owner/Instigator/LuaModule"), EAsyncExecution::TaskGraphMainThread, [this]
+        It(TEXT("创建Actor，指定初始Transform/CollisionHanding/Owner/Instigator/LuaModule"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            check(false);
+            // The module name is SpawnActor's seventh argument: the actor is bound to it as
+            // it is created, which is the whole point of dynamic binding. The module's
+            // Initialize() has run by the time SpawnActor returns, so reading a field it
+            // sets is what proves the binding happened - not just that the actor exists.
+            const auto Chunk = R"(
+            local Transform = UE.FTransform(UE.FQuat(4,3,2,1), UE.FVector(1,1,1), UE.FVector(2,2,2))
+            G_Actor = World:SpawnActor(UE.AActor, Transform, UE.ESpawnActorCollisionHandlingMethod.AlwaysSpawn, nil, nil, "Tests.Binding.BP_UnLuaTestActor")
+            return G_Actor.InitializeCalled
+            )";
+            UnLuaNova::RunChunk(L, Chunk);
+            TEST_TRUE(lua_toboolean(L, -1));
         });
 
-        xIt(TEXT("创建Actor，自定义构造参数"), EAsyncExecution::TaskGraphMainThread, [this]
+        It(TEXT("创建Actor，自定义构造参数"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            check(false);
+            // The eighth argument is an initializer table, handed to the module's
+            // Initialize() - the only way to give a freshly spawned actor values that are
+            // not on the class. Asserted on the value coming back out of Lua, so the case
+            // covers the whole trip rather than just the call not raising.
+            const auto Chunk = R"(
+            local Transform = UE.FTransform()
+            G_Actor = World:SpawnActor(UE.AActor, Transform, UE.ESpawnActorCollisionHandlingMethod.AlwaysSpawn, nil, nil, "Tests.Specs.World.SpawnWithInitializer", { Counter = 7 })
+            return G_Actor.Initializer.Counter
+            )";
+            UnLuaNova::RunChunk(L, Chunk);
+            TEST_EQUAL((int32)lua_tointeger(L, -1), 7);
         });
     });
 

@@ -15,6 +15,28 @@
 #include "UnLuaNovaEx.h"
 #include "LuaLib_Math.h"
 
+// FQuat, FRotator and FVector all reach FTransform_New as userdata, and
+// GetCppInstanceFast() answers raw memory without asking which struct it belongs to, so a
+// plain cast reads an FVector's three doubles as an FQuat's four. The metatable is what
+// says which struct an instance holds, and every metatable the class registry builds is
+// filed in the registry under the type's own name - comparing against that is what picks
+// the overload.
+static bool HasMetatable(lua_State* L, const int32 Index, const char* MetatableName)
+{
+    if (!lua_getmetatable(L, Index))
+        return false;
+
+    const bool bMatches = luaL_getmetatable(L, MetatableName) == LUA_TTABLE && lua_rawequal(L, -1, -2) != 0;
+    lua_pop(L, 2);
+    return bMatches;
+}
+
+template <typename T>
+static T* GetTypedInstance(lua_State* L, const int32 Index, const char* MetatableName)
+{
+    return HasMetatable(L, Index, MetatableName) ? (T*)GetCppInstanceFast(L, Index) : nullptr;
+}
+
 static int32 FTransform_New(lua_State* L)
 {
     const int32 NumParams = lua_gettop(L);
@@ -29,51 +51,39 @@ static int32 FTransform_New(lua_State* L)
         }
     case 2:
         {
-            const FQuat* Rotation = (FQuat*)GetCppInstanceFast(L, 2);
-            if (Rotation)
+            if (const FQuat* Rotation = GetTypedInstance<FQuat>(L, 2, "FQuat"))
             {
                 new(Userdata) FTransform(*Rotation);
                 return 1;
             }
 
-            // TODO: not supported currently
-            // if (IsType(L, 2, UnLuaNova::TType<FVector>()))
-            // {
-            //     const FVector* Translation = (FVector*)GetCppInstanceFast(L, 2);;
-            //     if (Translation)
-            //     {
-            //         new(Userdata) FTransform(*Translation);
-            //         return 1;
-            //     }
-            // }
-            //
-            // if (IsType(L, 2, UnLuaNova::TType<FRotator>()))
-            // {
-            //     const FRotator* Rotation = (FRotator*)GetCppInstanceFast(L, 2);
-            //     if (Rotation)
-            //     {
-            //         new(Userdata) FTransform(*Rotation);
-            //         return 1;
-            //     }
-            // }
-            //
-            // if (IsType(L, 2, UnLuaNova::TType<FQuat>()))
-            // {
-            //     const FQuat* Quat = (FQuat*)GetCppInstanceFast(L, 2);
-            //     if (Quat)
-            //     {
-            //         new(Userdata) FTransform(*Quat);
-            //         return 1;
-            //     }
-            // }
+            if (const FRotator* Rotation = GetTypedInstance<FRotator>(L, 2, "FRotator"))
+            {
+                new(Userdata) FTransform(*Rotation);
+                return 1;
+            }
+
+            if (const FVector* Translation = GetTypedInstance<FVector>(L, 2, "FVector"))
+            {
+                new(Userdata) FTransform(*Translation);
+                return 1;
+            }
 
             break;
         }
     case 3:
         {
-            const FQuat* Rotation = (FQuat*)GetCppInstanceFast(L, 2);
-            const FVector* Translation = (FVector*)GetCppInstanceFast(L, 3);
-            if (Rotation && Translation)
+            const FVector* Translation = GetTypedInstance<FVector>(L, 3, "FVector");
+            if (!Translation)
+                break;
+
+            if (const FQuat* Rotation = GetTypedInstance<FQuat>(L, 2, "FQuat"))
+            {
+                new(Userdata) FTransform(*Rotation, *Translation);
+                return 1;
+            }
+
+            if (const FRotator* Rotation = GetTypedInstance<FRotator>(L, 2, "FRotator"))
             {
                 new(Userdata) FTransform(*Rotation, *Translation);
                 return 1;
@@ -83,10 +93,18 @@ static int32 FTransform_New(lua_State* L)
         }
     case 4:
         {
-            const FQuat* Rotation = (FQuat*)GetCppInstanceFast(L, 2);
-            const FVector* Translation = (FVector*)GetCppInstanceFast(L, 3);
-            const FVector* Scale = (FVector*)GetCppInstanceFast(L, 4);
-            if (Rotation && Translation && Scale)
+            const FVector* Translation = GetTypedInstance<FVector>(L, 3, "FVector");
+            const FVector* Scale = GetTypedInstance<FVector>(L, 4, "FVector");
+            if (!Translation || !Scale)
+                break;
+
+            if (const FQuat* Rotation = GetTypedInstance<FQuat>(L, 2, "FQuat"))
+            {
+                new(Userdata) FTransform(*Rotation, *Translation, *Scale);
+                return 1;
+            }
+
+            if (const FRotator* Rotation = GetTypedInstance<FRotator>(L, 2, "FRotator"))
             {
                 new(Userdata) FTransform(*Rotation, *Translation, *Scale);
                 return 1;

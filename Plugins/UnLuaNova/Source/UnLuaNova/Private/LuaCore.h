@@ -45,6 +45,17 @@ void SetTableForClass(lua_State *L, const char *Name);
 bool TryToSetMetatable(lua_State *L, const char *MetatableName, UObject* Object = nullptr);
 
 /**
+ * The tag byte carried by every userdata descriptor. It lives here rather than in
+ * LuaCore.cpp because the dangling check marks a released container from its own
+ * translation unit, and a bit spelled out there as 1 << 6 is a bit nobody can check.
+ */
+#define USERDATA_MAGIC          0x1688
+#define BIT_VARIANT_TAG         (1 << 7)    // variant tag for userdata
+#define BIT_RELEASED_TAG        (1 << 6)    // this userdata was released and should not use anywhere
+#define BIT_TWOLEVEL_PTR        (1 << 5)    // two level pointer flag
+#define BIT_SCRIPT_CONTAINER    (1 << 4)    // script container (TArray, TSet, TMap) flag
+
+/**
  * Functions to handle Lua userdata
  */
 void* NewUserdataWithTwoLvPtrTag(lua_State* L, int Size, void* Object);

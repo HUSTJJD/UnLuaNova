@@ -16,6 +16,8 @@
 #include "LowLevel.h"
 #include "UnLuaNovaEx.h"
 #include "LuaCore.h"
+#include "LuaEnv.h"
+#include "Registries/ObjectRegistry.h"
 
 /**
  * Load an object. for example: UObject.Load("/Game/Core/Blueprints/AI/BehaviorTree_Enemy.BehaviorTree_Enemy")
@@ -187,8 +189,26 @@ static int32 UObject_IsA(lua_State* L)
     return 1;
 }
 
+/**
+ * Drop the binding's own reference to the instance table and mark the UObject slot inside
+ * the userdata released.
+ *
+ * This is the first half of releasing a bound object: the second half is the Lua table
+ * actually being collected, which is what lets the UObject go afterwards. Scripts call it
+ * from Destruct() (Content/Script/Tutorials/11_ReleaseUMG.lua) - it is the only way a
+ * script can give its half of the binding back before the object itself is destroyed.
+ */
 static int32 UObject_Release(lua_State* L)
 {
+    const int32 NumParams = lua_gettop(L);
+    if (NumParams != 1)
+        return luaL_error(L, "invalid parameters");
+
+    UObject* Object = UnLuaNova::GetUObject(L, 1);
+    if (!Object)
+        return luaL_error(L, "invalid object");
+
+    UnLuaNova::FLuaEnv::FindEnvChecked(L).GetObjectRegistry()->Unbind(Object);
     return 0;
 }
 

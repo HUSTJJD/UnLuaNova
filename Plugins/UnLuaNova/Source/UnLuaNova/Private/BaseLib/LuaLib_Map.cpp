@@ -146,6 +146,30 @@ static int32 TMap_Add(lua_State* L)
 }
 
 /**
+ * Whether a key is in the map. TArray and TSet both answer this, and a script walking a
+ * map otherwise has to call Find and compare against nil - which is not the same thing
+ * when the value legitimately is nil.
+ *
+ * @see FLuaMap::Find(...)
+ */
+static int32 TMap_Contains(lua_State* L)
+{
+    int32 NumParams = lua_gettop(L);
+    if (NumParams != 2)
+        return luaL_error(L, "invalid parameters");
+
+    FLuaMap* Map = (FLuaMap*)(GetCppInstanceFast(L, 1));
+    TMap_Guard(L, Map);
+
+    Map->KeyInterface->Initialize(Map->ElementCache);
+    Map->KeyInterface->WriteValue_InContainer(L, Map->ElementCache, 2);
+    const bool bExists = Map->Find(Map->ElementCache) != nullptr;
+    Map->KeyInterface->Destruct(Map->ElementCache);
+    lua_pushboolean(L, bExists);
+    return 1;
+}
+
+/**
  * @see FLuaMap::Remove(...)
  */
 static int32 TMap_Remove(lua_State* L)
@@ -338,6 +362,7 @@ static const luaL_Reg TMapLib[] =
 {
     {"Length", TMap_Length},
     {"Num", TMap_Length},
+    {"Contains", TMap_Contains},
     {"Add", TMap_Add},
     {"Remove", TMap_Remove},
     {"Find", TMap_Find},

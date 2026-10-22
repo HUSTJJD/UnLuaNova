@@ -42,7 +42,9 @@ namespace UnLuaNova
 
         void NotifyUObjectDeleted(UObject* Object);
 
-        bool PushMetatable(lua_State* L, const char* MetatableName);
+        // OutClassDesc is optional: the caller that only needs the metatable on the stack
+        // should not have to look the descriptor up again by name afterwards.
+        bool PushMetatable(lua_State* L, const char* MetatableName, FClassDesc** OutClassDesc = nullptr);
 
         bool TrySetMetatable(lua_State* L, const char* MetatableName);
 

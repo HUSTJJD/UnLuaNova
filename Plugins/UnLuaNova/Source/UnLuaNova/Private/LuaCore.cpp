@@ -84,12 +84,6 @@ void SetTableForClass(lua_State *L, const char *Name)
     lua_pop(L, 2);
 }
 
-#define USERDATA_MAGIC  0x1688
-#define BIT_VARIANT_TAG            (1 << 7)         // variant tag for userdata
-#define BIT_RELEASED_TAG            (1 << 6)        // this userdata was released and should not use anywhere
-#define BIT_TWOLEVEL_PTR        (1 << 5)            // two level pointer flag
-#define BIT_SCRIPT_CONTAINER    (1 << 4)            // script container (TArray, TSet, TMap) flag
-
 // The descriptor is allocated immediately BEFORE the payload, so it is reachable from a
 // bare payload pointer as (Ptr - sizeof(FUserdataDesc)). That single property is what
 // lets this file stay on the public API: locating it used to require walking back to
@@ -910,9 +904,8 @@ static void GetFieldInternal(lua_State* L)
 
     lua_pop(L, 1);
 
-    // TODO: refactor
-    const auto Registry = UnLuaNova::FLuaEnv::FindEnv(L)->GetClassRegistry();
-    FClassDesc* ClassDesc = Registry->Register(ClassName);
+    const auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
+    FClassDesc* ClassDesc = Env.GetClassRegistry()->Register(ClassName);
     TSharedPtr<FFieldDesc> Field = ClassDesc->RegisterField(FieldName, ClassDesc);
     if (Field && Field->IsValid())
     {
@@ -921,7 +914,7 @@ static void GetFieldInternal(lua_State* L)
         if (bInherited)
         {
             FString SuperStructName = Field->GetOuterName();
-            const auto Pushed = Registry->PushMetatable(L, TCHAR_TO_UTF8(*SuperStructName));
+            const auto Pushed = Env.GetClassRegistry()->PushMetatable(L, TCHAR_TO_UTF8(*SuperStructName));
             check(Pushed);
             lua_pushvalue(L, 2);
             Type = lua_rawget(L, -2);

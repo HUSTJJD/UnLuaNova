@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Registries/ClassRegistry.h"
+#include "UnLuaNovaBase.h"
 #include "UnLuaNovaCompatibility.h"
 #include "LuaEnv.h"
 #include "Binding.h"
@@ -20,6 +21,7 @@
 #include "LuaCore.h"
 #include "UELib.h"
 #include "ReflectionUtils/ClassDesc.h"
+#include "Registries/EnumRegistry.h"
 
 extern int32 UObject_Identical(lua_State* L);
 extern int32 UObject_Delete(lua_State* L);
@@ -80,8 +82,14 @@ namespace UnLuaNova
         const auto EnumType = Cast<UEnum>(Type);
         if (EnumType)
         {
-            // TODO:
-            check(false);
+            // An enum is not a struct, so there is no FClassDesc to hand back - it belongs
+            // to the enum registry, which gives it its own metatable (Enum_Index). Publish
+            // it there and report nothing here: UE.EFoo already takes that route, and this
+            // is the same name reached the long way round (UE.UFoo, a container's enum
+            // entry), so failing loudly is the wrong answer where a working binding is.
+            UE_LOG(LogUnLuaNova, Verbose, TEXT("%s is an enum, registered with the enum registry."), UTF8_TO_TCHAR(MetatableName));
+            Env->GetEnumRegistry()->Register(EnumType);
+            return nullptr;
         }
 
         return nullptr;
@@ -105,7 +113,7 @@ namespace UnLuaNova
         return Ret;
     }
 
-    bool FClassRegistry::PushMetatable(lua_State* L, const char* MetatableName)
+    bool FClassRegistry::PushMetatable(lua_State* L, const char* MetatableName, FClassDesc** OutClassDesc)
     {
         int Type = luaL_getmetatable(L, MetatableName);
         if (Type == LUA_TTABLE)
@@ -118,6 +126,8 @@ namespace UnLuaNova
             }
             else
             {
+                if (OutClassDesc)
+                    *OutClassDesc = Ret;
                 return true;
             }
         }
@@ -232,6 +242,9 @@ namespace UnLuaNova
 
         UELib::SetTableForClass(L, MetatableName);
 
+        if (OutClassDesc)
+            *OutClassDesc = ClassDesc;
+
         return true;
     }
 
@@ -247,13 +260,12 @@ namespace UnLuaNova
     FClassDesc* FClassRegistry::Register(const char* MetatableName)
     {
         const auto L = Env->GetMainState();
-        if (!PushMetatable(L, MetatableName))
+        FClassDesc* ClassDesc = nullptr;
+        if (!PushMetatable(L, MetatableName, &ClassDesc))
             return nullptr;
 
-        // TODO: refactor
         lua_pop(L, 1);
-        FName Key = FName(UTF8_TO_TCHAR(MetatableName));
-        return Name2Classes.FindChecked(Key);
+        return ClassDesc;
     }
 
     FClassDesc* FClassRegistry::Register(const UStruct* Class)

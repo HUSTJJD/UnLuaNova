@@ -21,6 +21,21 @@
 
 namespace UnLuaNovaTestSuite
 {
+    // Opens a map in PIE and waits until that map - not whatever was running before - is
+    // actually playing.
+    //
+    // Two things about PIE inside a long suite make this more than "request and wait":
+    //
+    //  - An earlier test's session can still be alive (FEndPlayMapCommand leaves PIE running
+    //    on UE5). Requesting a new one while the old one is still tearing down is the bad
+    //    case: the engine ends the old session inside that very call - audio device and all -
+    //    and the new request can be dropped with it, so no session ever comes up.
+    //  - The engine's "wait for a map" helper answers for *any* game world, so a stale
+    //    session can satisfy the wait for a map that has not been opened yet.
+    //
+    // So: end whatever is running and wait until it is really gone, then start, then wait by
+    // map name - and that wait is bounded, because a suite that never finishes is worse than
+    // a test that fails.
     class FOpenMapLatentCommand : public IAutomationLatentCommand
     {
     public:
@@ -31,9 +46,16 @@ namespace UnLuaNovaTestSuite
         void LoadMap();
 
     private:
+        // How long a session is allowed to take before this gives up on it. Generous on
+        // purpose: starting PIE compiles blueprints and can take a second or two, and a
+        // false alarm here turns into a failed test rather than a slow one.
+        static constexpr double WaitTimeoutSeconds = 60.0;
+
         FString MapName;
         bool bForceReload;
-        TUniquePtr<FWaitForMapToLoadCommand> WaitForMapToLoad;
+        bool bEndingPreviousSession = false;
+        double WaitDeadline = 0.0;
+        TUniquePtr<FWaitForSpecifiedMapToLoadCommand> WaitForMapToLoad;
     };
 
     class FEndPlayMapCommand : public IAutomationLatentCommand

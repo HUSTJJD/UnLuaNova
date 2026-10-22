@@ -131,6 +131,21 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
     否则它会变成真的被编译进工程的测试产物）
 - **英文文档补三页**：`Docs/EN/Features.md`、`Settings.md`、`ConsoleCommand.md`
   （此前 EN 只有 7 页，"功能清单 / 设置项 / 控制台命令"这三个英文读者最先找的页面全是缺的）
+- **`TMap:Contains(Key)`**：与 `TArray` / `TSet` 对齐。此前只有 `Find` 可用，
+  而 `Find` 返回 `nil` 既可能是"没有这个键"也可能是"值本身是 nil"；更糟的是缺一个方法时
+  `Map:Contains(2)` 走到 `__index` 自引用链上，报的是
+  `'__index' chain too long; possible loop`，看不出真正原因是名字不存在
+
+### Fixed
+- **`lua.sandbox` 现在两个后端都存在**：它原先只注册在能沙盒化的后端里（`UNLUANOVA_HAS_SANDBOX`），
+  plain-Lua 下敲 `lua.sandbox 1` 得到的是"命令不存在"。CVar 改为无条件注册，是否真的生效
+  由 `UnLuaNova.HasFeature('sandbox')` 回答
+- **`IntelliSense::IsValidFunctionName` 拒绝 `__` 开头的名字**：`__index` / `__newindex`
+  这类脚本内部名会被写进生成的声明文件，补全因此给出脚本根本调用不了的东西
+- **覆写分发用例取的是分发真正会用的那个环境**：`ULuaFunction::execCallLua` 用
+  `IUnLuaNovaModule::Get().GetEnv(Context)`（环境定位器的结果）解析环境，而不是
+  `TryBind` 被调用的那个。spec 自建 `FLuaEnv` 时绑定与分发落在两个 VM 上，
+  表现是"覆装上了、调用却静默走原实现"
 
 ### Changed
 - **测试注册名统一大小写**：`UNLUANOVA.API.Base` / `UNLUANOVA.API.Enum` →

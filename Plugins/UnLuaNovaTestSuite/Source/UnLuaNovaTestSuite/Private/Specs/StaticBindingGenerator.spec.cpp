@@ -91,10 +91,12 @@ void FStaticBindingGeneratorSpec::Define()
         FString Content;
         TEST_TRUE(SpecGenerate(OutputDir, Content));
 
-        TestTrue(TEXT("类型被选中"), Content.Contains(TEXT("UUnLuaNovaTestStub")));
+        // UE strips the U prefix: UUnLuaNovaTestStub is written out as UnLuaNovaTestStub,
+        // and that is the name the generated symbols carry.
+        TestTrue(TEXT("类型被选中"), Content.Contains(TEXT("TEXT(\"UnLuaNovaTestStub\")")));
         TestTrue(TEXT("成员函数被导出"), Content.Contains(TEXT("ProbeWithStaticBinding")));
         TestTrue(TEXT("属性带上了种类"), Content.Contains(TEXT("EStaticPropKind::")));
-        TestTrue(TEXT("类型描述符已生成"), Content.Contains(TEXT("TypeBinding_UUnLuaNovaTestStub")));
+        TestTrue(TEXT("类型描述符已生成"), Content.Contains(TEXT("TypeBinding_UnLuaNovaTestStub")));
 
         IFileManager::Get().DeleteDirectory(*OutputDir, false, true);
     });

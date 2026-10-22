@@ -124,9 +124,14 @@ void FBenchmarkSpec::Define()
         const FString Previous = Dir / TEXT("previous.csv");
 
         // latest -> previous before overwriting, so the report always has something to
-        // compare against.
-        IFileManager::Get().Delete(*Previous, false, true);
-        IFileManager::Get().Move(*Previous, *Latest);
+        // compare against. Only when there is a latest: Move() logs an error when the
+        // source does not exist - which is the normal state the first time this runs -
+        // and the automation framework turns a logged error into a failed case.
+        if (IFileManager::Get().FileExists(*Latest))
+        {
+            IFileManager::Get().Delete(*Previous, false, true);
+            IFileManager::Get().Move(*Previous, *Latest);
+        }
 
         TArray<FString> Lines;
         Lines.Add(TEXT("Case,Iterations,TotalMs,PerOpUs"));

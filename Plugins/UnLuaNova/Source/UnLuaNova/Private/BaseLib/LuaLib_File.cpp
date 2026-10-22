@@ -254,7 +254,9 @@ private:
 	bool HelperCheckFileMode(const FString& Mode, uint32& OutFlags, bool& OutIsWrite)
 	{
 		bool Ret = false;
-		//skip 'b' flag default is binary mode@TODO check me :see file history
+		// 'b' is accepted and then ignored: files are opened in binary mode whatever the
+		// mode string says, so "r" and "rb" mean the same thing here - which is why both
+		// spellings are listed. Only r / w / a / + decide the flags below.
 		static const FString OpenModeNames[] = 
 		{ 
 			TEXT("r"), TEXT("w"), TEXT("r+"),

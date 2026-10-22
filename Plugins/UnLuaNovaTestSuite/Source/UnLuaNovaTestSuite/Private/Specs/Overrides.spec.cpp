@@ -29,13 +29,14 @@
 #include "UnLuaNovaBase.h"
 #include "UnLuaNovaTemplate.h"
 #include "LuaFunction.h"
+#include "UnLuaNovaModule.h"
 #include "UnLuaNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 BEGIN_DEFINE_SPEC(FUnLuaNovaOverridesSpec, "UnLuaNova.API.Overrides", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
-    TSharedPtr<UnLuaNova::FLuaEnv> Env;
+    UnLuaNova::FLuaEnv* Env;
     lua_State* L;
 
     // Reads a global the fixture writes, so a case can tell whether Lua ran at all
@@ -53,8 +54,22 @@ void FUnLuaNovaOverridesSpec::Define()
 {
     BeforeEach([this]
     {
-        Env = MakeShared<UnLuaNova::FLuaEnv>();
+        // Not an env of our own. The dispatch thunk (ULuaFunction::execCallLua) resolves
+        // the env with IUnLuaNovaModule::Get().GetEnv(Context) - the env locator's answer,
+        // not the one TryBind was called on. Building a private FLuaEnv here therefore
+        // binds the object where nothing will ever call it: the override is installed,
+        // the call silently reaches the original implementation, and every case below
+        // measures zero. Taking the env the thunk will take is the only way both halves
+        // of the contract are observed in the same VM.
+        UnLuaNova::Startup();
+        Env = IUnLuaNovaModule::Get().GetEnv();
         L = Env->GetMainState();
+
+        // The fixture counts calls in a global, so a reused env (Startup() early-returns
+        // when a preceding case left the module active) would hand a case someone else's
+        // total. Zeroing it here keeps every count below a count of this case.
+        Env->DoString(TEXT("_G.OverridesStubGlobalCalls = 0"));
+        Env->DoString(TEXT("_G.OverridesStubShouldError = false"));
     });
 
     AfterEach([this]
@@ -62,7 +77,8 @@ void FUnLuaNovaOverridesSpec::Define()
         // Before the env goes away: restoring walks the overridden UFunctions, and the
         // override's Lua side is held by this env.
         ULuaFunction::RestoreOverrides(UUnLuaNovaTestStubForOverrides::StaticClass());
-        Env.Reset();
+        UnLuaNova::Shutdown();
+        Env = nullptr;
         L = nullptr;
     });
 
