@@ -201,13 +201,20 @@ local Back = UnLuaNova.Buffer.ToArray(Buf)      -- buffer -> TArray
 
 ```
 Plugins/UnLuaNova/Intermediate/IntelliSense/
-├── *.lua                EmmyLua 注解，给 IDE 补全用（见[智能提示](IntelliSense.md)）
-└── UnLuaNova.d.lua      Luau 声明，给 luau-analyze 用
+├── *.lua                EmmyLua 注解，给 IDE 补全用，也给 LuaLS 做 Lua 后端的静态检查
+└── UnLuaNova.d.lua      Luau 声明，给 luau-analyze 做 Luau 后端的静态检查用
 ```
 
 !!! note "产物是 `.d.lua`，不是给脚本 require 的"
     它是 `declare class` / `declare function` 组成的纯声明文件，
     只在静态检查时被引用，运行时不要 `require` 它。
+
+!!! note "Lua 后端用的是另一个分析器：LuaLS"
+    同一份导出里，`.d.lua` 归 `luau-analyze`，`*.lua`（EmmyLua）归
+    `lua-language-server`，对应脚本是 `Tools/CheckLuaTypes.ps1`。
+    这不是偏好而是语法事实：Luau 的类型注解 Lua 5.5 解析不了，
+    反过来 Lua 后端的脚本也喂不进 `luau-analyze`。
+    `RunTests.ps1` 按后端分派，两个后端都会在报告里出一节「静态类型检查」。
 
 **使用**：把 `UnLuaNova.d.lua` 放进脚本工程，脚本头部声明严格模式，然后用 `luau-analyze` 检查：
 

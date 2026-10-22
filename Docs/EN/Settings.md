@@ -59,7 +59,7 @@ such resident types here and their subclasses are bound right after the environm
 
 ### Generate IntelliSense
 
-Whether to generate hint files for Lua - see [IntelliSense](../CN/IntelliSense.md).
+Whether to generate hint files for Lua - see [IntelliSense](../EN/IntelliSense.md).
 
 ### Auto startup
 

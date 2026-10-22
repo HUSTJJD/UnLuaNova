@@ -128,7 +128,7 @@ description: UnLuaNova —— 面向 Unreal Engine 的 Lua 脚本方案，Tencen
 | 引擎基线 | **UE 5.8.3**（源码版） |
 | Lua 后端 | **Luau（默认）** ／ Lua 5.5 —— 均以子模块引入 |
 | 上游基线 | Tencent/UnLua v2.3.6 + `develop`(2026-04) |
-| 许可 | MIT |
+| 许可 | Polyform Small Business 1.0.0 ／ 商用超阈值需付费 |
 
 !!! warning "早期阶段"
     项目仍在早期重构阶段，改动会比较频繁：适合尝鲜、提 issue、一起 push，暂不建议直接上生产。

@@ -26,6 +26,17 @@ Plugins/UnLuaNovaTestSuite/
 └── Content/Tests/                 场景测试用的关卡与资源
 ```
 
+配套脚本都在 `Tools/` 下，从仓库根调用：
+
+| 脚本 | 作用 |
+|---|---|
+| `Tools/RunTests.ps1` | 编译 + 跑用例 + 收集截图/录屏 + 生成报告，本文档的主角 |
+| `Tools/GenerateTestReport.py` | 把自动化框架导出的 JSON 转成 Markdown/HTML 报告（`RunTests.ps1` 会调） |
+| `Tools/CheckLuauTypes.ps1` | Luau 后端：用 `luau-analyze` + 生成的 `UnLuaNova.d.lua` 做静态类型检查 |
+| `Tools/CheckLuaTypes.ps1` | Lua 后端：用 LuaLS（`lua-language-server`）+ 生成的 EmmyLua 注解做静态检查 |
+| `Tools/Rename-To-UnLuaNova.ps1` | 迁移脚本：把一份 UnLua 工程/代码批量改名到 `UnLuaNova`（`UnLua` → `UnLuaNova`、`UUnLuaSettings` → `UUnLuaNovaSettings` 等）。只在迁移时用一次，跑测试不需要它 |
+| `Tools/Install-NightlyTask.ps1` | 注册/删除"每晚编译一次测试代码"的 Windows 计划任务（`-BuildOnly`），见下方"每晚至少编一次" |
+
 ## 一键运行
 
 ```powershell
@@ -72,12 +83,16 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `-Backend` | `Both` | 跑哪个 Lua 后端：`Lua`、`Luau` 或 `Both` |
 | `-Platform` / `-Configuration` | `Win64` / `Development` | 传给 UBT 的编译参数 |
 | `-SkipBuild` | 关 | 跳过编译，直接跑现有二进制；**不允许同时切换后端**（见下） |
+| `-BuildOnly` | 关 | 只编译不跑：编完就退出，不启动编辑器、不生成报告。给 nightly 与"改完 spec 先确认能编过"用，与 `-SkipBuild` 互斥 |
 | `-Filter` | `UnLuaNova` | 用例过滤器，前缀匹配 |
 | `-Map` | 空 | 场景测试要开哪个关卡；多数用例自建 World，不需要 |
 | `-OutputDir` | `Saved/TestReports/<时间戳>` | 报告输出根目录，每个后端一个子目录 |
 | `-ExtraCommands` | 空 | 跑完追加执行的控制台命令（截图用） |
 | `-NoScreenshots` | 关 | 不收集截图。**默认收集**：文档站和报告画廊都靠它们 |
 | `-NoVideo` | 关 | 不录帧序列。**默认录**：Showcase 用例会录一段帧序列，报告生成时编码成 `.mp4` |
+| `-FailOnTypeErrors` | 关 | 静态检查报出错误时非 0 退出（默认只记进报告）。Luau 后端是 `luau-analyze`，Lua 后端是 LuaLS，见 [Luau 后端](Luau.md) |
+| `-FailOnDrift` | 关 | 用例清单与基线不一致时非 0 退出（默认只告警），见下方"用例清单基线" |
+| `-UpdateBaseline` | 关 | 把这一轮的用例清单写成新基线并提交；人工确认后才跑 |
 | `-NullRHI` | 关 | 无头跑：快，但**不是同一套用例**，且没有画面可截，见下 |
 | `-Publish` | 关 | 把报告和截图复制到 `Docs/`，供 Pages 发布 |
 | `-NoReport` | 关 | 只跑测试，不生成报告 |
@@ -235,6 +250,38 @@ git 里反复产生无意义 diff）。本机那份 `report.md` 仍然指向原�
 `Saved/Screenshots/WindowsEditor/` —— 编辑器不清它，不清就会把上一次的 PNG 当成这一次的图发布
 出去，那比没有图更糟，因为看的人看不出来。
 
+### 截的是"玩家看到的东西"
+
+`FScreenshotLatentCommand` 截的是**游戏视口含 UI 的那一帧**
+（`RequestScreenshot(Name, true, ..., bRestrictToGameViewport=true)`）。教程关卡的可见内容是
+`Screen.Print`（PrintString 屏幕调试文字）和 UMG 控件，全在 UI 层；曾经用 `bShowUI=false` 截裸
+场景渲染目标 —— 引擎还会顺手关掉屏幕调试文字 —— 而关卡本身没有灯光和网格体，于是四张示例图
+全是纯黑。改回来后，截到的就是按下 Play 时看到的画面。
+
+截图之后紧跟一条 `FVerifyScreenshotNotBlankLatentCommand`：解码 PNG，如果整图是一种颜色就
+直接判失败。一张"什么都看不见"的示例图比一次失败更糟 —— 失败会有人看，黑图会安静地挂进
+文档站。
+
+### 空关卡怎么办：补装 Commandlet
+
+改截图参数只能让"UI 层的内容"进图，改不了关卡本身。四个教程关卡是**空世界**（没有灯光、
+网格体、PlayerStart），它们的示例内容本来就只在屏幕文字和日志里 —— 所以截到的是"什么都没有
+的世界"。补装它是这个 Commandlet 唯一的工作：
+
+```powershell
+UnrealEditor-Cmd.exe "D:\learning\UnLua\UnLuaNovaDemo.uproject" -run=UnLuaNovaShowcaseDressing -unattended -NoSplash
+# 只补一个：        ... -run=UnLuaNovaShowcaseDressing -Map=/Game/Tutorials/01_HelloWorld/HelloWorld
+# 撤销（移除补装）： ... -run=UnLuaNovaShowcaseDressing -Undo
+```
+
+每个关卡加：一盏可移动的太阳光、一盏可移动的天光、一块接光的地板、三个立方体（让画面看得出
+是个三维空间）、一个 PlayerStart（让 PIE 有确定的机位）。全部是 Movable —— 静态光需要烘光，
+Commandlet 跑不了烘光，静态光出来还是黑的。
+
+幂等：已补装过的关卡直接跳过；`-Undo` 按 tag
+`UnLuaNovaShowcaseDressing` 只删自己加的东西，人工摆的 Actor 一个都不会碰。跑完记得提交
+`.umap` 的改动。
+
 ### 在测试里加一张图
 
 ```cpp
@@ -287,6 +334,29 @@ Showcase 用例除了静态图，还会录一段**帧序列**（`Showcase_Bindin
     本机的引擎构建里也没有随附 ffmpeg 可执行文件（只有 AMD AMF 的头文件）。
     而测试要的是"Case 跑的那几秒"，不是渲一段序列，走测试自己按帧截图反而最可控。
 
+## 用例清单基线
+
+"全绿"里藏着一种最坏的失败：用例被改名、被 `-Filter` 漏掉、被误删，报告**照样是全绿的** ——
+少跑一半和全部通过长得一模一样。所以每轮报告都带上**用例全名清单**（`summary.json` 的
+`names` 字段），和上一轮的基线比对：
+
+```powershell
+# 平时跑就会比对（RunTests.ps1 自动带上 --baseline）
+.\Tools\RunTests.ps1 -Backend Luau
+
+# 想在 CI 里让"用例集变了"直接红
+.\Tools\RunTests.ps1 -Backend Luau -FailOnDrift
+
+# 确认改动是有意的之后，更新基线并提交
+.\Tools\RunTests.ps1 -Backend Both -UpdateBaseline
+git add Tools/baseline
+```
+
+比三件事：用例总数、消失/新增的用例名、总耗时（超出 ±50% 才提示 —— 机器负载造成的抖动
+不该算）。基线上 `Tools/baseline/lua.json` 与 `Tools/baseline/luau.json`，**入库**。
+
+默认**只告警不失败**：改用例名是正当操作，一个动不动就红的 CI 会被人关掉。
+
 ## 为什么不在 GitHub Actions 上跑
 
 UnLuaNova 依赖**本地 UE 源码构建**（UE 5.8.3）。GitHub 托管 runner 拿不到这个引擎，
@@ -298,9 +368,32 @@ UnLuaNova 依赖**本地 UE 源码构建**（UE 5.8.3）。GitHub 托管 runner 
 
 如果你有自托管 Windows runner，把 `Tools/RunTests.ps1` 接进去即可，脚本的退出码已经准备好了。
 
+### 每晚至少编一次
+
+测试代码本身也是**要编译的代码**：改过一次引擎字段名、搬过一次 helper，整套 spec 就编不过了，
+而一次全量构建 20 多分钟，没人会天天手动跑。所以让"编译"每天自动发生一次：
+
+```powershell
+# 注册（或更新）一个每晚 02:00 的计划任务：只编译，不启动编辑器、不跑用例、不出报告
+.\Tools\Install-NightlyTask.ps1
+
+# 等价的手工命令；失败时非 0 退出，日志在 Saved/nightly-build.log
+pwsh -File D:\learning\UnLua\Tools\RunTests.ps1 -Backend Luau -BuildOnly -NoReport
+```
+
+`-BuildOnly` 编完就退出，编译失败时脚本非 0 退出 —— 这就是反馈回路的全部：
+"测试代码编译不过"这类问题在**一天内**被发现，而不是等下一次人工全量构建。
+用 `-Backend Both` 可以把两个后端都编一遍，代价是两倍的编译时间。
+
+!!! note "没有自托管 runner 也能有这条回路"
+    上面这条计划任务就是它的降级形态：只做编译，不跑用例。
+    有自托管 Windows runner 时换成 GitHub Actions 的 `schedule` 即可，同一条命令。
+
 ## 写新用例的约定
 
 - **命名**：`UnLuaNova.<域>.<主题>`，例如 `UnLuaNova.API.FLuaEnv`。Issue 回归保留 `Issue###` 编号。
+  一律用这个大小写，**不要全大写**（`UNLUANOVA.API.Base` 这种写法可能被 `-Filter` 漏掉，
+  也和 `Automation List` 的输出对不上）。
 - **单元测试**放 `Private/Specs/`，用 `BEGIN_DEFINE_SPEC`；**场景/实例测试**放 `Private/Tests/`。
 - 全部包在 `#if WITH_DEV_AUTOMATION_TESTS` 里，保证打包版本不含测试代码。
 - 需要 World 的用例走 `FOpenMapLatentCommand`，不要自己 `LoadMap`。

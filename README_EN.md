@@ -43,7 +43,7 @@ In short: **keep UnLua's programming feel, add the maintenance, performance and 
 | Binding | Runtime reflection | Build-time **static binding** (opt-out type selection) |
 | Performance | — | `CallUEFast` skips redundant lookups, persistent parameter buffers |
 | Observability | Minimal | CPU profiler / memory stats / debug service / sandbox / watchdog |
-| Type checking | None | Generated Luau `.d.lua`, checked by `luau-analyze` |
+| Type checking | LuaLS + generated EmmyLua annotations | Generated Luau `.d.lua`, checked by `luau-analyze` |
 
 ## Quick start
 
@@ -106,7 +106,7 @@ match the Lua function name (`AnimNotify_xxx`) and the replacement is done — n
 |:---|:---|
 | [UE 新手快速上手](Docs/CN/Quickstart_For_UE_Newbie.md) | [Programming Guide](Docs/EN/UnLuaNova_Programming_Guide.md) |
 | [功能清单](Docs/CN/Features.md) | [API Reference](Docs/EN/API.md) |
-| [Luau 鍚庣](Docs/CN/Luau.md) | [Luau Backend](Docs/EN/Luau.md) |
+| [Luau 后端](Docs/CN/Luau.md) | [Luau Backend](Docs/EN/Luau.md) |
 | [编程指南](Docs/CN/UnLuaNova_Programming_Guide.md) | [How To Implement Overriding](Docs/EN/How_To_Implement_Overriding.md) |
 | [API 参考](Docs/CN/API.md) | [FAQ](Docs/EN/FAQ.md) |
 | [设置项](Docs/CN/Settings.md) | [Docs site](https://hustjjd.github.io/UnLuaNova/) |
@@ -136,7 +136,7 @@ A star is the cheapest way to help ⭐ — also welcome:
 
 - Issues: build problems, engine version porting, API questions
 - PRs: docs fixes, new tests, merging unmerged community fixes from upstream
-- Tests: `.\Tools\RunTest
+- Tests: `\Tools\RunTests.ps1` (see [Testing and Automation](Docs/EN/Testing.md))
 
 ## License
 

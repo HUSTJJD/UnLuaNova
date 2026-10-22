@@ -29,8 +29,8 @@ description: "生成引擎类型符号，让 VSCode 等 IDE 对 UE API 提供补
 
 ```
 Plugins/UnLuaNova/Intermediate/IntelliSense/
-├── *.lua                EmmyLua 注解，给 IDE 补全用（上面三步讲的就是这个）
-└── UnLuaNova.d.lua      Luau 声明，给 luau-analyze 做静态检查用
+├── *.lua                EmmyLua 注解，给 IDE 补全用，也给 LuaLS 做 Lua 后端的静态检查
+└── UnLuaNova.d.lua      Luau 声明，给 luau-analyze 做 Luau 后端的静态检查用
 ```
 
 前者是给 IDE 看的类型注解，后者是给静态检查器看的 `declare class` / `declare function` 声明 ——

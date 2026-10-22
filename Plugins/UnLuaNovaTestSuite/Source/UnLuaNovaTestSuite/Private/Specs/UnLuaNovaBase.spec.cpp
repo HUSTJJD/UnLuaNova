@@ -19,11 +19,11 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FUNLUANOVABaseSpec, "UNLUANOVA.API.Base", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+BEGIN_DEFINE_SPEC(FUnLuaNovaBaseSpec, "UnLuaNova.API.Base", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     lua_State* L;
-END_DEFINE_SPEC(FUNLUANOVABaseSpec)
+END_DEFINE_SPEC(FUnLuaNovaBaseSpec)
 
-void FUNLUANOVABaseSpec::Define()
+void FUnLuaNovaBaseSpec::Define()
 {
     BeforeEach([this]
     {

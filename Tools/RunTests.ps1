@@ -101,6 +101,12 @@
     Print what would run - resolved engine, project, output dir and the full command line -
     and exit without starting the editor. Use it to check the discovered paths.
 
+.PARAMETER BuildOnly
+    Build and stop: compile each requested backend, verify the binaries really are that
+    backend, and exit without starting the editor or generating a report. This is what a
+    nightly scheduled task wants - it catches a spec that no longer compiles within a day,
+    without paying for a full test run. Mutually exclusive with -SkipBuild.
+
 .EXAMPLE
     .\Tools\RunTests.ps1
 
@@ -111,6 +117,12 @@
     .\Tools\RunTests.ps1 -Backend Lua -Publish
 
     Builds the plain-Lua backend, runs the suite and publishes Docs/test-lua-report.md only.
+
+.EXAMPLE
+    .\Tools\RunTests.ps1 -Backend Luau -BuildOnly
+
+    Compiles the Luau backend and exits - no editor, no report. Exits non-zero if it does
+    not compile, which is the point.
 #>
 
 [CmdletBinding()]
@@ -131,9 +143,18 @@ param(
     [switch] $Publish,
     [switch] $NoReport,
     [switch] $SkipBuild,
-    # luau-analyze 报出类型错误时让脚本以非 0 退出。默认只记录到报告里，不当作测试失败：
-    # 它是静态检查，不是自动化用例，而且本机未必装了 luau-analyze。
+    # 只编译不跑：编完每个后端就退出，不启动编辑器、不生成报告。给 nightly 与"改完 spec
+    # 想先确认能编过"这类场景用；与 -SkipBuild 互斥。
+    [switch] $BuildOnly,
+    # 静态检查报出错误时让脚本以非 0 退出（Luau 后端是 luau-analyze，Lua 后端是 LuaLS）。
+    # 默认只记录到报告里，不当作测试失败：它是静态检查，不是自动化用例，而且本机未必装了
+    # 对应的分析器。
     [switch] $FailOnTypeErrors,
+    # 用例集护栏：把这一轮的用例清单与 Tools/baseline/<后端>.json 比对，消失/新增会打出来。
+    # 默认只告警不失败（改用例名是正当操作）；加上 -FailOnDrift 才让脚本非 0 退出。
+    [switch] $FailOnDrift,
+    # 人工确认后跑一次：把这一轮的用例清单写成新的基线并提交。
+    [switch] $UpdateBaseline,
     [switch] $DryRun
 )
 
@@ -268,8 +289,25 @@ if you are certain it is not running.
 
     New-Item -ItemType Directory -Path (Split-Path -Parent $LockPath) -Force | Out-Null
     # FileShare::None is the actual mutex: a second process cannot even open the file.
-    $script:LockStream = [System.IO.File]::Open($LockPath, [System.IO.FileMode]::OpenOrCreate,
-        [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    #
+    # Retried, because Remove-Item above returns while Windows may still be finishing the
+    # delete (a scanner or an indexer holding the file briefly is enough), and because two
+    # runs starting in the same second can both get past the stale check. Without this the
+    # failure is an IOException that looks like a broken script rather than a busy moment.
+    $Attempt = 0
+    while ($true) {
+        $Attempt++
+        try {
+            $script:LockStream = [System.IO.File]::Open($LockPath, [System.IO.FileMode]::OpenOrCreate,
+                [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+            break
+        } catch {
+            if ($Attempt -ge 5) {
+                throw "Could not take the run lock at '$LockPath' after $Attempt tries: $($_.Exception.Message)"
+            }
+            Start-Sleep -Milliseconds 400
+        }
+    }
     $Stamp = [System.Text.Encoding]::UTF8.GetBytes("pid=$PID started=$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
     $script:LockStream.Write($Stamp, 0, $Stamp.Length)
     $script:LockStream.Flush()
@@ -391,35 +429,52 @@ function Invoke-TypeCheck {
         [Parameter(Mandatory)] [string] $Backend
     )
 
-    # The report generator looks for this exact file name next to the automation JSON.
-    $SummaryPath = Join-Path $RunDir "luau-analyze.json"
+    # Two backends, two analyzers, and that is not a preference - it is what each language
+    # can parse. Luau scripts carry type annotations and --!strict, which Lua 5.5 chokes on;
+    # the Lua backend's scripts are Lua 5.5, which luau-analyze chokes on. So each backend
+    # runs the checker that reads its language, against the declarations the editor exported
+    # for it (.d.lua for Luau, EmmyLua for Lua), and each writes its own summary next to the
+    # automation JSON - the report generator looks for these exact names.
+    if ($Backend -eq "Luau") {
+        $SummaryPath = Join-Path $RunDir "luau-analyze.json"
+        $CheckerName = "CheckLuauTypes.ps1"
+        $Checker = Join-Path $ToolsDir $CheckerName
+        $CheckerLabel = "luau-analyze"
+        # Only the annotated Luau scripts: the rest of Content/Script is written to Lua 5.1
+        # so it loads on both backends, and strict mode would light up on it for reasons
+        # that have nothing to do with this run.
+        $CheckerArgs = @("-Path", "Content/Script/Luau", "-Mode", "strict", "-SummaryPath", $SummaryPath)
+    } else {
+        $SummaryPath = Join-Path $RunDir "lua-analyze.json"
+        $CheckerName = "CheckLuaTypes.ps1"
+        $Checker = Join-Path $ToolsDir $CheckerName
+        $CheckerLabel = "LuaLS"
+        # The whole script root minus Content/Script/Luau (Luau syntax, never loaded by the
+        # Lua backend) - Warning and above, so type hints do not bury real errors.
+        $CheckerArgs = @("-Path", "Content/Script", "-CheckLevel", "Warning", "-SummaryPath", $SummaryPath)
+    }
 
-    function Write-Skip {
+    $Skip = {
         param([string] $Reason)
-        @{ skipped = $true; reason = $Reason; mode = "strict"; files = 0 } |
-            ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $SummaryPath -Encoding UTF8
+        @{
+            skipped = $true
+            checker = $CheckerLabel
+            reason  = $Reason
+            mode    = $(if ($Backend -eq "Luau") { "strict" } else { "Warning" })
+            files   = 0
+        } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $SummaryPath -Encoding UTF8
     }
 
-    # The declarations are Luau's (UnLuaNova.d.lua), so checking them against a plain-Lua
-    # build would report nonsense - or nothing.
-    if ($Backend -ne "Luau") {
-        Write-Skip "只在 Luau 后端下有意义：声明文件是 Luau 的，plain Lua 构建不生成它。"
-        return
-    }
-
-    $Checker = Join-Path $ToolsDir "CheckLuauTypes.ps1"
     if (-not (Test-Path $Checker)) {
-        Write-Skip "没找到 Tools/CheckLuauTypes.ps1。"
+        & $Skip "没找到 Tools/$CheckerName。"
+        Write-Host ("TypeCheck : skipped - 没找到 Tools/{0}" -f $CheckerName) -ForegroundColor Yellow
         return
     }
 
-    # Only the annotated Luau scripts: the rest of Content/Script is written to Lua 5.1 so it
-    # loads on both backends, and strict mode would light up on it for reasons that have
-    # nothing to do with this run.
-    & $Checker -Path "Content/Script/Luau" -Mode strict -SummaryPath $SummaryPath
+    & $Checker @CheckerArgs
 
     if (-not (Test-Path $SummaryPath)) {
-        Write-Skip "类型检查脚本没有写出结果文件（退出码 $LASTEXITCODE）。"
+        & $Skip "类型检查脚本没有写出结果文件（退出码 $LASTEXITCODE）。"
         return
     }
 
@@ -430,9 +485,9 @@ function Invoke-TypeCheck {
     }
 
     $Errors = @($S.errors).Count
-    Write-Host ("TypeCheck : {0} file(s), {1} error(s), {2} warning(s)" -f $S.files, $Errors, @($S.warnings).Count)
+    Write-Host ("TypeCheck ({0}) : {1} file(s), {2} error(s), {3} warning(s)" -f $CheckerLabel, $S.files, $Errors, @($S.warnings).Count)
     if ($Errors -gt 0) {
-        Write-Host "TypeCheck : 有类型错误，见报告「静态类型检查」一节。" -ForegroundColor Yellow
+        Write-Host "TypeCheck : 有静态检查错误，见报告「静态类型检查」一节。" -ForegroundColor Yellow
         if ($FailOnTypeErrors) { $script:ExitCode = 1 }
     }
 }
@@ -581,6 +636,10 @@ if ($DryRun)
     exit 0
 }
 
+if ($BuildOnly -and $SkipBuild) {
+    throw "-BuildOnly and -SkipBuild are mutually exclusive: one asks for a build, the other skips it."
+}
+
 $ExitCode = 0
 $CurrentBackend = Get-IniBackend
 $IniOriginal = $CurrentBackend
@@ -644,6 +703,11 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         # Only now is it safe to name this run's backend: the build produced it and the
         # artifacts agree with the ini. Everything downstream reads it from here.
         Assert-BackendBuilt -Value $B
+
+        if ($BuildOnly) {
+            Write-Host "BuildOnly  : $B 编译通过，跳过测试运行。" -ForegroundColor Green
+            continue
+        }
 
         $RunDir = Join-Path $OutputDir $B.ToLower()
         New-Item -ItemType Directory -Path $RunDir -Force | Out-Null
@@ -712,6 +776,11 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
 
             $GenArgs = @($Generator, "--reports", $RunDir, "--out", $RunDir, "--backend", $B)
             if ($Publish) { $GenArgs += "--publish" }
+            # 用例被改名/误删/被 filter 漏掉时，"全绿"是最坏的结果 —— 少跑一半和全过
+            # 看起来一模一样。基线比对让报告自己说出这件事。
+            $GenArgs += @("--baseline", (Join-Path $RepoRoot "Tools/baseline/$($B.ToLower()).json"))
+            if ($UpdateBaseline) { $GenArgs += "--update-baseline" }
+            if ($FailOnDrift) { $GenArgs += "--fail-on-drift" }
 
             & python @GenArgs
             if ($LASTEXITCODE -ne 0) {

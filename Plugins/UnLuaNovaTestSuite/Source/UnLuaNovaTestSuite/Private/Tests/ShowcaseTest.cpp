@@ -37,13 +37,15 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// Opens the level, lets PIE settle, takes the still, and - if this run is recording - a clip
-// of the same scene. The wait is not cosmetic: PIE needs a few ticks before there is anything
-// to photograph, and a shot taken at frame 0 is a picture of a loading frame.
+// Opens the level, lets PIE settle, takes the still, verifies it is not a uniform (blank)
+// image, and - if this run is recording - captures a clip of the same scene. The wait is not
+// cosmetic: PIE needs a few ticks before there is anything to photograph, and a shot taken at
+// frame 0 is a picture of a loading frame.
 #define SHOWCASE_SHOT(MapName, ShotName) \
     ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName)) \
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f)) \
     ADD_LATENT_AUTOMATION_COMMAND(FScreenshotLatentCommand(ShotName)) \
+    ADD_LATENT_AUTOMATION_COMMAND(FVerifyScreenshotNotBlankLatentCommand(ShotName, *this)) \
     if (IsFrameRecordingEnabled()) \
     { \
         ADD_LATENT_AUTOMATION_COMMAND(FCaptureFramesLatentCommand(FString(ShotName) + TEXT("_Clip"), GetFrameRecordingCount())) \

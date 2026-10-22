@@ -61,6 +61,28 @@ namespace UnLuaNovaTestSuite
         int32 FramesWaited = 0;
     };
 
+    // Decodes the PNG at PngPath and returns a non-empty description when it is a uniform
+    // (all-one-color) image - "a photo of nothing". Returns an empty string when the PNG is
+    // missing, undecodable, or has actual content, so a broken check never masks a real shot.
+    FString DescribeUniformScreenshot(const FString& PngPath);
+
+    // Runs after FScreenshotLatentCommand and turns a uniform screenshot into a test failure.
+    // A showcase image has exactly one job - show the level - and an all-black PNG means the
+    // shot captured nothing (empty level, occluded window, ...). Before this check such shots
+    // passed silently and got published to the docs.
+    class FVerifyScreenshotNotBlankLatentCommand : public IAutomationLatentCommand
+    {
+    public:
+        FVerifyScreenshotNotBlankLatentCommand(FString ShotName, FAutomationTestBase& InTest);
+
+        virtual bool Update() override;
+
+    private:
+        FString Name;
+        FAutomationTestBase& Test;
+        int32 FramesWaited = 0;
+    };
+
     // Captures a burst of consecutive frames as <Name>_0001.png, <Name>_0002.png, ... so an
     // offline encoder (-Video in Tools/RunTests.ps1) can turn them into a clip. Still images
     // are what the docs site shows; a clip is what shows something moving.
@@ -69,16 +91,22 @@ namespace UnLuaNovaTestSuite
     // callback, and asking for the next frame before the previous PNG exists produces a
     // sequence with holes in it. The wait is bounded on purpose for the same reason the
     // single-shot command's is - a -NullRHI run never writes a PNG.
+    //
+    // The first couple of frames are dropped rather than captured: the very first one can still
+    // show the level editor viewport (grid and axis gizmo) instead of the PIE view, which leaves
+    // a jarring frame of the wrong thing at the head of every clip.
     class FCaptureFramesLatentCommand : public IAutomationLatentCommand
     {
     public:
-        FCaptureFramesLatentCommand(FString ClipName, int32 NumFrames);
+        FCaptureFramesLatentCommand(FString ClipName, int32 NumFrames, int32 WarmupFrames = 3);
 
         virtual bool Update() override;
 
     private:
         FString Name;
         int32 Frames;
+        int32 WarmupFrames;
+        int32 WarmedUp = 0;
         int32 Captured = 0;
         int32 FramesWaited = 0;
         bool bPending = false;

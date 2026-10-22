@@ -17,7 +17,8 @@ description: "What UnLuaNova can do, and what it adds on top of UnLua v2.3.6"
 ## Platform support
 
 * Runtime: Windows / Android / iOS / Linux / macOS
-* Engine: Unreal Engine 4.17.x - 5.x
+* Engine baseline: **Unreal Engine 5.8.3** (source build). Compatibility code from the 4.17–5.x
+  era is still present but is not verified.
 
 ## Replacing Blueprint implementations with Lua
 
@@ -37,7 +38,7 @@ description: "What UnLuaNova can do, and what it adds on top of UnLua v2.3.6"
 
 * Unicast delegates: bind, unbind, fire
 * Multicast delegates: bind, unbind, clear, broadcast
-* `UENUM` access, including [custom collision enums](../CN/CollisionEnum.md)
+* `UENUM` access, including [custom collision enums](../EN/CollisionEnum.md)
 * Member and static variables and functions, global functions
 
 ## Calling Lua from C++
@@ -76,13 +77,16 @@ See [Console Commands](ConsoleCommand.md) for the exact syntax.
   `meta=(UnLuaNovaNoExport)`; `meta=(UnLuaNovaExport)` on a base class pulls a whole
   hierarchy back in
 * The read path takes no exclusive lock, so cost does not grow with the number of types
-* See [Static Export and Static Binding](../CN/StaticExportBinding.md)
+* See [Static Export and Static Binding](../EN/StaticExportBinding.md)
 
 ### Script-side type checking
 
 * Generates Luau `.d.lua` declarations for `luau-analyze`, moving a class of UE API misuse
   to compile time
-* See [IntelliSense](../CN/IntelliSense.md) and [Luau backend](Luau.md)
+* The Lua backend gets the same idea from the other side: the exported EmmyLua annotations
+  are checked by LuaLS. Each backend uses its own analyzer - neither can parse the other's
+  language, see [Testing](Testing.md)
+* See [IntelliSense](../EN/IntelliSense.md) and [Luau backend](Luau.md)
 
 ### String extensions
 
@@ -107,7 +111,7 @@ See [Console Commands](ConsoleCommand.md) for the exact syntax.
   (`UnLuaNova.Showcase.*`), not by hand; recording a clip and encoding it into the report is on
   by default (`-NoVideo` opts out), and the encoder comes from the `imageio-ffmpeg` pip package -
   no system-wide ffmpeg needed
-* See [Testing and Automation](../CN/Testing.md)
+* See [Testing and Automation](../EN/Testing.md)
 
 ---
 

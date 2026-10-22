@@ -28,9 +28,22 @@ Either way that copy is what gets committed and rendered by MkDocs, and it delib
 points at no local path: the run directory is timestamped and Saved/ is gitignored, so
 naming it here would make the file change on every single run.
 
+Baseline guard-rail:
+    --baseline <path>      compare this run with a previous one and say what moved
+    --update-baseline      overwrite that file with this run
+    --fail-on-drift        exit non-zero when something moved
+
+A test that silently stops running is worse than a test that fails: the report stays green
+while half the suite disappears (renamed, filtered out, deleted by accident). Comparing the
+set of test *names* - not just the totals - is what catches that, so `summary.json` carries
+the full list and `--baseline` diffs it. Drift only *warns* by default: renaming a test is a
+legitimate thing to do, and a CI that goes red every time someone does is a CI people
+silence.
+
 Usage:
     python GenerateTestReport.py --reports <dir> [--out <dir>] [--backend Lua|Luau]
-                                 [--publish]
+                                 [--publish] [--baseline <path>]
+                                 [--update-baseline] [--fail-on-drift]
 """
 
 import argparse
@@ -51,8 +64,10 @@ SKIP_STATES = {"skipped", "skip", "notrun", "notrun", "ignored", "na"}
 MAX_MESSAGE_LEN = 400
 SLOWEST_COUNT = 10
 
-# Written by Tools/RunTests.ps1 (which runs Tools/CheckLuauTypes.ps1 with -SummaryPath).
-TYPECHECK_FILE = "luau-analyze.json"
+# Written by Tools/RunTests.ps1. Which checker runs depends on the backend - Luau scripts
+# are checked with luau-analyze, Lua scripts with LuaLS - and each one writes its summary
+# under its own name next to the automation JSON.
+TYPECHECK_FILES = {"Lua": "lua-analyze.json", "Luau": "luau-analyze.json"}
 TYPECHECK_SHOWN = 20
 
 # Frames are captured one per rendered frame, so this is the playback rate chosen for the
@@ -70,6 +85,15 @@ CRASH_MARKERS = (
     "LowLevelFatalError",
 )
 MAX_STACK_LINES = 25
+
+# Baseline drift: how far the total runtime may move before it is worth mentioning. The
+# number is deliberately loose - a shared machine, a cold shader cache or a background
+# build all move it by more than any real regression would.
+DURATION_DRIFT_RATIO = 0.5
+
+# How many names to spell out in the drift line. The point is to notice, not to dump a
+# hundred lines into the build log.
+DRIFT_NAMES_SHOWN = 8
 
 
 def _get(obj, *names, default=None):
@@ -181,8 +205,12 @@ def strip_machine_paths(text: str, repo_root: Path) -> str:
 
 def load_tests(reports_dir: Path):
     tests = []
+    # The static checker's summary lands in the same directory as the automation JSON, and
+    # it is not a test: without this it was picked up here and showed up in 跳过明细 as a
+    # test named "luau-analyze" that nobody had ever run.
+    typecheck_files = set(TYPECHECK_FILES.values())
     for path in sorted(reports_dir.glob("*.json")):
-        if path.name == "summary.json":
+        if path.name == "summary.json" or path.name in typecheck_files:
             continue
         try:
             # utf-8-sig, not utf-8: the automation framework writes its index.json with a
@@ -435,21 +463,38 @@ def collect_media(shot_dir, video_dir):
     return stills, clips, uncoded
 
 
-def load_typecheck(reports_dir: Path):
-    """Read the luau-analyze summary RunTests.ps1 left next to the JSON, if any."""
-    path = reports_dir / TYPECHECK_FILE
-    if not path.is_file():
-        return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
-        # A broken summary must not take the report down with it.
-        print(f"WARNING: could not read {path}: {e}", file=sys.stderr)
-        return None
+def load_typecheck(reports_dir: Path, backend=None):
+    """Read the summary this backend's static checker left next to the JSON, if any.
+
+    The two backends do not share a checker - Luau runs luau-analyze, Lua runs LuaLS - so
+    the backend decides which file to look for. Without a backend, take whichever one is
+    there, which keeps a single unlabelled run working.
+    """
+    names = []
+    if backend in TYPECHECK_FILES:
+        names.append(TYPECHECK_FILES[backend])
+    names += [name for name in TYPECHECK_FILES.values() if name not in names]
+
+    for name in names:
+        path = reports_dir / name
+        if not path.is_file():
+            continue
+        try:
+            # utf-8-sig, not utf-8: PowerShell's Set-Content -Encoding UTF8 writes a BOM, and
+            # plain utf-8 raises on it - which made the whole type checking section disappear
+            # from every report while looking like the checker had never run at all.
+            return json.loads(path.read_text(encoding="utf-8-sig", errors="replace"))
+        except (OSError, json.JSONDecodeError) as e:
+            # A broken summary must not take the report down with it.
+            print(f"WARNING: could not read {path}: {e}", file=sys.stderr)
+            return None
+    return None
 
 
 def render_typecheck(tc) -> list:
-    lines = ["## 静态类型检查（luau-analyze）", ""]
+    # Named after the checker that actually ran: the two backends do not use the same one.
+    checker = tc.get("checker") or "静态检查"
+    lines = [f"## 静态类型检查（{checker}）", ""]
 
     if tc.get("skipped"):
         lines.append("**跳过。**")
@@ -645,6 +690,11 @@ def render(
                 f'<video controls muted loop playsinline width="640" src="{image_prefix}{clip["file"]}"></video>'
             )
             lines.append("")
+            # GitHub's markdown renderer strips raw HTML, so on a report page read there the
+            # <video> above silently disappears and reads as "the clip cannot be played" - the
+            # file itself is a standard H.264 mp4. A plain link survives every renderer.
+            lines.append(f"[播放不了？直接打开视频文件（标准 H.264 mp4）]({image_prefix}{clip['file']})")
+            lines.append("")
             frames = f"，{clip['frames']} 帧" if clip["frames"] else ""
             lines.append(f"{frames}，由这些帧编码而成（`Tools/RunTests.ps1 -Video`）。")
             lines.append("")
@@ -668,10 +718,10 @@ def render(
     # Luau declarations and luau-analyze with no result anywhere anyone looks.
     if typecheck is not None:
         lines.extend(render_typecheck(typecheck))
-    elif backend == "Luau":
+    elif backend in TYPECHECK_FILES:
         lines.append("## 静态类型检查")
         lines.append("")
-        lines.append("这一轮没有跑：`Tools/RunTests.ps1` 没写 `luau-analyze.json`。")
+        lines.append(f"这一轮没有跑：`Tools/RunTests.ps1` 没写 `{TYPECHECK_FILES[backend]}`。")
         lines.append("")
 
     lines.append("---")
@@ -690,6 +740,81 @@ def render(
         lines.append(f"原始 JSON 目录：`{reports_dir}`")
     lines.append("")
     return "\n".join(lines) + "\n"
+
+
+def default_baseline_path(backend):
+    """Where the previous run of this backend is recorded, when nobody said otherwise."""
+    name = (backend or "unknown").lower() + ".json"
+    return Path(__file__).resolve().parent / "baseline" / name
+
+
+def load_baseline(path: Path):
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        # A half-written or hand-edited baseline must not take the whole run down with it.
+        print(f"WARNING: baseline '{path}' is unreadable ({exc}); skipping the comparison.", file=sys.stderr)
+        return None
+    if not isinstance(data, dict):
+        print(f"WARNING: baseline '{path}' is not an object; skipping the comparison.", file=sys.stderr)
+        return None
+    return data
+
+
+def compare_with_baseline(summary, baseline):
+    """Diff this run against the recorded one.
+
+    Returns (drifted, [human readable lines]). `drifted` is about the *set of tests*: a
+    renamed, deleted or filtered-out test is the thing that must not pass unnoticed.
+    """
+    lines = []
+    drifted = False
+
+    old_total = baseline.get("total")
+    new_total = summary.get("total")
+    if isinstance(old_total, int) and isinstance(new_total, int) and old_total != new_total:
+        lines.append(f"用例总数 {old_total} -> {new_total}（{new_total - old_total:+d}）")
+
+    old_names = set(baseline.get("names") or [])
+    new_names = set(summary.get("names") or [])
+    missing = sorted(old_names - new_names)
+    added = sorted(new_names - old_names)
+    if missing:
+        drifted = True
+        shown = ", ".join(missing[:DRIFT_NAMES_SHOWN])
+        lines.append(f"{len(missing)} 个用例消失：{shown}{' …' if len(missing) > DRIFT_NAMES_SHOWN else ''}")
+    if added:
+        drifted = True
+        shown = ", ".join(added[:DRIFT_NAMES_SHOWN])
+        lines.append(f"{len(added)} 个用例新增：{shown}{' …' if len(added) > DRIFT_NAMES_SHOWN else ''}")
+
+    old_duration = baseline.get("duration")
+    new_duration = summary.get("duration")
+    if (
+        isinstance(old_duration, (int, float))
+        and isinstance(new_duration, (int, float))
+        and old_duration > 0
+    ):
+        ratio = new_duration / old_duration
+        if abs(ratio - 1.0) > DURATION_DRIFT_RATIO:
+            lines.append(f"耗时 {old_duration:.1f}s -> {new_duration:.1f}s（{ratio:.0%}，超出 ±50%）")
+
+    return drifted, lines
+
+
+def baseline_payload(summary):
+    """Only the stable parts: enough to notice drift, nothing that changes every run."""
+    return {
+        "generated": summary["generated"],
+        "backend": summary["backend"],
+        "total": summary["total"],
+        "failed": summary["failed"],
+        "skipped": summary["skipped"],
+        "duration": summary["duration"],
+        "names": summary["names"],
+    }
 
 
 def main() -> None:
@@ -715,6 +840,25 @@ def main() -> None:
         action="store_true",
         help="also write the Docs/ copy; that copy is committed, so it carries no "
         "machine specific path and no per-run directory name",
+    )
+    parser.add_argument(
+        "--baseline",
+        default=None,
+        metavar="PATH",
+        help="compare this run against a previous one (total, test names, duration) and "
+        "print what moved; defaults to Tools/baseline/<backend>.json when updating",
+    )
+    parser.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="overwrite the baseline with this run - an intentional, reviewed act, which "
+        "is why it is not folded into a normal run",
+    )
+    parser.add_argument(
+        "--fail-on-drift",
+        action="store_true",
+        help="exit non-zero when the set of tests changed; off by default so a legitimate "
+        "rename does not turn the build red",
     )
     args = parser.parse_args()
 
@@ -771,7 +915,7 @@ def main() -> None:
 
     screenshots, clips, uncoded = collect_media(shot_dir, video_dir)
 
-    typecheck = load_typecheck(reports_dir)
+    typecheck = load_typecheck(reports_dir, backend)
 
     generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     total = len(tests)
@@ -810,6 +954,9 @@ def main() -> None:
         "videos_failed": len(encode_failures),
         "crashed": crash is not None,
         "crash_test": crash["test"] if crash else None,
+        # The whole point of the baseline: totals alone cannot tell a renamed test from a
+        # deleted one, so the set of names travels with the numbers.
+        "names": sorted(t["name"] for t in tests),
         # None when it was not run this round - deliberately not folded into pass/fail,
         # because it is not an automation test and a skipped check is not a failed test.
         "typecheck": {
@@ -821,6 +968,38 @@ def main() -> None:
     (out_dir / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n"
     )
+
+    # Compared before anything can exit: a report that quietly covers fewer tests than last
+    # time is the failure mode this is here to catch, and it is invisible in the numbers
+    # alone because every test it still has is green.
+    drift_exit = 0
+    if args.baseline or args.update_baseline:
+        baseline_path = Path(args.baseline).resolve() if args.baseline else default_baseline_path(backend)
+        baseline = load_baseline(baseline_path)
+        if baseline is None:
+            print(f"BASELINE: 没有基线（{baseline_path}）；确认这份结果无误后用 --update-baseline 创建。")
+        else:
+            drifted, drift_lines = compare_with_baseline(summary, baseline)
+            if drift_lines:
+                for line in drift_lines:
+                    print(f"BASELINE: {line}")
+            else:
+                print(f"BASELINE: 与基线一致（{summary['total']} 个用例）")
+            if drifted:
+                print(
+                    "BASELINE: 用例集变了。确认是有意为之后，跑 RunTests.ps1 -UpdateBaseline 更新基线。",
+                    file=sys.stderr,
+                )
+                drift_exit = 1
+
+        if args.update_baseline:
+            baseline_path.parent.mkdir(parents=True, exist_ok=True)
+            baseline_path.write_text(
+                json.dumps(baseline_payload(summary), ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            print(f"BASELINE: 已写入 {baseline_path}（{summary['total']} 个用例）")
 
     if encode_failures:
         # Loud, not silent: a report that quietly shows a pile of PNGs looks like a run that
@@ -872,6 +1051,9 @@ def main() -> None:
         f"{label}{total} tests: {passed} passed, {failed} failed, {skipped} skipped "
         f"-> {out_dir / 'report.md'}"
     )
+
+    if drift_exit and args.fail_on_drift:
+        raise SystemExit("用例集与基线不一致；确认后更新基线（RunTests.ps1 -UpdateBaseline）。")
 
 
 if __name__ == "__main__":

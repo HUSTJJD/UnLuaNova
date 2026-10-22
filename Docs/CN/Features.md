@@ -15,7 +15,7 @@ description: "UnLuaNova 的能力总览，以及相对 UnLua v2.3.6 的增量"
 
 ## 平台支持
 * 运行平台：Windows / Android / iOS / Linux / OSX
-* 引擎版本：Unreal Engine 4.17.x - Unreal Engine 5.x
+* 引擎基线：**Unreal Engine 5.8.3**（源码版）；代码保留了 4.17–5.x 时期的兼容写法，但不做验证
 
 ## 支持使用Lua替换实现
 * 蓝图里所有标记了 `BlueprintImplementableEvent` 或 `BlueprintNativeEvent` 的"蓝图事件"
@@ -78,6 +78,8 @@ description: "UnLuaNova 的能力总览，以及相对 UnLua v2.3.6 的增量"
 ### 脚本侧类型检查
 
 * 可生成 Luau `.d.lua` 类型声明，交由 `luau-analyze` 做静态检查，把一部分 UE API 误用提前到编译期
+* Lua 后端走同一套思路的另一半：编辑器导出的 EmmyLua 注解交给 LuaLS 做静态检查
+  （两个后端各用自己的分析器 —— 互相解析不了对方的语言，见[测试](Testing.md)）
 * 见[智能提示](IntelliSense.md)与[Luau 后端](Luau.md#三类型声明与-luau-analyze)
 
 ### 字符串扩展

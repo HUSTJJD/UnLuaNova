@@ -34,8 +34,8 @@ The same export also produces `UnLuaNova.d.lua`:
 
 ```
 Plugins/UnLuaNova/Intermediate/IntelliSense/
-├── *.lua                EmmyLua annotations, for IDE completion (steps 1-3 above)
-└── UnLuaNova.d.lua      Luau declarations, for static checking with luau-analyze
+├── *.lua                EmmyLua annotations, for IDE completion and for LuaLS on the Lua backend
+└── UnLuaNova.d.lua      Luau declarations, for static checking with luau-analyze on the Luau backend
 ```
 
 The first is type annotation for an IDE, the second is `declare class` / `declare function`

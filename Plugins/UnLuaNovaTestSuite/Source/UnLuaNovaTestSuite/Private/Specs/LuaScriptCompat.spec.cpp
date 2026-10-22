@@ -73,7 +73,9 @@ void FLuaScriptCompatSpec::Define()
         {
             // Silence here would be worse than the error: a script asking for an option the
             // layer does not implement would carry on as if the collection had happened.
-            UnLuaNova::RunChunk(L, "return pcall(collectgarbage, 'nope')");
+            // pcall also returns the message, and a message is truthy, so the call is
+            // parenthesised: only the status is left on the stack, and that is what -1 reads.
+            UnLuaNova::RunChunk(L, "return (pcall(collectgarbage, 'nope'))");
             TEST_FALSE(lua_toboolean(L, -1));
         });
 

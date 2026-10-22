@@ -12,7 +12,8 @@ description: "UnLuaNova 的 C++ API、Lua API 与构建期宏定义速查"
 
 * `UnLuaNova::GLuaSrcFullPath` Lua源码文件所在的绝对路径
 
-* `FLuaContext::GLuaCxt` 全局Lua上下文
+* `UnLuaNova::FLuaEnv` 一个独立的 Lua 运行环境（多环境下每个环境各自一个实例）；主环境通过
+  `IUnLuaNovaModule::Get().GetEnv()` 获取
 
 ### 全局函数
 命名空间：UnLuaNova
@@ -26,9 +27,9 @@ description: "UnLuaNova 的 C++ API、Lua API 与构建期宏定义速查"
 
 * `IsType` 判断Lua堆栈上指定索引位置上的对象类型
 
-* `CreateState` 从 `GLuaCxt` 创建一个 `lua_State`
+* `CreateState` 创建一个 `lua_State`（单环境时代的遗留入口，新代码请用 `FLuaEnv`）
 
-* `GetState` 获取 `GLuaCxt` 中的 `lua_State`
+* `GetState` 获取主环境的 `lua_State`，等价于 `FLuaEnv::GetMainState()`
 
 * `Startup` 启动UnLuaNova环境
 
@@ -52,13 +53,13 @@ description: "UnLuaNova 的 C++ API、Lua API 与构建期宏定义速查"
 FUnLuaNovaDelegates
 * `OnLuaStateCreated` 当一个Lua虚拟机被创建出来时候触发，可以拿到其对应的 `lua_State`
 
-* `OnLuaContextInitialized` 当 `FLuaContext` 初始化完成后触发
+* `OnLuaContextInitialized` 当 `FLuaEnv` 初始化完成后触发（**注意**：当前构建里没有广播点，绑定后不会被调用）
 
-* `OnPreLuaContextCleanup` 当 `FLuaContext` 开始回收清理前触发
+* `OnPreLuaContextCleanup` 当 `FLuaEnv` 开始回收清理前触发（**注意**：当前构建里没有广播点，绑定后不会被调用）
 
-* `OnPostLuaContextCleanup` 当 `FLuaContext` 完成回收清理后触发
+* `OnPostLuaContextCleanup` 当 `FLuaEnv` 完成回收清理后触发（**注意**：当前构建里没有广播点，绑定后不会被调用）
 
-* `OnPreStaticallyExport` 当 `FLuaContext` 开始向 `lua_State` 注册静态导出的类型之前触发
+* `OnPreStaticallyExport` 当 `FLuaEnv` 开始向 `lua_State` 注册静态导出的类型之前触发
 
 * `OnObjectBinded` 当某个 `UObject` 和Lua绑定时触发
 
@@ -74,7 +75,7 @@ FUnLuaNovaDelegates
 * `UUnLuaNovaInterface` UnLuaNova的核心接口，用来标记和识别需要绑定到Lua的对象
 
 ### 类
-* `FLuaContext` 封装了整个UnLuaNova运行环境上下文
+* `FLuaEnv` 封装了一个 UnLuaNova 运行环境（主 `lua_State` 及其注册表、模块、线程），多环境下每个环境各自一个实例
 
 * `FLuaIndex` 对Lua堆栈索引的简单封装
 
@@ -96,6 +97,10 @@ FUnLuaNovaDelegates
 
 ### 全局表
 * `UE` 仅当 `WITH_UE4_NAMESPACE` 开关启用时存在，作为访问C++侧类的根对象。当开关禁用时，访问C++可以直接通过 `_G` 作为根对象来访问。类型是用到了才会注册到Lua，因此不必担心一次性加载过多导致的性能问题
+
+* `UE.__newindex` `UE` 命名空间**只读**：引擎类型由绑定层用 `lua_rawset` 惰性注册进去，脚本
+  往里写（比如 `UE.FVector = nil`）会直接报错，而不是静默覆盖掉别人的绑定。注册期除外——
+  为了能让类型继续惰性注册，命名空间在注册完成前是可写的，之后才装上 `__newindex`
 
 ### 全局函数
 * `RegisterEnum` 手动注册一个枚举到Lua

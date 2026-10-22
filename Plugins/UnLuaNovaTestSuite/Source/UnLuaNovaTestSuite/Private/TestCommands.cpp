@@ -19,7 +19,11 @@
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Modules/ModuleManager.h"
 #include "UnrealClient.h"
 
 #if WITH_EDITOR
@@ -158,7 +162,16 @@ namespace UnLuaNovaTestSuite
             bRequested = true;
             // No suffix: the report generator matches screenshots by name, so the file has
             // to be exactly <Name>.png.
-            FScreenshotRequest::RequestScreenshot(Name, false, false);
+            //
+            // bShowUI=true, restricted to the game viewport. The tutorial levels' visible
+            // content is PrintString on-screen text and UMG widgets - both live in the UI
+            // layer. With bShowUI=false this captured the bare scene render target only, and
+            // the engine additionally disables on-screen debug messages for that path
+            // (UnrealClient.cpp: GAreScreenMessagesEnabled = false), so every showcase shot
+            // came out as a photo of an empty, unlit world: pure black. Restricting to the
+            // game viewport keeps the editor chrome out when PIE is embedded in the level
+            // editor viewport.
+            FScreenshotRequest::RequestScreenshot(Name, true, false, false, FIntRect(), true);
             return false;
         }
 
@@ -178,8 +191,8 @@ namespace UnLuaNovaTestSuite
         return false;
     }
 
-    FCaptureFramesLatentCommand::FCaptureFramesLatentCommand(FString ClipName, int32 NumFrames)
-        : Name(MoveTemp(ClipName)), Frames(NumFrames)
+    FCaptureFramesLatentCommand::FCaptureFramesLatentCommand(FString ClipName, int32 NumFrames, int32 WarmupFrames)
+        : Name(MoveTemp(ClipName)), Frames(NumFrames), WarmupFrames(WarmupFrames)
     {
     }
 
@@ -188,6 +201,14 @@ namespace UnLuaNovaTestSuite
         if (Captured >= Frames)
             return true;
 
+        if (WarmedUp < WarmupFrames)
+        {
+            // Let the PIE viewport settle before the first frame is captured, otherwise frame 1
+            // is a picture of the level editor viewport instead of the running demo.
+            ++WarmedUp;
+            return false;
+        }
+
         const FString FrameName = FString::Printf(TEXT("%s_%04d"), *Name, Captured + 1);
         const FString Path = FPaths::ScreenShotDir() / (FrameName + TEXT(".png"));
 
@@ -195,7 +216,9 @@ namespace UnLuaNovaTestSuite
         {
             bPending = true;
             FramesWaited = 0;
-            FScreenshotRequest::RequestScreenshot(FrameName, false, false);
+            // Same bShowUI/bRestrictToGameViewport reasoning as FScreenshotLatentCommand:
+            // without UI the clips record an empty unlit world instead of the demo.
+            FScreenshotRequest::RequestScreenshot(FrameName, true, false, false, FIntRect(), true);
             return false;
         }
 
@@ -241,13 +264,100 @@ namespace UnLuaNovaTestSuite
     static void TakeScreenshotCommand(const TArray<FString>& Args)
     {
         const FString ShotName = Args.Num() > 0 ? Args[0] : TEXT("UnLuaNovaTest");
-        FScreenshotRequest::RequestScreenshot(ShotName, false, false);
+        // Same as FScreenshotLatentCommand: capture the game viewport with UI, not the bare
+        // (and here, empty) scene render target.
+        FScreenshotRequest::RequestScreenshot(ShotName, true, false, false, FIntRect(), true);
     }
 
     static FAutoConsoleCommand GScreenshotConsoleCommand(
         TEXT("UnLuaNovaTest.Screenshot"),
         TEXT("Requests a screenshot into Saved/Screenshots. Usage: UnLuaNovaTest.Screenshot <name>"),
         FConsoleCommandWithArgsDelegate::CreateStatic(&TakeScreenshotCommand));
+
+    FString DescribeUniformScreenshot(const FString& PngPath)
+    {
+        IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+        const TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG);
+        if (!ImageWrapper.IsValid())
+        {
+            return FString();
+        }
+
+        TArray<uint8> FileData;
+        if (!FFileHelper::LoadFileToArray(FileData, *PngPath))
+        {
+            return FString();
+        }
+        if (!ImageWrapper->SetCompressed(FileData.GetData(), FileData.Num()))
+        {
+            return FString();
+        }
+
+        TArray64<uint8> Raw;
+        if (!ImageWrapper->GetRaw(ERGBFormat::BGRA, 8, Raw))
+        {
+            return FString();
+        }
+
+        const int32 Width = ImageWrapper->GetWidth();
+        const int32 Height = ImageWrapper->GetHeight();
+        const int64 NumPixels = Raw.Num() / 4;
+        if (NumPixels <= 0)
+        {
+            return FString();
+        }
+
+        // Uniform = min/max luminance over the whole image within a small tolerance. A real
+        // scene shot has far more spread than that, so this only fires on photos of nothing.
+        uint8 MinLuma = 255;
+        uint8 MaxLuma = 0;
+        const uint8* Pixels = Raw.GetData();
+        for (int64 i = 0; i < NumPixels; ++i)
+        {
+            const uint8* Pixel = Pixels + (i << 2); // BGRA
+            const uint8 Luma = static_cast<uint8>((Pixel[0] * 299u + Pixel[1] * 587u + Pixel[2] * 114u) >> 8);
+            MinLuma = FMath::Min(MinLuma, Luma);
+            MaxLuma = FMath::Max(MaxLuma, Luma);
+            if (MaxLuma - MinLuma > 2)
+            {
+                return FString();
+            }
+        }
+
+        return FString::Printf(TEXT("是一张 %dx%d 的纯色图（亮度范围 %d..%d，四舍五入就是什么都看不见）"),
+            Width, Height, MinLuma, MaxLuma);
+    }
+
+    FVerifyScreenshotNotBlankLatentCommand::FVerifyScreenshotNotBlankLatentCommand(FString ShotName, FAutomationTestBase& InTest)
+        : Name(MoveTemp(ShotName)), Test(InTest)
+    {
+    }
+
+    bool FVerifyScreenshotNotBlankLatentCommand::Update()
+    {
+        const FString Path = FPaths::ScreenShotDir() / (Name + TEXT(".png"));
+
+        if (!IFileManager::Get().FileExists(*Path))
+        {
+            // The screenshot command upstream already gave up after 120 frames with a log
+            // line; this only catches the "PNG appeared late" race.
+            if (++FramesWaited <= 120)
+            {
+                return false;
+            }
+            Test.AddWarning(FString::Printf(TEXT("截图 '%s' 没有落盘（%s），无法检查是否为空图。"), *Name, *Path));
+            return true;
+        }
+
+        const FString Uniform = DescribeUniformScreenshot(Path);
+        if (!Uniform.IsEmpty())
+        {
+            Test.AddError(FString::Printf(TEXT("截图 '%s' %s —— 大概率截到了空关卡（没有灯光/网格体，可见内容全在 UI 层）或无效的一帧。"),
+                *Name, *Uniform));
+        }
+
+        return true;
+    }
 }
 
 #endif

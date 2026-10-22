@@ -204,13 +204,20 @@ class of UE API misuse (wrong function name, wrong arity, wrong argument type) b
 
 ```
 Plugins/UnLuaNova/Intermediate/IntelliSense/
-├── *.lua                EmmyLua annotations, for IDE completion
-└── UnLuaNova.d.lua      Luau declarations, for luau-analyze
+├── *.lua                EmmyLua annotations, for IDE completion and for LuaLS on the Lua backend
+└── UnLuaNova.d.lua      Luau declarations, for luau-analyze on the Luau backend
 ```
 
 !!! note "It is a `.d.lua`, not something to require"
     A pure declaration file made of `declare class` / `declare function`.
     It is referenced by the static checker only — never `require` it at runtime.
+
+!!! note "The Lua backend uses a different analyzer: LuaLS"
+    From the same export, `.d.lua` goes to `luau-analyze` and the EmmyLua `*.lua` go to
+    `lua-language-server`, driven by `Tools/CheckLuaTypes.ps1`. That is not a preference,
+    it is syntax: Luau's type annotations do not parse as Lua 5.5, and Lua backend scripts
+    do not parse as Luau. `RunTests.ps1` dispatches per backend, so both backends get a
+    "static type checking" section in their report.
 
 **Use**: drop `UnLuaNova.d.lua` into your script project, put `--!strict` at the top of your
 scripts, then run `luau-analyze`:

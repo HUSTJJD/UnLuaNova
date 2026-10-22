@@ -42,7 +42,7 @@ UnLuaNova 把散落的社区成果收敛成一条**有人维护的发行线**，
 | 绑定方式 | 运行时反射 | 构建期**静态绑定**（opt-out 选择类型） |
 | 性能 | — | `CallUEFast` 跳过冗余查找、参数缓存持久化 |
 | 可观测性 | 基础 | CPU Profiler / 内存统计 / 调试服务 / 沙盒 / 看门狗 |
-| 类型检查 | 无 | 生成 Luau `.d.lua`，`luau-analyze` 提前暴露 UE API 误用 |
+| 类型检查 | LuaLS + 导出的 EmmyLua 注解 | 生成 Luau `.d.lua`，`luau-analyze` 提前暴露 UE API 误用 |
 
 ## 快速开始
 
@@ -106,7 +106,7 @@ Lua 函数名对上（`AnimNotify_xxx`）即完成替换，不需要任何辅助
 |:---|:---|
 | [UE 新手快速上手](Docs/CN/Quickstart_For_UE_Newbie.md) | [Programming Guide](Docs/EN/UnLuaNova_Programming_Guide.md) |
 | [功能清单](Docs/CN/Features.md) | [API Reference](Docs/EN/API.md) |
-| [Luau 鍚庣](Docs/CN/Luau.md) | [Luau Backend](Docs/EN/Luau.md) |
+| [Luau 后端](Docs/CN/Luau.md) | [Luau Backend](Docs/EN/Luau.md) |
 | [编程指南](Docs/CN/UnLuaNova_Programming_Guide.md) | [How To Implement Overriding](Docs/EN/How_To_Implement_Overriding.md) |
 | [API 参考](Docs/CN/API.md) | [FAQ](Docs/EN/FAQ.md) |
 | [设置项](Docs/CN/Settings.md) | [在线文档站](https://hustjjd.github.io/UnLuaNova/) |
@@ -135,7 +135,7 @@ Star 是最省力的支持方式 ⭐ —— 也欢迎：
 
 - 提 issue：编译问题、UE 版本适配、API 疑问都可以
 - 提 PR：修文档、补测试、合入上游未合并的社区修复
-- 跑测试：`.\Tools\RunT
+- 跑测试：`\Tools\RunTests.ps1`（详见 [测试与自动化](Docs/CN/Testing.md)）
 
 ## 许可
 

@@ -28,6 +28,17 @@ Plugins/UnLuaNovaTestSuite/
 └── Content/Tests/                 levels and assets for the scenario tests
 ```
 
+The companion scripts live in `Tools/` and are invoked from the repository root:
+
+| Script | What it does |
+|---|---|
+| `Tools/RunTests.ps1` | Builds, runs the suite, collects screenshots/recordings, generates the report — the subject of this page |
+| `Tools/GenerateTestReport.py` | Turns the JSON the automation framework exported into the Markdown/HTML report (`RunTests.ps1` calls it) |
+| `Tools/CheckLuauTypes.ps1` | Luau backend: static type check via `luau-analyze` plus the generated `UnLuaNova.d.lua` |
+| `Tools/CheckLuaTypes.ps1` | Lua backend: static check via LuaLS (`lua-language-server`) plus the generated EmmyLua annotations |
+| `Tools/Rename-To-UnLuaNova.ps1` | Migration script: bulk-renames an UnLua project/codebase to `UnLuaNova` (`UnLua` → `UnLuaNova`, `UUnLuaSettings` → `UUnLuaNovaSettings`, …). Run it once when migrating; not part of running tests |
+| `Tools/Install-NightlyTask.ps1` | Registers / removes the Windows scheduled task that compiles the test code once a night (`-BuildOnly`), see "Compile at least once a day" below |
+
 ## One command
 
 ```powershell
@@ -75,13 +86,16 @@ backend" below.
 | `-Backend` | `Both` | which Lua backend to run: `Lua`, `Luau` or `Both` |
 | `-Platform` / `-Configuration` | `Win64` / `Development` | passed to UBT |
 | `-SkipBuild` | off | skip building and run the existing binaries; **never combined with a backend switch** |
+| `-BuildOnly` | off | build and stop: compile each backend and exit without launching the editor or generating a report. For nightlies and for "does this spec still compile?"; mutually exclusive with `-SkipBuild` |
 | `-Filter` | `UnLuaNova` | test filter, prefix matched |
 | `-Map` | empty | which level the scenario tests should open; most tests build their own World |
 | `-OutputDir` | `Saved/TestReports/<timestamp>` | report root, one sub-directory per backend |
 | `-ExtraCommands` | empty | extra console commands to run afterwards (used for screenshots) |
 | `-NoScreenshots` | off | do not collect screenshots. **They are collected by default**: the docs site and the report gallery run on them |
 | `-NoVideo` | off | do not record. **Recording is on by default**: the showcase tests record a frame sequence and the report generator encodes it into an `.mp4` |
-| `-FailOnTypeErrors` | off | exit non-zero when luau-analyze reports type errors (by default they are only recorded) |
+| `-FailOnTypeErrors` | off | exit non-zero when the static checker reports errors (by default they are only recorded). `luau-analyze` on the Luau backend, LuaLS on the Lua backend |
+| `-FailOnDrift` | off | exit non-zero when the test list no longer matches the baseline (by default it only warns), see "Test list baseline" below |
+| `-UpdateBaseline` | off | write this run's test list as the new baseline and commit it - a reviewed, manual act |
 | `-NullRHI` | off | headless: faster, but **not the same set of tests**, and no frames to capture - see below |
 | `-Publish` | off | copy the report and screenshots into `Docs/` for Pages |
 | `-NoReport` | off | run the tests only, generate no report |
@@ -265,6 +279,42 @@ the script empties `Saved/Screenshots/WindowsEditor/` first - the editor does no
 would be published as this run's images. That is worse than having no image, because nobody can
 tell.
 
+### What the shot captures: what the player sees
+
+`FScreenshotLatentCommand` captures the **game viewport with UI**
+(`RequestScreenshot(Name, true, ..., bRestrictToGameViewport=true)`). The tutorial levels' visible
+content is `Screen.Print` (PrintString on-screen text) and UMG widgets - all in the UI layer. The
+old `bShowUI=false` request captured the bare scene render target - and the engine also disables
+on-screen debug messages for that path - while the levels themselves have no lights or meshes, so
+all four showcase images came out pure black. After the fix, the shot is exactly what pressing
+Play shows.
+
+Each shot is followed by `FVerifyScreenshotNotBlankLatentCommand`: it decodes the PNG and fails
+the test when the whole image is a single color. A showcase image that shows nothing is worse
+than a failure - a failure gets looked at, a black image quietly ships to the docs site.
+
+### When the level itself is empty: the dressing commandlet
+
+Fixing capture flags only gets UI-layer content into the picture; it cannot change the level.
+The four tutorial levels **are empty worlds** - no light, no geometry, no PlayerStart - and their
+demos print to the screen and the log, so the scene itself has nothing to photograph. Dressing
+them is all this commandlet does:
+
+```powershell
+UnrealEditor-Cmd.exe "D:\learning\UnLua\UnLuaNovaDemo.uproject" -run=UnLuaNovaShowcaseDressing -unattended -NoSplash
+# one level only: ... -run=UnLuaNovaShowcaseDressing -Map=/Game/Tutorials/01_HelloWorld/HelloWorld
+# undo it:        ... -run=UnLuaNovaShowcaseDressing -Undo
+```
+
+Per level it adds: a movable sun, a movable sky light, a floor to catch the light, three cubes so
+the shot reads as a 3D space, and a PlayerStart so PIE has a defined camera. Everything is
+Movable on purpose - static lights need a lighting build, a commandlet cannot run one, and static
+lights would still come out black.
+
+Idempotent: an already dressed level is skipped. `-Undo` removes actors tagged
+`UnLuaNovaShowcaseDressing` and nothing else, so anything placed by hand is untouched. Commit the
+resulting `.umap` changes afterwards.
+
 ### Adding a shot to a test
 
 ```cpp
@@ -325,6 +375,33 @@ exactly like "this round recorded nothing".
     sequence render, so capturing one frame per rendered frame from the test is both simpler
     and more controllable.
 
+## Test list baseline
+
+"All green" hides the worst kind of failure: a test that was renamed, filtered out or deleted
+by accident leaves a report that is **still all green** - half the suite missing looks exactly
+like everything passing. So every run carries the **full list of test names** (`names` in
+`summary.json`) and diffs it against the previous baseline:
+
+```powershell
+# A normal run already compares - RunTests.ps1 passes --baseline itself
+.\Tools\RunTests.ps1 -Backend Luau
+
+# Make "the set of tests changed" turn CI red
+.\Tools\RunTests.ps1 -Backend Luau -FailOnDrift
+
+# Once the change is confirmed intentional, refresh the baseline and commit it
+.\Tools\RunTests.ps1 -Backend Both -UpdateBaseline
+git add Tools/baseline
+```
+
+Three things are compared: the total, the names that disappeared or appeared, and the total
+runtime (only flagged past ±50% - noise from a loaded machine is not a regression). The
+baselines are `Tools/baseline/lua.json` and `Tools/baseline/luau.json`, and they are
+**committed**.
+
+It **warns but does not fail** by default: renaming a test is legitimate, and a CI that goes
+red every time someone does is a CI people turn off.
+
 ## Why not on GitHub Actions
 
 UnLuaNova depends on a **local UE source build** (UE 5.8.3). GitHub-hosted runners have no such
@@ -338,10 +415,35 @@ engine and cannot build one. So:
 If you have a self-hosted Windows runner, wire `Tools/RunTests.ps1` into it - its exit code is
 already what a CI wants.
 
+### Compile at least once a day
+
+The test code is compiled code too: rename an engine field, move a helper, and the whole spec
+directory stops compiling. A full build takes 20-odd minutes, so nobody runs one by hand every
+day. Make the compile happen daily instead:
+
+```powershell
+# Register (or update) a task that runs nightly at 02:00: build only, no editor, no tests,
+# no report
+.\Tools\Install-NightlyTask.ps1
+
+# The same thing by hand; it exits non-zero on failure and logs to Saved/nightly-build.log
+pwsh -File D:\learning\UnLua\Tools\RunTests.ps1 -Backend Luau -BuildOnly -NoReport
+```
+
+`-BuildOnly` compiles and exits, and RunTests.ps1 exits non-zero when the build fails - which
+is the whole feedback loop: "the test code does not compile" is caught **within a day** rather
+than at the next manual full build. `-Backend Both` compiles both backends, at twice the cost.
+
+!!! note "You get this loop without a runner too"
+    The scheduled task above is the degraded form of it: compile only, no test run.
+    With a self-hosted Windows runner, swap it for a GitHub Actions `schedule` running the
+    same command.
+
 ## Conventions for new tests
 
 - **Naming**: `UnLuaNova.<area>.<topic>`, for example `UnLuaNova.API.FLuaEnv`. Issue regressions
-  keep their `Issue###` number.
+  keep their `Issue###` number. Use exactly this casing — **no all-caps** (`UNLUANOVA.API.Base`
+  can slip past `-Filter` and will not line up with `Automation List` output).
 - **Unit tests** go in `Private/Specs/` using `BEGIN_DEFINE_SPEC`; **scenario / instance tests** go
   in `Private/Tests/`.
 - Everything is wrapped in `#if WITH_DEV_AUTOMATION_TESTS`, so packaged builds contain no test

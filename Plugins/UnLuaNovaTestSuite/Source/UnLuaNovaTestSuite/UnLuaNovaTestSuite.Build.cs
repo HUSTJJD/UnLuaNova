@@ -71,6 +71,8 @@ public class UnLuaNovaTestSuite : ModuleRules
 			{
 				"UnLuaNova",
 				"UMG",
+				// Showcase 截图的黑图检测要解码 PNG（TestCommands.cpp 的 DescribeUniformScreenshot）
+				"ImageWrapper",
 				string.Equals(backend, "Lua", StringComparison.OrdinalIgnoreCase) ? "Lua" : "Luau"
 			}
 		);

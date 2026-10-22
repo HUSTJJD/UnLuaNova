@@ -9,12 +9,26 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 ## [Unreleased]
 
 ### Added
+- **`Tools/RunTests.ps1 -BuildOnly`**：只编译不跑（编完退出，不启动编辑器、不生成报告），
+  与 `-SkipBuild` 互斥。让"测试代码编译不过"这类问题能在一天内被发现
+- **`Tools/Install-NightlyTask.ps1`**：注册/删除"每晚编译一次测试代码"的 Windows 计划任务
+  （自托管 runner 的降级形态；有 runner 时直接用 Actions 的 `schedule`）
+- **用例清单基线护栏**：`summary.json` 增加 `names`（用例全名清单），
+  `GenerateTestReport.py` 新增 `--baseline` / `--update-baseline` / `--fail-on-drift`，
+  `RunTests.ps1` 新增 `-UpdateBaseline` / `-FailOnDrift`。用例被改名/误删/被 `-Filter` 漏掉
+  时报告会明确说出来（默认只告警，避免合理的用例调整把 CI 变红）；基线
+  `Tools/baseline/{lua,luau}.json` 入库
 - `TSet` 支持 `pairs` 迭代：注册 `UNLUANOVA_ITER_ENTRY(TSet_Pairs)`（Luau 下是 `__iter`、
   Lua 5.x 下是 `__pairs`），产出 `(元素, true)`；之前 `pairs(Set)` 在两个后端都会报错，
   只能靠 `ToArray()` / `ToTable()`
 - **静态绑定层** `StaticBinding/`：POD 描述符 + 注册表（延迟解析）+ 自动注册器
-- **`UnLuaStaticBindingGenerator`** Commandlet：构建期为声明类型生成静态绑定表
+- **`UnLuaNovaStaticBindingGenerator`** Commandlet：构建期为声明类型生成静态绑定表
 - `CallUEFast`：对已解析函数跳过 `GetFunctionCallspace` / 覆写重定向查找 / 接口函数查找
+- **`UnLuaNovaShowcaseDressing` Commandlet**：给示例关卡补装"能被拍到的东西"——每关一盏可移动
+  太阳光 + 一盏可移动天光 + 一块地板 + 三个立方体 + 一个 PlayerStart。四个教程关卡是空世界
+  （无灯光/网格体/PlayerStart），示例内容只在屏幕文字与日志里，所以拍出来必然是纯黑；这补的是
+  根因，不是截图参数。全部 Movable（静态光要烘光，Commandlet 跑不了），幂等，
+  `-Undo` 只删带 `UnLuaNovaShowcaseDressing` tag 的 Actor
 - **Lua 后端抽象** `LuaBackend.h`：吸收 Lua 5.4 与 Luau 的 API 差异（`UNLUANOVA_LUA_BACKEND` 开关）
 - Luau 以 git submodule 引入（`Source/ThirdParty/Luau`，0.743）+ `Luau.Build.cs`
 - 改名脚本 `Tools/Rename-To-UnLuaNova.ps1`
@@ -72,6 +86,10 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   （此前 EN 只有 7 页，"功能清单 / 设置项 / 控制台命令"这三个英文读者最先找的页面全是缺的）
 
 ### Changed
+- **测试注册名统一大小写**：`UNLUANOVA.API.Base` / `UNLUANOVA.API.Enum` →
+  `UnLuaNova.API.Base` / `UnLuaNova.API.Enum`（spec 类名同步改为 `FUnLuaNovaBaseSpec` /
+  `FUnLuaNovaEnumSpec`）。全大写写法有被 `-Filter` 漏掉的风险，也与 `Automation List` 输出
+  对不上；约定已写进 `Docs/CN|EN/Testing.md`
 - 引擎基线升到 **UE 5.8.3**：`BuildSettingsVersion.V6` + `IncludeOrderVersion.Latest`
 - `LuaOverridesClass` 的 UField 链遍历适配 UE 5.7+（`UField::Next` 已是 `TObjectPtr`）
 - 项目全面改名 `UnLua` → `UnLuaNova`（模块、UCLASS、宏、文件名、Lua 全局名、ini section）
@@ -124,8 +142,46 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   之前 `luau-analyze` 只存在于一个独立 ps1 里，跑没跑、过没过在任何报告里都看不到；
   没装 luau-analyze 时报告写"跳过 + 原因"，不假装查过。新增 `-FailOnTypeErrors`
   让它成为门禁（默认不，因为它是静态检查不是用例）
+- **Lua 后端也有静态检查了** `Tools/CheckLuaTypes.ps1`：用 `lua-language-server`（LuaLS）+
+  编辑器导出的 EmmyLua 注解（`Intermediate/IntelliSense/*.lua`）检查 `Content/Script`
+  （排除 `Luau/`）。**两个后端各用自己的分析器**，这不是偏好而是语法事实：Luau 的类型注解
+  Lua 5.5 解析不了，反过来 Lua 后端的脚本也喂不进 `luau-analyze`，所以不存在"共用一个"。
+  `RunTests.ps1` 按后端分派（Luau → `luau-analyze.json`，Lua → `lua-analyze.json`），
+  报告里两个后端都会出一节「静态类型检查」；没装 LuaLS、或没导出过智能提示时明确写
+  "跳过 + 原因"，不硬跑出几百条假错
 
 ### Fixed
+- **「静态类型检查」这一节从来没出现过**：`RunTests.ps1` 写摘要用的是
+  `Set-Content -Encoding UTF8`（PowerShell 会加 BOM），而 `GenerateTestReport.py` 用
+  `utf-8` 读，解析直接抛异常 —— 结果这一节被整块跳过，报告只留下"这一轮没有跑"，
+  看起来就像静态检查从来没接过。现在和读自动化 JSON 一样用 `utf-8-sig`
+- **报告里多出一条用例 `luau-analyze`**：`GenerateTestReport.py` 把报告目录下所有 `*.json`
+  当用例读，静态检查的摘要也被算成一条「跳过」的用例（并写进了基线）。现在按名字排除，
+  `Tools/baseline/{lua,luau}.json` 也清掉了这条伪用例（总数各减 1）
+- **文档"幽灵 API"清理**：`Docs/CN|EN/API.md` 里的 `FLuaContext` / `GLuaCxt` 改写为
+  `UnLuaNova::FLuaEnv` 与 `IUnLuaNovaModule::Get().GetEnv()`；`AUTO_UnLuaNova_STARTUP` →
+  `AUTO_UNLUA_STARTUP`、`UnLuaNova_ENABLE_DEBUG` → `UNLUANOVA_ENABLE_DEBUG`（与
+  `UnLuaNova.Build.cs` 一致）；删掉已移除的 `SUPPORTS_RPC_CALL` / `SUPPORTS_COMMANDLET`；
+  标注 `OnLuaContextInitialized` / `OnPre/PostLuaContextCleanup` 当前构建里**没有广播点**
+- **文档口径统一**：许可 MIT → Polyform（`Docs/index.md`、`mkdocs.yml`）；引擎版本
+  "4.17.x - 5.x" → 基线 UE 5.8.3（`Docs/CN|EN/Features.md`）
+- **README 乱码/截断修复**：`Luau 后端`（原为 GBK 误读产生的乱码）与"跑测试"条目
+  （原被截断成 `.\Tools\RunT`），`README.md` / `README_EN.md` 均为 UTF-8
+- **`Docs/EN/*` 回链修正**：指向 `../CN/*.md` 的跨语言链接改回 `../EN/*.md`
+  （`Docs/EN/index.md` 指向中文索引那一条是有意为之，保留）
+- `CHANGELOG` 里的 `UnLuaStaticBindingGenerator` → `UnLuaNovaStaticBindingGenerator`
+- **Showcase 示例截图全是纯黑**：`FScreenshotLatentCommand` 之前用 `RequestScreenshot(Name, false, false)`
+  截"裸场景渲染目标"，而教程关卡（`Content/Tutorials/`）本身没有灯光和网格体，可见内容
+  （`Screen.Print` 的屏幕调试文字、ReleaseUMG 的 UMG 控件）全在 UI 层；引擎在 `bShowUI=false`
+  的截图请求里还会显式关闭屏幕调试文字。于是四张示例图（连同录屏帧序列）都是"空世界的
+  场景渲染"= 纯黑，且能安静通过。现在改为截**游戏视口含 UI**（`bShowUI=true` +
+  `bRestrictToGameViewport=true`，PIE 内嵌在编辑器视口时不会把编辑器界面截进来），并新增
+  `FVerifyScreenshotNotBlankLatentCommand`：解码 PNG，整图单一颜色即判失败 —— 黑图从此
+  进不了文档站
+- **录屏第 1 帧拍到编辑器视口**：`FCaptureFramesLatentCommand` 现在先丢 3 帧预热，等 PIE 视口稳定
+  再开始连拍，否则每段视频开头都是一帧"关卡编辑器网格 + 坐标轴"
+- **报告里的视频在 GitHub 上"播不了"**：`<video>` 是裸 HTML，GitHub 的 markdown 渲染器会把它整块
+  过滤掉。视频下方补了一条纯 markdown 的"直接打开视频文件"链接，任何渲染器都能显示
 - **Lua 5.5 后端一跑就崩**：`TSharedPtr` 的 `__gc`（`ReleaseSharedPtr`）用 `lua_touserdata()` 取到的是
   块首的 `FUserdataDesc`，而不是 `NewSmartPointer()` 放置智能指针的 payload，于是 `Reset()` 把描述符
   当成 `TSharedPtr` 拆了 —— 静态导出之后第一个 `lua_close()` 必然破坏堆，整个 Lua 后端跑不出任何一条

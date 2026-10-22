@@ -68,4 +68,4 @@ TODO.
 - [IntelliSense](IntelliSense.md) - teaching your IDE the UE API
 - [Console Commands](ConsoleCommand.md) - lua.dbg and friends
 - [Luau backend](Luau.md) - native breakpoints, sandbox and other Luau-only features
-- [Testing and Automation](../CN/Testing.md) - automated tests and screenshots
+- [Testing and Automation](../EN/Testing.md) - automated tests and screenshots

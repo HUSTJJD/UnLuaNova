@@ -32,5 +32,5 @@ Start with the Programming Guide, or jump straight to the reference you need.
 </div>
 
 !!! tip "Looking for more?"
-    The Chinese docs cover a few more topics (settings, console commands, testing).
+    The Chinese docs are the source of truth and get new topics first.
     Machine translation of [中文文档](../CN/index.md) works well enough in a pinch.

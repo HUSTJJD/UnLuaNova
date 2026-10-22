@@ -12,7 +12,8 @@ description: "C++ API, Lua API and build-time macros of UnLuaNova"
 
 * `UnLuaNova::GLuaSrcFullPath` Absolute path of Lua script source files
 
-* `FLuaContext::GLuaCxt` Global Lua context
+* `UnLuaNova::FLuaEnv` One isolated Lua environment (multi-env builds have one instance per
+  environment); the primary environment is reached via `IUnLuaNovaModule::Get().GetEnv()`
 
 ### Global Functions
 Namespace of UnLuaNova
@@ -26,9 +27,9 @@ Namespace of UnLuaNova
 
 * `IsType` Return the data in Lua stack at given index is the given type or not
 
-* `CreateState` Return global lua_State pointer created in FLuaContext class
+* `CreateState` Creates a `lua_State` (legacy single-environment entry point; prefer `FLuaEnv`)
 
-* `GetState` Return the global lua_State pointer created by CreateState
+* `GetState` Returns the main environment's `lua_State`, same as `FLuaEnv::GetMainState()`
 
 * `Startup` Call to start the UnLuaNova, return true for success start, otherwise, return false
 
@@ -52,11 +53,14 @@ Namespace of UnLuaNova
 FUnLuaNovaDelegates
 * `OnLuaStateCreated` Trriged after created a lua_State, you can get the lua_State in this delegate
 
-* `OnLuaContextInitialized` Trriged after UnLuaNova's context has been initialized
+* `OnLuaContextInitialized` Trriged after `FLuaEnv` has been initialized (**note**: no broadcast
+  point exists in the current build, so a bound handler never fires)
 
-* `OnPreLuaContextCleanup` Trriged before starting to clean UnLuaNova's context
+* `OnPreLuaContextCleanup` Trriged before starting to clean `FLuaEnv` (**note**: no broadcast
+  point exists in the current build, so a bound handler never fires)
 
-* `OnPostLuaContextCleanup` Trriged after UnLuaNova's context has been cleaned
+* `OnPostLuaContextCleanup` Trriged after `FLuaEnv` has been cleaned (**note**: no broadcast
+  point exists in the current build, so a bound handler never fires)
 
 * `OnPreStaticallyExport` Trriged before starting to register the statically exported classes into lua_State
 
@@ -74,7 +78,8 @@ FUnLuaNovaDelegates
 * `UUnLuaNovaInterface` Core interface for UnLuaNova, used to tell UnLuaNova which UE-Object should be bind with Lua file
 
 ### Class
-* `FLuaContext` Wrapper of UnLuaNova's context, contains the main lua_State of UnLuaNova
+* `FLuaEnv` Wrapper of one UnLuaNova environment (main `lua_State` plus its registry, modules and
+  threads); multi-env builds have one instance per environment
 
 * `FLuaIndex` Wrapper of the index of Lua stack
 
@@ -96,6 +101,12 @@ FUnLuaNovaDelegates
 
 ### Global Tables
 * `UE` Could use `UE.UEClass` to access class in c++ if you open `WITH_UE4_NAMESPACE`, otherwise, could access class in c++ by `_G.UEClass`. Class will be registered into Lua while being used, so don’t worry about the performance problems caused by too much loading at one time.
+
+* `UE.__newindex` The `UE` namespace is **read-only**: engine types are published by the binding
+  layer with `lua_rawset`, so a script writing into it (say `UE.FVector = nil`) raises an error
+  instead of silently replacing a binding everything else depends on. Registration is the one
+  exception — the namespace stays writable until registration is done, and only then gets
+  `__newindex` installed.
 
 ### Global Functions
 * `RegisterEnum` Used to manually register an enum into Lua
@@ -130,17 +141,13 @@ FUnLuaNovaDelegates
 * `print` Override origin `print` by `UEPrint`
 
 ## Macros in UnLuaNova module
-* `AUTO_UnLuaNova_STARTUP` Macro for whether to automatically start or not, default is true
+* `AUTO_UNLUA_STARTUP` Macro for whether to automatically start or not, default is true
 
 * `WITH_UE4_NAMESPACE` Macro for whether to use `UE` to access Unreal Class's in Lua or not , default is true
 
-* `SUPPORTS_RPC_CALL` Macro for whether to support RPC calls, default is true
-
-* `SUPPORTS_COMMANDLET` Macro for whether to support UnLuaNova in `commandlet`, default is true
-
 * `ENABLE_TYPE_CHECK` Macro for whether to check arguments' type is correct or not while calling C++ from Lua, default is true
 
-* `UnLuaNova_ENABLE_DEBUG` Macro for whether to output UnLuaNova's debugging log, default is true.
+* `UNLUANOVA_ENABLE_DEBUG` Macro for whether to output UnLuaNova's debugging log, default is false.
 
 ---
 

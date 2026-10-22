@@ -48,9 +48,13 @@ namespace UnLuaNova
         bool FillFrame(lua_State* L, int32 Level, lua_Debug& Out)
         {
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+            // Luau spells the source option 's' and folds the stack walk into this call.
             return lua_getinfo(L, Level, "sln", &Out) != 0;
 #else
-            return lua_getstack(L, Level, &Out) != 0 && lua_getinfo(L, "sln", &Out) != 0;
+            // Plain Lua spells it 'S', and an option lua_getinfo does not know makes it
+            // answer 0 - which reads as "no frame here", so the service would never stop
+            // and never report a stack. Same spelling the profiler and lua.dbg use.
+            return lua_getstack(L, Level, &Out) != 0 && lua_getinfo(L, "nSl", &Out) != 0;
 #endif
         }
     }
