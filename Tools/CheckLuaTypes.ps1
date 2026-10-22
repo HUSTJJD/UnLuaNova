@@ -53,9 +53,10 @@ param(
     [ValidateSet("Error", "Warning", "Information", "Hint")]
     [string] $CheckLevel = "Warning",
 
-    # 声明给 LuaLS 的 Lua 版本。后端是 5.5（LuaLS 也支持 "Lua 5.5"）；默认给 5.4 是因为
-    # 工程脚本本身是 5.1 兼容写法，4/5 之差对诊断没有影响，而 5.4 连老版本 LuaLS 都认
-    [string] $RuntimeVersion = "Lua 5.4",
+    # 声明给 LuaLS 的 Lua 版本。后端就是 5.5，子模块跟的是 master（它的
+    # script/config/template.lua 里 'Lua 5.5' 是合法取值）。老版本 LuaLS 不认这个值，
+    # 那时候传 -RuntimeVersion "Lua 5.4"
+    [string] $RuntimeVersion = "Lua 5.5",
 
     # 额外关掉的诊断名，例如 "undefined-doc-name"、"different-requires"
     [string[]] $DisableDiagnostic = @(),

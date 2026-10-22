@@ -135,7 +135,7 @@ Star 是最省力的支持方式 ⭐ —— 也欢迎：
 
 - 提 issue：编译问题、UE 版本适配、API 疑问都可以
 - 提 PR：修文档、补测试、合入上游未合并的社区修复
-- 跑测试：`\Tools\RunTests.ps1`（详见 [测试与自动化](Docs/CN/Testing.md)）
+- 跑测试：`.\Tools\RunTests.ps1`（详见 [测试与自动化](Docs/CN/Testing.md)）
 
 ## 许可
 

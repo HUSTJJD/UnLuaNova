@@ -122,6 +122,83 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 
 少跑的那几条不会被算成通过——把无头跑不了的条件判成"通过"才是假结果。
 
+## 用例清单
+
+第一列就是 `-Filter` 匹配的那串名字，所以 `.\Tools\RunTests.ps1 -Filter UnLuaNova.API.TArray`
+跑的就是表里那一行。这份表由 `Private/` 下的注册宏（`BEGIN_DEFINE_SPEC` /
+`IMPLEMENT_SIMPLE_AUTOMATION_TEST` / `BEGIN_VIEWPORT_TESTSUITE`）直接列出——**加删用例请以代码为准**，
+并以 `Tools/baseline/*.json` 里的清单做漂移对照。
+
+| 注册名 | 覆盖什么 | 备注 |
+|---|---|---|
+| `UnLuaNova.API.Base` | `Push` / `RunChunk` / `Call` / `CallTableFunc`，含按引用传参的函数 | |
+| `UnLuaNova.API.Binding.Dynamic` | 动态绑定：SpawnActor 时指定脚本路径 | 仅编辑器 |
+| `UnLuaNova.API.Binding.Multiple` | 多重绑定：同一脚本绑到不同类 | 仅编辑器 |
+| `UnLuaNova.API.Binding.Overridden` | 覆写：同一脚本绑到不同类 | 仅编辑器 |
+| `UnLuaNova.API.Binding.Priority` | 绑定冲突：静态绑定优先于动态绑定 | 仅编辑器 |
+| `UnLuaNova.API.Binding.Static` | 静态绑定：由 `GetModuleName` 指定脚本路径 | 仅编辑器 |
+| `UnLuaNova.API.CallUEFast` | 静态绑定的快速调用路径与参数缓存 | |
+| `UnLuaNova.API.DataTable` | `GetTableDataRowFromName` | |
+| `UnLuaNova.API.DefaultParamCollector` | 默认参数集合、调用时填充默认值 | |
+| `UnLuaNova.API.EKeys` | 访问 `EKeys`、比较 `FKey` | |
+| `UnLuaNova.API.Enum` | `GetNameStringByValue` / `GetDisplayNameTextByValue` / `GetMaxValue` | |
+| `UnLuaNova.API.ErrorHandling` | 编译错误、运行时错误、引擎侧错误、错误消息不含机器路径 | |
+| `UnLuaNova.API.FColor` | 构造 / `Set` / `Add` / `tostring()` | |
+| `UnLuaNova.API.FIntPoint` | 构造 / `Set` / `Add` / `Sub` / `Mul` / `Div` / `unm` / `tostring()` | |
+| `UnLuaNova.API.FIntVector` | 同上，外加 `SizeSquared` | |
+| `UnLuaNova.API.FLinearColor` | 构造 / `Set` / `Add` / `Sub` / `Mul` / `Div` / `tostring()` | |
+| `UnLuaNova.API.FLuaEnv` | 创建环境、`DoString`、`GC` 与热重载、模块加载、环境生命周期 | |
+| `UnLuaNova.API.FMulticastScriptDelegate` | `Add` / `Remove` / `Clear` / `Broadcast` | |
+| `UnLuaNova.API.FQuat` | 构造 / `Set` / `Normalize` / `Mul` / `tostring()` | |
+| `UnLuaNova.API.FRotator` | 构造 / `Set` / `tostring()` | |
+| `UnLuaNova.API.FScriptDelegate` | `Bind` / `Unbind` / `Execute` | |
+| `UnLuaNova.API.FTransform` | 构造 / `BlendWith` / `tostring()` | 单参数构造重载暂未支持 |
+| `UnLuaNova.API.FVector` | 构造 / `Set` / `Normalize` / 四则运算 / `unm` / `tostring()` | |
+| `UnLuaNova.API.FVector2D` | 同上 | |
+| `UnLuaNova.API.FVector4` | 同上 | |
+| `UnLuaNova.API.Lifetime` | 释放标记、脚本持有对象的回收、手动引用、环境销毁 | |
+| `UnLuaNova.API.LuaBackend` | 后端适配层、能力对齐、Luau 专属能力、整数类型、协程、Profiler 与调试 | 后端相关 |
+| `UnLuaNova.API.LuaScriptCompat` | `collectgarbage` / `load` 等脚本层兼容 | 后端相关 |
+| `UnLuaNova.API.Observability` | CPU 性能分析、内存统计、调试服务 | |
+| `UnLuaNova.API.OutParam.Full` | 返回全部 Out 参数 | 仅编辑器 |
+| `UnLuaNova.API.OutParam.Partial` | 返回部分 Out 参数，其余用传入值填充 | 仅编辑器 |
+| `UnLuaNova.API.RuntimeModules` | 随插件发布的 Lua 模块：`Vector` / `Buffer` | 后端相关 |
+| `UnLuaNova.API.StaticBinding` | 静态绑定注册表、解析、属性类型分类 | |
+| `UnLuaNova.API.StringEx` | `string` 扩展：split / strip / startswith·endswith / count / join | |
+| `UnLuaNova.API.TArray` | 容器全操作：`Add` / `Insert` / `Remove` / `Swap` / `Shuffle` / `ToTable` / `pairs` 等 | |
+| `UnLuaNova.API.TMap` | 容器全操作：`Add` / `Remove` / `Find` / `FindRef` / `Keys` / `Values` / `pairs` 等 | |
+| `UnLuaNova.API.TSet` | 容器全操作：`Add` / `Remove` / `Contains` / `ToArray` / `pairs` 等 | |
+| `UnLuaNova.API.UClass` | `Load` / `IsChildOf` / `GetDefaultObject` | |
+| `UnLuaNova.API.UE` | 全局 `UE` 命名空间 | |
+| `UnLuaNova.API.UObject` | `Load` / `IsValid` / `GetName` / `GetOuter` / `GetClass` / `GetWorld` / `IsA` / `Release` | |
+| `UnLuaNova.API.World` | `SpawnActor` | |
+| `UnLuaNova.Binding` | Scoped Enum、Enum Class | |
+| `UnLuaNova.Editor.Commands` | 控制台命令、Lua 模板、编辑器命令 | 仅编辑器 |
+| `UnLuaNova.Editor.StaticBindingGenerator` | 静态绑定生成器 | 仅编辑器 |
+| `UnLuaNova.Extensions` | LuaRapidjson / LuaProtobuf / LuaSocket | 需可选扩展插件 |
+| `UnLuaNova.Regression.Issue276` | 游戏世界暂停后 `coroutine delay` 不工作 | |
+| `UnLuaNova.Regression.Issue286` | 蓝图 `TMap FindRef` 错误 | |
+| `UnLuaNova.Regression.Issue295` | 动态绑定的 UMG 对象切换地图时 Destruct 崩溃 | |
+| `UnLuaNova.Regression.Issue300` | Lua 覆写函数返回给蓝图的值错误 | |
+| `UnLuaNova.Regression.Issue372` | `K2_DestroyActor` 销毁后 Lua 注册表残留 | |
+| `UnLuaNova.Regression.Issue401` | Lua 覆写导致数组传参错误 | |
+| `UnLuaNova.Regression.Issue430` | 动画通知调用组件 Lua 覆写函数崩溃 | |
+| `UnLuaNova.Regression.Issue434` | 多播委托创建 Handler 时与 `self` 绑定 | **需真实视口** |
+| `UnLuaNova.Regression.Issue443` | 某些代码块内无法调用蓝图函数 | |
+| `UnLuaNova.Regression.Issue446` | `FTickableGameObject` 的 Tick 里调用自身被覆写方法崩溃 | |
+| `UnLuaNova.Regression.Issue453` | 按引用传给蓝图的 `TArray` 变成空 Array | |
+| `UnLuaNova.Regression.Issue455` | `CacheScriptContainer` 导致的崩溃 | |
+| `UnLuaNova.Regression.Issue471` | `FScriptDelegate` 解绑无效 | |
+| `UnLuaNova.Regression.Issue603` | Lua 监听的事件里再次触发事件导致崩溃 | |
+| `UnLuaNova.Regression.Issue634` | 覆写非 ReturnValue 的 C++ 结构体返回值崩溃 | |
+| `UnLuaNova.Regression.Issue660` | UnLua 函数绑定多个代理导致崩溃 | |
+| `UnLuaNova.Regression.IssueOverrides` | 覆写引起的问题 | |
+| `UnLuaNova.Settings` | 死循环看门狗等设置项的实际行为 | 改全局设置，`AfterEach` 还原 |
+| `UnLuaNova.Showcase.Binding` | 静态绑定示例截图 | **需真实视口** |
+| `UnLuaNova.Showcase.Container` | 容器访问示例截图 | **需真实视口** |
+| `UnLuaNova.Showcase.Override` | 蓝图事件覆写示例截图 | **需真实视口** |
+| `UnLuaNova.Showcase.UMG` | UMG 与 Lua 生命周期示例截图 | **需真实视口** |
+
 ## 两个后端各一份报告
 
 Lua 后端是**编译期选择**（见[设置项](Settings.md)里的"Lua 后端"）：两个后端导出同样的
@@ -213,6 +290,7 @@ actor 跟着类一起没了。
 |---|---|
 | `report.md` | 结论：通过率、总数/通过/失败/跳过、**通过明细**、失败明细（含错误消息与源码位置）、最慢用例、截图画廊 |
 | `summary.json` | 机器可读的总数（含 `backend`），脚本据此决定退出码 |
+| `luau-analyze.json` | 静态类型检查结果，在报告里单独成节 |
 | `Editor.log` | 本次运行的完整日志 |
 | `screenshots/` | 测试期间产生的截图（含录屏的帧序列 `名字_0001.png` …） |
 | `videos/` | 帧序列编码出的 `.mp4`（编码失败会进报告并让脚本非 0 退出） |

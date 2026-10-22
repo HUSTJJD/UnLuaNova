@@ -3,7 +3,7 @@
     从子模块构建 lua-language-server（LuaLS），给 Lua 后端做静态检查用。
 
 .DESCRIPTION
-    LuaLS 以子模块引入在 Tools/lua-language-server，固定在一个 tag 上（见 .gitmodules）。
+    LuaLS 以子模块引入在 Tools/lua-language-server，跟 master（见 .gitmodules）。
     它自己还带 21 个嵌套子模块（3rd/luamake、3rd/bee.lua 等 7 个是构建要用的，
     另外 14 个 meta/3rd 是别的框架的 API 元数据）—— 第一次构建前要把它们拉下来，
     本脚本会代劳（git submodule update --init --recursive）。

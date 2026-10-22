@@ -129,6 +129,84 @@ is a report whose total is a couple of tests short:
 The tests that were not run are not counted as passed - calling "cannot run headless" a pass
 would be a false result.
 
+## Test list
+
+The first column is exactly what `-Filter` matches, so `.\Tools\RunTests.ps1 -Filter
+UnLuaNova.API.TArray` runs that one row. The list comes straight from the registration macros
+under `Private/` (`BEGIN_DEFINE_SPEC` / `IMPLEMENT_SIMPLE_AUTOMATION_TEST` /
+`BEGIN_VIEWPORT_TESTSUITE`) - **when tests are added or removed, the code wins**, and
+`Tools/baseline/*.json` is the drift reference.
+
+| Registered name | What it covers | Notes |
+|---|---|---|
+| `UnLuaNova.API.Base` | `Push` / `RunChunk` / `Call` / `CallTableFunc`, including by-ref parameters | |
+| `UnLuaNova.API.Binding.Dynamic` | dynamic binding: script path given at SpawnActor | editor only |
+| `UnLuaNova.API.Binding.Multiple` | multiple binding: one script bound to several classes | editor only |
+| `UnLuaNova.API.Binding.Overridden` | overriding: one script bound to several classes | editor only |
+| `UnLuaNova.API.Binding.Priority` | binding conflict: static binding wins over dynamic | editor only |
+| `UnLuaNova.API.Binding.Static` | static binding: script path from `GetModuleName` | editor only |
+| `UnLuaNova.API.CallUEFast` | the fast static-binding call path and its parameter cache | |
+| `UnLuaNova.API.DataTable` | `GetTableDataRowFromName` | |
+| `UnLuaNova.API.DefaultParamCollector` | default-parameter collection and fill-in at call time | |
+| `UnLuaNova.API.EKeys` | reaching `EKeys`, comparing `FKey` | |
+| `UnLuaNova.API.Enum` | `GetNameStringByValue` / `GetDisplayNameTextByValue` / `GetMaxValue` | |
+| `UnLuaNova.API.ErrorHandling` | compile errors, runtime errors, engine-side errors, messages free of machine paths | |
+| `UnLuaNova.API.FColor` | construct / `Set` / `Add` / `tostring()` | |
+| `UnLuaNova.API.FIntPoint` | construct / `Set` / `Add` / `Sub` / `Mul` / `Div` / `unm` / `tostring()` | |
+| `UnLuaNova.API.FIntVector` | same as above, plus `SizeSquared` | |
+| `UnLuaNova.API.FLinearColor` | construct / `Set` / `Add` / `Sub` / `Mul` / `Div` / `tostring()` | |
+| `UnLuaNova.API.FLuaEnv` | creating an env, `DoString`, `GC` and hot reload, module loading, env lifetime | |
+| `UnLuaNova.API.FMulticastScriptDelegate` | `Add` / `Remove` / `Clear` / `Broadcast` | |
+| `UnLuaNova.API.FQuat` | construct / `Set` / `Normalize` / `Mul` / `tostring()` | |
+| `UnLuaNova.API.FRotator` | construct / `Set` / `tostring()` | |
+| `UnLuaNova.API.FScriptDelegate` | `Bind` / `Unbind` / `Execute` | |
+| `UnLuaNova.API.FTransform` | construct / `BlendWith` / `tostring()` | single-argument constructors not supported yet |
+| `UnLuaNova.API.FVector` | construct / `Set` / `Normalize` / arithmetic / `unm` / `tostring()` | |
+| `UnLuaNova.API.FVector2D` | same as above | |
+| `UnLuaNova.API.FVector4` | same as above | |
+| `UnLuaNova.API.Lifetime` | release tag, collection of script-held objects, manual references, env teardown | |
+| `UnLuaNova.API.LuaBackend` | the backend shim, capability parity, Luau-only features, integer types, coroutines, profiler and debug | backend specific |
+| `UnLuaNova.API.LuaScriptCompat` | `collectgarbage` / `load` and other script-level compatibility | backend specific |
+| `UnLuaNova.API.Observability` | CPU profiling, memory stats, debug service | |
+| `UnLuaNova.API.OutParam.Full` | returning every out parameter | editor only |
+| `UnLuaNova.API.OutParam.Partial` | returning some out parameters, rest filled from the inputs | editor only |
+| `UnLuaNova.API.RuntimeModules` | Lua modules shipped with the plugin: `Vector` / `Buffer` | backend specific |
+| `UnLuaNova.API.StaticBinding` | the static-binding registry, resolution, property type classification | |
+| `UnLuaNova.API.StringEx` | `string` extensions: split / strip / startswith·endswith / count / join | |
+| `UnLuaNova.API.TArray` | full container surface: `Add` / `Insert` / `Remove` / `Swap` / `Shuffle` / `ToTable` / `pairs` etc. | |
+| `UnLuaNova.API.TMap` | full container surface: `Add` / `Remove` / `Find` / `FindRef` / `Keys` / `Values` / `pairs` etc. | |
+| `UnLuaNova.API.TSet` | full container surface: `Add` / `Remove` / `Contains` / `ToArray` / `pairs` etc. | |
+| `UnLuaNova.API.UClass` | `Load` / `IsChildOf` / `GetDefaultObject` | |
+| `UnLuaNova.API.UE` | the global `UE` namespace | |
+| `UnLuaNova.API.UObject` | `Load` / `IsValid` / `GetName` / `GetOuter` / `GetClass` / `GetWorld` / `IsA` / `Release` | |
+| `UnLuaNova.API.World` | `SpawnActor` | |
+| `UnLuaNova.Binding` | scoped enums and enum classes | |
+| `UnLuaNova.Editor.Commands` | console commands, Lua templates, editor commands | editor only |
+| `UnLuaNova.Editor.StaticBindingGenerator` | the static binding generator | editor only |
+| `UnLuaNova.Extensions` | LuaRapidjson / LuaProtobuf / LuaSocket | needs the optional extension plugins |
+| `UnLuaNova.Regression.Issue276` | `coroutine delay` stops working once the game world is paused | |
+| `UnLuaNova.Regression.Issue286` | wrong Blueprint `TMap FindRef` | |
+| `UnLuaNova.Regression.Issue295` | dynamically bound UMG object crashes in Destruct on map change | |
+| `UnLuaNova.Regression.Issue300` | wrong value returned to Blueprint from an overridden function | |
+| `UnLuaNova.Regression.Issue372` | Lua registry leftovers after `K2_DestroyActor` | |
+| `UnLuaNova.Regression.Issue401` | array arguments corrupted by Lua overriding | |
+| `UnLuaNova.Regression.Issue430` | crash calling an overridden function from an anim notify | |
+| `UnLuaNova.Regression.Issue434` | multicast delegate handler bound to `self` | **needs a real viewport** |
+| `UnLuaNova.Regression.Issue443` | Blueprint functions unreachable from some code blocks | |
+| `UnLuaNova.Regression.Issue446` | crash calling an overridden method from `FTickableGameObject::Tick` | |
+| `UnLuaNova.Regression.Issue453` | by-ref `TArray` arrives in Blueprint as an empty array | |
+| `UnLuaNova.Regression.Issue455` | crash caused by `CacheScriptContainer` | |
+| `UnLuaNova.Regression.Issue471` | `FScriptDelegate` unbinding does nothing | |
+| `UnLuaNova.Regression.Issue603` | crash re-firing an event from inside its own Lua listener | |
+| `UnLuaNova.Regression.Issue634` | crash overriding a C++ struct return that is not the ReturnValue | |
+| `UnLuaNova.Regression.Issue660` | crash binding one UnLua function to several delegates | |
+| `UnLuaNova.Regression.IssueOverrides` | problems caused by overriding | |
+| `UnLuaNova.Settings` | actual behaviour of settings such as the dead-loop watchdog | mutates global settings, restored in `AfterEach` |
+| `UnLuaNova.Showcase.Binding` | static binding sample screenshot | **needs a real viewport** |
+| `UnLuaNova.Showcase.Container` | container access sample screenshot | **needs a real viewport** |
+| `UnLuaNova.Showcase.Override` | Blueprint event override sample screenshot | **needs a real viewport** |
+| `UnLuaNova.Showcase.UMG` | UMG and Lua lifetime sample screenshot | **needs a real viewport** |
+
 ## One report per backend
 
 The Lua backend is a **build-time choice** (see "Lua backend" in [Settings](Settings.md)): both

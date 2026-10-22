@@ -70,7 +70,19 @@ if (-not (Test-Path $LogDir)) {
 $Command = "& '$RunTests' -Backend $Backend -BuildOnly -NoReport *>&1 | Out-File -FilePath '$LogPath' -Encoding utf8"
 $Argument = "-NoProfile -ExecutionPolicy Bypass -Command `"$Command`""
 
-$Action = New-ScheduledTaskAction -Execute "pwsh.exe" -Argument $Argument -WorkingDirectory $RepoRoot
+# Prefer PowerShell 7 when it exists, but fall back to Windows PowerShell 5.1: a machine
+# with only 5.1 installed would otherwise register a task that silently never runs
+# (the scheduler cannot resolve 'pwsh.exe'), which is worse than running the older host.
+$Shell = (Get-Command "pwsh.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+if (-not $Shell) {
+    $Shell = (Get-Command "powershell.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+}
+if (-not $Shell) {
+    throw "Neither pwsh.exe nor powershell.exe was found on PATH."
+}
+Write-Host "  shell   : $Shell"
+
+$Action = New-ScheduledTaskAction -Execute $Shell -Argument $Argument -WorkingDirectory $RepoRoot
 $Trigger = New-ScheduledTaskTrigger -Daily -At $At
 # StartWhenAvailable: a machine that was asleep at 02:00 still gets its build, which is
 # the entire point - a skipped night is a day of test code nobody compiled.

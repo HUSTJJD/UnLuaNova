@@ -826,9 +826,9 @@ Lua 5.4 内部耦合 **~72 处，14 个文件**：
 
 ---
 
-## 11. 解耦进展与一次失败（2026-10-19，务必读）
+## 10.5 解耦进展与一次失败（2026-10-19，务必读）
 
-### 11.1 已落地：`LuaBackend.h`（安全、可编译）
+### 10.5.1 已落地：`LuaBackend.h`（安全、可编译）
 
 `Plugins/UnLuaNova/Source/UnLuaNova/Public/LuaBackend.h` —— 唯一吸收 VM 差异的地方：
 
@@ -842,17 +842,17 @@ Lua 5.4 内部耦合 **~72 处，14 个文件**：
 
 `UNLUANOVA_LUA_BACKEND` 默认 0，所以**今天这棵树仍按原来方式编译**，零风险。
 
-### 11.2 一次失败（已回滚，无残留）
+### 10.5.2 一次失败（已回滚，无残留）
 
 我尝试用脚本按行号改写 `LuaCore.cpp` 的 userdata 层（把 `FUserdataDesc` 从 userdata **尾部**挪到**数据紧前面**，从而只靠指针就能定位描述符、彻底不需要 `lstate.h/lobject.h/lfunc.h`）。
 
 **脚本的 `RemoveRange` 成功但 `InsertRange` 全部失败**（PowerShell 类型不匹配），文件被删掉约 200 行而没写回新内容。已 `git checkout` 还原，校验 1388 行、`USERDATA_MAGIC`/`GetTValue`/`lstate.h` 均恢复原状，**没有残留**。
 
-### 11.3 为什么到此停下
+### 10.5.3 为什么到此停下
 
 那次改写是**内存布局手术**，正确性依赖：padding 计算与读写两端一致、容器 userdata 的 `padding=0` 假设、以及 `MarkUserdataTwoLvPtrTag` / `SetUserdataFlags` 两处只拿到裸指针的调用点。这些**必须靠编译 + 跑 `UnLuaTestSuite` 验证**，而这台机器编译不了。盲写交给你的风险远大于收益。
 
-### 11.4 下一步（强烈建议先做第 1 步）
+### 10.5.4 下一步（强烈建议先做第 1 步）
 
 1. **把编译跑通** —— `UnrealEditor-*.dll` 缺失，补上后我每一步都能验证，整体会快数倍
 2. 重做 `LuaCore.cpp` 的 userdata 层解耦（**在 Lua 5.5 上做**，新布局对两个 VM 都成立；不要先在 5.4 上做一遍再迁 5.5，会返工）

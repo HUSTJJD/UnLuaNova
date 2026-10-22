@@ -19,9 +19,10 @@
 [submodule "Tools/lua-language-server"]
 	path = Tools/lua-language-server
 	url = https://github.com/LuaLS/lua-language-server.git
-	# The Lua backend's static checker (Tools/CheckLuaTypes.ps1). Pinned to a tag rather
-	# than tracked on master: the point of vendoring it is that everyone checks with the
-	# same version.
+	branch = master
+	# The Lua backend's static checker (Tools/CheckLuaTypes.ps1). Same arrangement as the
+	# two submodules above: the superproject records one commit, and `git submodule update
+	# --remote` is what moves it to the tip of master.
 	# A tool, not a library to link - it lives under Tools/ so UBT never sees it.
 	# Build: Tools/Build-LuaLS.ps1 (needs Ninja + MSVC). It also has 21 nested submodules
 	# (3rd/* for the build, meta/3rd/* for other frameworks' API metadata); the build

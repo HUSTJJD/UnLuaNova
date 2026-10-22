@@ -1,48 +1,210 @@
-# UnLuaNova 审计修复 · 执行进度
+# UnLuaNova 审计修复 · TODO 与交接
 
-依据 `.codebuddy/AUDIT_TASKS.md`。已完成 **批次 1（文档/命名）+ 批次 2（反馈回路）**，
-即 P0 与 P1 全部任务（T1–T4、T6–T11）。
+> 源文件：`.codebuddy/AUDIT_TASKS.md`（任务定义）、`.codebuddy/TEST_DOC_AUDIT.md`（审计结论）。
+> 仓库根 `d:/learning/UnLua`。HEAD = `11301173 修复若干bug`。
+> 本文档是**唯一进度真相**，重开会话先读它。
 
-## 已完成
+---
 
-| 任务 | 内容 | 改动 |
+## 0. 一句话状态
+
+批次 1、2 已提交完成；批次 3 完成 3/4（T12 / T14 / T15 已编译并实跑，30 条新用例 28 通过）；
+**T13 未做**。剩余批次 4/5/6 未开始。
+两个尾巴必须收掉：**复跑确认两处修正**、**`-UpdateBaseline` 刷新基线**。
+
+---
+
+## 1. 已完成 ✅
+
+### 批次 1（文档/命名）— 已提交
+| 任务 | 内容 |
+|---|---|
+| T4 | 注册名 `UNLUANOVA.API.Base/Enum` → `UnLuaNova.API.Base/Enum`；类名 `FUNLUANOVA*Spec` → `FUnLuaNova*Spec`；命名约定写进 CN/EN `Testing.md` |
+| T6 | `Docs/CN\|EN/API.md`：`FLuaContext/GLuaCxt` → `UnLuaNova::FLuaEnv` + `IUnLuaNovaModule::Get().GetEnv()`；`AUTO_UnLuaNova_STARTUP`→`AUTO_UNLUA_STARTUP`；`UnLuaNova_ENABLE_DEBUG`→`UNLUANOVA_ENABLE_DEBUG`；删 `SUPPORTS_RPC_CALL`/`SUPPORTS_COMMANDLET`；补 `UE.__newindex` |
+| T7 | `Docs/index.md:131`、`mkdocs.yml:135` MIT → Polyform |
+| T8 | `Docs/CN/Features.md:18`、`Docs/EN/Features.md:20` → 基线 UE 5.8.3 |
+| T9 | `README.md`/`README_EN.md` 乱码（`Luau 后端`）与截断（`.\Tools\RunT`）修复，UTF-8 |
+| T10 | `Docs/EN/{Debugging,Features,Settings}.md` 6 处 `../CN/` → `../EN/` |
+| T11 | `Testing.md` 新增 `Tools/` 脚本表（含 `Rename-To-UnLuaNova.ps1`）；`CHANGELOG.md` Commandlet 改名 |
+
+### 批次 2（反馈回路）— 已提交
+| 任务 | 内容 |
+|---|---|
+| T2 | `RunTests.ps1 -BuildOnly`（与 `-SkipBuild` 互斥，编完即退出） |
+| T3 | `summary.json` 增 `names`；`GenerateTestReport.py` 增 `--baseline/--update-baseline/--fail-on-drift`；`RunTests.ps1` 增 `-UpdateBaseline/-FailOnDrift`；新增 `Tools/baseline/{lua,luau}.json` |
+| T1 | 降级版：`Tools/Install-NightlyTask.ps1` + CN/EN `Testing.md`「每晚至少编一次」章节 |
+
+验收实测：`BASELINE: 与基线一致（427 个用例）` 退出 0；删 3 个用例名 → 报漂移 + `--fail-on-drift` 退出 1。
+
+### 顺带修掉的 3 个真实缺陷（已写进 CHANGELOG）
+1. **`UnLuaNovaEditor` 编不过**：`UnLuaNovaShowcaseDressingCommandlet.cpp` include 了本引擎没有的 `Engine/SkyAtmosphere.h`（`ASkyAtmosphere` 在 `Components/SkyAtmosphereComponent.h`）。改动**尚未提交**。
+2. `RunTests.ps1` 读 `summary.json` 未指定编码 → 中文用例名让 `ConvertFrom-Json` 抛错。已加 `-Encoding UTF8`。**尚未提交**。
+3. 取锁在 `Remove-Item` 后立刻 `File::Open(FileShare::None)` 偶发 `IOException`。已加重试（5×400ms）。**尚未提交**。
+
+---
+
+## 2. 批次 3 明细
+
+### T15 `ErrorHandling.spec.cpp` ✅ 9/10（1 条待复跑）
+文件：`Private/Specs/ErrorHandling.spec.cpp`，注册名 `UnLuaNova.API.ErrorHandling`
+
+- 编译错误：`load` 返回 nil+消息 / 消息带 chunk 名 / `DoString` 返回 false 且环境仍可用
+- 运行时错误：返回 false 且栈顶还原 / 连续三次栈顶不变 / `pcall` 后不逃逸
+- 引擎侧错误：不存在的 UFunction / 参数类型错误 / nil 对象
+- 错误消息不含机器绝对路径
+
+> **实测修正**：给**静态绑定**函数（`ProbeWithStaticBinding`）传错类型**不会**报错，类型检查
+> 发生在反射路径。已改用 `ProbeWithoutStaticBinding` + 传 table。**未复跑确认。**
+
+### T14 `Lifetime.spec.cpp` ✅ 6/6
+文件：`Private/Specs/Lifetime.spec.cpp`，注册名 `UnLuaNova.API.Lifetime`
+
+- `IsReleasedPtr` 只认哨兵值
+- 只被 Lua 引用的对象会被引擎 GC 回收
+- 对象被标记销毁后从 Lua 访问是受控错误（`pcall` 能捕获）
+- `AddManualObjectReference` / `RemoveManualObjectReference`
+- 环境销毁不销毁被引用的对象
+
+> **实测修正（与清单预期相反）**：只被 Lua 引用**会**被回收。`PushUObject` 只给脚本一个
+> userdata，引擎不知道那是引用（`AutoObjectReference` 只用于委托 handler）。保活要靠
+> `AddManualObjectReference` 或 UPROPERTY。
+> 另：GC 后**不能**解引用裸指针 —— 原写法 `::IsValid(Stub)` 触发
+> `FUObjectArray::IndexToObject()` 断言崩溃。一律用 `TWeakObjectPtr` 观察。
+
+### T12 `LuaEnv.spec.cpp` 扩容 2 → 14 ✅ 13/14（1 条待复跑）
+文件：`Private/Specs/LuaEnv.spec.cpp`（注册名不变）
+
+- 多环境全局变量互不可见 / 支持启动脚本和参数 / **支持多个启动参数**（新夹具
+  `Content/Script/Tests/Specs/LuaEnv/支持多个启动参数.lua`）
+- `DoString` 语法错误、运行时错误两条失败路径
+- `GC()` / `HotReload()` 后仍可用
+- 自定义 loader / 内建 loader / **文件系统优先于内建** / require 真实模块 / require 缺失报错
+- `Start` 缺失模块
+- `OnCreated` / `OnDestroyed` 各一次；`GetAll` / `FindEnv`
+
+> **实测修正**：`Start()` 返回 void 且吞掉 pcall 结果，缺失启动模块**不产生** Error 级日志
+> （`AddExpectedError` 匹配不到）。原清单"断言有明确错误/日志"无法实现，改为断言
+> "模块没进 require 缓存（确实没跑）"，注释里记下这个静默失败行为。
+
+### T13 `Overrides.spec.cpp` ❌ 未做 —— 理由与做法
+
+**为什么没做**（实测约束，不是跳过）：
+1. 覆写的**分发行为**（Override 后走 Lua / Restore 后回原实现 / Suspend-Resume /
+   `FunctionDesc.cpp` 里 `bOverridable` 快速路径）必须有一个**已绑定 Lua 模块的对象**才能观测。
+2. `ULuaModuleLocator::Locate()` 对没实现 `IUnLuaNovaInterface` 的类直接返回空串 →
+   `AUnLuaTestActor`（有 `BlueprintImplementableEvent`）绑不上，`UUnLuaNovaTestStub` 也绑不上。
+3. 清单约束写"不要新建 UCLASS"；而给 `UUnLuaNovaTestStub` 加 `IUnLuaNovaInterface` 会让
+   ~20 个现有 spec 里的 `NewObject` 都去尝试绑定，风险更大 → **必须新增专用 stub**，
+   属于对清单约束的有意偏离，需要你点头。
+4. `ULuaFunction::Override()` 内部会 `LuaFunction->Bind()`，需要活的 `FLuaEnv`；
+   盲写有崩编辑器风险。
+
+**做法（下一步）**：
+- `Public/UnLuaNovaTestHelpers.h` 新增 `UUnLuaNovaTestStubForOverrides`
+  （`IUnLuaNovaInterface` + `UFUNCTION(BlueprintImplementableEvent) int32 Overridable() const`）
+- 夹具 `Content/Script/Tests/Specs/Overrides/OverridesStub.lua`
+- spec 注册名 `UnLuaNova.API.Overrides`：
+  1. `IsOverridable`：`BlueprintImplementableEvent` → true；`BlueprintCallable` → false
+  2. `GetOverridableFunctions`：数量与名字
+  3. `Override` → `ULuaFunction::Get(Func)` 非空 + `GetOverridden()` 非空
+  4. `RestoreOverrides` → `Get` 回到 null
+  5. Override 后调用走 Lua 实现（断言 Lua 侧标记变量）
+  6. Suspend → 走原实现；Resume → 又走 Lua
+  7. 覆写函数内部 `error()` → 不崩、错误被记录、对象仍可调用
+  8. 两个对象各自独立
+  - `AfterEach` 必须 `ULuaFunction::RestoreOverrides(Class)`，否则污染其他用例
+- **先 `.\Tools\RunTests.ps1 -Backend Luau -BuildOnly` 过编译，再跑。**
+- 验收：把 `FunctionDesc.cpp` 里 `StaticBinding->Flags.bOverridable` 那个分支去掉，第 5 条必须失败。
+
+---
+
+## 3. 未完成 TODO（批次 4 / 5 / 6）
+
+### 批次 4（~2.5 天）
+| 任务 | 文件 / 注册名 | 要点 | 工作量 |
+|---|---|---|---|
+| **T16** Latent | `Private/Specs/Latent.spec.cpp` / `UnLuaNova.API.Latent` | 锚点 `LuaCore.cpp:1217`（`Class_CallLatentFunction`）、`:1230`（主线程报错）、`:1241`（C 回调进入的线程不可 yield）。6 条：协程内 latent 挂起恢复、主线程调用的报错文案固化成契约、C 回调线程、回调只触发一次、latent 期间 env 销毁不崩、世界暂停后 delay 仍推进（收 `Issue276Test.cpp` 语义）。验收：改 `LuaCore.cpp` 两条消息一个字，对应用例必须失败 | 0.5–1 天 |
+| **T17** Locators | `Private/Specs/Locators.spec.cpp` / `UnLuaNova.API.Locators` | 锚点 `Public/LuaEnvLocator.h`、`Public/LuaModuleLocator.h`；设置项切换写法见 `Issue346Test.cpp:30/55`。6 条：默认 locator、切 `ULuaModuleLocator_ByPackage`、自定义 `ULuaModuleLocator` 子类、自定义 `ULuaEnvLocator` 子类、`AfterEach` 把 `ModuleLocatorClass` 写回原值。验收：单跑与全套结果一致 | 0.5 天 |
+| **T18** ConsoleCommands | `Private/Specs/ConsoleCommands.spec.cpp` / `UnLuaNova.Editor.ConsoleCommands` | **先 grep `Private/UnLuaNovaConsoleCommands.cpp` 确认真实命令名**。8 条：`lua.do` 正常/错误、`lua.profiler`、`lua.memstats`、`lua.dbg` 幂等、`lua.sandbox` 写保护、未知命令给用法提示。验收：命令改名必须让用例失败 | 0.5 天 |
+| **T19** Settings | `Private/Specs/Settings.spec.cpp` / `UnLuaNova.Settings` | 6–8 个"改了看得见效果"的设置项（后端、沙盒、dead-loop 阈值、dangling check、启动模块名、模块定位类），每条 保存原值→设置→断言→`AfterEach` 还原。参照 `LuaDeadLoopCheck.spec.cpp:36-52` 的还原写法 | 0.5 天 |
+| **T20** 静态绑定生成器 & IntelliSense | `Private/Specs/StaticBindingGenerator.spec.cpp`（1→~6）+ 新增 `IntelliSense.spec.cpp` / `UnLuaNova.Editor.IntelliSense` | 生成器：对 `UUnLuaNovaTestStub` 生成表**内容**断言（含 `ProbeWithStaticBinding`）、opt-out 类型不出现、连续两次生成字节一致、`-OutputDir` 不存在时报错非崩、生成的表能被 `FStaticBindingRegistry::Register` 且 `Find/FindFunc` 命中。IntelliSense：`UnLuaNova.d.lua` 含指定 UCLASS/UFUNCTION、重命名后重新生成生效、输出目录不存在时报错 | 1 天 |
+
+### 批次 5（~2.5 天）
+| 任务 | 要点 | 工作量 |
 |---|---|---|
-| T4 | 测试注册名统一大小写 | `UnLuaNovaBase.spec.cpp`、`UnLuaNovaEnum.spec.cpp`：`UNLUANOVA.API.Base/Enum` → `UnLuaNova.API.Base/Enum`；类名 `FUNLUANOVABaseSpec/EnumSpec` → `FUnLuaNovaBaseSpec/EnumSpec`。约定写进 CN/EN `Testing.md` |
-| T6 | 删掉幽灵 API | `Docs/CN\|EN/API.md`：`FLuaContext::GLuaCxt` → `UnLuaNova::FLuaEnv` + `IUnLuaNovaModule::Get().GetEnv()`；`CreateState/GetState` 指向 `FLuaEnv::GetMainState()`；`AUTO_UnLuaNova_STARTUP` → `AUTO_UNLUA_STARTUP`、`UnLuaNova_ENABLE_DEBUG` → `UNLUANOVA_ENABLE_DEBUG`；删除已移除的 `SUPPORTS_RPC_CALL`/`SUPPORTS_COMMANDLET`；新增 `UE.__newindex` 说明 |
-| T7 | 许可口径统一 | `Docs/index.md:131`、`mkdocs.yml:135` → Polyform Small Business 1.0.0 |
-| T8 | 引擎版本口径统一 | `Docs/CN/Features.md:18`、`Docs/EN/Features.md:20` → 基线 UE 5.8.3 |
-| T9 | README 乱码/截断 | `README.md`、`README_EN.md` 第 109 行 `Luau 后端`（原 GBK 误读乱码）与"跑测试"条目（原截断为 `.\Tools\RunT`）；两文件均为 UTF-8 |
-| T10 | EN 回链修正 | `Docs/EN/{Debugging,Features,Settings}.md` 共 6 处 `../CN/` → `../EN/` |
-| T11 | 补齐"有代码无文档" | CN/EN `Testing.md` 新增 `Tools/` 脚本表（含 `Rename-To-UnLuaNova.ps1`）；API.md 补 `UE.__newindex`；`CHANGELOG.md` Commandlet 改名 |
-| T2 | `RunTests.ps1 -BuildOnly` | 新开关（与 `-SkipBuild` 互斥）+ 校验 + 主循环 `continue` + 文档行 + `.PARAMETER`/`.EXAMPLE` |
-| T3 | 用例清单基线护栏 | `summary.json` 增 `names`；`GenerateTestReport.py` 增 `--baseline`/`--update-baseline`/`--fail-on-drift` 与比对/打印逻辑；`RunTests.ps1` 增 `-UpdateBaseline`/`-FailOnDrift` 并自动带 `--baseline`；新增 `Tools/baseline/{lua,luau}.json` |
-| T1 | nightly（降级版） | 新增 `Tools/Install-NightlyTask.ps1`（注册每晚 `-BuildOnly` 编译的计划任务）；CN/EN `Testing.md` 新增「每晚至少编一次」+「用例清单基线」两节 |
+| **T21** Lua 侧自测 | 新增 `Content/Script/Tests/Lua/Spec.lua`（极简 `describe/it/equal`，不引第三方）+ `*.spec.lua`（先覆盖 `StringEx`、`Vector`/`Buffer`）；C++ 侧 `Private/Specs/LuaSpecs.spec.cpp` / `UnLuaNova.Lua` 遍历执行并把结果搬回 C++ 逐条 `TestTrue`（失败要带 Lua 文件名/行号） | 1 天 |
+| **T22** 性能基线 | 把 `Private/Perfs/` 的 benchmark 接成自动化用例，跑 N 次写 CSV 到 `Saved/Benchmark/`；`GenerateTestReport.py` 读并与上次环比，劣化超 ±30% 只 warn | 1 天 |
+| **T23** 容器增强 | 现有 `LuaLib_Array/Map/Set.spec.cpp` 补：容器内 UObject/struct 生命周期（配合 T14）、`TSet pairs`（`UNLUANOVA_ITER_ENTRY(TSet_Pairs)`）**迭代中增删**、嵌套容器 | 0.5 天 |
 
-## 新增文件
-- `Tools/Install-NightlyTask.ps1`
-- `Tools/baseline/lua.json`（427 用例）、`Tools/baseline/luau.json`（436 用例）
+### 批次 6（~2.5 天）
+| 任务 | 要点 | 工作量 |
+|---|---|---|
+| **T5** `Testing.md` 用例清单表 | 两页新增「## 用例清单」三列表（注册名 / 覆盖什么 / 备注），**37 行由代码生成，不要照抄清单摘要**；CN 补 `-FailOnTypeErrors` 与 `luau-analyze.json` 产物行 | 0.5 天 |
+| **T24** `Architecture.md`（CN+EN） | 目录结构；双后端抽象（为什么不能写死 `UNLUANOVA_LUA_BACKEND`）；LuaCore 绑定与覆写；静态绑定生成→注册→`CallUEFast` 全链路；如何新增一个 LuaLib 类型；测试怎么写。要加 front matter、页尾「延伸阅读」、挂 `mkdocs.yml` 导航 | 1 天 |
+| **T25** `CxxApi.md`（CN+EN） | 以头文件为准逐项抄签名 + 一句话：`FLuaEnv` 全量、`IUnLuaNovaModule`、`ULuaEnvLocator`/`ULuaModuleLocator`、`UUnLuaNovaFunctionLibrary`、`RestoreTablesAfterSandbox`、`Binding.h`、`FStaticBindingRegistry` + `UNLUANOVA_REGISTER_STATIC_BINDING`、`UnLuaNova::LowLevel::*`、`ULuaFunction`/`ULuaOverridesClass`、`FLuaDebugValue`/`FLuaVariable` | 1 天 |
+| **T26** 中英收敛 + docs 严格模式 | 对齐 `API.md`（CN 8.8KB / EN 5.9KB）与 `Settings.md`；处理两份中文报告同时挂 CN/EN 导航的问题；提交占位报告让 CI 加回 `mkdocs build --strict` | 1 天 |
 
-## 验证结果
-- PowerShell 语法：`RunTests.ps1`、`Install-NightlyTask.ps1` 解析通过
-- Python 语法：`GenerateTestReport.py` 编译通过
-- 基线功能实测：
-  - 与基线一致 → `BASELINE: 与基线一致（427 个用例）`，退出 0
-  - 删掉 3 个用例名 → `BASELINE: 总数 433 -> 436(+3)` / `3 个用例新增`，`--fail-on-drift` 退出 1
-- 文档链接：Docs + README 相对链接全部可解析（Showcase 图片缺失为既有问题，非本次引入）
-- 代码围栏配对检查通过
-- `mkdocs` 未安装，未执行 `mkdocs build --strict`（CI 会跑）
+**通用完成标准（每任务）**：
+1. `.\Tools\RunTests.ps1 -Backend Both`（至少 `-Backend Luau`）通过且用例数不低于基线
+2. 改 Docs 就 `python -m mkdocs build --strict` 通过，CN/EN 同步，挂好导航
+3. 行为变更同步 `CHANGELOG.md`
+4. 增删用例后 `Tools/baseline/*.json` 用 `-UpdateBaseline` 更新
 
-## 遗留 / 需要人工
-1. **基线是从本机最近一轮报告（`Saved/TestReports/20261022-154202`）生成的**，不是新跑的。
-   建议合入前跑一次 `.\Tools\RunTests.ps1 -Backend Both -UpdateBaseline` 刷新并提交。
-2. `Docs/EN/index.md:36` 仍指向 `../CN/index.md` —— 这是**有意**的跨语言链接（提示读者可机翻中文页），故保留。
-3. `OnLuaContextInitialized` / `OnPreLuaContextCleanup` / `OnPostLuaContextCleanup` 在代码里
-   只有声明与定义、**没有 Broadcast 点**，已在文档中标注（未删除声明）。
-4. T4 步骤 3 要求的「`-Filter UNLUANOVA` vs `-Filter UnLuaNova` 大小写敏感性实测」未做，
-   需要一次真实跑测；改动本身是规范统一，两种情况下都成立。
+---
 
-## 未完成（后续批次）
-- 批次 3：T13 Overrides、T14 Lifetime、T15 ErrorHandling、T12 LuaEnv 扩容（~2.5 天）
-- 批次 4：T16 Latent、T17 Locators、T18 ConsoleCommands、T19 Settings、T20 静态绑定/IntelliSense（~2.5 天）
-- 批次 5：T21 Lua 侧自测、T22 性能基线、T23 容器增强（~2.5 天）
-- 批次 6：T5 用例清单表、T24 Architecture.md、T25 CxxApi.md、T26 中英收敛（~2.5 天）
+## 4. 当前工作区状态（未提交，5 个文件）
+
+```
+ M .codebuddy/AUDIT_PROGRESS.md                                   ← 本文档
+ D .codebuddy/_scan_log.py                                        ← 我建的临时脚本，被别人误提交后又删了；需要 git rm 或 restore
+ M CHANGELOG.md                                                   ← 批次 3 + 3 个缺陷修复的条目
+ M Config/DefaultUnLuaNovaEditor.ini                              ← LuaBackend=Lua（确认是不是原值，别直接提交）
+ M Plugins/.../Commandlets/UnLuaNovaShowcaseDressingCommandlet.cpp ← SkyAtmosphere include 修复（关键）
+```
+
+**注意**：`.codebuddy/_scan_log.py` 是被并发进程误提交进 `11301173` 的临时脚本，我已删除。
+提交前记得 `git rm --cached .codebuddy/_scan_log.py` 或 `git checkout -- .codebuddy/_scan_log.py`。
+
+---
+
+## 5. 阻塞与风险 ⚠️
+
+1. **有另一个进程在同时跑 `Tools/RunTests.ps1`** —— 抢过 `Saved/RunTests.lock`、出现我没发起的
+   运行目录、`CHANGELOG.md`/`Docs/` 被别人改动并连同我的文件一起提交进 `11301173`。
+   后果：我 3 次运行 2 次被打断，**没有一次导出完整自动化 JSON**（JSON 在 `Quit` 时才写）。
+   → 开跑前先确认 `Get-Process UnrealEditor-Cmd` 为空。
+2. **基线未刷新**：`Tools/baseline/{lua,luau}.json` 仍是旧的 427 / 436。新增 30 条用例后
+   基线比对会报漂移（护栏正常工作），需要跑一次 `-UpdateBaseline` 并提交。
+3. **两处修正未复跑**：`ErrorHandling` 的参数类型错误（改 `ProbeWithoutStaticBinding` + table）、
+   `LuaEnv` 的 `Start` 缺失模块（改断言 require 缓存）。
+4. `pwsh` 不在 PATH，跑脚本用 `powershell`（Windows PowerShell 5.1 实测可用）。
+   我写的 `Tools/Install-NightlyTask.ps1` 里注册的是 `pwsh.exe`，**这台机器上跑不了**，
+   需要改成 `powershell.exe` 或先装 PowerShell 7。 ← 待办
+5. `mkdocs` 本机没装，`mkdocs build --strict` 一直没跑过（CI 会跑）。
+6. `Docs/EN/index.md:36` 指向 `../CN/index.md` 是**有意**保留的跨语言链接，不是 T10 漏网。
+
+---
+
+## 6. 重开会话后第一步（按顺序）
+
+```powershell
+# 1) 确认没人跑测试
+Get-Process UnrealEditor-Cmd -ErrorAction SilentlyContinue
+
+# 2) 收掉临时脚本的 D 状态
+git rm --cached .codebuddy/_scan_log.py
+
+# 3) 确认 ini 后端是原值（LuaBackend=Lua），不是被中断的运行留在 Luau
+Select-String Config\DefaultUnLuaNovaEditor.ini -Pattern LuaBackend
+
+# 4) 复跑两处修正 + 刷新基线 + 出报告（约 25 分钟）
+powershell -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -Backend Both -UpdateBaseline
+
+# 5) 从 Editor.log 或 report.md 确认这两条变绿：
+#    UnLuaNova.API.ErrorHandling.引擎侧错误.参数类型错误是受控错误
+#    UnLuaNova.API.FLuaEnv.创建Lua环境.启动模块不存在时不会被记成已加载
+
+# 6) 提交：Commandlet include 修复 + RunTests 两处修复 + CHANGELOG + Tools/baseline/
+```
+
+然后再进批次 4：T16 → T17 → T18 → T19 → T20（同一批一起编译，攒着验更省时间）。

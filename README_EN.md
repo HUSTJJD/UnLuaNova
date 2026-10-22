@@ -136,7 +136,7 @@ A star is the cheapest way to help ⭐ — also welcome:
 
 - Issues: build problems, engine version porting, API questions
 - PRs: docs fixes, new tests, merging unmerged community fixes from upstream
-- Tests: `\Tools\RunTests.ps1` (see [Testing and Automation](Docs/EN/Testing.md))
+- Tests: `.\Tools\RunTests.ps1` (see [Testing and Automation](Docs/EN/Testing.md))
 
 ## License
 

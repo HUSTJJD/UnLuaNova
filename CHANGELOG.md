@@ -9,6 +9,11 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 ## [Unreleased]
 
 ### Added
+- **三个新 spec，共 30 条用例**：`UnLuaNova.API.ErrorHandling`（10 条：编译错误、运行时错误、
+  栈平衡、引擎侧错误、错误消息不含机器路径）、`UnLuaNova.API.Lifetime`（6 条：释放标记、
+  脚本持有对象的回收语义、手动引用、环境销毁）、`UnLuaNova.API.FLuaEnv` 由 2 条扩到 14 条
+  （多环境隔离、DoString 失败路径、GC/HotReload、loader 优先级、require 失败、启动模块、
+  OnCreated/OnDestroyed、GetAll/FindEnv）
 - **`Tools/RunTests.ps1 -BuildOnly`**：只编译不跑（编完退出，不启动编辑器、不生成报告），
   与 `-SkipBuild` 互斥。让"测试代码编译不过"这类问题能在一天内被发现
 - **`Tools/Install-NightlyTask.ps1`**：注册/删除"每晚编译一次测试代码"的 Windows 计划任务
@@ -153,10 +158,10 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 - **静态检查器以子模块引入**：`luau-analyze` 本来就在 Luau 子模块里
   （`CLI/src/Analyze.cpp`，只是 UBT 用 `.ubtignore` 排除了 `CLI/`），新增
   `Tools/Build-LuauAnalyze.ps1` 只构建 `Luau.Analyze.CLI` 这一个 target；
-  LuaLS 新增子模块 `Tools/lua-language-server`（固定在 tag 3.9.3，不是跟着 master），
+  LuaLS 新增子模块 `Tools/lua-language-server`（跟 master，与 Lua / Luau 两个子模块一致的
+  安排：父仓库记录一个具体 commit，要往前走就 `git submodule update --remote`），
   配套 `Tools/Build-LuaLS.ps1`（要 Ninja + MSVC，首次会拉它的 21 个嵌套子模块）。
-  两个检查脚本都优先用仓库里构建出来的那份，而不是 PATH 上碰巧装的那个 ——
-  固定版本才是把依赖放进仓库的意义
+  两个检查脚本都优先用仓库里构建出来的那份，而不是 PATH 上碰巧装的那个
 
 ### Changed
 - **IntelliSense 产物按方言分目录**：`Intermediate/IntelliSense/` 下拆成
@@ -168,6 +173,14 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   `IntelliSense/Luau/UnLuaNova.d.lua`
 
 ### Fixed
+- **`UnLuaNovaEditor` 模块编不过**：`UnLuaNovaShowcaseDressingCommandlet.cpp` 里的
+  `#include "Engine/SkyAtmosphere.h"` 在本引擎（UE 5.8.3 源码构建）中不存在 ——
+  `ASkyAtmosphere` 声明在 `Components/SkyAtmosphereComponent.h`。改掉后整个 `UnLuaNovaEditor`
+  模块才能编译。这正是 T1/T2 的"每晚编译一次"回路该抓的那类问题
+- **`RunTests.ps1` 读 `summary.json` 未指定编码**：用例名含中文时 `ConvertFrom-Json` 直接抛错，
+  崩溃报告因此读不到结论。加 `-Encoding UTF8`
+- **`RunTests.ps1` 取锁偶发失败**：删掉残留锁之后立刻 `File::Open(FileShare::None)`，
+  在 Windows 上会因删除尚未真正生效而抛 `IOException`。加重试（5 次 / 400ms）
 - **「静态类型检查」这一节从来没出现过**：`RunTests.ps1` 写摘要用的是
   `Set-Content -Encoding UTF8`（PowerShell 会加 BOM），而 `GenerateTestReport.py` 用
   `utf-8` 读，解析直接抛异常 —— 结果这一节被整块跳过，报告只留下"这一轮没有跑"，

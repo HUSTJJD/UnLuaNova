@@ -134,8 +134,12 @@ namespace
 			{
 				Component->SetMobility(EComponentMobility::Movable);
 				Component->Intensity = 1.f;
-				// Recapture instead of waiting for a build, for the same reason as the sun.
-				Component->SetRealTimeCapture(true);
+				// Deliberately NOT SetRealTimeCapture(true): that re-captures and re-uploads the
+				// sky every rendered frame, and the first run with it enabled crashed the render
+				// thread in RHIReadSurfaceData while the clip burst was reading back one Slate
+				// screenshot per frame - a per-frame GPU readback storm. A movable sky light
+				// captures once on registration, which is all a static scene needs.
+				Component->RecaptureSky();
 			}
 		}
 
