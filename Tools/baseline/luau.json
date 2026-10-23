@@ -1,10 +1,10 @@
 {
-  "generated": "2026-10-23 12:15:50",
+  "generated": "2026-10-23 13:45:31",
   "backend": "Luau",
   "total": 518,
   "failed": 0,
   "skipped": 0,
-  "duration": 205.934,
+  "duration": 162.762,
   "names": [
     "* 全部已注册",
     "64 位整数读写不截断",
