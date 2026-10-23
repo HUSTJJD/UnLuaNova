@@ -105,31 +105,35 @@ Each showcase also has a 60-frame clip recorded from the live run
 
 `UnLuaNova.Perf.Benchmark`, measured locally on UE 5.8.3 Development:
 
-| Path | Iterations | µs per op |
-|---|---:|---:|
-| Direct C++ call | 20000 | 0.0034 |
-| UE reflection `ProcessEvent` | 20000 | 0.4495 |
-| Calling a UE function from Lua | 20000 | 1.4712 |
-| Pure VM: arithmetic loop | 200000 | 0.0086 |
-| Pure VM: function call | 200000 | 0.0322 |
-| Pure VM: table read/write | 200000 | 0.0282 |
+| Path | Iterations | Lua 5.5 | Luau |
+|---|---:|---:|---:|
+| Direct C++ call | 20000 | 0.0014 | 0.0016 |
+| UE reflection `ProcessEvent` | 20000 | 0.4588 | 0.4435 |
+| Calling a UE function from Lua | 20000 | 1.4388 | 1.4340 |
+| Pure VM: arithmetic loop | 200000 | 0.0099 | **0.0063** |
+| Pure VM: function call | 200000 | 0.0297 | **0.0203** |
+| Pure VM: table grow (empty table, key by key) | 200000 | 0.0124 | **0.0119** |
+| Pure VM: table read (array index) | 200000 | 0.0124 | **0.0074** |
 
-The first three rows cross the language boundary, the last three do not — that split is the
-point:
+µs per op. The first three rows cross the language boundary, the last four do not — that split is
+the point:
 
-+ **Crossing into C++ costs microseconds.** 20000 "call a UE function from Lua" take 29.4 ms,
-  1.47 µs each — a little over 3× reflection `ProcessEvent`. Nowhere near the point where "it's
-  too slow to call the engine from script" becomes true.
-+ **The script itself is two orders of magnitude cheaper.** One pure VM iteration is
-  0.0086–0.032 µs, i.e. 9–32 nanoseconds. What costs time is the boundary, not the loops and
-  calls inside your script.
++ **Crossing into C++ costs microseconds, and costs the same on both backends** (1.44 µs). That
+  hop is UnLuaNova's parameter marshalling and function resolution, not the VM — switching
+  backends neither speeds up nor slows down calling the engine from script.
++ **For the script itself, Luau is faster across the board**: arithmetic loops 36% faster,
+  function calls 32% faster, table reads 40% faster. Table *growth* is only 4% faster — that row
+  is memory allocation and rehash, where VM optimisations have little room.
++ **Table grow and table read have to be measured separately.** Growing an empty table one key at
+  a time is dominated by rehash, not by lookup. Measuring them together tells you neither whether
+  building a table is expensive nor whether reading one is, and those are different problems for
+  whoever writes the script.
 
-> The table above is the **Lua 5.5 backend** run. The backend is a compile-time choice, so each
-> one is built and run separately; the Luau column goes here once that run lands. Only the `VM.*`
-> rows actually separate the two VMs — the first three are dominated by parameter marshalling and
-> function resolution, where both backends land in the same order of magnitude anyway.
+> Single sample, but the two backends ran back to back about a minute apart under comparable load
+> — the first three rows landing on top of each other is the evidence. For a tighter number, run
+> several rounds and take the median.
 
-Luau also has a pure-script path Lua 5.5 does not have, and `vector` is it:
+Then there is what Lua 5.5 simply does not have, `vector` being the clearest one:
 
 ```lua
 local Native = vector.create(1, 2, 3)

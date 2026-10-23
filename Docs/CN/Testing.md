@@ -182,7 +182,7 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `UnLuaNova.Editor.StaticBindingGenerator` | 静态绑定生成器 | 仅编辑器 |
 | `UnLuaNova.Extensions` | LuaRapidjson / LuaProtobuf / LuaSocket | 需可选扩展插件 |
 | `UnLuaNova.Lua` | 执行 `Content/Script/Tests/Lua/*.spec.lua`，把每条 Lua 侧结果搬回 C++ | 失败带 Lua 文件名与行号 |
-| `UnLuaNova.Perf.Benchmark` | 跨语言调用（Native / 反射 / Lua）+ 纯 VM 计算（算术 / 函数调用 / 表读写），按后端写 CSV 到 `Saved/Benchmark/` | 报告里与**同一后端**的上一轮环比，只告警不判定 |
+| `UnLuaNova.Perf.Benchmark` | 跨语言调用（Native / 反射 / Lua）+ 纯 VM 计算（算术 / 函数调用 / 表增长 / 表读取），按后端写 CSV 到 `Saved/Benchmark/` | 报告里与**同一后端**的上一轮环比，只告警不判定 |
 | `UnLuaNova.Regression.Issue276` | 游戏世界暂停后 `coroutine delay` 不工作 | |
 | `UnLuaNova.Regression.Issue286` | 蓝图 `TMap FindRef` 错误 | |
 | `UnLuaNova.Regression.Issue295` | 动态绑定的 UMG 对象切换地图时 Destruct 崩溃 | |

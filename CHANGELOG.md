@@ -55,8 +55,8 @@ Lua 可观测性（Profiler、内存统计、headless 调试服务、沙盒、�
   - `UnLuaNova.Lua`：新增 Lua 侧自测框架 `Content/Script/Tests/Lua/Spec.lua`
     （`describe` / `it` / `equal`，不引第三方）+ `StringEx.spec.lua`；C++ 侧逐条
     `TestTrue` 搬回结果，失败带 Lua 文件名与行号
-- **性能基线**：`UnLuaNova.Perf.Benchmark` 跑六项 —— 跨语言调用三项（Native / 反射 / Lua）
-  与纯 VM 计算三项（`VM.Arithmetic` / `VM.Call` / `VM.Table`），按后端写 CSV 到
+- **性能基线**：`UnLuaNova.Perf.Benchmark` 跑七项 —— 跨语言调用三项（Native / 反射 / Lua）
+  与纯 VM 计算四项（`VM.Arithmetic` / `VM.Call` / `VM.TableGrow` / `VM.TableRead`），按后端写 CSV 到
   `Saved/Benchmark/{latest,previous}-<后端>.csv`；`GenerateTestReport.py` 读出来与**同一后端**
   的上一轮做环比，劣化超 ±30% 标 ⚠️ 并在 stderr 提示，**不判定失败**（计时受机器负载影响）。
   两组分开是必要的：跨语言那一跳的开销在参数编组与函数解析上，两个后端因此落在同一量级，

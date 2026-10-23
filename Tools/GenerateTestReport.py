@@ -632,8 +632,10 @@ def render_benchmark(comparison) -> list:
             f"| {row['case']} | {row['now']:.4f} | {row['before']:.4f} | {pct:+.1f}%{flag} |"
         )
     lines.append("")
-    lines.append("> `VM.*` 三项不跨越语言边界，测的是虚拟机自身；其余三项测的是脚本进入 C++ 的那一跳，")
+    lines.append("> `VM.*` 四项不跨越语言边界，测的是虚拟机自身；其余三项测的是脚本进入 C++ 的那一跳，")
     lines.append("> 开销在参数编组与函数解析上，两个后端因此落在同一量级。")
+    lines.append("> `VM.TableGrow` 是空表逐个增长（rehash），`VM.TableRead` 是同一张表的纯数组读取 ——")
+    lines.append("> 拆开是为了区分「建表贵」和「读表贵」，这两件事对脚本作者完全不是一回事。")
     lines.append("")
     lines.append(
         f"> 与**同一后端**的上一轮比较（CSV 按后端分开存），超过 ±{int(BENCHMARK_DRIFT * 100)}% 会标 ⚠️，"

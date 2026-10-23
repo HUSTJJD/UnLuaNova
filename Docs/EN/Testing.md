@@ -190,7 +190,7 @@ under `Private/` (`BEGIN_DEFINE_SPEC` / `IMPLEMENT_SIMPLE_AUTOMATION_TEST` /
 | `UnLuaNova.Editor.StaticBindingGenerator` | the static binding generator | editor only |
 | `UnLuaNova.Extensions` | LuaRapidjson / LuaProtobuf / LuaSocket | needs the optional extension plugins |
 | `UnLuaNova.Lua` | runs `Content/Script/Tests/Lua/*.spec.lua` and lifts each Lua result into C++ | failures carry the Lua file name and line |
-| `UnLuaNova.Perf.Benchmark` | cross-language calls (native / reflective / Lua) plus pure VM work (arithmetic / call / table), written per backend as CSV under `Saved/Benchmark/` | compared with the previous run of the **same backend**, warn only |
+| `UnLuaNova.Perf.Benchmark` | cross-language calls (native / reflective / Lua) plus pure VM work (arithmetic / call / table grow / table read), written per backend as CSV under `Saved/Benchmark/` | compared with the previous run of the **same backend**, warn only |
 | `UnLuaNova.Regression.Issue276` | `coroutine delay` stops working once the game world is paused | |
 | `UnLuaNova.Regression.Issue286` | wrong Blueprint `TMap FindRef` | |
 | `UnLuaNova.Regression.Issue295` | dynamically bound UMG object crashes in Destruct on map change | |

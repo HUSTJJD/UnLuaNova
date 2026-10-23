@@ -169,14 +169,28 @@ void FBenchmarkSpec::Define()
                 "SpecResult[2] = s"), VmIterations));
         });
 
-        Measure(TEXT("VM.Table"), VmIterations, [this]()
+        // Table work splits in two on purpose. Growing an empty table one key at a time is
+        // rehash, not lookup, and the two have completely different consequences for a
+        // script author: a VM that costs 40% more to *build* a table may cost nothing extra
+        // to *read* one, and only the split says which it is. (Luau scripts can dodge the
+        // growth cost entirely with table.create(n); there is no equivalent on Lua 5.5, so
+        // preallocating is not an option in a chunk both backends have to compile.)
+        Measure(TEXT("VM.TableGrow"), VmIterations, [this]()
         {
             Env->DoString(FString::Printf(TEXT(
                 "local t = {}\n"
                 "for i = 1, %d do t[i] = i end\n"
+                "SpecResult.t = t"), VmIterations));
+        });
+
+        Measure(TEXT("VM.TableRead"), VmIterations, [this]()
+        {
+            Env->DoString(FString::Printf(TEXT(
+                "local t = SpecResult.t\n"
+                "if t == nil then SpecResult[3] = 0 return end\n"
                 "local s = 0.0\n"
                 "for i = 1, %d do s = s + t[i] end\n"
-                "SpecResult[3] = s"), VmIterations, VmIterations));
+                "SpecResult[3] = s"), VmIterations));
         });
 
         Proxy->RemoveFromRoot();
@@ -214,8 +228,8 @@ void FBenchmarkSpec::Define()
         TEST_TRUE(bWritten);
 
         // Sanity: work happened and was measured. Not an absolute duration - see the file
-        // comment. Six rows: three crossing into C++, three staying inside the VM.
-        TEST_EQUAL(Rows.Num(), 6);
+        // comment. Seven rows: three crossing into C++, four staying inside the VM.
+        TEST_EQUAL(Rows.Num(), 7);
         for (const FRow& Row : Rows)
         {
             TestTrue(*FString::Printf(TEXT("%s 跑了 %d 次"), *Row.Case, Row.Iterations), Row.Iterations > 0);
