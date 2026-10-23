@@ -5,7 +5,7 @@ description: "自动化测试产出的通过率、通过明细、失败明细与
 
 # 测试报告（Luau 后端）
 
-> 由 `Tools/GenerateTestReport.py` 自动生成于 2026-10-23 11:28:33。请勿手工编辑。
+> 由 `Tools/GenerateTestReport.py` 自动生成于 2026-10-23 11:54:31。请勿手工编辑。
 
 ## 结论
 
@@ -645,14 +645,10 @@ description: "自动化测试产出的通过率、通过明细、失败明细与
 |---|---|
 | 检查文件数 | 6 |
 | 模式 | `strict` |
-| 错误 | 1 |
+| 错误 | 0 |
 | 警告 | 5 |
 
-**有类型错误 ❌** —— 输出到日志里的前几条：
-
-```
-Content/Script/Luau/02_SandboxBoundary.lua:24: TypeError: Function only returns 1 value, but 2 are required here
-```
+**没有类型错误 ✅**（声明文件由编辑器「导出智能提示」生成。）
 
 ## 性能环比
 

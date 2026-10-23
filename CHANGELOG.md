@@ -195,6 +195,9 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 - **已发布的报告终于有「静态类型检查」这一节**：`GenerateTestReport.py` 写 `Docs/` 那份时
   调 `render()` 漏了 `typecheck` / `encode_failures`，于是入库的页面永远写着"这一轮没有跑：
   `RunTests.ps1` 没写 `luau-analyze.json`"，只有 `Saved/` 下那份能看到检查结果
+- **Luau 示例 `02_SandboxBoundary.lua` 的 `Try` 注解**：`Fn: () -> ()` 让 Luau 认为
+  `pcall(Fn)` 只返回一个值，取第二个返回值被判成 "Function only returns 1 value, but 2
+  are required here"（喂进声明之后静态检查报出的唯一一条错误）。改成 `() -> (...any)`
 
 ### Changed
 - **测试注册名统一大小写**：`UNLUANOVA.API.Base` / `UNLUANOVA.API.Enum` →

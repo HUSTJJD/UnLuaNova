@@ -276,6 +276,29 @@ function Shorten-Path([string] $Text)
     return $s.TrimStart('\', '/')
 }
 
+# ---------------------------------------------------------------- require
+# 这些脚本 require 的是 UnLuaNova 的模块名（require "Luau.Index"），由运行时从脚本根目录
+# 解析：UnLuaNovaLib.cpp 把 package.path 设成 "Content/Script/?.lua;Plugins/UnLuaNova/
+# Content/Script/?.lua"，再走 Lua 的 searcher（模块名里的 . 换成目录分隔符）。
+# luau-lsp 不认这一套：它以 require 所在文件的目录为基准拼名字，能改路径的只有 .luaurc 的
+# aliases，而别名又要求 require 写成 "@Alias/..." 才生效 —— 所以 "Luau.Index" 它永远解不开。
+# 于是自己按 package.path 判一次：运行时能解析的，那是分析器的限制；两边都解析不到的，
+# 是真写错了（运行时必炸），按错误算。
+$ScriptPatterns = @("Content/Script/?.lua", "Plugins/UnLuaNova/Content/Script/?.lua")
+
+function Test-ModuleResolvable([string] $ModuleName)
+{
+    if (-not $ModuleName) { return $false }
+
+    foreach ($pattern in $ScriptPatterns)
+    {
+        $candidate = Join-Path $RepoRoot ($pattern.Replace('?', $ModuleName.Replace('.', '/')))
+        if (Test-Path -LiteralPath $candidate) { return $true }
+    }
+
+    return $false
+}
+
 # 诊断长这样：  Content/Script/Luau/Index.lua(47,20): TypeError: Unknown require ...
 # 类型段是分析器给的分类：TypeError / SyntaxError 是错误，其余（lint 的名字，如
 # UnknownGlobal、DeprecatedApi）是警告 —— 比按字面找 error/warning 稳。
@@ -305,13 +328,21 @@ foreach ($Line in $Lines)
     {
         $Warnings.Add($text)
     }
-    elseif ($msg -match '^Unknown require')
+    elseif ($msg -match '^Unknown require:\s*(?<path>.+)$')
     {
-        # 这些脚本 require 的是 UnLuaNova 的模块路径（require "Luau.Index"），由运行时从
-        # 脚本根目录解析；分析器只认文件系统上相对当前文件的路径，所以这一类它永远解不
-        # 开（.luaurc 的 aliases 也要 require 带 @ 前缀才生效）。当成警告而不是错误：
-        # 错在解析规则不在脚本，但一个真写错的 require 也会落在这里，所以留着让人看见。
-        $Warnings.Add($text)
+        # 诊断里给的是解析后的路径，它的文件名就是原始模块名（点没被当成分隔符）。
+        # 路径来自 elseif 里那次 -match，所以在 $Matches 里，不在 $m 里。
+        $ModuleName = [System.IO.Path]::GetFileNameWithoutExtension($Matches['path'])
+
+        if (Test-ModuleResolvable $ModuleName)
+        {
+            # 运行时找得到，分析器找不到：错在解析规则，不在脚本 —— 降级成警告
+            $Warnings.Add("$text（运行时按 package.path 能解析到 '$ModuleName'，luau-lsp 按文件所在目录解析，解不开是它的限制）")
+        }
+        else
+        {
+            $Errors.Add("$text（运行时也解析不到 '$ModuleName'：package.path 里没有它，require 会在运行时报错）")
+        }
     }
     else
     {
