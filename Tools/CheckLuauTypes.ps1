@@ -173,8 +173,9 @@ if ($Files.Count -eq 0)
 
 # ---------------------------------------------------------------- config
 # luau-lsp 没有 --mode：严格程度来自 .luaurc（--base-luaurc 指定的那份是默认值）。
-# 同一个文件还负责 require 的别名 —— 这些脚本 require 的是 UnLuaNova 的模块路径
-# （require "Luau.Index"），没有任何配置时 luau-lsp 只会把它当成解不开的 require。
+# 同一份配置里的 aliases 供 require "@Luau/Index" 这种带 @ 的写法使用 —— 这些脚本
+# require 的是不带 @ 的模块路径（require "Luau.Index"），别名对它们不生效，见下面
+# 对 Unknown require 的处理。
 if (-not (Test-Path -LiteralPath $WorkDir)) { New-Item -ItemType Directory -Path $WorkDir -Force | Out-Null }
 
 function Get-RelativePath([string] $From, [string] $To)
@@ -262,6 +263,18 @@ finally
 
 $Lines = @($Output | ForEach-Object { $_.ToString() })
 
+# 报告里打印的是相对路径：绝对路径每台机器都不一样，入库的那份报告会因此每次都变。
+function Shorten-Path([string] $Text)
+{
+    if (-not $Text) { return "" }
+
+    $s = $Text
+    # luau-lsp 给的盘符是小写（d:\learning\...），$RepoRoot 是用户当时敲的大小写
+    # （D:\learning\UnLua），所以用大小写不敏感的替换。
+    foreach ($c in @($RepoRoot, ($RepoRoot -replace '\\', '/'))) { $s = $s -ireplace [regex]::Escape($c), '' }
+    return $s.TrimStart('\', '/')
+}
+
 # 诊断长这样：  Content/Script/Luau/Index.lua(47,20): TypeError: Unknown require ...
 # 类型段是分析器给的分类：TypeError / SyntaxError 是错误，其余（lint 的名字，如
 # UnknownGlobal、DeprecatedApi）是警告 —— 比按字面找 error/warning 稳。
@@ -272,18 +285,37 @@ foreach ($Line in $Lines)
 {
     if (-not $Line) { continue }
 
+    # 分析器自己的进度行（[INFO] Loading definitions file: ...）不是诊断
+    if ($Line -match '^\[[A-Z]+\]\s') { continue }
+
     $m = [regex]::Match($Line, '^(?<file>.+?)\((?<line>\d+),(?<col>\d+)\):\s*(?<type>[^:]+):\s*(?<msg>.+)$')
     if (-not $m.Success)
     {
         # 分析器自己的报错（读不到文件、配置写错……）没有那个形状，但一样是问题
-        $Errors.Add($Line)
+        $Errors.Add((Shorten-Path $Line))
         continue
     }
 
     $where = "$($m.Groups['file'].Value):$($m.Groups['line'].Value)"
-    $text = "$($where): $($m.Groups['type'].Value): $($m.Groups['msg'].Value)"
-    if ($m.Groups['type'].Value -match 'Error$') { $Errors.Add($text) }
-    else { $Warnings.Add($text) }
+    $msg = $m.Groups['msg'].Value
+    $text = Shorten-Path "$($where): $($m.Groups['type'].Value): $msg"
+
+    if ($m.Groups['type'].Value -notmatch 'Error$')
+    {
+        $Warnings.Add($text)
+    }
+    elseif ($msg -match '^Unknown require')
+    {
+        # 这些脚本 require 的是 UnLuaNova 的模块路径（require "Luau.Index"），由运行时从
+        # 脚本根目录解析；分析器只认文件系统上相对当前文件的路径，所以这一类它永远解不
+        # 开（.luaurc 的 aliases 也要 require 带 @ 前缀才生效）。当成警告而不是错误：
+        # 错在解析规则不在脚本，但一个真写错的 require 也会落在这里，所以留着让人看见。
+        $Warnings.Add($text)
+    }
+    else
+    {
+        $Errors.Add($text)
+    }
 }
 
 if ($Lines.Count -gt 0)
