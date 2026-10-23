@@ -9,6 +9,15 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 ## [Unreleased]
 
 ### Added
+- **「相对 UnLua：原理与优势」两页文档**：`Docs/CN|EN/WhyUnLuaNova.md`。此前只有
+  `Features.md` 的「相对 UnLua 的增量」清单，只说"有什么"，没说"**为什么这么做**"。
+  新页对 12 个主题逐条给出 **痛点 → 原理 → 优势 → 边界**：静态绑定（构建期 POD 表 +
+  惰性解析 + 读锁与 `PendingCount` 快判）、`CallUEFast` 为什么只省一半、参数缓存（注明沿用
+  上游 `ENABLE_PERSISTENT_PARAM_BUFFER`，不冒充增量）、双后端能力宏、LuaScriptCompat、
+  VM Hook 分发器（记录"看门狗查 `lua_gethook` 后静默失效"这个真实发生过的问题）、
+  Profiler 写 Insights、看门狗线程模型、内存统计两层数据、headless 调试服务、沙盒、
+  脚本侧类型检查，另附「代价与已知边界」总表。已从 `Features` / `index` / `README` 交叉链接，
+  两页均挂进 `mkdocs.yml` 导航
 - **架构与 C++ API 两页文档**：`Docs/CN|EN/Architecture.md`（目录结构、双后端抽象、
   绑定与覆写、静态绑定全链路、如何新增 LuaLib 类型）与 `Docs/CN|EN/CxxApi.md`
   （`FLuaEnv` / `IUnLuaNovaModule` / 定位器 / 导出与注册 / 静态绑定注册表 / `LowLevel` /
@@ -42,6 +51,35 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   英文导航改为挂这一页
 
 ### Changed
+- **`Tools/*.ps1` 丢掉 UTF-8 BOM 会整轮崩，现在能自愈**：Windows PowerShell 5.1 没有 BOM 就按
+  系统 ANSI（GBK）读 `.ps1`，中文字符串被解成乱码后落在字符串字面量里，脚本一行没跑就
+  `ParseException` —— 报告上只看到"类型检查失败"，看不到原因。BOM 可能被编辑器、也可能被
+  脚本化的改写弄丢，所以 `RunTests.ps1` 在调用 `CheckLuaTypes.ps1` / `CheckLuauTypes.ps1`
+  之前用 `Ensure-Utf8Bom` 检查并补回，而不是默认它还在
+- **切后端不再删 `Plugins/UnLuaNova/Intermediate/`**：`UnLuaNova.Build.cs` 把
+  `Config/DefaultUnLuaNovaEditor.ini` 登记进 `ExternalDependencies`，改 ini 即让 UBT 的
+  makefile 失效，Build.cs 重新求值。以前 UBT 不盯着这个 ini，只能整目录删掉来逼它重编 ——
+  75 MB、69 个 `.obj`，其中 62 个是跟后端无关的 Luau VM。现在只重编真正用到
+  `UNLUANOVA_LUA_BACKEND` 的模块（切后端本身免不了重编：那两个后端的头文件不是同一份）
+- **IntelliSense 产物移到插件自己的目录**：`Plugins/UnLuaNova/Intermediate/IntelliSense/` →
+  `Plugins/UnLuaNova/IntelliSense/`（已 gitignore）。它不再是构建中间产物：IDE 指过去、
+  两个静态检查器读它，而 `Intermediate/` 是 UBT 随时会清的目录。**破坏性改动**：`UnLuaNovaDemo.code-workspace`
+  和 IDE 的 `workspace.library` 要改指新路径
+- **测试自己导出声明文件**：`Tools/RunTests.ps1` 在类型检查前跑一次
+  `UnrealEditor-Cmd.exe <uproject> -run=UnLuaNovaIntelliSense -BP=1`（两个后端只付一次启动成本）。
+  之前只有人点过工具栏按钮的机器才有声明文件，别的机器上类型检查等于没跑却照样报绿
+- **LuaLS 的假绿灯**：`--check_format` 默认是 `pretty`，`check.json` 根本不落盘，而脚本把
+  "没有结果文件"当成"0 错误"写进 summary —— 一轮 700 条诊断的报告显示全绿。现在显式要
+  JSON、结果文件缺失时改用 stdout 解析、实在没有就记 `skipped`（`-Require` 下报错退出）
+- **Luau 声明改成这个 Luau 版本认得的语法**：`declare class` 已被上游移除，现为
+  `declare extern type X extends Y with ... end`；out 参数按 `FFunctionDesc` 的语义回到返回值
+  而不是既当入参又写成 `any...`；重名类型/重名成员去重；`end` 这类关键字参数名加下划线。
+  `UnLuaNova` / `UE` 两个全局也声明了 —— `UnLuaNova` 按 `Content/IntelliSense/UnLuaNova.d.lua`
+  真实建模（与 EmmyLua 那份并列维护），`UE` 因为 18k 个成员会触发 Luau 的复杂度上限、
+  且脚本写 `UE.FVector` 而声明叫 `Vector`，只能先做成不透明表
+- **`Tools/CheckLuauTypes.ps1` 在喂不进声明时跳过**：这个版本的 luau-analyze 没有 `--defs`
+  （上游删了，vendored 的 Luau 不归我们改），传了会是 `Unrecognized option` 且一条诊断都看不到。
+  先探测再决定传不传；喂不进去就跳过并写明原因，和 Lua 后端缺 EmmyLua 声明时的处理一致
 - `GenerateTestReport.py` 新增 `load_benchmark` / `compare_benchmark` / `render_benchmark`，
   报告里多一节「性能环比」
 - `Tools/Install-NightlyTask.ps1` 优先用 `pwsh.exe`，找不到时退回 `powershell.exe`

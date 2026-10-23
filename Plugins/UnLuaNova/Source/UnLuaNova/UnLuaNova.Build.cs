@@ -71,6 +71,18 @@ public class UnLuaNova : ModuleRules
         var config = new ConfigHierarchy(new[] { configFile });
         const string section = "/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings";
 
+        // Everything below is read out of this ini, and UBT has no reason to watch it: the
+        // makefile it caches holds the rules' output, and without this the only file it checks
+        // is the .Build.cs itself. Editing LuaBackend then changed nothing - the build happily
+        // handed back the previous backend's objects, and Tools/RunTests.ps1 had to delete
+        // Plugins/UnLuaNova/Intermediate after every switch to force the issue.
+        //
+        // Listed here, a modified ini invalidates the makefile: the rules are evaluated again,
+        // the definitions change, and whatever includes them is rebuilt. That is still a
+        // recompile - a different backend is a different build - but it is UBT's own decision
+        // about what is stale, instead of "throw the whole directory away".
+        ExternalDependencies.Add(configFilePath);
+
         Action<string, string, bool> loadBoolConfig = (key, macro, defaultValue) =>
         {
             bool flag;

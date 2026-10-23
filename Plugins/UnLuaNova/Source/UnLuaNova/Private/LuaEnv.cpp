@@ -338,6 +338,66 @@ namespace UnLuaNova
         return *AllEnvs.FindChecked(UnLuaNovaGetMainState(const_cast<lua_State*>(L)));
     }
 
+    namespace
+    {
+        // Is the module in package.loaded? That table is the only record of "this module
+        // ran": both backends write to it - plain Lua's own require, and the replacement
+        // require() this env installs on Luau - so it answers the question without
+        // caring which one built it. A backend without a package table at all counts as
+        // "not loaded", never as an error: reading nil is what used to abort the process.
+        bool IsModuleLoaded(lua_State* L, const char* ModuleName)
+        {
+            lua_getglobal(L, "package");
+            if (!lua_istable(L, -1))
+            {
+                lua_pop(L, 1);
+                return false;
+            }
+
+            lua_getfield(L, -1, "loaded");
+            lua_remove(L, -2);
+            if (!lua_istable(L, -1))
+            {
+                lua_pop(L, 1);
+                return false;
+            }
+
+            lua_getfield(L, -1, ModuleName);
+            const bool bLoaded = lua_isnil(L, -1) == 0;
+            lua_pop(L, 2);
+            return bLoaded;
+        }
+
+        // Message handler for the startup call, installed in place of the generic
+        // ReportLuaCallError. Two properties are worth the duplication:
+        //
+        //   * the module name is always in the message. ReportLuaCallError prints only
+        //     whatever the VM raised, and whether that happens to name the module is up
+        //     to the backend - plain Lua does, Luau does not report at all.
+        //   * the level is always Error, so a missing startup module is never a silent
+        //     no-op for whoever owns the env.
+        //
+        // Upvalue 1 is a bool the caller watches, so it can tell whether this ran and
+        // report the failure itself when it did not.
+        int ReportStartupModuleError(lua_State* L)
+        {
+            if (auto* bReported = static_cast<bool*>(lua_touserdata(L, lua_upvalueindex(1))))
+                *bReported = true;
+
+            // A project that installed its own reporter owns the report - including the
+            // level it is logged at - so it is handed the message instead, once.
+            if (FUnLuaNovaDelegates::ReportLuaCallError.IsBound())
+                return FUnLuaNovaDelegates::ReportLuaCallError.Execute(L);
+
+            const char* ModuleName = lua_tostring(L, lua_upvalueindex(2));
+            const char* Message = lua_tostring(L, -1);
+            UE_LOG(LogUnLuaNova, Error, TEXT("Startup module '%s' failed to load: %s"),
+                UTF8_TO_TCHAR(ModuleName ? ModuleName : ""),
+                UTF8_TO_TCHAR(Message ? Message : luaL_typename(L, -1)));
+            return 0;
+        }
+    }
+
     void FLuaEnv::Start(const TMap<FString, UObject*>& Args)
     {
         const auto& Setting = *GetDefault<UUnLuaNovaSettings>();
@@ -356,7 +416,20 @@ namespace UnLuaNova
         }
 
         const auto Guard = GetDeadLoopCheck()->MakeGuard();
-        lua_pushcfunction(L, ReportLuaCallError);
+        const int Top = lua_gettop(L);
+
+        // A startup module that never runs looks exactly like one that ran and did
+        // nothing, so the failure has to be reported - once, at Error, naming the
+        // module. Nothing about that used to be guaranteed: the pcall result was
+        // dropped, and whether the generic error handler said anything at all was up to
+        // the backend (plain Lua logs it, Luau stays silent). Hence the explicit check
+        // below on top of the handler: if require() came back but never recorded the
+        // module, that is reported too.
+        bool bReported = false;
+        lua_pushlightuserdata(L, &bReported);
+        lua_pushstring(L, TCHAR_TO_UTF8(*StartupModuleName));
+        lua_pushcclosure(L, ReportStartupModuleError, 2);
+
         lua_getglobal(L, "require");
         lua_pushstring(L, TCHAR_TO_UTF8(*StartupModuleName));
         lua_createtable(L, 0, Args.Num());
@@ -365,7 +438,29 @@ namespace UnLuaNova
             PushUObject(L, Pair.Value);
             lua_setfield(L, -2, TCHAR_TO_UTF8(*Pair.Key));
         }
-        lua_pcall(L, 2, LUA_MULTRET, -4);
+        const int Status = lua_pcall(L, 2, LUA_MULTRET, -4);
+
+        if (Status != LUA_OK)
+        {
+            // Only reachable when the handler never ran - otherwise it has already
+            // reported, and a second line would be one report too many.
+            if (!bReported)
+            {
+                const char* Message = lua_tostring(L, -1);
+                UE_LOG(LogUnLuaNova, Error, TEXT("Startup module '%s' failed to load: %s"), *StartupModuleName,
+                    UTF8_TO_TCHAR(Message ? Message : luaL_typename(L, -1)));
+            }
+        }
+        else if (!IsModuleLoaded(L, TCHAR_TO_UTF8(*StartupModuleName)))
+        {
+            UE_LOG(LogUnLuaNova, Error, TEXT("Startup module '%s' did not load: require() returned without recording it in package.loaded, so the module never ran."), *StartupModuleName);
+        }
+
+        // The results are ours, not the caller's - Start() returns void. Leaving them
+        // on the stack would keep the env permanently off-balance, and on Luau, where
+        // lua_gettop() is frame-relative, that shifts the message-handler index of every
+        // later top-level call by one.
+        lua_settop(L, Top);
         bStarted = true;
     }
 

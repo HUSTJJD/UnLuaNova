@@ -219,8 +219,9 @@ Lua 后端是**编译期选择**（见[设置项](Settings.md)里的"Lua 后端"
 对每个后端依次做：
 
 1. 写 `Config/DefaultUnLuaNovaEditor.ini` 的 `LuaBackend=<后端>`；
-2. 清掉 `Plugins/UnLuaNova/Intermediate/`（UBT 不会盯着这个 ini，不清就可能把上一个后端的
-   目标文件当成最新的）；
+2. 什么都不用清 —— `UnLuaNova.Build.cs` 把这个 ini 登记进了 `ExternalDependencies`，
+   改它就让 UBT 的 makefile 失效，Build.cs 重新求值、宏跟着变、只有真正用到宏的模块重编
+   （以前是整目录删掉：69 个 `.obj` 里有 62 个是 Luau VM，跟后端一点关系都没有）；
 3. `Engine/Build/BatchFiles/Build.bat <工程>Editor <平台> <配置> -Project=<uproject>`；
 4. 跑测试，结果落到 `Saved/TestReports/<时间戳>/lua` 和 `.../luau`；
 5. 生成报告；跑完把 ini 恢复成原样（`try/finally`，中断也会恢复）。

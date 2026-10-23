@@ -51,6 +51,9 @@ description: "UnLuaNova 的能力总览，以及相对 UnLua v2.3.6 的增量"
 
 以下是 UnLuaNova 在 UnLua v2.3.6 之上新增的能力。
 
+> 想知道**每一项为什么这么做、换来了什么、代价在哪**：
+> [相对 UnLua：原理与优势](WhyUnLuaNova.md)。本文只列"有什么"。
+
 ### 双 Lua 后端
 
 * 支持 **Lua 5.5** 与 **Luau** 两个后端，默认 Luau，通过配置切换（见[设置](Settings.md#lua后端)）
@@ -108,6 +111,7 @@ description: "UnLuaNova 的能力总览，以及相对 UnLua v2.3.6 的增量"
 
 ## 延伸阅读
 
+- [相对 UnLua：原理与优势](WhyUnLuaNova.md) — 每个增量的痛点 / 原理 / 收益 / 边界
 - [编程指南](UnLuaNova_Programming_Guide.md) — 编程指南
 - [静态导出与静态绑定](StaticExportBinding.md) — 静态绑定如何工作
 - [Showcase 示例](Showcase.md) — 可运行示例

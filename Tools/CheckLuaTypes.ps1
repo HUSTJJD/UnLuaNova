@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     用 LuaLS（lua-language-server）对工程的 Lua 脚本做静态检查（Lua 后端）。
 
@@ -380,9 +380,63 @@ function Shorten-Path([string] $Full)
 {
     if (-not $Full) { return "" }
     $s = $Full -replace '^file:///', '' -replace '^file://', ''
+
+    # check.json 里的路径是 URI 编码过的：file:///d%3A/learning/... 直接替换盘符是替换不掉的，
+    # 得先解码，否则报告里每一条都顶着 "d%3A\learning\UnLua\..." 这种东西。
+    try { $s = [Uri]::UnescapeDataString($s) } catch { }
+
     $s = $s -replace '/', '\'
-    foreach ($candidate in @($RepoRoot, ($RepoRoot -replace '\\', '/'))) { $s = $s.Replace($candidate, '') }
+
+    # 大小写不敏感：盘符和目录名在 URI 里是小写（d:\learning\unlua），$RepoRoot 是用户当时敲的
+    # 大小写（D:\learning\UnLua）。用 Contains 那套替换会一条都替换不掉，报告就全是绝对路径。
+    foreach ($candidate in @($RepoRoot, ($RepoRoot -replace '\\', '/')))
+    {
+        $s = $s -ireplace [regex]::Escape($candidate), ''
+    }
+
     return $s.TrimStart('\')
+}
+
+# LuaLS 的 pretty 输出长这样（带 ANSI 颜色码）：
+#   <ESC>[34mContent\Script\Foo.lua:2:7<ESC>[0m [<ESC>[33mWarning<ESC>[0m] Cannot assign `nil` ...
+# 后面几行是细节，错误码在括号里（assign-type-mismatch）。check.json 不落盘的版本只能靠这个。
+function Collect-PrettyDiagnostics
+{
+    param([string[]] $Text, $Sink)
+
+    $Pending = $null
+
+    foreach ($Line in $Text)
+    {
+        if (-not $Line) { continue }
+
+        # 去掉 ANSI 转义序列，否则文件名前面粘着一串 \u001b[34m
+        $Plain = [regex]::Replace([string] $Line, "\u001b\[[0-9;]*m", "")
+
+        $m = [regex]::Match($Plain, '^(?<file>.+?):(?<line>\d+):(?<col>\d+)\s*\[(?<level>[^\]]+)\]\s*(?<msg>.+)$')
+        if ($m.Success)
+        {
+            if ($Pending) { $Sink.Add($Pending) }
+
+            $Pending = [pscustomobject]@{
+                message  = $m.Groups['msg'].Value.Trim()
+                severity = $m.Groups['level'].Value.Trim()
+                code     = ""
+                file     = $m.Groups['file'].Value.Trim()
+                line     = $m.Groups['line'].Value
+            }
+            continue
+        }
+
+        # 细节行：第一行括号里的东西是错误码
+        if ($Pending -and -not $Pending.code)
+        {
+            $c = [regex]::Match($Plain, '\((?<code>[a-z0-9_-]+)\)\s*$')
+            if ($c.Success) { $Pending.code = $c.Groups['code'].Value }
+        }
+    }
+
+    if ($Pending) { $Sink.Add($Pending) }
 }
 
 $Raw = New-Object System.Collections.Generic.List[object]
@@ -405,8 +459,20 @@ else
     # 没有结果文件就没有"通过"这回事：它要么什么都没检查（早期版本传文件就这表现），要么
     # 结果没落到我们读的路径上。以前这里只往输出里加一行，summary 仍然写 0/0，报告上就是
     # 一个绿灯 —— 检查一下其实没跑和检查通过，在报告里必须长得不一样。
-    $NoResultReason = "LuaLS 没有写出 $CheckJson（退出码 $ExitCode）—— 这一轮没有实际检查任何文件。"
-    $Lines += $NoResultReason
+    #
+    # 这个版本的 LuaLS 即使传了 --check_format=json 也不写 check.json（它只有 pretty 输出），
+    # 所以先把 stdout 上的诊断捞出来，别白跑一趟。
+    Collect-PrettyDiagnostics -Text ($Output | ForEach-Object { $_.ToString() }) -Sink $Raw
+
+    if ($Raw.Count -eq 0)
+    {
+        $NoResultReason = "LuaLS 没有写出 $CheckJson（退出码 $ExitCode），stdout 里也没有诊断 —— 这一轮没有实际检查任何文件。"
+        $Lines += $NoResultReason
+    }
+    else
+    {
+        $Lines += "check.json 没落盘，结果是从 LuaLS 的 stdout 解析出来的（这个版本只输出 pretty）。"
+    }
 }
 
 $Errors = New-Object System.Collections.Generic.List[string]

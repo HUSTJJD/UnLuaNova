@@ -191,11 +191,27 @@ void FUnLuaNovaIntelliSenseGenerator::ExportUnLua()
     const auto SrcDir = ContentDir / "IntelliSense";
     const auto DstDir = EmmyLuaDir;
 
-    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
-    if (!PlatformFile.DirectoryExists(*SrcDir))
+    IFileManager& FileManager = IFileManager::Get();
+    if (!FileManager.DirectoryExists(*SrcDir))
         return;
 
-    PlatformFile.CopyDirectoryTree(*DstDir, *SrcDir, true);
+    // File by file rather than CopyDirectoryTree, because Content/IntelliSense now also holds
+    // the Luau declaration of the API (UnLuaNova.d.lua). It is Luau syntax; copied into
+    // EmmyLua/ it makes LuaLS's own "you mixed dialects" check fire and the whole Lua static
+    // check bails out.
+    TArray<FString> Files;
+    FileManager.FindFilesRecursive(Files, *SrcDir, TEXT("*"), true, false);
+
+    for (const FString& File : Files)
+    {
+        if (File.EndsWith(TEXT(".d.lua")))
+            continue;
+
+        const FString Relative = File.RightChop(SrcDir.Len() + 1);
+        const FString Dest = DstDir / Relative;
+        FileManager.MakeDirectory(*FPaths::GetPath(Dest), true);
+        FileManager.Copy(*Dest, *File);
+    }
 }
 
 void FUnLuaNovaIntelliSenseGenerator::ExportLuauDecls(const TArray<const UField*> Types)

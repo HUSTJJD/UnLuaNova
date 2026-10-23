@@ -45,6 +45,9 @@ In short: **keep UnLua's programming feel, add the maintenance, performance and 
 | Observability | Minimal | CPU profiler / memory stats / debug service / sandbox / watchdog |
 | Type checking | LuaLS + generated EmmyLua annotations | Generated Luau `.d.lua`, checked by `luau-analyze` |
 
+For **why each of these is built the way it is, what it buys and what it costs**:
+[Why UnLuaNova](Docs/EN/WhyUnLuaNova.md) (Chinese: [相对 UnLua：原理与优势](Docs/CN/WhyUnLuaNova.md)).
+
 ## Quick start
 
 ```bash
@@ -106,6 +109,7 @@ match the Lua function name (`AnimNotify_xxx`) and the replacement is done — n
 |:---|:---|
 | [UE 新手快速上手](Docs/CN/Quickstart_For_UE_Newbie.md) | [Programming Guide](Docs/EN/UnLuaNova_Programming_Guide.md) |
 | [功能清单](Docs/CN/Features.md) | [API Reference](Docs/EN/API.md) |
+| [相对 UnLua：原理与优势](Docs/CN/WhyUnLuaNova.md) | [Why UnLuaNova](Docs/EN/WhyUnLuaNova.md) |
 | [Luau 后端](Docs/CN/Luau.md) | [Luau Backend](Docs/EN/Luau.md) |
 | [编程指南](Docs/CN/UnLuaNova_Programming_Guide.md) | [How To Implement Overriding](Docs/EN/How_To_Implement_Overriding.md) |
 | [API 参考](Docs/CN/API.md) | [FAQ](Docs/EN/FAQ.md) |

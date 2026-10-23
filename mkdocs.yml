@@ -57,6 +57,7 @@ nav:
       - 入门:
           - UE 新手快速上手: CN/Quickstart_For_UE_Newbie.md
           - 功能清单: CN/Features.md
+          - 相对 UnLua：原理与优势: CN/WhyUnLuaNova.md
       - 编程:
           - 编程指南: CN/UnLuaNova_Programming_Guide.md
           - Luau 后端: CN/Luau.md
@@ -86,6 +87,7 @@ nav:
       - Getting Started:
           - Quickstart for UE Newcomers: EN/Quickstart_For_UE_Newbie.md
           - Features: EN/Features.md
+          - Why UnLuaNova: EN/WhyUnLuaNova.md
       - Programming:
           - Programming Guide: EN/UnLuaNova_Programming_Guide.md
           - Luau Backend: EN/Luau.md

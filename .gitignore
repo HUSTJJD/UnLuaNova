@@ -13,7 +13,7 @@ Plugins/*/Intermediate/
 # declarations for the IDE and the type checkers, different on every machine, never checked in.
 # Only the directory directly under the plugin - Plugins/<name>/Content/IntelliSense holds the
 # hand-written annotations and is tracked.
-Plugins/**/IntelliSense/
+Plugins/*/IntelliSense/
 WindowsNoEditor/
 MacNoEditor/
 Android_*/

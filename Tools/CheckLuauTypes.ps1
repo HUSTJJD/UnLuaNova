@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     用 luau-analyze 对工程的 Lua 脚本做静态类型检查（Luau 后端）。
 

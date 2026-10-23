@@ -53,6 +53,9 @@ description: "What UnLuaNova can do, and what it adds on top of UnLua v2.3.6"
 
 ## What UnLuaNova adds on top of UnLua v2.3.6
 
+> For **why each of these is built the way it is, what it buys, and what it costs**, see
+> [Why UnLuaNova](WhyUnLuaNova.md). This page only lists what exists.
+
 ### Two Lua backends
 
 * **Lua 5.5** and **Luau**, selected at build time (default: Luau) - see
@@ -117,6 +120,7 @@ See [Console Commands](ConsoleCommand.md) for the exact syntax.
 
 ## Further reading
 
+- [Why UnLuaNova](WhyUnLuaNova.md) - pain / mechanism / payoff / limits for every addition
 - [Programming Guide](UnLuaNova_Programming_Guide.md)
 - [Settings](Settings.md) - every setting, including the backend switch
 - [Console Commands](ConsoleCommand.md) - runtime debug commands

@@ -38,6 +38,9 @@ description: UnLuaNova —— 面向 Unreal Engine 的 Lua 脚本方案，Tencen
 
 </div>
 
+每一项**为什么这么做、换来了什么、代价在哪**：[相对 UnLua：原理与优势](CN/WhyUnLuaNova.md)
+（英文版 [Why UnLuaNova](EN/WhyUnLuaNova.md)）。
+
 ## 五分钟跑起来
 
 <div class="grid" markdown>

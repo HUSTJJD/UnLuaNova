@@ -13,6 +13,10 @@ Start with the Programming Guide, or jump straight to the reference you need.
 
     Binding, calling the engine from Lua, calling Lua from the engine, garbage collection.
 
+- :material-help-circle: **[Why UnLuaNova](WhyUnLuaNova.md)**
+
+    Pain, mechanism, payoff and limits for every addition over UnLua v2.3.6.
+
 - :material-language-lua: **[Luau Backend](Luau.md)**
 
     Language features available today, sandboxing, native breakpoints and luau-analyze.

@@ -15,6 +15,8 @@ description: UnLuaNova 中文文档导航 —— 从新手上手到进阶配置�
 
     [功能清单](Features.md) —— 能做什么、相对 UnLua 多了什么
 
+    [相对 UnLua：原理与优势](WhyUnLuaNova.md) —— 每个增量为什么这么做、收益与边界
+
 - :material-book-open-variant: **编程**
 
     [编程指南](UnLuaNova_Programming_Guide.md) —— 绑定、双向调用、GC 的核心概念

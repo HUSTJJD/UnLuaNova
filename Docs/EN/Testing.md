@@ -228,8 +228,11 @@ is not a flag, it is:
 and for each backend, in order:
 
 1. write `LuaBackend=<backend>` into `Config/DefaultUnLuaNovaEditor.ini`;
-2. clear `Plugins/UnLuaNova/Intermediate/` (UBT does not watch that ini, so without this it may
-   treat the previous backend's object files as up to date);
+2. nothing to clear - `UnLuaNova.Build.cs` lists that ini in its `ExternalDependencies`, so
+   editing it invalidates UBT's makefile: the rules are evaluated again, the macro changes, and
+   only the modules that actually see it are rebuilt. (Clearing the directory used to be the
+   workaround, and it threw away 69 .obj files - 62 of them the Luau VM, which has nothing to
+   do with the backend.)
 3. `Engine/Build/BatchFiles/Build.bat <Project>Editor <platform> <config> -Project=<uproject>`;
 4. run the tests, results into `Saved/TestReports/<timestamp>/lua` and `.../luau`;
 5. generate the report; restore the ini afterwards (`try/finally`, so an interrupt restores it

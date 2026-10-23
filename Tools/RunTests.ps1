@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Runs the UnLuaNova automation tests and writes a readable report.
 
@@ -727,6 +727,28 @@ function Export-IntelliSense {
     return $true
 }
 
+function Ensure-Utf8Bom {
+    param([Parameter(Mandatory)] [string] $Path)
+
+    # Windows PowerShell 5.1 decodes a .ps1 with the machine's ANSI code page unless the file
+    # opens with a UTF-8 BOM. These scripts are full of Chinese, so a BOM-less file is not a
+    # cosmetic problem: the bytes are decoded as GBK, the resulting garbage lands inside string
+    # literals, and the script dies with a ParseException before it runs a single line. That is
+    # how a run once reported a failed type check without ever saying what was wrong.
+    #
+    # Anything can drop a BOM - an editor, a save, a scripted rewrite - so do not trust it: put
+    # it back when it is missing. Returns $true when it had to write. A BOM is only prepended,
+    # never to a file that already has one: that would corrupt the first line.
+    $Bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($Bytes.Length -ge 3 -and $Bytes[0] -eq 0xEF -and $Bytes[1] -eq 0xBB -and $Bytes[2] -eq 0xBF) {
+        return $false
+    }
+
+    $Text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+    [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($true)))
+    return $true
+}
+
 function Invoke-TypeCheck {
     param(
         [Parameter(Mandatory)] [string] $RunDir,
@@ -778,6 +800,10 @@ function Invoke-TypeCheck {
         & $Skip "没找到 Tools/$CheckerName。"
         Write-Host ("TypeCheck : skipped - 没找到 Tools/{0}" -f $CheckerName) -ForegroundColor Yellow
         return
+    }
+
+    if (Ensure-Utf8Bom -Path $Checker) {
+        Write-Host "TypeCheck : $CheckerName 缺 UTF-8 BOM，已补上（见函数注释）。" -ForegroundColor Yellow
     }
 
     & $Checker @CheckerArgs
@@ -1008,14 +1034,16 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
             Set-IniBackend -Value $B
             $CurrentBackend = $B
 
-            # A different backend is a genuinely different build, not a tweak, and UBT has
-            # no reason to watch this ini: drop the plugin's intermediate output so the
-            # next build cannot hand back the previous backend's objects.
-            $PluginIntermediate = Join-Path $RepoRoot "Plugins/UnLuaNova/Intermediate"
-            if (Test-Path $PluginIntermediate) {
-                Write-Host "Clearing $PluginIntermediate"
-                Remove-Item $PluginIntermediate -Recurse -Force -ErrorAction SilentlyContinue
-            }
+            # Nothing to delete here on purpose. There used to be a wipe of
+            # Plugins/UnLuaNova/Intermediate: UBT does not watch Config/DefaultUnLuaNovaEditor.ini,
+            # so a backend switch left the previous backend's objects in place and the only way
+            # to force the issue was to throw the directory away - 75 MB of build output, and a
+            # full recompile whether or not anything relevant changed.
+            #
+            # The ini is now listed in UnLuaNova.Build.cs' ExternalDependencies, so touching it
+            # invalidates the makefile by itself. Assert-BackendBuilt after the build is what
+            # catches the case where it did not: it compares the ini to the macro UBT actually
+            # compiled in, and refuses to run rather than file results under the wrong backend.
         }
 
         if (-not $SkipBuild) {

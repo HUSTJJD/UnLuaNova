@@ -327,24 +327,16 @@ namespace UnLuaNova
                 }
             }
 
-            // How a script reaches the engine: UE.FVector(1, 2, 3), UE.UClass.Load("..."),
-            // UE.UKismetSystemLibrary.Delay(...). One member per type, each a constructor - so
-            // UE.FVector(...) *is* an FVector and everything done with the result is checked
-            // against the extern types above. `...any` because the constructors are not
-            // reflected: UnLua accepts several spellings for the same type (three numbers, a
-            // native vector, nothing at all), and pretending otherwise would invent errors.
-            //
-            // Deliberately not modelled: UE.EAttachmentRule.SnapToTarget, i.e. reading an enum
-            // member off the namespace. An enum is a string union here, and there is no way to
-            // declare "and also indexable by member name" - so enums are reachable as types
-            // (`local R: EAttachmentRule`) but not through UE.<Enum>.<Member>.
-            Out += TEXT("\ndeclare extern type UENamespace with\n");
-            for (const FString& Name : DeclaredNames)
-            {
-                Out += FString::Printf(TEXT("\t%s: (...any) -> %s\n"), *Name, *Name);
-            }
-            Out += TEXT("end\n");
-            Out += TEXT("\ndeclare UE: UENamespace\n");
+            // How scripts reach the engine: UE.FVector(1, 2, 3), UE.UClass.Load("..."),
+            // UE.UKismetSystemLibrary.Delay(...). Modelling that as one member per type was
+            // tried and does not survive contact with Luau:
+            //   - 18k members in one extern type trips "Code is too complex to typecheck";
+            //   - the names would not match anyway - a script writes UE.FVector while the
+            //     declaration is `extern type Vector` (reflection reports the stripped name).
+            // So UE stays an opaque table: every UE.Foo is `any`, which costs the checking of
+            // engine calls but invents no errors either. Scripts that want types still get
+            // them - `local V: Vector` is checked against the extern types above.
+            Out += TEXT("\ndeclare UE: { [string]: any }\n");
 
             return Out;
         }
