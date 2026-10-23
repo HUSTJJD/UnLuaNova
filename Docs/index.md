@@ -102,7 +102,7 @@ description: UnLuaNova —— 面向 Unreal Engine 的 Lua 脚本方案，Tencen
 
 - :material-language-lua: **[Luau Backend](EN/Luau.md)**
 
-    Language features, sandboxing, native breakpoints and luau-analyze on the Luau backend.
+    Language features, sandboxing, native breakpoints and luau-lsp on the Luau backend.
 
 - :material-api: **[API Reference](EN/API.md)**
 
@@ -128,14 +128,27 @@ description: UnLuaNova —— 面向 Unreal Engine 的 Lua 脚本方案，Tencen
 
 | 项 | 值 |
 |---|---|
+| 当前版本 | **1.0.0**（[CHANGELOG](https://github.com/HUSTJJD/UnLuaNova/blob/master/CHANGELOG.md)） |
 | 引擎基线 | **UE 5.8.3**（源码版） |
 | Lua 后端 | **Luau（默认）** ／ Lua 5.5 —— 均以子模块引入 |
 | 上游基线 | Tencent/UnLua v2.3.6 + `develop`(2026-04) |
 | 许可 | Polyform Small Business 1.0.0 ／ 商用超阈值需付费 |
 
-!!! warning "早期阶段"
-    项目仍在早期重构阶段，改动会比较频繁：适合尝鲜、提 issue、一起 push，暂不建议直接上生产。
-    已知事项见仓库根目录的 `CHANGELOG.md`。
+## 测试结果
+
+自动化测试在**两个后端各跑一遍全量**，报告随仓库发布 —— 不是抽样，是仓库里的每一条用例：
+
+| 后端 | 用例 | 通过 | 失败 | 耗时 | 静态类型检查 |
+|:---|---:|---:|---:|---:|:---|
+| **Luau**（默认） | **518** | 518 ✅ | 0 | 205.9s | `luau-lsp` strict：**0 错误** |
+| Lua 5.5 | 509 | 509 ✅ | 0 | 225.1s | LuaLS：**0 错误** |
+
+完整报告：[Luau 后端](test-luau-report.md) · [Lua 5.5 后端](test-lua-report.md)
+
+!!! tip "上生产前"
+    Luau 后端 518 条全绿，可以评估与接入。建议锁定版本，并先读完两节已知边界：
+    [相对 UnLua：原理与优势](CN/WhyUnLuaNova.md#六代价与已知边界) 与
+    [Luau 后端](CN/Luau.md#六仍未完成的部分)。
 
 ## 从 UnLua 迁移
 

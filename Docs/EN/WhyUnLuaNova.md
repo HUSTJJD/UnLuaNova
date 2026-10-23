@@ -558,7 +558,7 @@ artefacts, one per analyzer:
 ```
 Plugins/UnLuaNova/IntelliSense/
 ├── EmmyLua/    Lua dialect   → lua-language-server (LuaLS)
-└── Luau/       Luau dialect  → luau-analyze
+└── Luau/       Luau dialect  → luau-lsp
     └── UnLuaNova.d.lua
 ```
 
@@ -569,22 +569,22 @@ Plugins/UnLuaNova/IntelliSense/
 
 ### Payoff
 
-- **Some UE API misuse moves from run time to "compile time"**: `--!strict` plus `luau-analyze`
+- **Some UE API misuse moves from run time to "compile time"**: `--!strict` plus `luau-lsp`
   reports it while you type.
 - **Mapping rules are explicit**: integer widths and floats collapse to `number`,
   `FString`/`FName`/`FText` to `string`, `TArray<T>` → `{T}`, `TMap<K,V>` → `{[K]: V}`,
   `TSet<T>` → `{[T]: boolean}`, with delegates and other inexpressible types falling back to `any`.
 - **Results land in the test report**: `Tools/RunTests.ps1` dispatches per backend
-  (`luau-analyze` for Luau, LuaLS for Lua), and reports "skipped + reason" when the tool is absent
+  (`luau-lsp` for Luau, LuaLS for Lua), and reports "skipped + reason" when the tool is absent
   instead of pretending it ran.
 
 ### Limits
 
 - **Each backend uses its own analyzer — a syntactic fact, not a preference**: Lua 5.5 cannot parse
-  Luau annotations, and Lua-backend scripts cannot be fed to `luau-analyze`. There is no shared one.
+  Luau annotations, and Lua-backend scripts cannot be fed to `luau-lsp`. There is no shared one.
 - **The `UE` global is currently an opaque table**: its ~18k members trip Luau's complexity limit,
   and scripts write `UE.FVector` while the declaration is named `Vector`. Not yet solved.
-- `luau-analyze` is a **local step** — CI has no binary for it.
+- `luau-lsp` is a **local step** — CI has no binary for it.
 
 ---
 

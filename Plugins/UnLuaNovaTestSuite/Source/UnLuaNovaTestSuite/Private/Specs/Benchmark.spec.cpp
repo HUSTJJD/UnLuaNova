@@ -19,12 +19,22 @@
 // the CSV: GenerateTestReport.py reads Saved/Benchmark/ and compares against the previous
 // run, which is what makes "this change made calls slower" visible at all.
 //
+// That comparison is per backend (latest-Luau.csv, latest-Lua.csv). One shared file looked
+// fine until -Backend Both ran the two back to back: the Luau run then found the Lua 5.5 run
+// as "previous" and reported the difference between two different VMs as a 20% regression.
+// The tag is a compile-time constant, exactly like the VM it labels.
+//
 // What it asserts is deliberately weak - that work happened, took time, and was recorded.
 // Asserting an absolute duration would make the suite red on a loaded CI machine, and a
 // flaky case is worse than no case. The comparison lives in the report, where a 30%
 // regression is a warning and not a failure.
 
 #include "UnLuaNovaBase.h"
+// LuaBackend.h is where UNLUANOVA_LUA_BACKEND is defined, and it is not reachable from
+// UnLuaNovaBase.h. Without this include the #if below silently evaluates an undefined macro
+// as 0, matches UNLUANOVA_BACKEND_LUAU and tags a Lua 5.5 build "Luau" - which is exactly
+// the mix-up this tag exists to prevent.
+#include "LuaBackend.h"
 #include "UnLuaNovaTemplate.h"
 #include "UnLuaNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
@@ -39,6 +49,21 @@
 // Small enough that the case stays a few seconds; large enough that a single outlier
 // iteration cannot move the average.
 static constexpr int32 SpecIterations = 20000;
+
+// The VM rows are pure script work, two orders of magnitude cheaper per iteration than a
+// cross-language call, so they need a proportionally longer run to clear timer noise.
+static constexpr int32 VmIterations = 200000;
+
+// Which backend this build compiled, used to name the CSV. A run that cannot say which VM
+// produced its numbers is not a baseline - see the file comment.
+static const TCHAR* BackendTag()
+{
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+    return TEXT("Luau");
+#else
+    return TEXT("Lua");
+#endif
+}
 
 BEGIN_DEFINE_SPEC(FBenchmarkSpec, "UnLuaNova.Perf.Benchmark", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     TSharedPtr<UnLuaNova::FLuaEnv> Env;
@@ -114,14 +139,56 @@ void FBenchmarkSpec::Define()
                 "for i = 1, %d do SpecProxy:UpdateMeshID(i) end"), SpecIterations));
         });
 
+        // ---- pure VM work ----------------------------------------------------
+        // The three rows above measure the crossing into C++: parameter marshalling and
+        // UFunction resolution dominate, so both backends land in the same ballpark and the
+        // numbers say nothing about the interpreter. These rows stay inside the chunk - same
+        // rule as the Lua row, the loop has to be in the script or the timing is compile
+        // time - and they are written in the syntax both VMs accept (no `continue`, no
+        // compound assignment, no type annotations), so one chunk compiles either way.
+        //
+        // Each result is written into SpecResult instead of being left in a local: a value
+        // nobody reads is dead code, and a compiler is free to delete the loop with it.
+        lua_newtable(L);
+        lua_setglobal(L, "SpecResult");
+
+        Measure(TEXT("VM.Arithmetic"), VmIterations, [this]()
+        {
+            Env->DoString(FString::Printf(TEXT(
+                "local s = 0.0\n"
+                "for i = 1, %d do s = s + i * 0.5 end\n"
+                "SpecResult[1] = s"), VmIterations));
+        });
+
+        Measure(TEXT("VM.Call"), VmIterations, [this]()
+        {
+            Env->DoString(FString::Printf(TEXT(
+                "local function Add(a, b) return a + b end\n"
+                "local s = 0.0\n"
+                "for i = 1, %d do s = s + Add(i, 0.5) end\n"
+                "SpecResult[2] = s"), VmIterations));
+        });
+
+        Measure(TEXT("VM.Table"), VmIterations, [this]()
+        {
+            Env->DoString(FString::Printf(TEXT(
+                "local t = {}\n"
+                "for i = 1, %d do t[i] = i end\n"
+                "local s = 0.0\n"
+                "for i = 1, %d do s = s + t[i] end\n"
+                "SpecResult[3] = s"), VmIterations, VmIterations));
+        });
+
         Proxy->RemoveFromRoot();
 
         // ---- write the CSV -------------------------------------------------
         const FString Dir = FPaths::ProjectSavedDir() / TEXT("Benchmark");
         IFileManager::Get().MakeDirectory(*Dir, true);
 
-        const FString Latest = Dir / TEXT("latest.csv");
-        const FString Previous = Dir / TEXT("previous.csv");
+        // Per backend - see the file comment. Sharing one pair of files across backends
+        // compares two different VMs and calls the difference a regression.
+        const FString Latest = Dir / FString::Printf(TEXT("latest-%s.csv"), BackendTag());
+        const FString Previous = Dir / FString::Printf(TEXT("previous-%s.csv"), BackendTag());
 
         // latest -> previous before overwriting, so the report always has something to
         // compare against. Only when there is a latest: Move() logs an error when the
@@ -147,8 +214,8 @@ void FBenchmarkSpec::Define()
         TEST_TRUE(bWritten);
 
         // Sanity: work happened and was measured. Not an absolute duration - see the file
-        // comment.
-        TEST_EQUAL(Rows.Num(), 3);
+        // comment. Six rows: three crossing into C++, three staying inside the VM.
+        TEST_EQUAL(Rows.Num(), 6);
         for (const FRow& Row : Rows)
         {
             TestTrue(*FString::Printf(TEXT("%s 跑了 %d 次"), *Row.Case, Row.Iterations), Row.Iterations > 0);

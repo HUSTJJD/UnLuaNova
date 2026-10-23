@@ -19,7 +19,7 @@ Start with the Programming Guide, or jump straight to the reference you need.
 
 - :material-language-lua: **[Luau Backend](Luau.md)**
 
-    Language features available today, sandboxing, native breakpoints and luau-analyze.
+    Language features available today, sandboxing, native breakpoints and luau-lsp.
 
 - :material-api: **[API Reference](API.md)**
 

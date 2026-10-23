@@ -46,7 +46,7 @@ Lua 侧的函数如何被 C++ 调回去。
 要点：静态导出绑定把反射信息预生成好，运行时不需要遍历 UCLASS，
 启动开销和 UObject 数量无关。
 
-<!-- ![绑定示例](Images/tests-luau/Showcase_Binding.png) -->
+![绑定示例](../Images/tests-luau/Showcase_Binding.png)
 
 ### 2. 覆写：用 Lua 替换蓝图事件
 
@@ -56,21 +56,21 @@ Lua 侧的函数如何被 C++ 调回去。
 要点：覆写是**替换**而非追加，被覆写的实现默认不再执行；需要调用原实现时用
 `Overridden` 系列的显式调用。
 
-<!-- ![覆写示例](Images/tests-luau/Showcase_Override.png) -->
+![覆写示例](../Images/tests-luau/Showcase_Override.png)
 
 ### 3. 容器：TArray / TMap / TSet 的 Lua 侧访问
 
 `LuaLib_Array` / `LuaLib_Map` / `LuaLib_Set` 三个模块给出容器在 Lua 里的读写方式，
 以及它们在 Lua 侧是引用语义（不拷贝容器本身）。`TSet` 现在也能 `pairs` 迭代。
 
-<!-- ![容器示例](Images/tests-luau/Showcase_Container.png) -->
+![容器示例](../Images/tests-luau/Showcase_Container.png)
 
 ### 4. UMG：Lua 接管界面与生命周期
 
 `11_ReleaseUMG` 演示 UMG 控件交给 Lua 之后，父子控件的创建、释放与引用关系如何收敛——
 这也是最容易写出悬挂引用的一类场景。
 
-<!-- ![UMG 示例](Images/tests-luau/Showcase_UMG.png) -->
+![UMG 示例](../Images/tests-luau/Showcase_UMG.png)
 
 调试相关能力集中在[调试](Debugging.md)一页；内存统计走 `lua.memstats`
 控制台命令，可以按内存类别看到 Lua 侧的分配分布。

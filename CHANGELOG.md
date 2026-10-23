@@ -8,6 +8,19 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 
 ## [Unreleased]
 
+还没有内容。改动累积到这里，下一个版本发布时再把这一节整体换成版本号。
+
+---
+
+## [1.0.0] - 2026-10-23
+
+UnLuaNova 的第一个正式版本。上游 Tencent/UnLua 停在 v2.3.6（2023-11），这一版把散落的社区成果
+收敛成一条有人维护的发行线，并把三件事做成默认能力：构建期静态绑定、Lua 5.5 / Luau 双后端、
+Lua 可观测性（Profiler、内存统计、headless 调试服务、沙盒、死循环看门狗）。
+
+版本号从 `2.3.6` 回到 `1.0.0`：沿用上游的版本号会让"这是上游的哪个版本"和"这是 UnLuaNova 的哪个
+版本"混在一起，而两者的兼容性承诺并不相同。UnLuaNova 从这里开始按自己的版本线走。
+
 ### Added
 - **「相对 UnLua：原理与优势」两页文档**：`Docs/CN|EN/WhyUnLuaNova.md`。此前只有
   `Features.md` 的「相对 UnLua 的增量」清单，只说"有什么"，没说"**为什么这么做**"。
@@ -42,9 +55,13 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   - `UnLuaNova.Lua`：新增 Lua 侧自测框架 `Content/Script/Tests/Lua/Spec.lua`
     （`describe` / `it` / `equal`，不引第三方）+ `StringEx.spec.lua`；C++ 侧逐条
     `TestTrue` 搬回结果，失败带 Lua 文件名与行号
-- **性能基线**：`UnLuaNova.Perf.Benchmark` 跑 Native / 反射 / Lua 三种调用，写 CSV 到
-  `Saved/Benchmark/{latest,previous}.csv`；`GenerateTestReport.py` 读出来做环比，
-  劣化超 ±30% 标 ⚠️ 并在 stderr 提示，**不判定失败**（计时受机器负载影响）
+- **性能基线**：`UnLuaNova.Perf.Benchmark` 跑六项 —— 跨语言调用三项（Native / 反射 / Lua）
+  与纯 VM 计算三项（`VM.Arithmetic` / `VM.Call` / `VM.Table`），按后端写 CSV 到
+  `Saved/Benchmark/{latest,previous}-<后端>.csv`；`GenerateTestReport.py` 读出来与**同一后端**
+  的上一轮做环比，劣化超 ±30% 标 ⚠️ 并在 stderr 提示，**不判定失败**（计时受机器负载影响）。
+  两组分开是必要的：跨语言那一跳的开销在参数编组与函数解析上，两个后端因此落在同一量级，
+  只有 `VM.*` 三项才真正区分虚拟机。CSV 按后端分开同理 —— `-Backend Both` 先后跑两个后端，
+  共用一份文件会让 Luau 那一轮拿 Lua 5.5 的结果当基线，把两个虚拟机的差异报成回归
 - **容器迭代中增删用例**：`TArray` / `TMap` / `TSet` 各补两条（迭代中 Add / Remove 不崩，
   且改动真的生效）
 - `Docs/EN/TestReports.md`：说明两份测试报告是自动生成的中文页、以及为什么不做翻译，

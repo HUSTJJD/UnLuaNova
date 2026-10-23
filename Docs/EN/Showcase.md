@@ -48,7 +48,7 @@ Lua, and how a Lua function is called back from C++.
 Point of interest: static export binding pre-generates the reflection data, so startup cost does
 not grow with the number of `UObject`s.
 
-<!-- ![Binding sample](Images/tests-luau/Showcase_Binding.png) -->
+![Binding sample](../Images/tests-luau/Showcase_Binding.png)
 
 ### 2. Overriding: replacing Blueprint events from Lua
 
@@ -58,7 +58,7 @@ a Blueprint, then overriding events such as `ReceiveBeginPlay` from Lua.
 Point of interest: overriding **replaces** - the original implementation does not run unless you
 call it explicitly through `Overridden`.
 
-<!-- ![Override sample](Images/tests-luau/Showcase_Override.png) -->
+![Override sample](../Images/tests-luau/Showcase_Override.png)
 
 ### 3. Containers: TArray / TMap / TSet from Lua
 
@@ -66,14 +66,14 @@ call it explicitly through `Overridden`.
 and that they are reference semantics there (the container itself is not copied). `TSet` can now
 be iterated with `pairs`.
 
-<!-- ![Container sample](Images/tests-luau/Showcase_Container.png) -->
+![Container sample](../Images/tests-luau/Showcase_Container.png)
 
 ### 4. UMG: Lua takes over the UI and its lifetime
 
 `11_ReleaseUMG` shows how parent/child widget creation, release and references settle down once
 Lua owns the UI - the scenario where dangling references are easiest to write.
 
-<!-- ![UMG sample](Images/tests-luau/Showcase_UMG.png) -->
+![UMG sample](../Images/tests-luau/Showcase_UMG.png)
 
 Debugging features are on the [Debugging](Debugging.md) page; memory statistics come from the
 `lua.memstats` console command, which breaks Lua-side allocation down by memory category.

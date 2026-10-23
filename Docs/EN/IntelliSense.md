@@ -33,7 +33,7 @@ without any copying.
 Type `UE.` in any Lua file of the project - the engine types should come up. If nothing
 appears, check that your IDE's Lua language extension is installed and enabled.
 
-## 4. Luau declarations (for luau-analyze)
+## 4. Luau declarations (for luau-lsp)
 
 The same export also produces `UnLuaNova.d.lua`:
 
@@ -45,7 +45,7 @@ Plugins/UnLuaNova/IntelliSense/
 │   ├── UE.lua           aggregate entry point for engine types
 │   ├── UnLuaNova.lua    UnLuaNova's own API (copied from the plugin's Content)
 │   └── <module>/<type>.lua  by UE package, e.g. Script/Engine/, Game/Foo/
-└── Luau/                Luau dialect, for luau-analyze (Luau backend static check)
+└── Luau/                Luau dialect, for luau-lsp (Luau backend static check)
     └── UnLuaNova.d.lua
 ```
 
@@ -55,7 +55,7 @@ They are split because neither analyzer can parse the other's language - feeding
 `EmmyLua/` is type annotation for an IDE and for LuaLS; `Luau/UnLuaNova.d.lua` is
 `declare class` / `declare function` declarations for a static checker - **do not `require`
 it**, it is only referenced at check time. Put the `.d.lua` next to your scripts and start
-the file with `--!strict`, and `luau-analyze` will surface UE API misuse before you run
+the file with `--!strict`, and `luau-lsp` will surface UE API misuse before you run
 anything.
 
 See [Luau backend](Luau.md).
@@ -65,6 +65,6 @@ See [Luau backend](Luau.md).
 ## Further reading
 
 - [Debugging](Debugging.md) - debugging Lua scripts
-- [Luau backend](Luau.md) - declarations and luau-analyze
+- [Luau backend](Luau.md) - declarations and luau-lsp
 - [FAQ](FAQ.md) - IntelliSense questions
 - [Settings](Settings.md) - the "Generate IntelliSense" setting

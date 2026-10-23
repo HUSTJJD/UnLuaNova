@@ -43,7 +43,7 @@ In short: **keep UnLua's programming feel, add the maintenance, performance and 
 | Binding | Runtime reflection | Build-time **static binding** (opt-out type selection) |
 | Performance | — | `CallUEFast` skips redundant lookups, persistent parameter buffers |
 | Observability | Minimal | CPU profiler / memory stats / debug service / sandbox / watchdog |
-| Type checking | LuaLS + generated EmmyLua annotations | Generated Luau `.d.lua`, checked by `luau-analyze` |
+| Type checking | LuaLS + generated EmmyLua annotations | Generated Luau `.d.lua`, checked by `luau-lsp` |
 
 For **why each of these is built the way it is, what it buys and what it costs**:
 [Why UnLuaNova](Docs/EN/WhyUnLuaNova.md) (Chinese: [相对 UnLua：原理与优势](Docs/CN/WhyUnLuaNova.md)).
@@ -103,23 +103,33 @@ Each showcase also has a 60-frame clip recorded from the live run
 
 ### Call overhead
 
-`UnLuaNova.Perf.Benchmark`, 20000 calls per row, **µs per call** (measured locally,
-UE 5.8.3 Development):
+`UnLuaNova.Perf.Benchmark`, measured locally on UE 5.8.3 Development:
 
-| Path | Lua 5.5 | Luau |
+| Path | Iterations | µs per op |
 |---|---:|---:|
-| Direct C++ call | 0.0001 | 0.0001 |
-| UE reflection `ProcessEvent` | 0.5897 | 0.5654 |
-| Calling a UE function from Lua | 1.5627 | 1.8818 |
+| Direct C++ call | 20000 | 0.0034 |
+| UE reflection `ProcessEvent` | 20000 | 0.4495 |
+| Calling a UE function from Lua | 20000 | 1.4712 |
+| Pure VM: arithmetic loop | 200000 | 0.0086 |
+| Pure VM: function call | 200000 | 0.0322 |
+| Pure VM: table read/write | 200000 | 0.0282 |
 
-Read together, the three rows say **calling engine API from Lua costs microseconds**: 20000
-cross-language calls take 30–40 ms, roughly 1.6–1.9 µs each — only 2–3× reflection
-`ProcessEvent`, and nowhere near the point where "it's too slow to call the engine from script"
-becomes true.
+The first three rows cross the language boundary, the last three do not — that split is the
+point:
 
-Both backends land in the **same order of magnitude** on this hop, because the cost is in
-UnLuaNova's parameter marshalling and function resolution, not in the VM. Luau's speed shows up
-on the pure script side, and `vector` is the clearest example:
++ **Crossing into C++ costs microseconds.** 20000 "call a UE function from Lua" take 29.4 ms,
+  1.47 µs each — a little over 3× reflection `ProcessEvent`. Nowhere near the point where "it's
+  too slow to call the engine from script" becomes true.
++ **The script itself is two orders of magnitude cheaper.** One pure VM iteration is
+  0.0086–0.032 µs, i.e. 9–32 nanoseconds. What costs time is the boundary, not the loops and
+  calls inside your script.
+
+> The table above is the **Lua 5.5 backend** run. The backend is a compile-time choice, so each
+> one is built and run separately; the Luau column goes here once that run lands. Only the `VM.*`
+> rows actually separate the two VMs — the first three are dominated by parameter marshalling and
+> function resolution, where both backends land in the same order of magnitude anyway.
+
+Luau also has a pure-script path Lua 5.5 does not have, and `vector` is it:
 
 ```lua
 local Native = vector.create(1, 2, 3)
@@ -182,13 +192,16 @@ match the Lua function name (`AnimNotify_xxx`) and the replacement is done — n
 
 | Item | Value |
 |---|---|
+| Current version | **1.0.0** ([CHANGELOG](CHANGELOG.md)) |
 | Engine baseline | **UE 5.8.3** (source build) |
 | Lua backend | **Luau (default)** / Lua 5.5 — both as submodules |
 | Upstream baseline | Tencent/UnLua v2.3.6 + `develop` (2026-04) |
 | License | Polyform Small Business 1.0.0 / paid above threshold |
 
-> ⚠️ Early stage, expect churn. Great for trying out, opening issues and pushing fixes — not yet recommended for production.
-> Known issues: see [CHANGELOG](CHANGELOG.md#known-issues).
+The Luau backend is green on all 518 automated cases (see [Test results](#test-results)) — ready to
+evaluate and adopt. Before shipping, pin a version and read the two known-limits sections:
+[Why UnLuaNova](Docs/EN/WhyUnLuaNova.md#6-costs-and-known-limits) and
+[Luau Backend](Docs/EN/Luau.md#6-what-is-still-missing).
 
 ## Docs index
 

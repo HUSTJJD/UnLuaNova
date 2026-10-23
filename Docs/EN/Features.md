@@ -84,7 +84,7 @@ See [Console Commands](ConsoleCommand.md) for the exact syntax.
 
 ### Script-side type checking
 
-* Generates Luau `.d.lua` declarations for `luau-analyze`, moving a class of UE API misuse
+* Generates Luau `.d.lua` declarations for `luau-lsp`, moving a class of UE API misuse
   to compile time
 * The Lua backend gets the same idea from the other side: the exported EmmyLua annotations
   are checked by LuaLS. Each backend uses its own analyzer - neither can parse the other's

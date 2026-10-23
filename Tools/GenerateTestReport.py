@@ -556,16 +556,20 @@ def render_typecheck(tc) -> list:
     return lines
 
 
-BENCHMARK_FILE = "latest.csv"
-BENCHMARK_PREVIOUS = "previous.csv"
+# Per backend on purpose: Benchmark.spec.cpp writes latest-Luau.csv / latest-Lua.csv. A single
+# shared pair of files compared a Luau run against the Lua 5.5 run -Backend Both had just
+# finished, and reported the gap between two different VMs as if it were a regression.
+BENCHMARK_FILE = "latest-{backend}.csv"
+BENCHMARK_PREVIOUS = "previous-{backend}.csv"
 # Benchmarks are timed on whatever machine ran them, so a tight threshold would make the
 # report cry wolf on every loaded build machine. 30% is deliberately loose: it is there to
 # catch "this change made calls twice as slow", not to police noise.
 BENCHMARK_DRIFT = 0.30
 
 
-def load_benchmark(repo_root: Path):
-    """Read Saved/Benchmark: this run's CSV and, if there is one, the run before it.
+def load_benchmark(repo_root: Path, backend=None):
+    """Read Saved/Benchmark for this backend: this run's CSV and, if there is one, the run
+    before it - of the *same* backend.
 
     Returns (rows, previous). Both are dicts of Case -> per-op microseconds. Missing
     files are not an error: the benchmark is its own automation case, and a run that did
@@ -575,8 +579,8 @@ def load_benchmark(repo_root: Path):
 
     bench_dir = repo_root / "Saved" / "Benchmark"
 
-    def read(name):
-        path = bench_dir / name
+    def read(pattern):
+        path = bench_dir / pattern.format(backend=backend or "unknown")
         if not path.is_file():
             return None
         try:
@@ -612,7 +616,7 @@ def compare_benchmark(rows, previous):
 def render_benchmark(comparison) -> list:
     lines = ["## 性能环比", ""]
     if not comparison:
-        lines.append("这一轮没有性能数据（`Saved/Benchmark/latest.csv` 不存在）。")
+        lines.append("这一轮没有性能数据（`Saved/Benchmark/latest-<后端>.csv` 不存在）。")
         lines.append("")
         return lines
 
@@ -628,9 +632,12 @@ def render_benchmark(comparison) -> list:
             f"| {row['case']} | {row['now']:.4f} | {row['before']:.4f} | {pct:+.1f}%{flag} |"
         )
     lines.append("")
+    lines.append("> `VM.*` 三项不跨越语言边界，测的是虚拟机自身；其余三项测的是脚本进入 C++ 的那一跳，")
+    lines.append("> 开销在参数编组与函数解析上，两个后端因此落在同一量级。")
+    lines.append("")
     lines.append(
-        f"> 超过 ±{int(BENCHMARK_DRIFT * 100)}% 会标 ⚠️，但**不会**让这轮失败："
-        "计时受机器负载影响，这里只做提示，不做判定。"
+        f"> 与**同一后端**的上一轮比较（CSV 按后端分开存），超过 ±{int(BENCHMARK_DRIFT * 100)}% 会标 ⚠️，"
+        "但**不会**让这轮失败：计时受机器负载影响，这里只做提示，不做判定。"
     )
     lines.append("")
     return lines
@@ -1055,7 +1062,7 @@ def main() -> None:
     typecheck = load_typecheck(reports_dir, backend)
 
     repo_root = Path(__file__).resolve().parent.parent
-    bench_rows, bench_previous = load_benchmark(repo_root)
+    bench_rows, bench_previous = load_benchmark(repo_root, backend)
     benchmark = compare_benchmark(bench_rows, bench_previous) if bench_rows else None
 
     generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

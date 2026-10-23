@@ -514,7 +514,7 @@ Lua 脚本里的 UE API 误用（函数名拼错、参数个数不对、取了�
 ```
 Plugins/UnLuaNova/IntelliSense/
 ├── EmmyLua/    Lua 方言     → lua-language-server（LuaLS）
-└── Luau/       Luau 方言    → luau-analyze
+└── Luau/       Luau 方言    → luau-lsp
     └── UnLuaNova.d.lua
 ```
 
@@ -523,20 +523,20 @@ Plugins/UnLuaNova/IntelliSense/
 
 ### 优势
 
-- **一部分 UE API 误用从运行时提前到"编译期"**：`--!strict` + `luau-analyze` 能在写的时候报出来。
+- **一部分 UE API 误用从运行时提前到"编译期"**：`--!strict` + `luau-lsp` 能在写的时候报出来。
 - **类型映射有明确规则**：整数各宽度与浮点统一为 `number`，`FString`/`FName`/`FText` 为 `string`，
   `TArray<T>` → `{T}`，`TMap<K,V>` → `{[K]: V}`，`TSet<T>` → `{[T]: boolean}`，
   委托等无法表达的类型退化为 `any`。
 - **检查结果会进测试报告**：`Tools/RunTests.ps1` 按后端分派
-  （Luau → `luau-analyze`，Lua → LuaLS），没工具时报告写"跳过 + 原因"，不假装查过。
+  （Luau → `luau-lsp`，Lua → LuaLS），没工具时报告写"跳过 + 原因"，不假装查过。
 
 ### 边界
 
 - **两个后端各用自己的分析器，这是语法事实不是偏好**：Luau 的类型注解 Lua 5.5 解析不了，
-  Lua 后端的脚本也喂不进 `luau-analyze`，不存在"共用一个"。
+  Lua 后端的脚本也喂不进 `luau-lsp`，不存在"共用一个"。
 - **`UE` 全局目前是不透明表**：它有 1.8 万个成员，会触发 Luau 的复杂度上限，
   且脚本写 `UE.FVector` 而声明叫 `Vector`。这一条还没打通。
-- `luau-analyze` 是**本地步骤**，CI 上没有可执行文件。
+- `luau-lsp` 是**本地步骤**，CI 上没有可执行文件。
 
 ---
 
