@@ -1,15 +1,21 @@
 ﻿<#
 .SYNOPSIS
-    用 luau-analyze 对工程的 Lua 脚本做静态类型检查（Luau 后端）。
+    用 luau-lsp 对工程的 Lua 脚本做静态类型检查（Luau 后端）。
 
 .DESCRIPTION
     编辑器工具栏「导出智能提示」会生成 UnLuaNova.d.lua —— 引擎类型的 Luau 声明。
-    这个脚本把声明喂给 luau-analyze，把一部分 UE API 误用（方法名拼错、参数个数/类型
+    这个脚本把声明喂给分析器，把一部分 UE API 误用（方法名拼错、参数个数/类型
     不对）提前到运行之前。
 
-    为什么不在 CI 里跑：luau-analyze 是一个可执行文件，GitHub 托管 runner 上没有，
+    分析器是 luau-lsp（Tools/luau-lsp 子模块，Tools/Build-LuauLsp.ps1 构建），
+    不是 Luau 自带的 luau-analyze：上游把 luau-analyze 的 --defs 删了
+    （CLI/src/Analyze.cpp 里已经没有这个分支，传进去只会得到 "Unrecognized option"），
+    声明文件因此喂不进去；而缺了声明，每个 UE.xxx 都是 Unknown global，
+    报告全是假错。luau-lsp analyze 有 --definitions，读的就是同一份 .d.lua。
+
+    为什么不在 CI 里跑：luau-lsp 是一个可执行文件，GitHub 托管 runner 上没有，
     而 UnLuaNova 依赖本地 UE 源码构建，CI 也拿不到引擎。所以这是本地工具；
-    找不到 luau-analyze 时脚本会说明怎么拿，并且默认以 0 退出（用 -Require 改成报错）。
+    找不到 luau-lsp 时脚本会说明怎么拿，并且默认以 0 退出（用 -Require 改成报错）。
 
 .EXAMPLE
     .\Tools\CheckLuauTypes.ps1
@@ -18,7 +24,7 @@
     .\Tools\CheckLuauTypes.ps1 -Path Content/Script/Luau -Mode strict
 
 .EXAMPLE
-    .\Tools\CheckLuauTypes.ps1 -LuauAnalyze C:\Tools\luau-analyze.exe -Require
+    .\Tools\CheckLuauTypes.ps1 -LuauLsp C:\Tools\luau-lsp.exe -Require
 #>
 
 [CmdletBinding()]
@@ -29,17 +35,17 @@ param(
     # Luau 声明文件；默认取编辑器导出的那一份（EmmyLua 在 EmmyLua/ 子目录，两种方言分开导出）
     [string] $Defs = "Plugins/UnLuaNova/IntelliSense/Luau/UnLuaNova.d.lua",
 
-    # luau-analyze 的路径；不传就按下面的顺序找
-    [string] $LuauAnalyze,
+    # luau-lsp 的路径；不传就按下面的顺序找
+    [string] $LuauLsp,
 
-    # strict | nonstrict。strict 要求每个变量都有可推断类型
+    # strict | nonstrict。写进 --base-luaurc，作为没有 .luaurc 时的默认模式
     [ValidateSet("strict", "nonstrict")]
     [string] $Mode = "strict",
 
-    # 追加给 luau-analyze 的参数，例如 "--solver=V2"
+    # 追加给 luau-lsp 的参数，例如 "--flag:LuauSolverV2=true"
     [string[]] $ExtraArgs = @(),
 
-    # 找不到 luau-analyze 时报错退出，而不是跳过
+    # 找不到 luau-lsp 时报错退出，而不是跳过
     [switch] $Require,
 
     # 只打印将要执行的命令
@@ -53,6 +59,8 @@ $ErrorActionPreference = 'Stop'
 
 # 仓库根目录 = Tools 的父目录，这样换个克隆/换台机器都能直接跑
 $RepoRoot = Split-Path -Parent $PSScriptRoot
+# 基准 .luaurc 落在这里：它带着本机绝对路径/相对路径，入库会让这个文件每次运行都变
+$WorkDir = Join-Path $RepoRoot "Saved/LuauLsp"
 
 function Resolve-InputPath([string] $Candidate)
 {
@@ -72,49 +80,46 @@ function Write-TypeCheckSummary([hashtable] $Result)
 
 # 每条退出路径都要先写 JSON：不写的话，"没跑"和"跑了但没结果"在报告里长得一样。
 
-# ---------------------------------------------------------------- luau-analyze
-function Find-LuauAnalyze
+# ---------------------------------------------------------------- luau-lsp
+function Find-LuauLsp
 {
-    if ($script:LuauAnalyze) { return $script:LuauAnalyze }
+    if ($script:LuauLsp) { return $script:LuauLsp }
 
-    if ($env:LUAU_ANALYZE -and (Test-Path -LiteralPath $env:LUAU_ANALYZE)) { return $env:LUAU_ANALYZE }
+    if ($env:LUAU_LSP -and (Test-Path -LiteralPath $env:LUAU_LSP)) { return $env:LUAU_LSP }
 
-    $cmd = Get-Command luau-analyze -ErrorAction SilentlyContinue
+    $cmd = Get-Command luau-lsp -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
 
-    # Luau 子模块用 cmake 编出来的位置（Tools/Build-LuauAnalyze.ps1 走的就是第一条）
-    $candidates = @(
-        "Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau/build/Release/luau-analyze.exe",
-        "Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau/build/release/luau-analyze.exe",
-        "Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau/build/RelWithDebInfo/luau-analyze.exe",
-        "Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau/build/luau-analyze.exe"
-    )
-    foreach ($c in $candidates)
+    # 子模块构建出来的那个（Tools/Build-LuauLsp.ps1）。MSVC 是多配置生成器，产物在
+    # build/<Configuration>/ 下，所以递归找；版本固定，优先于 PATH 上碰巧装的那个。
+    $built = Join-Path $RepoRoot "Tools/luau-lsp/build"
+    if (Test-Path -LiteralPath $built)
     {
-        $full = Resolve-InputPath $c
-        if (Test-Path -LiteralPath $full) { return $full }
+        $found = Get-ChildItem -LiteralPath $built -Recurse -Filter "luau-lsp.exe" -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($found) { return $found.FullName }
     }
 
     return $null
 }
 
-$Analyzer = Find-LuauAnalyze
+$Analyzer = Find-LuauLsp
 
 if (-not $Analyzer)
 {
     $msg = @"
-找不到 luau-analyze。三种拿法：
-  1. 从 Luau 子模块构建：Tools\Build-LuauAnalyze.ps1
-     （luau-analyze 就在子模块里，UBT 只是不编它）
-  2. cmake 自己构建 Luau 子模块：Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau
-  3. 设置环境变量 LUAU_ANALYZE 指向可执行文件
+找不到 luau-lsp。三种拿法：
+  1. 从子模块构建（推荐，版本固定）：Tools\Build-LuauLsp.ps1
+     需要 cmake + MSVC，且要在 Developer PowerShell 里跑
+  2. cmake 自己构建子模块：Tools/luau-lsp（它自己还带一个 luau/ 嵌套子模块）
+  3. 设置环境变量 LUAU_LSP 指向可执行文件
 
 详见 Docs/CN/Luau.md
 "@
 
     Write-TypeCheckSummary @{
         skipped = $true
-        reason  = "找不到 luau-analyze（下载预编译二进制，或 cmake 构建 Luau 子模块，或设 LUAU_ANALYZE 环境变量）"
+        reason  = "找不到 luau-lsp（Tools\Build-LuauLsp.ps1 从子模块构建，或设 LUAU_LSP 环境变量）"
         mode    = $Mode
         files   = 0
     }
@@ -148,42 +153,11 @@ if (-not (Test-Path -LiteralPath $DefsPath))
     $DefsPath = $null
 }
 
-# 有文件不等于喂得进去：上游把 luau-analyze 的 --defs 删了，vendored 的 Luau 又不是我们能改的
-# 代码。先问一句再传 —— 传了不认识的选项，整个检查会以 "Unrecognized option" 收场，真诊断
-# 一条都看不到（比没有声明还糟）。和 Lua 后端缺 EmmyLua 声明时是同一个道理：喂不进声明就
-# 等于每个 UE.xxx 都是 Unknown global，报告全是假错，所以跳过而不是硬跑。
-$SupportsDefs = $false
-if ($DefsPath)
-{
-    $SavedEap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try { $HelpText = (& $Analyzer --help 2>&1 | ForEach-Object { $_.ToString() }) -join "`n" }
-    catch { $HelpText = "" }
-    finally { $ErrorActionPreference = $SavedEap }
-
-    $SupportsDefs = $HelpText -match '--defs'
-
-    if (-not $SupportsDefs)
-    {
-        Write-TypeCheckSummary @{
-            skipped  = $true
-            reason   = "这个 luau-analyze 不支持 --defs，声明文件喂不进去（上游删了这个选项，vendored 的 Luau 不归我们改）"
-            analyzer = $Analyzer
-            defs     = $DefsPath
-            mode     = $Mode
-            files    = 0
-        }
-        Write-Warning "这个 luau-analyze 不支持 --defs：$Analyzer"
-        Write-Warning "声明文件 $DefsPath 喂不进去，缺了它每个 UE.xxx 都会报 Unknown global，报告全是假错，所以跳过。"
-        exit 0
-    }
-}
-
 if ((Get-Item -LiteralPath $Target).PSIsContainer)
 {
     # .d.lua 是声明，不是脚本，不参与检查
-    $Files = @(Get-ChildItem -LiteralPath $Target -Recurse -Filter *.lua -File |
-        Where-Object { $_.Name -notlike "*.d.lua" })
+    $Files = @(Get-ChildItem -LiteralPath $Target -Recurse -File |
+        Where-Object { $_.Extension -in '.lua', '.luau' -and $_.Name -notlike "*.d.lua" })
 }
 else
 {
@@ -193,26 +167,79 @@ else
 if ($Files.Count -eq 0)
 {
     Write-TypeCheckSummary @{ skipped = $true; reason = "没有找到 .lua 文件：$Target"; mode = $Mode; files = 0 }
-    Write-Host "没有找到 .lua 文件：$Target"
+    Write-Host "没有找到 .lua / .luau 文件：$Target"
     exit 0
 }
 
+# ---------------------------------------------------------------- config
+# luau-lsp 没有 --mode：严格程度来自 .luaurc（--base-luaurc 指定的那份是默认值）。
+# 同一个文件还负责 require 的别名 —— 这些脚本 require 的是 UnLuaNova 的模块路径
+# （require "Luau.Index"），没有任何配置时 luau-lsp 只会把它当成解不开的 require。
+if (-not (Test-Path -LiteralPath $WorkDir)) { New-Item -ItemType Directory -Path $WorkDir -Force | Out-Null }
+
+function Get-RelativePath([string] $From, [string] $To)
+{
+    $fromUri = New-Object Uri((($From.TrimEnd('\', '/')) + '/'))
+    $toUri = New-Object Uri($To)
+    $rel = $fromUri.MakeRelativeUri($toUri).ToString()
+    try { $rel = [Uri]::UnescapeDataString($rel) } catch { }
+    # 反斜杠在 JSON 里要转义，Lua 一样认正斜杠
+    return $rel.Replace('\', '/')
+}
+
+# 别名 = 被检查目录自己，加上它同级的那几个目录：require 的第一段就是这些目录名。
+$Dir = if ((Get-Item -LiteralPath $Target).PSIsContainer) { $Target } else { Split-Path -Parent $Target }
+$AliasDirs = New-Object System.Collections.Generic.List[string]
+$AliasDirs.Add($Dir)
+foreach ($sibling in @(Get-ChildItem -LiteralPath (Split-Path -Parent $Dir) -Directory -ErrorAction SilentlyContinue))
+{
+    $AliasDirs.Add($sibling.FullName)
+}
+
+$Aliases = [ordered]@{}
+foreach ($d in ($AliasDirs | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -Unique))
+{
+    $name = Split-Path -Leaf $d
+    if (-not $name) { continue }
+    $Aliases[$name] = Get-RelativePath -From $WorkDir -To $d
+}
+
+$BaseLuaurc = [ordered]@{
+    languageMode = $Mode
+    aliases      = $Aliases
+}
+$BaseLuaurcPath = Join-Path $WorkDir ".luaurc"
+# 不能带 BOM：Luau 的配置解析器会在第一个字节上就炸
+# （Expected '{' at line 1, got Unicode character U+feff），而 Set-Content -Encoding UTF8
+# 在 Windows PowerShell 5.1 上是一定会写 BOM 的。
+[System.IO.File]::WriteAllText($BaseLuaurcPath,
+    ($BaseLuaurc | ConvertTo-Json -Depth 5),
+    (New-Object System.Text.UTF8Encoding($false)))
+
+# ---------------------------------------------------------------- args
 $ArgList = New-Object System.Collections.Generic.List[string]
-if ($DefsPath -and $SupportsDefs) { $ArgList.Add("--defs=$DefsPath") }
-$ArgList.Add("--mode=$Mode")
+$ArgList.Add("analyze")
+# platform=standard：不加载 Roblox 的 DataModel 那套东西，声明只有我们这一份
+$ArgList.Add("--platform=standard")
+if ($DefsPath) { $ArgList.Add("--definitions=@unluanova=$DefsPath") }
+$ArgList.Add("--base-luaurc=$BaseLuaurcPath")
+$ArgList.Add("--formatter=default")
 foreach ($a in $ExtraArgs) { if ($a) { $ArgList.Add($a) } }
 foreach ($f in $Files) { $ArgList.Add($f.FullName) }
 
-Write-Host "luau-analyze: $Analyzer"
-Write-Host "检查 $($Files.Count) 个文件（mode=$Mode）"
+Write-Host "luau-lsp : $Analyzer"
+Write-Host "检查 $($Files.Count) 个文件（mode=$Mode，声明 $(if ($DefsPath) { $DefsPath } else { '（无）' })）"
 
 if ($DryRun)
 {
+    Write-Host "（DryRun）cwd = $RepoRoot"
     Write-Host "（DryRun）$Analyzer $($ArgList -join ' ')"
+    Write-Host "（DryRun）$BaseLuaurcPath ："
+    Get-Content -LiteralPath $BaseLuaurcPath | ForEach-Object { Write-Host "  $_" }
     exit 0
 }
 
-# luau-analyze writes every diagnostic to stderr, and PowerShell turns those into ErrorRecords -
+# luau-lsp writes every diagnostic to stderr, and PowerShell turns those into ErrorRecords -
 # with $ErrorActionPreference='Stop' the first one ends the script right here, before the
 # summary is written and before the exit code is read. The run then looks like the type check
 # never happened. Both are needed below, neither needs PowerShell's help, so it stays quiet
@@ -221,7 +248,11 @@ $SavedPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 try
 {
-    $Output = & $Analyzer $ArgList 2>&1
+    # 在仓库根目录跑：luau-lsp 把诊断里的路径写成相对 cwd 的形式，换一个 cwd 报告里
+    # 就会出现一堆 ../..，入库的那份每次都不一样。
+    Push-Location $RepoRoot
+    try { $Output = & $Analyzer $ArgList 2>&1 }
+    finally { Pop-Location }
     $ExitCode = $LASTEXITCODE
 }
 finally
@@ -230,8 +261,30 @@ finally
 }
 
 $Lines = @($Output | ForEach-Object { $_.ToString() })
-$Errors = @($Lines | Where-Object { $_ -match '(?i)error' })
-$Warnings = @($Lines | Where-Object { $_ -match '(?i)warning' })
+
+# 诊断长这样：  Content/Script/Luau/Index.lua(47,20): TypeError: Unknown require ...
+# 类型段是分析器给的分类：TypeError / SyntaxError 是错误，其余（lint 的名字，如
+# UnknownGlobal、DeprecatedApi）是警告 —— 比按字面找 error/warning 稳。
+$Errors = New-Object System.Collections.Generic.List[string]
+$Warnings = New-Object System.Collections.Generic.List[string]
+
+foreach ($Line in $Lines)
+{
+    if (-not $Line) { continue }
+
+    $m = [regex]::Match($Line, '^(?<file>.+?)\((?<line>\d+),(?<col>\d+)\):\s*(?<type>[^:]+):\s*(?<msg>.+)$')
+    if (-not $m.Success)
+    {
+        # 分析器自己的报错（读不到文件、配置写错……）没有那个形状，但一样是问题
+        $Errors.Add($Line)
+        continue
+    }
+
+    $where = "$($m.Groups['file'].Value):$($m.Groups['line'].Value)"
+    $text = "$($where): $($m.Groups['type'].Value): $($m.Groups['msg'].Value)"
+    if ($m.Groups['type'].Value -match 'Error$') { $Errors.Add($text) }
+    else { $Warnings.Add($text) }
+}
 
 if ($Lines.Count -gt 0)
 {
@@ -240,7 +293,7 @@ if ($Lines.Count -gt 0)
     Write-Host ""
 }
 
-Write-Host "类型检查：错误 $(@($Errors).Count) 条，警告 $(@($Warnings).Count) 条。"
+Write-Host "类型检查：错误 $($Errors.Count) 条，警告 $($Warnings.Count) 条。"
 
 Write-TypeCheckSummary @{
     skipped  = $false
@@ -253,7 +306,7 @@ Write-TypeCheckSummary @{
     exit     = $ExitCode
 }
 
-# luau-analyze 对"有类型错误"不一定返回非 0，所以以输出里的错误计数为准
+# luau-lsp 有诊断就返回非 0，但"有警告也要算失败"太吵，所以以错误计数为准
 if ($Errors.Count -gt 0) { exit 1 }
 if ($ExitCode -ne 0) { exit $ExitCode }
 exit 0

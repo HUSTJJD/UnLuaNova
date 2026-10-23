@@ -757,15 +757,18 @@ function Invoke-TypeCheck {
 
     # Two backends, two analyzers, and that is not a preference - it is what each language
     # can parse. Luau scripts carry type annotations and --!strict, which Lua 5.5 chokes on;
-    # the Lua backend's scripts are Lua 5.5, which luau-analyze chokes on. So each backend
+    # the Lua backend's scripts are Lua 5.5, which a Luau analyzer chokes on. So each backend
     # runs the checker that reads its language, against the declarations the editor exported
     # for it (.d.lua for Luau, EmmyLua for Lua), and each writes its own summary next to the
     # automation JSON - the report generator looks for these exact names.
+    # The Luau side is luau-lsp, not Luau's own luau-analyze: upstream deleted --defs from
+    # luau-analyze, so the .d.lua could not reach it and every UE.xxx came back as an
+    # Unknown global. luau-lsp analyze takes --definitions and reads the same file.
     if ($Backend -eq "Luau") {
         $SummaryPath = Join-Path $RunDir "luau-analyze.json"
         $CheckerName = "CheckLuauTypes.ps1"
         $Checker = Join-Path $ToolsDir $CheckerName
-        $CheckerLabel = "luau-analyze"
+        $CheckerLabel = "luau-lsp"
         # Only the annotated Luau scripts: the rest of Content/Script is written to Lua 5.1
         # so it loads on both backends, and strict mode would light up on it for reasons
         # that have nothing to do with this run.
