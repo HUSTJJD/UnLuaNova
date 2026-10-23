@@ -11,52 +11,41 @@
     这些在 Lua 5.5 后端下是**编译期错误** —— 不是运行到才失败，是 require 的那一刻就崩。
     所以这里先问后端，只有确认是 Luau 才去 require 它们；Lua 5.5 下直接返回
     Available = false，一个示例文件都不会被加载。
+
+    因此这个文件自己必须是**两个后端都能解析**的语法：它是 Lua 5.5 下唯一会被 require
+    到的 Luau 示例文件，一旦写了 `type X = ...` 这类注解，守卫就先于它自己的判断失效 ——
+    require 直接语法错误，Lua 后端连"我不是 Luau"这句话都说不出来。同理，两个分支共用
+    同一张表、只有一个 return：luau-analyze 只拿第一个 return 当模块类型去推断，分成两个
+    形状不同的 return 会让第二个被判成"缺字段"。
 ]]
 
--- 两个 return 的字段集不一样（失败时给 Reason，成功时给示例模块），而 luau-analyze 拿第一个
--- return 当模块类型去推断，第二个就会被判成"缺字段"。所以这里显式声明返回类型，示例字段标成
--- 可选 —— 顺带把 Backend 从字面量放宽成 string：不写的话，第一个 return 会把 Backend 推断成
--- "Lua"（`~= "Luau"` 分支里的收窄结果），第二个 return 再赋 "Luau" 就成了类型不符。
-type Index = {
-    Backend: string,
-    Available: boolean,
-    Reason: string?,
-    StrictTyping: any?,
-    SandboxBoundary: any?,
-    NativeDebug: any?,
-    LuauSyntax: any?,
-    VectorInterop: any?,
-}
+local Backend = UnLuaNova.GetBackend()
 
-local Backend: string = UnLuaNova.GetBackend()
+-- 两个分支返回的是同一张表，用 Available 区分；示例字段只在 Luau 下存在。
+local Examples = {
+    Backend = Backend,
+    Available = false,
+}
 
 if Backend ~= "Luau" then
-    local Unavailable: Index = {
-        Backend = Backend,
-        Available = false,
-        Reason = "这些示例需要 Luau 后端，当前后端是 " .. tostring(Backend),
-    }
-    return Unavailable
-end
-
-local Examples: Index = {
-    Backend = Backend,
-    Available = true,
+    Examples.Reason = "这些示例需要 Luau 后端，当前后端是 " .. tostring(Backend)
+else
+    Examples.Available = true
 
     -- 严格类型 + 冻结配置表
-    StrictTyping = require "Luau.01_StrictTyping",
+    Examples.StrictTyping = require "Luau.01_StrictTyping"
 
     -- 沙盒开启后，什么能写、什么会报错
-    SandboxBoundary = require "Luau.02_SandboxBoundary",
+    Examples.SandboxBoundary = require "Luau.02_SandboxBoundary"
 
     -- lua.dbg 原生断点的下断点目标
-    NativeDebug = require "Luau.03_NativeDebug",
+    Examples.NativeDebug = require "Luau.03_NativeDebug"
 
     -- continue / 复合赋值 / table.freeze / bit32 速览
-    LuauSyntax = require "Luau.04_LuauSyntax",
+    Examples.LuauSyntax = require "Luau.04_LuauSyntax"
 
     -- vector 与 FVector 互操作
-    VectorInterop = require "Luau.05_VectorInterop",
-}
+    Examples.VectorInterop = require "Luau.05_VectorInterop"
+end
 
 return Examples

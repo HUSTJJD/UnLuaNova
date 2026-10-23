@@ -165,10 +165,16 @@ local function make_sandbox()
             local _, new_module = xpcall(func, load_error_handler, ...)
             if loaded_modules[module_name] == nil then
                 loaded_modules[module_name] = new_module
-                package.loaded[module_name] = new_module
+                -- package.loaded is the record of "this module ran": FLuaEnv::Start() and
+                -- LowLevel::GetLoadedModule() both read it, and both native require()s -
+                -- plain Lua's own, and the one this env installs on Luau - store `true`
+                -- for a module that returns nothing. Writing the nil verbatim deletes the
+                -- entry instead, so a module that did run reads back as one that never
+                -- did (Start() reports it at Error) and the next require() runs it again.
+                package.loaded[module_name] = new_module == nil and true or new_module
                 loaded_module_times[module_name] = get_last_modified_time(module_name)
                 call_hook("module_loaded", new_module, module_name, false)
-                return new_module, nil
+                return package.loaded[module_name], nil
             end
         else
             return origin_require(module_name, ...)
