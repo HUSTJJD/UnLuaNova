@@ -323,7 +323,18 @@ BEGIN_EXPORT_CLASS(FSoftObjectPtr, const UObject*)
     ADD_FUNCTION_EX("GetAssetName", FString, GetAssetName)
     ADD_FUNCTION_EX("GetLongPackageName", FString, GetLongPackageName)
     ADD_CONST_FUNCTION_EX("Get", UObject*, Get)
+    // 引擎给 FSoftObjectPtr::LoadSynchronous 加了 ELoadFlags 形参（有默认值），
+    // 而 UnLua 只能按"注册时的签名"去调：写成无参就得把
+    // `UObject*(FSoftObjectPtr::*)(ELoadFlags) const` 强转成无参版本（C4191）。
+    // 改成带参注册会让 Lua 侧的 obj:LoadSynchronous() 少一个实参而报错
+    // （UnLua 没有 C++ 默认参数机制），所以这里保留无参形态并关掉该诊断。
+    //
+    // TODO(上游)：彻底修法是注册一个 lua_CFunction 转发（AddStaticCFunction），
+    // 在函数体里显式传 LOAD_None，避免成员函数指针转换。
+    MSVC_PRAGMA(warning(push))
+    MSVC_PRAGMA(warning(disable: 4191))  // 函数指针强制转换
     ADD_CONST_FUNCTION_EX("LoadSynchronous", UObject*, LoadSynchronous)
+    MSVC_PRAGMA(warning(pop))
     ADD_LIB(FSoftObjectPtrLib)
 END_EXPORT_CLASS()
 

@@ -51,7 +51,8 @@ public:
 
         FUnLuaNovaEditorCommands::Register();
 
-        FCoreDelegates::OnPostEngineInit.AddRaw(this, &FUnLuaNovaEditorModule::OnPostEngineInit);
+        // OnPostEngineInit 被弃用：新接口是 GetOnPostEngineInit()（返回同一个 delegate 的引用）
+        FCoreDelegates::GetOnPostEngineInit().AddRaw(this, &FUnLuaNovaEditorModule::OnPostEngineInit);
 
         MainMenuToolbar = MakeShareable(new FMainMenuToolbar);
         BlueprintToolbar = MakeShareable(new FBlueprintToolbar);
@@ -72,7 +73,7 @@ public:
     virtual void ShutdownModule() override
     {
         FUnLuaNovaEditorCommands::Unregister();
-        FCoreDelegates::OnPostEngineInit.RemoveAll(this);
+        FCoreDelegates::GetOnPostEngineInit().RemoveAll(this);
         UnregisterSettings();
 
 #if ENGINE_MAJOR_VERSION > 4
@@ -164,7 +165,8 @@ private:
                 return true;
             SuspendedPackages.Add(Package, Class);
             return false;
-        }, false);
+            // 第三个参数原来是 bool bIncludeNestedObjects，5.x 换成了 EGetObjectsFlags
+        }, EGetObjectsFlags::None);
 
         for (const auto Pair : SuspendedPackages)
             ULuaFunction::SuspendOverrides(Pair.Value);

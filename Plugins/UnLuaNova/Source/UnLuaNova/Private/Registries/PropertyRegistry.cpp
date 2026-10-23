@@ -364,7 +364,8 @@ namespace UnLuaNova
 #endif
             };
 #if UE_VERSION_NEWER_THAN(5, 2, 1)
-            const auto Property = new FTextProperty(PropertyCollector, "", RF_Transient);
+            // 带 InObjectFlags 的 F*Property 构造函数已弃用：直接去掉那个实参
+            const auto Property = new FTextProperty(PropertyCollector, "");
 #else
             const auto Property = new FTextProperty(PropertyCollector, Params);
 #endif
@@ -488,7 +489,7 @@ namespace UnLuaNova
 			};
         	const auto EnumProperty = new FEnumProperty(PropertyCollector, Params);
 #endif
-            const auto UnderlyingProperty = new FByteProperty(EnumProperty, TEXT("UnderlyingType"), RF_Transient);
+            const auto UnderlyingProperty = new FByteProperty(EnumProperty, TEXT("UnderlyingType"));
             Property = EnumProperty;
             Property->AddCppProperty(UnderlyingProperty);
 #if UE_VERSION_OLDER_THAN(5, 3, 0)

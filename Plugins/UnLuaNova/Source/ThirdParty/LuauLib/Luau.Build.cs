@@ -69,6 +69,10 @@ public class Luau : ModuleRules
 		// loudly if the other one is too (or if neither is).
 		PublicDefinitions.Add("UNLUANOVA_BACKEND_MODULE_LUAU=1");
 
+		// Luau still uses strcpy/strcat/strncpy; MSVC flags each of them (C4996).
+		// Private, so only the Luau sources see it - dependents keep UE's default.
+		PrivateDefinitions.Add("_CRT_SECURE_NO_WARNINGS=1");
+
 		// Luau defaults to LUA_USE_LONGJMP=0, i.e. C++ exceptions (class lua_exception).
 		// Unreal builds with exceptions disabled, so force setjmp/longjmp instead - that
 		// is also what plain Lua does, so pcall/error semantics match.
@@ -94,6 +98,17 @@ public class Luau : ModuleRules
 			PrivateDefinitions.Add("LUA_API=__declspec(dllexport)");
 			PrivateDefinitions.Add("LUACODE_API=__declspec(dllexport)");
 		}
+
+		// Force-include our own warning header into every Luau translation unit.
+		//
+		// UBT has no switch for the two diagnostics upstream Luau emits (C4457
+		// "declaration hides function parameter" and C4389 "signed/unsigned
+		// mismatch"): ShadowVariableWarningLevel only maps to /wd4456,4458,4459 on
+		// MSVC, and SignCompareWarningLevel maps to clang -Wsign-compare. Patching
+		// the sources is not an option either - they live in the submodule.
+		//
+		// The header sits next to this file, i.e. outside Luau/, so it is ours.
+		ForceIncludeFiles.Add(Path.Combine(ModuleDirectory, "LuauWarnings.h"));
 
 		// Third-party C++: do not let Unreal's strict settings fail the build.
 		// Off, not Warning, so third-party code never fails the build on diagnostics.
