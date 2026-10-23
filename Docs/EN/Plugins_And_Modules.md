@@ -14,8 +14,9 @@ Modules:
 * `UnLuaNova` - the runtime module
 * `UnLuaNovaEditor` - editor module: Lua template generation, IntelliSense export, console
   commands
-* `UnLuaNovaDefaultParamCollector` - build-time module that collects `UFUNCTION` default
-  parameter values
+* `UnLuaNovaDefaultParamCollector` - a C# UBT plugin (not declared under `Modules`; UBT
+  discovers the `*.ubtplugin.csproj` itself) that collects `UFUNCTION` default parameter
+  values
 
 ## UnLuaNovaExtensions
 

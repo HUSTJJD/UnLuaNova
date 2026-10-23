@@ -11,18 +11,18 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using EpicGames.Core;
 
-namespace UnLuaNovaDefaultParamCollectorUbtPlugin
+namespace UnLuaNovaDefaultParamCollector
 {
     [UnrealHeaderTool]
-    class UnLuaNovaDefaultParamCollectorUbtPlugin
+    class DefaultParamCollectorExporter
     {
         [UhtExporter(Name = "UnLuaNova", Description = "UnLuaNova Default Param Collector", Options = UhtExporterOptions.Default, ModuleName = "UnLuaNova")]
-        private static void UnLuaNovaDefaultParamCollectorUbtPluginExporter(IUhtExportFactory factory)
+        private static void Export(IUhtExportFactory factory)
         {
-            new UnLuaNovaDefaultParamCollectorUbtPlugin(factory).Generate();
+            new DefaultParamCollectorExporter(factory).Generate();
         }
 
-        public UnLuaNovaDefaultParamCollectorUbtPlugin(IUhtExportFactory factory)
+        public DefaultParamCollectorExporter(IUhtExportFactory factory)
         {
             Factory = factory;
             Borrower = new BorrowStringBuilder(StringBuilderCache.Big);
@@ -382,7 +382,7 @@ namespace UnLuaNovaDefaultParamCollectorUbtPlugin
             else if (property is UhtMulticastDelegateProperty)
             {
                 PreAddProperty(classObj, function);
-                GeneratedContentBuilder.AppendFormat("PC->Parameters.Add(TEXT(\"{0}\"), SharedMulticastDelegate);\r\n", property.SourceName);
+                GeneratedContentBuilder.AppendFormat("PC->Parameters.Add(TEXT(\"{0}\"), SharedMulticastScriptDelegate);\r\n", property.SourceName);
             }
         }
 

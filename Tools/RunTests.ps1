@@ -1096,7 +1096,11 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         } elseif ($env:UNLUANOVA_RECORD_FRAMES) {
             # already set by the caller - leave it alone
         } else {
-            $env:UNLUANOVA_RECORD_FRAMES = "60"
+            # 帧数，不是帧率：showcase 用例每个 tick 抓一张截图，抓满这么多张为止。
+            # 每一张都是一次完整的视口回读 + PNG 编码，是跑测试时最主要的卡顿来源
+            # （4 个 showcase 各 60 帧时，它们占了整轮 183s 里的 77s）。
+            # 30 张 + 报告生成器按 15fps 编码 = 仍是 2 秒的剪辑，截图数少一半。
+            $env:UNLUANOVA_RECORD_FRAMES = "30"
         }
 
         # Launched with Start-Process and not with `&` on purpose: `&` blocks until the editor

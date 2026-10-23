@@ -28,7 +28,7 @@ Plugins/UnLuaNova/
 │   │   │   └── StaticBinding/    the static binding registry implementation
 │   │   └── UnLuaNova.Build.cs  backend selection lives here (reads LuaBackend from Config/DefaultUnLuaNovaEditor.ini)
 │   ├── UnLuaNovaEditor/        editor module: toolbars, IntelliSense, 3 commandlets, settings
-│   ├── UnLuaNovaDefaultParamCollector(|UbtPlugin)/  UBT plugin collecting UFunction default parameters
+│   ├── UnLuaNovaDefaultParamCollector/  C# UBT plugin (not a module) collecting UFunction default parameters
 │   └── ThirdParty/             the Lua and Luau git submodules plus each one's Build.cs and generator
 ├── UnLuaNovaExtensions/        LuaProtobuf / LuaRapidjson / LuaSocket, three independent plugins (optional)
 └── UnLuaNovaTestSuite/         tests: Private/Specs/ (unit) + Private/Tests/ (regression, scenario)

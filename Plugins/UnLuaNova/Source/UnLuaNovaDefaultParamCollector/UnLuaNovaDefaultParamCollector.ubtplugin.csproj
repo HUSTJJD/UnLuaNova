@@ -1,5 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="UnLuaNovaDefaultParamCollectorUbtPlugin.ubtplugin.csproj.props" Condition="Exists('UnLuaNovaDefaultParamCollectorUbtPlugin.ubtplugin.csproj.props')" />
+  <Import Project="UnLuaNovaDefaultParamCollector.ubtplugin.csproj.props" Condition="Exists('UnLuaNovaDefaultParamCollector.ubtplugin.csproj.props')" />
   <Import Project="$(EngineDir)\Source\Programs\Shared\UnrealEngine.csproj.props" />
 
   <PropertyGroup>
@@ -13,9 +13,9 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <Configurations>Debug;Release;Development</Configurations>
-    <RootNamespace>UnLuaDefaultParamCollectorUbtPlugin</RootNamespace>
-    <AssemblyName>UnLuaDefaultParamCollectorUbtPlugin</AssemblyName>
-    <OutputPath>..\..\..\..\Binaries\DotNET\UnrealBuildTool\Plugins\UnLuaDefaultParamCollectorUbtPlugin\</OutputPath>
+    <RootNamespace>UnLuaNovaDefaultParamCollector</RootNamespace>
+    <AssemblyName>UnLuaNovaDefaultParamCollector</AssemblyName>
+    <OutputPath>..\..\..\..\Binaries\DotNET\UnrealBuildTool\Plugins\UnLuaNovaDefaultParamCollector\</OutputPath>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <DebugType>pdbonly</DebugType>
     <Nullable>enable</Nullable>

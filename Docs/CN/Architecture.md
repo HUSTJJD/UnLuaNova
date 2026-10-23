@@ -27,7 +27,7 @@ Plugins/UnLuaNova/
 │   │   │   └── StaticBinding/    静态绑定注册表的实现
 │   │   └── UnLuaNova.Build.cs  后端选择在这里（读 Config/DefaultUnLuaNovaEditor.ini 的 LuaBackend）
 │   ├── UnLuaNovaEditor/        编辑器模块：工具栏、IntelliSense、3 个 Commandlet、设置项
-│   ├── UnLuaNovaDefaultParamCollector(|UbtPlugin)/  UBT 插件，收集 UFunction 的默认参数
+│   ├── UnLuaNovaDefaultParamCollector/  C# UBT 插件（非模块），收集 UFunction 的默认参数
 │   └── ThirdParty/             Lua / Luau 两个 git 子模块 + 各自的 Build.cs 与生成脚本
 ├── UnLuaNovaExtensions/        LuaProtobuf / LuaRapidjson / LuaSocket，三个独立插件（可不带）
 └── UnLuaNovaTestSuite/         测试：Private/Specs/（单元）+ Private/Tests/（回归、场景）

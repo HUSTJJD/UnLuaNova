@@ -12,7 +12,7 @@ description: "UnLuaNova / UnLuaNovaExtensions / UnLuaNovaTestSuite 的组成与�
 模块列表：
 * UnLuaNova 主要运行时模块
 * UnLuaNovaEditor 编辑器模块，提供Lua模版生成/智能提示导出/控制台命令等功能
-* UnLuaNovaDefaultParamCollector 编码模块，收集UFUNCTION的默认参数
+* UnLuaNovaDefaultParamCollector C\# 版 UBT 插件（不在 `Modules` 里声明，UBT 自动发现），收集UFUNCTION的默认参数
 
 ## UnLuaNovaExtensions
 

@@ -401,7 +401,21 @@ Showcase 用例除了静态图，还会录一段**帧序列**（`Showcase_Bindin
 .\Tools\RunTests.ps1 -NoVideo
 ```
 
-想改长度就设 `UNLUANOVA_RECORD_FRAMES`（默认 60 帧）。
+剪辑的帧数由 `UNLUANOVA_RECORD_FRAMES` 决定（默认 30 帧）。它是**帧数不是帧率**：
+showcase 用例每个 tick 抓一张截图，抓满为止 —— 一张截图就是一次完整的视口回读加 PNG
+编码，是跑测试时最主要的卡顿来源（每个 showcase 抓 60 帧时，4 个 showcase 占了整轮
+183s 里的 77s）。报告生成器按 15fps 编码，所以 30 帧仍是 2 秒的剪辑，截图数少一半。
+
+```powershell
+# 想要更长的剪辑：帧数翻倍（30 -> 60 帧 = 4 秒）
+$env:UNLUANOVA_RECORD_FRAMES = "60"; .\Tools\RunTests.ps1 -Backend Luau
+
+# 只要整场录屏，不要 showcase 剪辑
+$env:UNLUANOVA_RECORD_FRAMES = "0"; .\Tools\RunTests.ps1 -Backend Luau
+```
+
+整场录屏是另一回事：它由 ffmpeg 抓编辑器窗口，帧率看 `-SessionFps`（默认 15），
+`-NoSessionVideo` 单独关掉它、`-NoVideo` 两个一起关。
 
 ### 编码器从哪来
 

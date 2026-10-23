@@ -77,9 +77,12 @@ SESSION_VIDEO_STEM = "session"
 TYPECHECK_FILES = {"Lua": "lua-analyze.json", "Luau": "luau-analyze.json"}
 TYPECHECK_SHOWN = 20
 
-# Frames are captured one per rendered frame, so this is the playback rate chosen for the
-# encoded clip, not a measurement.
-CLIP_FPS = 30
+# A clip is this many seconds long, whatever the capture count was: the playback rate is
+# derived per sequence (frames / CLIP_SECONDS). Every captured frame is a full viewport
+# readback plus a PNG encode, and that is what stalls the run, so RunTests.ps1 wants to be
+# able to halve the capture count without halving the clip - 30 frames at 15fps and 60 frames
+# at 30fps are both a 2-second clip.
+CLIP_SECONDS = 2.0
 
 # What a crash looks like in Editor.log. The automation framework exports nothing when the
 # process dies, so the log is the only evidence there is.
@@ -405,11 +408,14 @@ def find_ffmpeg(explicit=None):
     return None, None
 
 
-def encode_sequences(shot_dir, video_dir, sequences, ffmpeg, fps=CLIP_FPS):
+def encode_sequences(shot_dir, video_dir, sequences, ffmpeg, fps=None):
     """Encode every frame sequence into one .mp4. Returns a {name: reason} map of failures.
 
     Recording is part of the run, not an extra, so a burst that cannot be encoded is a
     failure with a reason - never a silent pile of PNGs the reader has to decode by eye.
+
+    fps is the playback rate for all sequences; leave it None to derive it per sequence from
+    CLIP_SECONDS.
     """
     failures = {}
     if not sequences:
@@ -419,10 +425,13 @@ def encode_sequences(shot_dir, video_dir, sequences, ffmpeg, fps=CLIP_FPS):
     for name, frames in sorted(sequences.items()):
         out = video_dir / f"{name}.mp4"
         # -framerate: the frames were grabbed one per rendered frame, so any real frame rate
-        # is a guess; 30 is the honest one for a clip whose point is "it moves".
+        # is a guess. Deriving it from the frame count keeps the clip CLIP_SECONDS long:
+        # 60 frames play at 30fps, 30 frames at 15fps. Without this, halving the captures to
+        # make the run less stuttery would also halve every clip.
+        rate = fps if fps else max(1, round(len(frames) / CLIP_SECONDS))
         cmd = [
             ffmpeg, "-y", "-loglevel", "error",
-            "-framerate", str(fps),
+            "-framerate", str(rate),
             "-i", str(shot_dir / f"{name}_%04d.png"),
             # libx264 refuses odd dimensions, and a viewport can be any size (a resized
             # editor window, a custom -ResX/-ResY). Crop the last row/column rather than

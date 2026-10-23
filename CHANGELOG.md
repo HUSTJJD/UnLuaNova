@@ -56,6 +56,11 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   `.d.lua`
 
 ### Changed
+- **showcase 剪辑默认抓 30 帧而不是 60 帧**：每一帧都是一次完整的视口回读 + PNG 编码，
+  是跑测试时最主要的卡顿来源（每个 showcase 抓 60 帧时，4 个 showcase 占了整轮 183s 里的
+  77s）。`GenerateTestReport.py` 改成按帧数反推播放帧率（`CLIP_SECONDS`，默认 2 秒），
+  所以 30 帧按 15fps 播、60 帧按 30fps 播 —— 剪辑时长不变，截图数减半。
+  想改长度就设 `UNLUANOVA_RECORD_FRAMES`（帧数，不是帧率）
 - **`Tools/*.ps1` 丢掉 UTF-8 BOM 会整轮崩，现在能自愈**：Windows PowerShell 5.1 没有 BOM 就按
   系统 ANSI（GBK）读 `.ps1`，中文字符串被解成乱码后落在字符串字面量里，脚本一行没跑就
   `ParseException` —— 报告上只看到"类型检查失败"，看不到原因。BOM 可能被编辑器、也可能被

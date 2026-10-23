@@ -439,7 +439,22 @@ means this round did not record.
 .\Tools\RunTests.ps1 -NoVideo
 ```
 
-Change the length with `UNLUANOVA_RECORD_FRAMES` (default 60 frames).
+Clip length comes from `UNLUANOVA_RECORD_FRAMES` (default 30 frames). It is a **frame count,
+not a frame rate**: a showcase test grabs one screenshot per tick until it has that many, and
+one screenshot is a full viewport readback plus a PNG encode - the main source of stutter while
+the suite runs (at 60 frames each, the four showcase tests were 77s of a 183s run). The report
+generator encodes at 15fps, so 30 frames is still a 2-second clip for half the captures.
+
+```powershell
+# longer clips: double the count (30 -> 60 frames = 4 seconds)
+$env:UNLUANOVA_RECORD_FRAMES = "60"; .\Tools\RunTests.ps1 -Backend Luau
+
+# keep the whole-run recording, drop the showcase clips
+$env:UNLUANOVA_RECORD_FRAMES = "0"; .\Tools\RunTests.ps1 -Backend Luau
+```
+
+The whole-run recording is a separate thing: ffmpeg captures the editor window at
+`-SessionFps` (default 15). `-NoSessionVideo` drops just that one, `-NoVideo` drops both.
 
 ### Where the encoder comes from
 
