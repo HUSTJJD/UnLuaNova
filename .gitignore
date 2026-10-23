@@ -25,7 +25,7 @@ IOS/
 /TPSProject.sln.DotSettings.user
 /Plugins/Developer/RiderLink
 /Benchmark
-/Plugins/UnLuaNova/Source/UnLuaNovaDefaultParamCollectorUbtPlugin/obj
+/Plugins/UnLuaNova/Source/UnLuaNovaDefaultParamCollector/obj
 
 # Generated on the machine that last opened/built the project:
 #   *.slnx            - VS solution (same role as the already-ignored *.sln)

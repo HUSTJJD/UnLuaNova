@@ -47,6 +47,87 @@ UnLuaNova 把散落的社区成果收敛成一条**有人维护的发行线**，
 每一项**为什么这么做、换来了什么、代价在哪**：[相对 UnLua：原理与优势](Docs/CN/WhyUnLuaNova.md)
 （英文版 [Why UnLuaNova](Docs/EN/WhyUnLuaNova.md)）。
 
+## 测试结果
+
+自动化测试在**两个后端各跑一遍全量**，报告由 `Tools/RunTests.ps1` 生成、随仓库发布 ——
+不是抽样，是仓库里的每一条用例：
+
+| 后端 | 用例 | 通过 | 失败 | 跳过 | 耗时 | 静态类型检查 |
+|:---|---:|---:|---:|---:|---:|:---|
+| **Luau**（默认） | **518** | 518 ✅ | 0 | 0 | 205.9s | `luau-lsp` strict：**0 错误** |
+| Lua 5.5 | 509 | 509 ✅ | 0 | 0 | 225.1s | LuaLS：**0 错误** |
+
+完整报告：[Luau 后端](Docs/test-luau-report.md) · [Lua 5.5 后端](Docs/test-lua-report.md)
+
+518 条里有 **59 条是上游 issue 的回归测试**（`Issue276` … `Issue668`）——
+上游那些「有人报、有人改、但没人验证过」的问题，在这里是一条会红的用例，
+而不是一段留在 issue 区里的对话。
+
+Luau 比 Lua 5.5 多出的 9 条，是 Luau 专属能力：原生 `vector` ↔ `FVector`、`buffer` 读写、
+沙盒拦截、**原生断点与单步**（常态零开销）、分配分类统计。这些在 Lua 5.5 下**不存在**，
+不是降级实现 —— 详见 [Luau 后端](Docs/CN/Luau.md)。
+
+### 运行时实录
+
+下面四张不是摆拍，是自动化测试自己跑出来的画面（用例 `UnLuaNova.Showcase.*`）：
+
+<div align="center">
+
+<table>
+<tr>
+<td align="center"><img src="Docs/Images/tests-luau/Showcase_Binding.png" width="400"><br><b>静态绑定</b></td>
+<td align="center"><img src="Docs/Images/tests-luau/Showcase_Container.png" width="400"><br><b>容器访问</b></td>
+</tr>
+<tr>
+<td align="center"><img src="Docs/Images/tests-luau/Showcase_Override.png" width="400"><br><b>蓝图事件覆写</b></td>
+<td align="center"><img src="Docs/Images/tests-luau/Showcase_UMG.png" width="400"><br><b>UMG 与 Lua 生命周期</b></td>
+</tr>
+</table>
+
+</div>
+
+每一段 showcase 还有 60 帧的实机剪辑（`Tools/RunTests.ps1 -Video` 录制，标准 H.264 mp4）：
+
+[静态绑定](Docs/Images/tests-luau/Showcase_Binding_Clip.mp4) ｜
+[容器访问](Docs/Images/tests-luau/Showcase_Container_Clip.mp4) ｜
+[蓝图事件覆写](Docs/Images/tests-luau/Showcase_Override_Clip.mp4) ｜
+[UMG 与 Lua 生命周期](Docs/Images/tests-luau/Showcase_UMG_Clip.mp4) ｜
+[整场录屏：从第一条用例跑到最后一条](Docs/Images/tests-luau/session.mp4)
+
+> GitHub 不内联播放仓库内的 mp4，点开上面的链接即可观看；文档站的
+> [测试报告](https://hustjjd.github.io/UnLuaNova/) 里是可以直接播放的。
+
+### 调用开销
+
+`UnLuaNova.Perf.Benchmark` 每项 20000 次调用，单位 **µs/次**（本机实测，UE 5.8.3 Development）：
+
+| 路径 | Lua 5.5 | Luau |
+|---|---:|---:|
+| 直接 C++ 调用 | 0.0001 | 0.0001 |
+| UE 反射 `ProcessEvent` | 0.5897 | 0.5654 |
+| 从 Lua 调用 UE 函数 | 1.5627 | 1.8818 |
+
+三行放在一起看，结论是「**从 Lua 调引擎 API 的成本是微秒级**」：20000 次跨语言调用 30–40 ms，
+单次约 1.6–1.9 µs —— 只有反射 `ProcessEvent` 的 2–3 倍，量级上远低于「为了性能不敢从脚本调引擎」的门槛。
+
+两个后端在这一跳上**同一量级**，因为它花在 UnLuaNova 的参数编组与函数解析上，不在虚拟机本身。
+Luau 的速度优势体现在纯脚本侧，最典型的是 `vector`：
+
+```lua
+local Native = vector.create(1, 2, 3)
+local Sum = (Native + Native) * 2     -- 值类型运算，零分配
+
+local Vec = UE.FVector(1, 2, 3)
+local Sum2 = (Vec + Vec) * 2          -- 每次 + 都新建一个 userdata，随后被 GC
+```
+
+`vector` 的三个分量塞在 TValue 里，运算不分配任何对象；`FVector` 是带元表的 userdata，
+每一次 `a + b` 都要新建再回收一个。数学密集的脚本（方向、速度、偏移、插值）在 Luau 下
+可以直接避开这一整条分配链。
+
+> 想自己复现：`.\Tools\RunTests.ps1 -Backend Both -Publish`，两个后端各出一份报告，
+> 性能数据写进 `Saved/Benchmark/`。
+
 ## 快速开始
 
 ```bash
