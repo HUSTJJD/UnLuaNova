@@ -5,7 +5,7 @@ description: "自动化测试产出的通过率、通过明细、失败明细与
 
 # 测试报告（Luau 后端）
 
-> 由 `Tools/GenerateTestReport.py` 自动生成于 2026-10-23 10:42:12。请勿手工编辑。
+> 由 `Tools/GenerateTestReport.py` 自动生成于 2026-10-23 11:28:33。请勿手工编辑。
 
 ## 结论
 
@@ -639,17 +639,28 @@ description: "自动化测试产出的通过率、通过明细、失败明细与
 
 ，60 帧，由这些帧编码而成（`Tools/RunTests.ps1 -Video`）。
 
-## 静态类型检查
+## 静态类型检查（luau-lsp）
 
-这一轮没有跑：`Tools/RunTests.ps1` 没写 `luau-analyze.json`。
+| 指标 | 数值 |
+|---|---|
+| 检查文件数 | 6 |
+| 模式 | `strict` |
+| 错误 | 1 |
+| 警告 | 5 |
+
+**有类型错误 ❌** —— 输出到日志里的前几条：
+
+```
+Content/Script/Luau/02_SandboxBoundary.lua:24: TypeError: Function only returns 1 value, but 2 are required here
+```
 
 ## 性能环比
 
 | 用例 | 本次（µs/次） | 上次（µs/次） | 变化 |
 |---|---|---|---|
-| Lua | 1.7139 | 1.7976 | -4.7% |
-| Native | 0.0001 | 0.0001 | +0.0% |
-| Reflection | 0.4584 | 0.5698 | -19.6% |
+| Lua | 2.2216 | 1.8641 | +19.2% |
+| Native | 0.0001 | — | 无上次数据 |
+| Reflection | 0.6137 | 0.8480 | -27.6% |
 
 > 超过 ±30% 会标 ⚠️，但**不会**让这轮失败：计时受机器负载影响，这里只做提示，不做判定。
 

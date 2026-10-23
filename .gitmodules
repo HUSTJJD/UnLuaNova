@@ -13,9 +13,10 @@
 	# Same as above: Luau.Build.cs generates a .ubtignore so UBT only builds the wrappers
 	# in LuauLib/Generated and not Analysis/, CLI/, tests/ etc.
 	ignore = untracked
-	# luau-analyze (the Luau backend's static checker) is part of this submodule -
-	# CLI/src/Analyze.cpp - but UBT excludes CLI/, so Tools/Build-LuauAnalyze.ps1
-	# builds just the Luau.Analyze.CLI target with cmake. No separate dependency.
+	# Luau's own CLI is in here too (CLI/src/Analyze.cpp), but UBT excludes CLI/ and it is no
+	# longer what checks this project: upstream deleted its --defs, so the Luau backend runs
+	# luau-lsp instead - Tools/luau-lsp, built by Tools/Build-LuauLsp.ps1. Build the vendored
+	# luau-analyze by hand (cmake --target Luau.Analyze.CLI) if you ever want it back.
 [submodule "Tools/lua-language-server"]
 	path = Tools/lua-language-server
 	url = https://github.com/LuaLS/lua-language-server.git

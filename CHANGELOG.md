@@ -49,6 +49,11 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   且改动真的生效）
 - `Docs/EN/TestReports.md`：说明两份测试报告是自动生成的中文页、以及为什么不做翻译，
   英文导航改为挂这一页
+- **Luau 后端的静态检查改用 `luau-lsp`**：以子模块引入 `Tools/luau-lsp`
+  （`Tools/Build-LuauLsp.ps1` 用 cmake + MSVC 构建）。上游把 `luau-analyze` 的 `--defs`
+  删了，`UnLuaNova.d.lua` 因此喂不进去 —— 缺了它每个 `UE.xxx` 都是 Unknown global，
+  报告全是假错，这一步只能整段跳过。`luau-lsp analyze --definitions` 读的是同一份
+  `.d.lua`
 
 ### Changed
 - **`Tools/*.ps1` 丢掉 UTF-8 BOM 会整轮崩，现在能自愈**：Windows PowerShell 5.1 没有 BOM 就按
@@ -94,6 +99,9 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 
 ### Removed
 - `.codebuddy/_scan_log.py`：被并发进程误提交进 `11301173` 的临时脚本，已从索引移除
+- **`Tools/Build-LuauAnalyze.ps1`**：Luau 后端的静态检查改用 `luau-lsp` 之后没人调用了。
+  `luau-analyze` 本体还在 Luau 子模块的 `CLI/` 里（UBT 不编），真要用时 cmake 编
+  `Luau.Analyze.CLI` 就是了
 - **`Tools/RunTests.ps1 -BuildOnly`**：只编译不跑（编完退出，不启动编辑器、不生成报告），
   与 `-SkipBuild` 互斥。让"测试代码编译不过"这类问题能在一天内被发现
 - **`Tools/Install-NightlyTask.ps1`**：注册/删除"每晚编译一次测试代码"的 Windows 计划任务
@@ -184,6 +192,9 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   `IUnLuaNovaModule::Get().GetEnv(Context)`（环境定位器的结果）解析环境，而不是
   `TryBind` 被调用的那个。spec 自建 `FLuaEnv` 时绑定与分发落在两个 VM 上，
   表现是"覆装上了、调用却静默走原实现"
+- **已发布的报告终于有「静态类型检查」这一节**：`GenerateTestReport.py` 写 `Docs/` 那份时
+  调 `render()` 漏了 `typecheck` / `encode_failures`，于是入库的页面永远写着"这一轮没有跑：
+  `RunTests.ps1` 没写 `luau-analyze.json`"，只有 `Saved/` 下那份能看到检查结果
 
 ### Changed
 - **测试注册名统一大小写**：`UNLUANOVA.API.Base` / `UNLUANOVA.API.Enum` →

@@ -166,7 +166,7 @@ param(
     # 只编译不跑：编完每个后端就退出，不启动编辑器、不生成报告。给 nightly 与"改完 spec
     # 想先确认能编过"这类场景用；与 -SkipBuild 互斥。
     [switch] $BuildOnly,
-    # 静态检查报出错误时让脚本以非 0 退出（Luau 后端是 luau-analyze，Lua 后端是 LuaLS）。
+    # 静态检查报出错误时让脚本以非 0 退出（Luau 后端是 luau-lsp，Lua 后端是 LuaLS）。
     # 默认只记录到报告里，不当作测试失败：它是静态检查，不是自动化用例，而且本机未必装了
     # 对应的分析器。
     [switch] $FailOnTypeErrors,
@@ -689,9 +689,9 @@ function Format-DataSize {
 
 function Export-IntelliSense {
     # The type check is only as good as the declarations it reads, and those are produced by
-    # the editor - UnLuaNova.d.lua for luau-analyze, the EmmyLua annotations for LuaLS. They
+    # the editor - UnLuaNova.d.lua for luau-lsp, the EmmyLua annotations for LuaLS. They
     # used to be reachable only from the editor toolbar, so a machine where nobody ever
-    # clicked that button ran the check against nothing: luau-analyze turned every UE type
+    # clicked that button ran the check against nothing: luau-lsp turned every UE type
     # into "Unknown global 'UnLuaNova'", and LuaLS skipped the run outright. Both still
     # looked like a passing run.
     #
@@ -716,7 +716,7 @@ function Export-IntelliSense {
     }
 
     if (-not (Test-Path -LiteralPath $DeclsFile) -or (Get-Item -LiteralPath $DeclsFile).Length -eq 0) {
-        Write-Host "Decl      : 没生成 $DeclsFile —— luau-analyze 会把每个 UE 类型都报成 unknown global。" -ForegroundColor Yellow
+        Write-Host "Decl      : 没生成 $DeclsFile —— luau-lsp 会把每个 UE 类型都报成 unknown global。" -ForegroundColor Yellow
         return $false
     }
 

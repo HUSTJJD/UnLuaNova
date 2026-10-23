@@ -1,6 +1,6 @@
 ---
 title: Luau Backend
-description: UnLuaNova's Luau backend — language features you can use today, type declarations with luau-analyze, sandboxing, native breakpoints, and the differences from Lua 5.5
+description: UnLuaNova's Luau backend — language features you can use today, type declarations with luau-lsp, sandboxing, native breakpoints, and the differences from Lua 5.5
 ---
 
 # Luau Backend
@@ -29,7 +29,7 @@ These come from Luau itself (all Luau libraries are registered via `luaL_openlib
 
 | Feature | Status | Notes |
 |---|:--:|---|
-| Type annotations, `--!strict` / `--!nonstrict` | Available | Pair it with the generated `UnLuaNova.d.lua`, see [type declarations](#3-type-declarations-and-luau-analyze) |
+| Type annotations, `--!strict` / `--!nonstrict` | Available | Pair it with the generated `UnLuaNova.d.lua`, see [type declarations](#3-type-declarations-and-luau-lsp) |
 | `continue` | Available | Lua 5.5 has no such keyword |
 | Compound assignment `+=` `-=` `*=` `/=` `%=` `..=` | Available | Also syntax-level incompatibility |
 | `type()` / `typeof()` | Available | `typeof` returns the class name for userdata |
@@ -195,9 +195,9 @@ Both `UnLuaNova.Vector` and `UnLuaNova.Buffer` are safe to call on either backen
 
 ---
 
-## 3. Type declarations and luau-analyze
+## 3. Type declarations and luau-lsp
 
-The editor module generates Luau declarations for engine types so `luau-analyze` can catch a
+The editor module generates Luau declarations for engine types so `luau-lsp` can catch a
 class of UE API misuse (wrong function name, wrong arity, wrong argument type) before you run.
 
 **Generate**: UnLuaNova toolbar → export IntelliSense. Output:
@@ -205,7 +205,7 @@ class of UE API misuse (wrong function name, wrong arity, wrong argument type) b
 ```
 Plugins/UnLuaNova/IntelliSense/
 ├── EmmyLua/             Lua dialect, for IDE completion + LuaLS
-└── Luau/                Luau dialect, for luau-analyze
+└── Luau/                Luau dialect, for luau-lsp
     └── UnLuaNova.d.lua
 ```
 
@@ -214,17 +214,23 @@ Plugins/UnLuaNova/IntelliSense/
     It is referenced by the static checker only — never `require` it at runtime.
 
 !!! note "The Lua backend uses a different analyzer: LuaLS"
-    From the same export, `.d.lua` goes to `luau-analyze` and the EmmyLua `*.lua` go to
+    From the same export, `.d.lua` goes to `luau-lsp` and the EmmyLua `*.lua` go to
     `lua-language-server`, driven by `Tools/CheckLuaTypes.ps1`. That is not a preference,
     it is syntax: Luau's type annotations do not parse as Lua 5.5, and Lua backend scripts
     do not parse as Luau. `RunTests.ps1` dispatches per backend, so both backends get a
     "static type checking" section in their report.
 
+!!! note "Why luau-lsp and not Luau's own luau-analyze"
+    Upstream removed `--defs` from `luau-analyze`, so the declarations cannot be fed to it -
+    and without them every `UE.xxx` is reported as an Unknown global, i.e. a report full of
+    false positives. `luau-lsp analyze --definitions` reads the same `.d.lua`. Build it from
+    the `Tools/luau-lsp` submodule with `Tools/Build-LuauLsp.ps1` (cmake + MSVC).
+
 **Use**: drop `UnLuaNova.d.lua` into your script project, put `--!strict` at the top of your
-scripts, then run `luau-analyze`:
+scripts, then run `luau-lsp`:
 
 ```bash
-luau-analyze --solver=V2 --settings=luau-settings.json Content/Script/
+luau-lsp analyze --platform=standard --definitions=@unluanova=Plugins/UnLuaNova/IntelliSense/Luau/UnLuaNova.d.lua Content/Script/
 ```
 
 Mapping rules: integers of every width and floats collapse to `number`,
@@ -233,7 +239,7 @@ Mapping rules: integers of every width and floats collapse to `number`,
 exotic degrade to `any`.
 
 **One command**: `Tools/CheckLuauTypes.ps1` wires the two steps together - find
-`luau-analyze`, pass it the `.d.lua`, run it over a script directory, and exit non-zero if
+`luau-lsp`, pass it the `.d.lua`, run it over a script directory, and exit non-zero if
 any type error is reported:
 
 ```powershell
@@ -244,16 +250,16 @@ any type error is reported:
 .\Tools\CheckLuauTypes.ps1 -Path Content/Script/Luau -Mode strict
 
 # pin the binary; fail instead of skipping when it is missing
-.\Tools\CheckLuauTypes.ps1 -LuauAnalyze C:\Tools\luau-analyze.exe -Require
+.\Tools\CheckLuauTypes.ps1 -LuauLsp C:\Tools\luau-lsp.exe -Require
 ```
 
-`luau-analyze` itself is not in the repo (it is an executable). The script looks for it as
-`-LuauAnalyze` → `LUAU_ANALYZE` → `PATH` → the Luau submodule's cmake build directory.
+`luau-lsp` itself is not in the repo (it is an executable). The script looks for it as
+`-LuauLsp` → `LUAU_LSP` → `PATH` → the `Tools/luau-lsp` submodule's cmake build directory.
 When it finds none it skips and exits 0, so it is safe to hang off any scheduler; add
 `-Require` if a missing tool should count as a failure.
 
 !!! note "Why this is not a CI step"
-    GitHub-hosted runners have neither `luau-analyze` nor a local UE source build, so type
+    GitHub-hosted runners have neither `luau-lsp` nor a local UE source build, so type
     checking is a **local** step. CI only checks that the script itself parses.
 
 ---
@@ -344,7 +350,7 @@ for the `-Backend` you ask for before it runs anything:
 |---|---|---|
 | Zero-copy `buffer` ↔ `TArray<uint8>` | explicit byte-by-byte conversion | true zero copy needs the container binding to read and write buffer memory directly |
 | Freezing **class tables** under sandbox | globals hardened + writes into `UE` refused | class tables cache lazily (a first access `rawset`s), so freezing them breaks the cache |
-| `luau-analyze` in CI | local script exists, CI has no binary | a self-hosted runner can run it as-is |
+| `luau-lsp` in CI | local script exists, CI has no binary | a self-hosted runner can run it as-is |
 | DAP adapter | `lua.dbg` is headless | the capability is exposed; what is missing is the layer that plugs it into an IDE |
 
 ---

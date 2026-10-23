@@ -119,6 +119,7 @@ if (-not $Analyzer)
 
     Write-TypeCheckSummary @{
         skipped = $true
+        checker = "luau-lsp"
         reason  = "找不到 luau-lsp（Tools\Build-LuauLsp.ps1 从子模块构建，或设 LUAU_LSP 环境变量）"
         mode    = $Mode
         files   = 0
@@ -139,7 +140,7 @@ if (-not $Analyzer)
 $Target = Resolve-InputPath $Path
 if (-not (Test-Path -LiteralPath $Target))
 {
-    Write-TypeCheckSummary @{ skipped = $true; reason = "路径不存在：$Target"; mode = $Mode; files = 0 }
+    Write-TypeCheckSummary @{ skipped = $true; checker = "luau-lsp"; reason = "路径不存在：$Target"; mode = $Mode; files = 0 }
     Write-Host "路径不存在：$Target"
     exit 1
 }
@@ -166,7 +167,7 @@ else
 
 if ($Files.Count -eq 0)
 {
-    Write-TypeCheckSummary @{ skipped = $true; reason = "没有找到 .lua 文件：$Target"; mode = $Mode; files = 0 }
+    Write-TypeCheckSummary @{ skipped = $true; checker = "luau-lsp"; reason = "没有找到 .lua 文件：$Target"; mode = $Mode; files = 0 }
     Write-Host "没有找到 .lua / .luau 文件：$Target"
     exit 0
 }
@@ -329,6 +330,7 @@ Write-Host "类型检查：错误 $($Errors.Count) 条，警告 $($Warnings.Coun
 
 Write-TypeCheckSummary @{
     skipped  = $false
+    checker  = "luau-lsp"
     analyzer = $Analyzer
     defs     = $(if ($DefsPath) { $DefsPath } else { $null })
     mode     = $Mode

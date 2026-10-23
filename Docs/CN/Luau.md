@@ -1,6 +1,6 @@
 ---
 title: Luau 后端
-description: UnLuaNova 的 Luau 后端：立即可用的语言特性、类型声明与 luau-analyze、沙盒、原生断点调试，以及与 Lua 5.5 的行为差异
+description: UnLuaNova 的 Luau 后端：立即可用的语言特性、类型声明与 luau-lsp、沙盒、原生断点调试，以及与 Lua 5.5 的行为差异
 ---
 
 # Luau 后端
@@ -29,7 +29,7 @@ LuaBackend=Luau   ; 或 Lua
 
 | 特性 | 状态 | 备注 |
 |---|:--:|---|
-| 类型注解、`--!strict` / `--!nonstrict` | 可用 | 配合生成的 `UnLuaNova.d.lua` 使用，见[类型声明](#三类型声明与-luau-analyze) |
+| 类型注解、`--!strict` / `--!nonstrict` | 可用 | 配合生成的 `UnLuaNova.d.lua` 使用，见[类型声明](#三类型声明与-luau-lsp) |
 | `continue` | 可用 | Lua 5.5 没有这个关键字 |
 | 复合赋值 `+=` `-=` `*=` `/=` `%=` `..=` | 可用 | 同上，属于语法层面不兼容 |
 | `type()` / `typeof()` | 可用 | `typeof` 对 userdata 返回类名 |
@@ -192,9 +192,9 @@ local Back = UnLuaNova.Buffer.ToArray(Buf)      -- buffer -> TArray
 
 ---
 
-## 三、类型声明与 luau-analyze
+## 三、类型声明与 luau-lsp
 
-编辑器模块会为引擎类型生成 Luau 声明文件，供 `luau-analyze` 做静态检查 ——
+编辑器模块会为引擎类型生成 Luau 声明文件，供 `luau-lsp` 做静态检查 ——
 把一部分 UE API 误用（函数名拼错、参数个数/类型不对）提前到"编译期"。
 
 **生成**：UnLuaNova 工具栏 → 导出智能提示，产物落在
@@ -202,7 +202,7 @@ local Back = UnLuaNova.Buffer.ToArray(Buf)      -- buffer -> TArray
 ```
 Plugins/UnLuaNova/IntelliSense/
 ├── EmmyLua/             Lua 方言，给 IDE 补全 + LuaLS
-└── Luau/                Luau 方言，给 luau-analyze
+└── Luau/                Luau 方言，给 luau-lsp
     └── UnLuaNova.d.lua
 ```
 
@@ -211,13 +211,19 @@ Plugins/UnLuaNova/IntelliSense/
     只在静态检查时被引用，运行时不要 `require` 它。
 
 !!! note "Lua 后端用的是另一个分析器：LuaLS"
-    同一份导出里，`.d.lua` 归 `luau-analyze`，`*.lua`（EmmyLua）归
+    同一份导出里，`.d.lua` 归 `luau-lsp`，`*.lua`（EmmyLua）归
     `lua-language-server`，对应脚本是 `Tools/CheckLuaTypes.ps1`。
     这不是偏好而是语法事实：Luau 的类型注解 Lua 5.5 解析不了，
-    反过来 Lua 后端的脚本也喂不进 `luau-analyze`。
+    反过来 Lua 后端的脚本也喂不进 `luau-lsp`。
     `RunTests.ps1` 按后端分派，两个后端都会在报告里出一节「静态类型检查」。
 
-**使用**：把 `UnLuaNova.d.lua` 放进脚本工程，脚本头部声明严格模式，然后用 `luau-analyze` 检查：
+!!! note "为什么是 luau-lsp，而不是 Luau 自带的 luau-analyze"
+    上游把 `luau-analyze` 的 `--defs` 选项删了，声明文件喂不进去；缺了声明，
+    每个 `UE.xxx` 都会被报成 Unknown global，报告全是假错。`luau-lsp analyze
+    --definitions` 读的是同一份 `.d.lua`。它由 `Tools/Build-LuauLsp.ps1` 从
+    `Tools/luau-lsp` 子模块构建（cmake + MSVC）。
+
+**使用**：把 `UnLuaNova.d.lua` 放进脚本工程，脚本头部声明严格模式，然后用 `luau-lsp` 检查：
 
 ```lua
 --!strict
@@ -225,7 +231,7 @@ local M = UnLuaNova.Class()
 
 function M:ReceiveBeginPlay()
     self.Health = 100
-    -- 下面这行会在 luau-analyze 阶段报错：UE.UWidgetBlueprintLibrary 没有这个方法
+    -- 下面这行会在 luau-lsp 阶段报错：UE.UWidgetBlueprintLibrary 没有这个方法
     local W = UE.UWidgetBlueprintLibrary.CreateWidget(self)
 end
 
@@ -233,14 +239,14 @@ return M
 ```
 
 ```bash
-luau-analyze --solver=V2 --settings=luau-settings.json Content/Script/
+luau-lsp analyze --platform=standard --definitions=@unluanova=Plugins/UnLuaNova/IntelliSense/Luau/UnLuaNova.d.lua Content/Script/
 ```
 
 类型映射规则：整数各宽度与浮点统一为 `number`，`FString`/`FName`/`FText` 为 `string`，
 `TArray<T>` → `{T}`，`TMap<K,V>` → `{[K]: V}`，`TSet<T>` → `{[T]: boolean}`，
 结构体按 `USTRUCT` 名，委托等无法表达的类型退化为 `any`。
 
-**一键检查**：`Tools/CheckLuauTypes.ps1` 把上面两步串起来 —— 找到 `luau-analyze`、
+**一键检查**：`Tools/CheckLuauTypes.ps1` 把上面两步串起来 —— 找到 `luau-lsp`、
 带上 `.d.lua`、对脚本目录跑一遍，有类型错误就以非零退出码结束：
 
 ```powershell
@@ -250,16 +256,16 @@ luau-analyze --solver=V2 --settings=luau-settings.json Content/Script/
 # 只看 Luau 示例，严格模式
 .\Tools\CheckLuauTypes.ps1 -Path Content/Script/Luau -Mode strict
 
-# 指定 luau-analyze；找不到时就报错而不是跳过
-.\Tools\CheckLuauTypes.ps1 -LuauAnalyze C:\Tools\luau-analyze.exe -Require
+# 指定 luau-lsp；找不到时就报错而不是跳过
+.\Tools\CheckLuauTypes.ps1 -LuauLsp C:\Tools\luau-lsp.exe -Require
 ```
 
-`luau-analyze` 本身不在仓库里（它是个可执行文件），脚本按这个顺序找：
-`-LuauAnalyze` 参数 → 环境变量 `LUAU_ANALYZE` → `PATH` → Luau 子模块的 cmake 构建目录。
+`luau-lsp` 本身不在仓库里（它是个可执行文件），脚本按这个顺序找：
+`-LuauLsp` 参数 → 环境变量 `LUAU_LSP` → `PATH` → `Tools/luau-lsp` 子模块的 cmake 构建目录。
 找不到时默认跳过并以 0 退出，所以可以放心挂到任何调度里；想让"没工具"也算失败就加 `-Require`。
 
 !!! note "为什么不在 CI 里跑"
-    GitHub 托管 runner 上没有 `luau-analyze`，也没有本地 UE 源码构建，
+    GitHub 托管 runner 上没有 `luau-lsp`，也没有本地 UE 源码构建，
     所以类型检查是**本地步骤**；CI 只保证脚本本身语法正确。
 
 ---
@@ -344,7 +350,7 @@ end
 |---|---|---|
 | `buffer` ↔ `TArray<uint8>` 的零拷贝 | 目前是显式逐字节转换 | 真正的零拷贝要让容器绑定直接读写 buffer 内存 |
 | 沙盒下冻结**类表** | 只冻结了全局表 + 拦截脚本写入 `UE` | 类表是懒缓存的（首次访问会 `rawset`），冻结会打断缓存 |
-| `luau-analyze` 进 CI | 本地脚本已有，CI 没有可执行文件 | 有自托管 runner 就可以直接挂上去 |
+| `luau-lsp` 进 CI | 本地脚本已有，CI 没有可执行文件 | 有自托管 runner 就可以直接挂上去 |
 | DAP 适配器 | `lua.dbg` 是 headless 的 | 能力已暴露，缺一个把它接到 IDE 的适配层 |
 
 ---

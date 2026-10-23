@@ -1178,6 +1178,11 @@ def main() -> None:
                     clips=clips,
                     session=session,
                     uncoded=uncoded,
+                    # typecheck / encode_failures were missing here, so the committed page
+                    # always said "这一轮没有跑" even on runs whose checker did run - only the
+                    # copy under Saved/ ever showed the section.
+                    typecheck=typecheck,
+                    encode_failures=encode_failures,
                     benchmark=benchmark,
                 ),
                 repo_root,

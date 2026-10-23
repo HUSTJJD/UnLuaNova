@@ -34,9 +34,9 @@ The companion scripts live in `Tools/` and are invoked from the repository root:
 |---|---|
 | `Tools/RunTests.ps1` | Builds, runs the suite, collects screenshots/recordings, generates the report — the subject of this page |
 | `Tools/GenerateTestReport.py` | Turns the JSON the automation framework exported into the Markdown/HTML report (`RunTests.ps1` calls it) |
-| `Tools/CheckLuauTypes.ps1` | Luau backend: static type check via `luau-analyze` plus the generated `UnLuaNova.d.lua` |
+| `Tools/CheckLuauTypes.ps1` | Luau backend: static type check via `luau-lsp` plus the generated `UnLuaNova.d.lua` |
 | `Tools/CheckLuaTypes.ps1` | Lua backend: static check via LuaLS (`lua-language-server`) plus the generated EmmyLua annotations |
-| `Tools/Build-LuauAnalyze.ps1` | cmake-builds `luau-analyze` from the Luau submodule (it is in there; UBT just skips `CLI/`) |
+| `Tools/Build-LuauLsp.ps1` | cmake-builds `luau-lsp` from the `Tools/luau-lsp` submodule (needs cmake + MSVC; it carries a nested `luau/` submodule) |
 | `Tools/Build-LuaLS.ps1` | Builds LuaLS from the `Tools/lua-language-server` submodule; pulls its 21 nested submodules on first run |
 | `Tools/Rename-To-UnLuaNova.ps1` | Migration script: bulk-renames an UnLua project/codebase to `UnLuaNova` (`UnLua` → `UnLuaNova`, `UUnLuaSettings` → `UUnLuaNovaSettings`, …). Run it once when migrating; not part of running tests |
 | `Tools/Install-NightlyTask.ps1` | Registers / removes the Windows scheduled task that compiles the test code once a night (`-BuildOnly`), see "Compile at least once a day" below |
@@ -95,7 +95,7 @@ backend" below.
 | `-ExtraCommands` | empty | extra console commands to run afterwards (used for screenshots) |
 | `-NoScreenshots` | off | do not collect screenshots. **They are collected by default**: the docs site and the report gallery run on them |
 | `-NoVideo` | off | do not record. **Recording is on by default**: the showcase tests record a frame sequence and the report generator encodes it into an `.mp4` |
-| `-FailOnTypeErrors` | off | exit non-zero when the static checker reports errors (by default they are only recorded). `luau-analyze` on the Luau backend, LuaLS on the Lua backend |
+| `-FailOnTypeErrors` | off | exit non-zero when the static checker reports errors (by default they are only recorded). `luau-lsp` on the Luau backend, LuaLS on the Lua backend |
 | `-FailOnDrift` | off | exit non-zero when the test list no longer matches the baseline (by default it only warns), see "Test list baseline" below |
 | `-UpdateBaseline` | off | write this run's test list as the new baseline and commit it - a reviewed, manual act |
 | `-NullRHI` | off | headless: faster, but **not the same set of tests**, and no frames to capture - see below |

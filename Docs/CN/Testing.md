@@ -32,9 +32,9 @@ Plugins/UnLuaNovaTestSuite/
 |---|---|
 | `Tools/RunTests.ps1` | 编译 + 跑用例 + 收集截图/录屏 + 生成报告，本文档的主角 |
 | `Tools/GenerateTestReport.py` | 把自动化框架导出的 JSON 转成 Markdown/HTML 报告（`RunTests.ps1` 会调） |
-| `Tools/CheckLuauTypes.ps1` | Luau 后端：用 `luau-analyze` + 生成的 `UnLuaNova.d.lua` 做静态类型检查 |
+| `Tools/CheckLuauTypes.ps1` | Luau 后端：用 `luau-lsp` + 生成的 `UnLuaNova.d.lua` 做静态类型检查 |
 | `Tools/CheckLuaTypes.ps1` | Lua 后端：用 LuaLS（`lua-language-server`）+ 生成的 EmmyLua 注解做静态检查 |
-| `Tools/Build-LuauAnalyze.ps1` | 从 Luau 子模块 cmake 构建 `luau-analyze`（它就在子模块里，只是 UBT 不编 `CLI/`） |
+| `Tools/Build-LuauLsp.ps1` | 从 `Tools/luau-lsp` 子模块 cmake 构建 `luau-lsp`（需要 cmake + MSVC；它自己还带一个 `luau/` 嵌套子模块） |
 | `Tools/Build-LuaLS.ps1` | 从 `Tools/lua-language-server` 子模块构建 LuaLS；首次会拉它的 21 个嵌套子模块 |
 | `Tools/Rename-To-UnLuaNova.ps1` | 迁移脚本：把一份 UnLua 工程/代码批量改名到 `UnLuaNova`（`UnLua` → `UnLuaNova`、`UUnLuaSettings` → `UUnLuaNovaSettings` 等）。只在迁移时用一次，跑测试不需要它 |
 | `Tools/Install-NightlyTask.ps1` | 注册/删除"每晚编译一次测试代码"的 Windows 计划任务（`-BuildOnly`），见下方"每晚至少编一次" |
@@ -92,7 +92,7 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `-ExtraCommands` | 空 | 跑完追加执行的控制台命令（截图用） |
 | `-NoScreenshots` | 关 | 不收集截图。**默认收集**：文档站和报告画廊都靠它们 |
 | `-NoVideo` | 关 | 不录帧序列。**默认录**：Showcase 用例会录一段帧序列，报告生成时编码成 `.mp4` |
-| `-FailOnTypeErrors` | 关 | 静态检查报出错误时非 0 退出（默认只记进报告）。Luau 后端是 `luau-analyze`，Lua 后端是 LuaLS，见 [Luau 后端](Luau.md) |
+| `-FailOnTypeErrors` | 关 | 静态检查报出错误时非 0 退出（默认只记进报告）。Luau 后端是 `luau-lsp`，Lua 后端是 LuaLS，见 [Luau 后端](Luau.md) |
 | `-FailOnDrift` | 关 | 用例清单与基线不一致时非 0 退出（默认只告警），见下方"用例清单基线" |
 | `-UpdateBaseline` | 关 | 把这一轮的用例清单写成新基线并提交；人工确认后才跑 |
 | `-NullRHI` | 关 | 无头跑：快，但**不是同一套用例**，且没有画面可截，见下 |

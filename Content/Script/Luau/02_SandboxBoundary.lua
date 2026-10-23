@@ -19,7 +19,9 @@ local M = UnLuaNova.Class()
 local Attempt = 0
 
 -- 把一次"本来会崩"的操作包起来，把结果打印出来，示例本身不会中断
-local function Try(Label: string, Fn: () -> ())
+-- 返回类型写成 (...any) 而不是 ()：pcall 的第二个返回值是按这个函数签名的返回类型推出来的，
+-- 写成 () 时 Luau 认为 pcall 只返回一个值，下面取 Err 就成了"要 2 个值但只有 1 个"。
+local function Try(Label: string, Fn: () -> (...any))
     Attempt += 1
     local Ok, Err = pcall(Fn)
     if Ok then
