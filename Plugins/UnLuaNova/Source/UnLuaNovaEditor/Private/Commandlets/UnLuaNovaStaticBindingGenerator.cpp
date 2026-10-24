@@ -208,7 +208,11 @@ namespace
 			if (!UnLuaNova::IsThunkableParamKind(Kind))
 				return false;
 
-			OutParamKinds.Add(PropKindName(Kind));
+			// Fully qualified: these strings become template *arguments* of
+			// StaticFuncThunk<EStaticPropKind Ret, EStaticPropKind... Args>, so a bare
+			// "Int" is an undeclared identifier at the call site - exactly as the return
+			// kind is qualified at the end of this function.
+			OutParamKinds.Add(FString::Printf(TEXT("EStaticPropKind::%s"), PropKindName(Kind)));
 		}
 
 		if (OutParamKinds.Num() > 8)

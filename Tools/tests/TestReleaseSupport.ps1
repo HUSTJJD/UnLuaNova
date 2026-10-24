@@ -54,6 +54,18 @@ try {
             (Join-Path $Tools 'RunTests.ps1'), '-DryRun', '-SkipBuild') -Log (Join-Path $Temporary 'partial.log') -WorkingDirectory $RepoRoot
     } catch { $Failed = $true }
     Assert $Failed 'Release accepted reduced coverage'
+    $Failed = $false
+    $FailedOutput = Join-Path $Temporary 'preflight-report'
+    try {
+        Invoke-ReleaseProcess -File $PowerShellExe -Arguments @('-NoProfile', '-NonInteractive', '-File',
+            (Join-Path $Tools 'RunTests.ps1'), '-EnginePath', (Join-Path $Temporary 'missing-engine'),
+            '-OutputDir', $FailedOutput) -Log (Join-Path $Temporary 'preflight.log') -WorkingDirectory $RepoRoot
+    } catch { $Failed = $true }
+    Assert $Failed 'Missing engine was accepted'
+    $Summary = Get-Content (Join-Path $FailedOutput 'release-summary.json') -Raw | ConvertFrom-Json
+    Assert ($Summary.complete -and -not $Summary.passed) 'Failed preflight lost the aggregate verdict'
+    Assert (@($Summary.stages | Where-Object status -eq 'blocked').Count -eq 31) 'Unexecuted stages disappeared from summary'
+    Assert ((Get-FileHash $Before.Path).Hash -eq $Before.Hash) 'Failed preflight modified project config'
     Write-Host 'Release support tests passed.'
 } finally {
     $Resolved = [IO.Path]::GetFullPath($Temporary)

@@ -34,6 +34,13 @@ if ((Test-Path $OutputDir) -and @(Get-ChildItem -LiteralPath $OutputDir -Force).
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 $Stages = [Collections.Generic.List[object]]::new()
 $Statuses = @{}
+$RequiredStages = @('tool-environment', 'repository-audit', 'tooling-tests', 'analyzer-LuaLS', 'analyzer-LuauLsp')
+foreach ($BackendName in @('Lua', 'Luau')) {
+    foreach ($Step in @('config', 'editor-build', 'static-bindings', 'package-development', 'server-build',
+        'editor-tests', 'declarations', 'typecheck', 'editor-evidence', 'game-tests', 'game-evidence', 'reports', 'package-shipping')) {
+        $RequiredStages += "$BackendName-$Step"
+    }
+}
 $Started = [DateTime]::UtcNow
 $LockStream = $null
 $ConfigCaptured = $false
@@ -125,6 +132,9 @@ try {
     $Provenance.engine = Get-Content (Join-Path $EnginePath 'Engine/Build/Build.version') -Raw | ConvertFrom-Json
     $Provenance.commit = (& git -C $RepoRoot rev-parse HEAD) -join ''
     $Provenance.worktree = @(& git -C $RepoRoot status --short)
+    Run 'git' @('-C', $RepoRoot, 'diff', 'HEAD', '--binary', '--no-ext-diff') 'source-diff'
+    $Provenance.source_diff_sha256 = (Get-FileHash (Join-Path $OutputDir 'logs/source-diff.log') -Algorithm SHA256).Hash
+    $Provenance.project_sha256 = (Get-FileHash -LiteralPath $ProjectPath -Algorithm SHA256).Hash
 
     Invoke-Stage 'tool-environment' {
         $Python = (Get-Command python -ErrorAction Stop).Source
@@ -272,6 +282,11 @@ try {
         $Stages.Add([ordered]@{ name = 'restore'; status = 'failed'; seconds = 0; detail = $_.Exception.Message })
     } finally {
         if ($LockStream) { $LockStream.Dispose(); Remove-Item -LiteralPath $LockPath -Force -ErrorAction SilentlyContinue }
+    }
+    foreach ($Name in $RequiredStages) {
+        if (-not $Statuses.ContainsKey($Name)) {
+            $Stages.Add([ordered]@{ name = $Name; status = 'blocked'; seconds = 0; detail = 'Pipeline ended before this stage.' })
+        }
     }
     $script:Finished = $true
     Write-ReleaseSummary
