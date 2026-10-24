@@ -65,18 +65,7 @@ namespace UnLuaNovaTestSuite
     static const TCHAR* DedicatedServerReportTest = TEXT("UnLuaNova.API.Net.DedicatedServer.Report");
     static const TCHAR* DedicatedServerMap = TEXT("/UnLuaNovaTestSuite/Tests/Misc/Empty");
 
-    /** "Name:Id" per RPC - the form that makes a diff readable in a failure message. */
-    static FString DescribeRpcs(const TSharedPtr<FJsonObject>& Report)
-    {
-        TArray<FString> Parts;
-        for (const TSharedPtr<FJsonValue>& Value : Report->GetArrayField(TEXT("Rpcs")))
-        {
-            const TSharedPtr<FJsonObject> Entry = Value->AsObject();
-            Parts.Add(FString::Printf(TEXT("%s:%d"), *Entry->GetStringField(TEXT("Name")),
-                (int32)Entry->GetNumberField(TEXT("RpcId"))));
-        }
-        return FString::Join(Parts, TEXT(", "));
-    }
+    // DescribeRpcs comes from UnLuaNovaTestCommon.h - see the note there.
 
     /**
      * Compares every peer's report against the first one's.

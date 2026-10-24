@@ -5,6 +5,13 @@ description: "Runnable samples: binding, overriding, containers and UMG"
 
 # Showcase Samples
 
+See the [capability matrix](../feature-matrix.md) for source and execution evidence. Existing images
+are illustrative, were not regenerated in this audit, and do not certify the current build.
+
+New executable samples: `Examples.RuntimeContracts` exposes `.Run()` for Event.Once reentry,
+explicit unsubscribe and OOP inheritance on both backends. `Luau.Index.BufferInterop:Run()`
+demonstrates buffer copy ownership. Both are connected to automation source and await execution.
+
 This page collects the **runnable samples**: a short piece of real code plus a screenshot of it
 running, to answer "how is this actually used" rather than describing an API signature.
 
@@ -45,8 +52,8 @@ Four specs, each opening one tutorial level and taking one shot; the files land 
 `UTutorialObject` shows the basic path in both directions - how a C++ class is reached from
 Lua, and how a Lua function is called back from C++.
 
-Point of interest: static export binding pre-generates the reflection data, so startup cost does
-not grow with the number of `UObject`s.
+This example exercises binding and object lifetime. It does not establish a speed advantage or
+startup cost independent of the number of UObjects.
 
 ![Binding sample](../Images/tests-luau/Showcase_Binding.png)
 

@@ -103,28 +103,7 @@ namespace UnLuaNovaTestSuite
         return bOk;
     }
 
-    /**
-     * Call an RPC the way a blueprint call would - ProcessEvent, which is the entry that
-     * decides whether a FUNC_Net function is executed here or sent to the other peer.
-     * Going through CallRemoteFunction instead would test our own idea of when to send
-     * rather than the engine's, and the engine's is the one that has to agree on both ends.
-     */
-    static void InvokeRpc(AActor* Actor, const TCHAR* Name, int32 Arg)
-    {
-        if (!Actor)
-            return;
-
-        UFunction* Function = Actor->FindFunction(FName(Name));
-        if (!Function)
-            return;
-
-        struct
-        {
-            int32 Value;
-        } Params;
-        Params.Value = Arg;
-        Actor->ProcessEvent(Function, &Params);
-    }
+    // InvokeRpc comes from UnLuaNovaTestCommon.h - see the note there.
 
     class FLuaNetScenarioCommand : public IAutomationLatentCommand
     {

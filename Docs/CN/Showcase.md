@@ -5,6 +5,10 @@ description: "可运行示例清单：绑定、覆写、容器访问与 UMG"
 
 # Showcase 示例
 
+当前源码示例与执行证据见 [能力矩阵](../feature-matrix.md)。本页已有截图仅作界面参考，未在本轮重新生成，不能证明当前构建通过。
+
+新增可执行契约示例：`Content/Script/Examples/RuntimeContracts.lua`（Event.Once 重入、主动解绑、OOP 继承）；在两个后端通过 `require("Examples.RuntimeContracts").Run()` 调用。Luau 的 `Content/Script/Luau/06_BufferInterop.lua` 演示 buffer 拷贝归属，经 `require("Luau.Index").BufferInterop:Run()` 调用。这些示例已关联自动化源码，尚待构建后执行。
+
 这一页汇集 UnLuaNova 的**可运行示例**：每个示例都是一小段真实代码 + 一张跑出来的截图，
 用来回答"这东西到底怎么用"，而不只是描述 API 签名。
 
@@ -43,8 +47,7 @@ description: "可运行示例清单：绑定、覆写、容器访问与 UMG"
 `UTutorialObject` 展示了最基础的一条链路——C++ 侧的类如何被 Lua 拿到、
 Lua 侧的函数如何被 C++ 调回去。
 
-要点：静态导出绑定把反射信息预生成好，运行时不需要遍历 UCLASS，
-启动开销和 UObject 数量无关。
+要点：绑定入口与对象生命周期需要一起验证。这个示例本身不能证明静态绑定的速度优势或启动成本与对象数量无关。
 
 ![绑定示例](../Images/tests-luau/Showcase_Binding.png)
 

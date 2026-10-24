@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-24 19:05:33",
+  "generated": "2026-10-24 19:36:35",
   "classes": {
     "A": "纯逻辑（不需要 UWorld）",
     "B": "需要 UWorld，不联网",
@@ -9,7 +9,7 @@
     "?": "未分类（没找到注册宏）"
   },
   "counts": {
-    "A": 53,
+    "A": 54,
     "B": 62,
     "C": 3,
     "D": 1,
@@ -60,6 +60,7 @@
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaOverrider.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaSpecs.spec.cpp": "A",
+    "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Observability.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Overrides.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp": "A",
@@ -182,6 +183,7 @@
     "UnLuaNova.API.Overrider": "A",
     "UnLuaNova.API.LuaScriptCompat": "A",
     "UnLuaNova.Lua": "A",
+    "UnLuaNova.API.LuauIntegration": "A",
     "UnLuaNova.API.Observability": "A",
     "UnLuaNova.API.Overrides": "A",
     "UnLuaNova.API.RuntimeModules": "A",

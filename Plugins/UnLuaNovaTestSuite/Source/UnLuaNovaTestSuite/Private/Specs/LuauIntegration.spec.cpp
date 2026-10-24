@@ -48,6 +48,11 @@ void FLuauIntegrationSpec::Define()
         IFileManager::Get().Delete(*(Root / TEXT("lines.txt")));
     });
 
+    It(TEXT("Buffer example preserves copy ownership"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        TEST_TRUE(UnLuaNova::RunChunk(L, "assert(require('Luau.Index').BufferInterop:Run())"));
+    });
+
     It(TEXT("CRLF reads and iterators consume the full line ending"), EAsyncExecution::TaskGraphMainThread, [this]
     {
         TEST_TRUE(UnLuaNova::RunChunk(L, R"(

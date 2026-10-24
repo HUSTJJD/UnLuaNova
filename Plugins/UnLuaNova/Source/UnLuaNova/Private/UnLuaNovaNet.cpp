@@ -164,6 +164,12 @@ namespace UnLuaNova
             ParseParams(L, Abs, Decl);
         }
 
+        /**
+         * A property is an FField, not a UObject, so it is allocated with new rather than
+         * NewObject<T>() (which goes through StaticConstructObject and cannot make one).
+         * Lifetime is the owner's: the UFunction it is created under holds it, and that is
+         * also what makes it visible to the garbage collector.
+         */
         FProperty* CreateStructParam(UFunction* Outer, FName Name, const TCHAR* StructPath)
         {
             // FindObject by path rather than TBaseStructure<FVector>::Get(): no header to
@@ -172,7 +178,7 @@ namespace UnLuaNova
             if (!Struct)
                 return nullptr;
 
-            auto* Property = NewObject<FStructProperty>(Outer, Name, RF_Transient);
+            auto* Property = new FStructProperty(Outer, Name);
             Property->Struct = Struct;
             return Property;
         }
@@ -183,24 +189,24 @@ namespace UnLuaNova
             {
             case ELuaNetParamType::Bool:
             {
-                auto* Property = NewObject<FBoolProperty>(Outer, Param.Name, RF_Transient);
+                auto* Property = new FBoolProperty(Outer, Param.Name);
                 // Without this the element size stays at whatever the default ctor left,
                 // and ParmsSize - hence the whole call frame - comes out wrong.
                 Property->SetBoolSize(sizeof(bool), true);
                 return Property;
             }
-            case ELuaNetParamType::Int:       return NewObject<FIntProperty>(Outer, Param.Name, RF_Transient);
-            case ELuaNetParamType::Int64:     return NewObject<FInt64Property>(Outer, Param.Name, RF_Transient);
-            case ELuaNetParamType::Float:     return NewObject<FFloatProperty>(Outer, Param.Name, RF_Transient);
-            case ELuaNetParamType::Double:    return NewObject<FDoubleProperty>(Outer, Param.Name, RF_Transient);
-            case ELuaNetParamType::String:    return NewObject<FStrProperty>(Outer, Param.Name, RF_Transient);
-            case ELuaNetParamType::Name:      return NewObject<FNameProperty>(Outer, Param.Name, RF_Transient);
+            case ELuaNetParamType::Int:       return new FIntProperty(Outer, Param.Name);
+            case ELuaNetParamType::Int64:     return new FInt64Property(Outer, Param.Name);
+            case ELuaNetParamType::Float:     return new FFloatProperty(Outer, Param.Name);
+            case ELuaNetParamType::Double:    return new FDoubleProperty(Outer, Param.Name);
+            case ELuaNetParamType::String:    return new FStrProperty(Outer, Param.Name);
+            case ELuaNetParamType::Name:      return new FNameProperty(Outer, Param.Name);
             case ELuaNetParamType::Vector:    return CreateStructParam(Outer, Param.Name, TEXT("/Script/CoreUObject.Vector"));
             case ELuaNetParamType::Rotator:   return CreateStructParam(Outer, Param.Name, TEXT("/Script/CoreUObject.Rotator"));
             case ELuaNetParamType::Transform: return CreateStructParam(Outer, Param.Name, TEXT("/Script/CoreUObject.Transform"));
             case ELuaNetParamType::Object:
             {
-                auto* Property = NewObject<FObjectProperty>(Outer, Param.Name, RF_Transient);
+                auto* Property = new FObjectProperty(Outer, Param.Name);
                 Property->SetPropertyClass(UObject::StaticClass());
                 return Property;
             }

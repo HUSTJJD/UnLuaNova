@@ -118,37 +118,11 @@ if (Call.IsValid())
 }
 ```
 
-## The gap that really remains: RPCs cannot be overridden
+## Networking and Instance Binding Boundaries
 
-Look at the second branch of `IsOverridable` again:
+Declared RPCs and replicated fields have an [experimental implementation](LuaNetworking.md). Ordinary overrides and declared RPC registration are different paths; one branch of IsOverridable cannot establish the entire network feature set. Conditions, int64, schemas and packaged acceptance remain open.
 
-```cpp
-(Function->FunctionFlags & (FUNC_Native | FUNC_Event | FUNC_Net)) == (FUNC_Native | FUNC_Event)
-```
-
-**`FUNC_Net` is explicitly excluded.** That is not a judgement copied from slua; it is a fact
-in our own code:
-
-* `FunctionDesc.cpp:43` only renames Net functions that already exist to `Xxx_RPC`;
-* the override system never touches a function carrying `FUNC_Net`.
-
-The consequence: **Lua can only override RPCs the engine already declared; it cannot declare a
-new RPC, nor declare replicated properties.** That is the thing worth doing, and it matters far
-more than "adding ten more base classes" - because it decides whether Lua can express network
-behaviour on its own.
-
-Direction (not implemented when this page was written): RPC functions go through
-`ULuaFunction` (already a `UFunction` subclass, already has `execScriptCallLua`), attached to
-the existing `ULuaOverridesClass` and reverted by `RestoreOverrides` on PIE exit - **no need** to
-add functions to a UClass at runtime and then write a cleanup apparatus, as slua does. One
-unknown to verify before starting: whether a build-time generated RPC UFunction keeps its Net
-flag in a cooked package.
-
-> This gap has since been closed - see [Lua-declared Networking](LuaNetworking.md). The
-> cross-process `RPCId` question raised above is covered by
-> `UnLuaNova.API.Net.DedicatedServer`.
-
----
+Binding a non-Blueprint UObject does not establish independent modules on same-class instances. UnLuaNovaManager::Classes remains keyed by UClass; see BIND-01 in the [roadmap](Benchmark_Review.md).
 
 ## Further reading
 

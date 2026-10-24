@@ -18,6 +18,8 @@
 #include "Engine.h"
 #include "GameFramework/GameStateBase.h"
 
+#include "Dom/JsonObject.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 DEFINE_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(FUnLuaNovaTestCommand_WaitSeconds, float, Duration);
@@ -273,6 +275,46 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, PrettyName, (EAutomationTestFlags::C
 namespace UnLuaNovaTestSuite
 {
     void PrintReferenceChain(UObject* Target);
+
+    /**
+     * Call an RPC the way a blueprint call would - ProcessEvent, which is the entry that
+     * decides whether a FUNC_Net function is executed here or sent to the other peer.
+     * Going through CallRemoteFunction instead would test our own idea of when to send
+     * rather than the engine's, and the engine's is the one that has to agree on both ends.
+     *
+     * inline here rather than static in each net test: this module is built with unity
+     * files, and a static helper of the same name in two of them is a redefinition the
+     * moment they land in the same translation unit.
+     */
+    inline void InvokeRpc(AActor* Actor, const TCHAR* Name, int32 Arg)
+    {
+        if (!Actor)
+            return;
+
+        UFunction* Function = Actor->FindFunction(FName(Name));
+        if (!Function)
+            return;
+
+        struct
+        {
+            int32 Value;
+        } Params;
+        Params.Value = Arg;
+        Actor->ProcessEvent(Function, &Params);
+    }
+
+    /** "Name:Id" per RPC - the form that makes a diff readable in a failure message. */
+    inline FString DescribeRpcs(const TSharedPtr<FJsonObject>& Report)
+    {
+        TArray<FString> Parts;
+        for (const TSharedPtr<FJsonValue>& Value : Report->GetArrayField(TEXT("Rpcs")))
+        {
+            const TSharedPtr<FJsonObject> Entry = Value->AsObject();
+            Parts.Add(FString::Printf(TEXT("%s:%d"), *Entry->GetStringField(TEXT("Name")),
+                (int32)Entry->GetNumberField(TEXT("RpcId"))));
+        }
+        return FString::Join(Parts, TEXT(", "));
+    }
 }
 
 #endif //WITH_DEV_AUTOMATION_TESTS

@@ -6,11 +6,11 @@
 --   ① 广播中增删监听者 —— 边遍历边改表，漏发或重发（这里用快照）
 --   ② 一个监听者报错带崩整条广播 —— 这里逐个 pcall，错误只记日志
 --   ③ 监听者持有已销毁的 UObject —— 这里提供 On(name, fn, owner) + UnbindOwner(owner)，
---      对象销毁时一次摘干净；OwnerIndex 是弱键表，不会把 owner 钉住
+--      对象销毁时显式摘干净；token 仍强持有 owner，弱键索引不提供自动解绑
 --   ④ 热重载后残留旧闭包 —— 旧模块表没了、旧闭包还挂在总线上。唯一可靠的做法是
 --      "带 owner 注册 + 停用时 UnbindOwner"，本模块为此提供这两个 API
 --
--- 这就是"机制"而不是"策略"：它不规定事件名怎么起、谁可以发，只保证上面四条不出错。
+-- 它不规定事件名或发送权限；调用方仍需在 owner 停用时显式解绑。
 -- 项目层的玩法事件语义（UI 栈、场景流）请自己在上层定，不要往这里塞。
 --
 -- 语法保持 Lua 5.1 兼容：不用 continue / 复合赋值 / 类型标注，两个后端都能编。
@@ -36,7 +36,7 @@ local LogError = _G.UnLuaNova and _G.UnLuaNova.LogError or _G.print
 --- name -> { token, ... }
 local Listeners = {}
 
---- owner -> { [token] = name }，弱键：owner 被回收后整条记录自动消失
+--- owner -> { [token] = name }; live tokens retain their owner until unsubscribed.
 local OwnerIndex = setmetatable({}, { __mode = "k" })
 
 local NextTokenId = 0
@@ -106,6 +106,7 @@ end
 local function RemoveToken(token)
 	token.Fn = nil          -- 置空后，正在进行的广播会跳过它
 	Untrack(token)
+	token.Owner = nil
 	local list = Listeners[token.Name]
 	if not list then
 		return false
@@ -192,13 +193,15 @@ function M.Emit(name, ...)
 		local token = snapshot[i]
 		if token.Fn ~= nil then
 			fired = fired + 1
-			local ok, err = pcall(token.Fn, ...)
+			local fn = token.Fn
+			-- Detach before calling so recursive Emit cannot invoke a Once listener again.
+			if token.Once then
+				RemoveToken(token)
+			end
+			local ok, err = pcall(fn, ...)
 			if not ok then
 				LogError(string.format("UnLuaNova.Event: '%s' 的监听者出错：%s",
 					tostring(name), tostring(err)))
-			end
-			if token.Once then
-				RemoveToken(token)
 			end
 		end
 	end

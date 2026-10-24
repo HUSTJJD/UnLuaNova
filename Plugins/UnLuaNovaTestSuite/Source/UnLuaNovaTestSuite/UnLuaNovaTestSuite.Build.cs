@@ -43,7 +43,10 @@ public class UnLuaNovaTestSuite : ModuleRules
 				"Core",
 				"CoreUObject",
 				"Engine",
-				"Slate"
+				"Slate",
+				// Json: UnLuaNovaTestCommon.h carries DescribeRpcs(), which reads the peers'
+				// JSON reports, so every translation unit that includes it needs the DOM.
+				"Json"
 			}
 		);
 
@@ -91,10 +94,10 @@ public class UnLuaNovaTestSuite : ModuleRules
 			// (Private/Specs/StaticBindingGenerator.spec.cpp). Editor-only, like the module.
 			PrivateDependencyModuleNames.Add("UnLuaNovaEditor");
 
-			// ...and its Private/ folder, because DebugAdapter.spec.cpp has to reach
-			// LuaDebugAdapter.h: the DAP server is not part of the module's public API, and
-			// promoting it would be a promise to every other module for the sake of one test.
-			PrivateIncludePathModuleNames.Add("UnLuaNovaEditor");
+			// Nothing else to add: LuaDebugAdapter.h lives in UnLuaNovaEditor's Public/
+			// folder, so the dependency above already puts it on the include path. It used
+			// to be a private header the test reached for by path, which is not a thing a
+			// consumer may do to another module - the header moved instead.
 		}
 
 		DynamicallyLoadedModuleNames.AddRange(

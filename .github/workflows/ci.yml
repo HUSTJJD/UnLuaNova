@@ -27,8 +27,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Report generator compiles
-        run: python -m py_compile Tools/GenerateTestReport.py
+      - name: Repository evidence and documentation checks
+        run: python -B Tools/AuditRepository.py
+
+      - name: Tool regression tests
+        run: python -B -m unittest discover -s Tools/tests -p "test_*.py"
+
+      - name: Python tools parse
+        run: python -B -c "import ast, pathlib; [ast.parse(p.read_text(encoding='utf-8-sig'), filename=str(p)) for p in pathlib.Path('Tools').glob('*.py')]"
 
       - name: PowerShell scripts parse
         shell: pwsh

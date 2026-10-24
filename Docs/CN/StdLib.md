@@ -104,6 +104,8 @@ native 模块（Timer）的硬要求：
 
 ## Timer（C++ 驱动）
 
+当前 Timer 的 Env/协程保活、销毁顺序与多 World 选择存在未解决风险，见 [LIFE-01](Benchmark_Review.md)。以下是现有 API，尚不能作为生命周期安全保证。
+
 ```lua
 local Timer = require('UnLuaNova.Timer')
 
@@ -176,7 +178,7 @@ Event.Clear()                                        -- 全清（不传名就是
 |---|---|
 | 广播中增删监听者，漏发或重发 | 先快照再逐个触发 |
 | 一个监听者报错带崩整条广播 | 逐个 `pcall`，错误只记日志 |
-| 监听者抓着已销毁的 UObject | `On(name, fn, owner)` + `UnbindOwner(owner)`；owner 索引是**弱键表**，不会把对象钉住 |
+| 监听者保留 owner | token 强持有 owner；销毁/停用时必须主动 `UnbindOwner(owner)`，弱键索引不提供自动释放 |
 | 热重载后残留旧闭包 | 没有银弹；唯一可靠做法是**带 owner 注册 + 停用时 `UnbindOwner`**，所以这两个 API 是刚需 |
 
 不带 owner 的订阅，热重载后旧闭包会留在总线上 —— 这是脚本方案里最常见的一类"越跑越卡、

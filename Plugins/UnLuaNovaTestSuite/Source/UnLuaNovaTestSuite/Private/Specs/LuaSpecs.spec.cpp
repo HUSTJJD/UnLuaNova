@@ -108,6 +108,7 @@ void FLuaSpecsSpec::Define()
         FString(UTF8_TO_TCHAR(Encoded)).ParseIntoArray(Lines, TEXT("\n"), false);
 
         int32 Failed = 0;
+        int32 Executed = 0;
         for (const FString& Line : Lines)
         {
             if (Line.IsEmpty())
@@ -115,8 +116,13 @@ void FLuaSpecsSpec::Define()
 
             TArray<FString> Fields;
             Line.ParseIntoArray(Fields, TEXT("\t"), false);
-            if (Fields.Num() < 4)
+            if (Fields.Num() < 4 || (Fields[0] != TEXT("PASS") && Fields[0] != TEXT("FAIL")))
+            {
+                AddError(FString::Printf(TEXT("Malformed Lua spec result: %s"), *Line));
                 continue;
+            }
+
+            ++Executed;
 
             const bool bPassed = Fields[0] == TEXT("PASS");
             const FString& File = Fields[1];
@@ -137,6 +143,7 @@ void FLuaSpecsSpec::Define()
 
         // Redundant with the per-case assertions, but it keeps "everything passed because
         // nothing ran" from being a green result.
+        TestTrue(TEXT("At least one Lua spec executed"), Executed > 0);
         TEST_EQUAL(Failed, 0);
     });
 }

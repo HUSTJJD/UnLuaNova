@@ -125,6 +125,8 @@ Hard requirements for native modules (Timer):
 
 ## Timer (C++ driven)
 
+Timer still has unresolved Env/coroutine lifetime, teardown-order and multi-World selection risks; see [LIFE-01](Benchmark_Review.md). The API below is not a lifecycle-safety guarantee.
+
 ```lua
 local Timer = require('UnLuaNova.Timer')
 
@@ -203,7 +205,7 @@ It does not exist to "store a table" (that part is trivial). It exists for these
 |---|---|
 | Listeners added/removed during broadcast, so some are missed or fired twice | Snapshot first, then invoke one by one |
 | One listener's error takes down the whole broadcast | Each invocation is `pcall`ed; errors are only logged |
-| A listener pins a destroyed UObject | `On(name, fn, owner)` + `UnbindOwner(owner)`; the owner index is a **weak-keyed** table, so it never pins the object |
+| A listener retains its owner | Tokens hold owners strongly; explicitly call `UnbindOwner(owner)` on teardown. A weak-key index does not provide automatic release |
 | Stale closures surviving a hot reload | No silver bullet; the only reliable pattern is **register with an owner and `UnbindOwner` on teardown**, which is why both APIs exist |
 
 Subscriptions without an owner leave their old closures on the bus after a hot reload -

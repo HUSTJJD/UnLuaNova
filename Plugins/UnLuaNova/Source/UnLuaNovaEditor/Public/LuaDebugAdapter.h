@@ -45,7 +45,10 @@ struct FLuaDapBreakpoint
  * - Continue() 是线程安全的（服务侧明确支持跨线程调用），所以 continue/next 直接在
  *   适配线程调用，否则永远解不开阻塞。
  */
-class FLuaDebugAdapter : public FRunnable
+// Exported: this header is part of the module's public API, which is what lets
+// UnLuaNovaTestSuite drive a real DAP session against the server (see
+// Private/Specs/DebugAdapter.spec.cpp) without reaching into Private/.
+class UNLUANOVAEDITOR_API FLuaDebugAdapter : public FRunnable
 {
 public:
     static FLuaDebugAdapter& Get();

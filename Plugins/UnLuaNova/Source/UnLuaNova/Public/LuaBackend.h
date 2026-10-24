@@ -274,7 +274,9 @@ namespace UnLuaNova
 inline int luaL_loadbufferx(lua_State* L, const char* Buff, size_t Size, const char* Name, const char* Mode)
 {
     (void)Mode; // Luau always compiles source; there is no "binary chunk" mode to honour
-    const lua_CompileOptions Options = UnLuaNova::GetLuauCompileOptions();
+    // Not const: luau_compile takes a lua_CompileOptions* even though it only reads it,
+    // so a const local cannot be handed over. Nothing here mutates it afterwards.
+    lua_CompileOptions Options = UnLuaNova::GetLuauCompileOptions();
 
     size_t BytecodeSize = 0;
     char* Bytecode = luau_compile(Buff, Size, &Options, &BytecodeSize);

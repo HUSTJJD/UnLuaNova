@@ -77,7 +77,10 @@ namespace UnLuaNovaTestSuite
         FString MapName;
         bool bForceReload;
         int32 NumClients = 1;
-        EPlayNetMode PlayNetMode = EPlayNetMode::PIE_Standalone;
+        // The mirror enum, not EPlayNetMode: the editor-only enum is not visible in every
+        // translation unit of this class (the -game carrier compiles it too), and the
+        // conversion happens once, where the play session is requested.
+        EUnLuaNovaPlayNetMode PlayNetMode = EUnLuaNovaPlayNetMode::Standalone;
         bool bEndingPreviousSession = false;
         double WaitDeadline = 0.0;
 #if WITH_EDITOR

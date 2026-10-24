@@ -39,6 +39,7 @@
 #include "UnLuaNovaBase.h"
 #include "Misc/AutomationTest.h"
 #include "UnLuaNovaTestHelpers.h"
+#include "UnLuaNovaSettings.h"
 
 #include "LuaEnv.h"
 

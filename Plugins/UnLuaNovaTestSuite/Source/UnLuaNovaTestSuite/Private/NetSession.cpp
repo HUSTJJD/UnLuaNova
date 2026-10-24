@@ -475,7 +475,10 @@ namespace UnLuaNovaTestSuite
             {
                 continue;
             }
-            if (Peer.Handle.IsValid() && !FPlatformProcess::IsProcRunning(Peer.Handle))
+            // Copied out: IsProcRunning takes FProcHandle& and Peer is const here, so the
+            // member cannot be handed over directly. The handle is a value, not ownership.
+            FProcHandle Handle = Peer.Handle;
+            if (Handle.IsValid() && !FPlatformProcess::IsProcRunning(Handle))
             {
                 Test.AddError(FString::Printf(TEXT("%s peer exited (%.0fs in) without writing a report - see %s"),
                     *Peer.Spec.Label, Now - StartedAt, *Session->LogPath(Peer.Spec.Label)));

@@ -46,6 +46,7 @@ else
 
     -- vector 与 FVector 互操作
     Examples.VectorInterop = require "Luau.05_VectorInterop"
+    Examples.BufferInterop = require "Luau.06_BufferInterop"
 end
 
 return Examples

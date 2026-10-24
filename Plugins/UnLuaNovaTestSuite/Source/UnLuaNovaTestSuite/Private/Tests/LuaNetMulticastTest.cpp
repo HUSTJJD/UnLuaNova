@@ -76,27 +76,8 @@ namespace UnLuaNovaTestSuite
         return nullptr;
     }
 
-    /** Calls a Lua-declared RPC the way a blueprint call would - see LuaNetClientServerTest. */
-    static void InvokeRpc(AActor* Actor, const TCHAR* Name, int32 Arg)
-    {
-        if (!Actor)
-        {
-            return;
-        }
-
-        UFunction* Function = Actor->FindFunction(FName(Name));
-        if (!Function)
-        {
-            return;
-        }
-
-        struct
-        {
-            int32 Value;
-        } Params;
-        Params.Value = Arg;
-        Actor->ProcessEvent(Function, &Params);
-    }
+    // InvokeRpc / DescribeRpcs live in UnLuaNovaTestCommon.h: three net tests use them and
+    // unity builds put those files in one translation unit.
 
     /** Server: waits until the expected number of clients are actually connected. */
     class FMulticastWaitForClientsCommand : public IAutomationLatentCommand
@@ -242,18 +223,6 @@ namespace UnLuaNovaTestSuite
     }
 
     // ------------------------------------------------------ driver asserts ----
-
-    static FString DescribeRpcs(const TSharedPtr<FJsonObject>& Report)
-    {
-        TArray<FString> Parts;
-        for (const TSharedPtr<FJsonValue>& Value : Report->GetArrayField(TEXT("Rpcs")))
-        {
-            const TSharedPtr<FJsonObject> Entry = Value->AsObject();
-            Parts.Add(FString::Printf(TEXT("%s:%d"), *Entry->GetStringField(TEXT("Name")),
-                (int32)Entry->GetNumberField(TEXT("RpcId"))));
-        }
-        return FString::Join(Parts, TEXT(", "));
-    }
 
     class FCompareMulticastReportsCommand : public IAutomationLatentCommand
     {

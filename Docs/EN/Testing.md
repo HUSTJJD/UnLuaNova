@@ -5,6 +5,10 @@ description: "Running the suite on UE's Automation framework, generating reports
 
 # Testing and Automation
 
+Current evidence is in [Lua status](../test-lua-report.md) / [Luau status](../test-luau-report.md). RunTests commands below build by default; none was run during this audit. Static classification and test-name baselines are not code coverage.
+
+Without building: `python -B Tools/AuditRepository.py` and `python -B -m unittest discover -s Tools/tests -p "test_*.py"`. See the [audit](Benchmark_Review.md) for acceptance gaps.
+
 UnLuaNova tests with the **native UE Automation framework** - no third-party framework. Every
 test lives in the `UnLuaNovaTestSuite` plugin, and one run gives you the pass rate, the failure
 reasons and the screenshots.

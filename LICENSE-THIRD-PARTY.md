@@ -1,43 +1,41 @@
-# 第三方组件许可
+# Third-party Sources and Notices
 
-UnLuaNova 是 [Tencent/UnLua](https://github.com/Tencent/UnLua) 的衍生作品，
-仓库里包含以下第三方组件。它们由各自的版权人授权，**不因为 UnLuaNova 变更许可而改变** ——
-这些组件仍然按 MIT 向你开放，你可以单独按 MIT 的条款使用它们。
+Inventory checked 2026-10-24. This document does not relicense upstream work. Retain existing copyright/permission notices and ship the applicable full notices with distributions. **This inventory is not yet a complete release compliance bundle:** extension version/provenance and root/file license scope require reconciliation.
 
-UnLuaNova 自身的许可（覆盖本仓库整体，以及 UnLuaNova 新增与修改的部分）见 [LICENSE](LICENSE)。
+## Included Runtime Components
 
----
+| Component | Location / source | License and attribution evidence |
+|---|---|---|
+| Tencent/UnLua | Inherited plugin source; [upstream](https://github.com/Tencent/UnLua) | MIT; Copyright (C) 2019 Tencent. Existing file headers must remain |
+| Lua 5.5.1 | `Plugins/UnLuaNova/Source/ThirdParty/LuaLib/Lua` | MIT; Lua.org, PUC-Rio; exact notice in pinned `lua.h` |
+| Luau | `Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau` | MIT; Copyright (c) 2019-2026 Roblox Corporation; Copyright (c) 1994-2019 Lua.org, PUC-Rio. Preserve `LICENSE.txt` and `lua_LICENSE.txt` |
+| LuaSocket | `Plugins/UnLuaNovaExtensions/LuaSocket`; [upstream](https://github.com/lunarmodules/luasocket) | MIT; local `luasocket.h` identifies Copyright (C) 1999-2013 Diego Nehab; exact imported revision and full distribution notice still to record |
+| lua-protobuf / protoc.lua | `Plugins/UnLuaNovaExtensions/LuaProtobuf`; [upstream](https://github.com/starwing/lua-protobuf) | Upstream MIT; local import revision and matching full copyright/permission text still to record |
+| serpent 0.30 | `Plugins/UnLuaNovaExtensions/LuaProtobuf/Content/Script/serpent.lua` | Local header: (C) 2012-17 Paul Kulchenko; MIT |
+| lua-rapidjson | `Plugins/UnLuaNovaExtensions/LuaRapidjson/Source/src`; [upstream](https://github.com/xpol/lua-rapidjson) | Upstream MIT; local import revision and matching full notice still to record |
+| RapidJSON | `Plugins/UnLuaNovaExtensions/LuaRapidjson/Source/include/rapidjson` | MIT headers: Copyright (C) 2015 Tencent, and Milo Yip; included subcomponents may differ |
+| msinttypes | RapidJSON `msinttypes/inttypes.h` and `stdint.h` | BSD-3-Clause text in those headers; Copyright (c) 2006-2013 Alexander Chemeris; retain Tencent modification notice |
 
-## Open Source Software Licensed Under the MIT License
+Dependency pins for Lua/Luau are in [VERSIONS.md](Plugins/UnLuaNova/Source/ThirdParty/VERSIONS.md). Do not infer the version of a copied extension from the current upstream HEAD.
 
-The below software in this distribution may have been modified by Tencent.
-All Tencent Modifications are Copyright (C) 2019 Tencent.
+## Development Tools and Build Artifacts
 
-### 1. UnLua
+- `Tools/luau-lsp` and `Tools/lua-language-server` are separate pinned tool submodules, not runtime libraries. Include their license files and transitive notices if distributing their binaries.
+- `Tools/LuauPerfgraph/perfgraph.py` is a launcher for the pinned Luau `tools/perfgraph.py` and `tools/svg.py`; the upstream code remains under Luau's MIT notices.
+- Python packages, imageio-ffmpeg and its bundled ffmpeg require package/binary-specific license inventory if redistributed. The requirement file alone is not that inventory.
+- Unreal Engine is an external dependency with separate Epic terms; this repository's license does not grant rights to engine code or assets.
+- Sample assets/images need an origin and redistribution-rights inventory before packaging a release.
 
-* 来源：<https://github.com/Tencent/UnLua>
-* Copyright (C) 2019 Tencent. All rights reserved.
-* 许可：MIT
+## Comparison-only Sources
 
-### 2. Lua 5.5
+- [slua-unreal](https://github.com/Tencent/sluaunreal/blob/7970ab72fd59118e1b3f86aac2d016828b54b748/LICENSE.TXT): BSD-3-Clause, with separately licensed dependencies. No implementation imported in this audit.
+- [FUnLua](https://github.com/fcscript/FUnLua/tree/7c5f6b5b4521260fe7eb2e8bd5c50500af9b0fc3): README claims MIT and links LICENSE.TXT, absent from the audited tree. Do not copy implementation until the grant and provenance are verified. This audit records design observations only.
 
-* 来源：<https://www.lua.org/>
-* Copyright (C) 1994–2026 Lua.org, PUC-Rio.
-* 许可：MIT
-* 引入方式：git 子模块（`Plugins/UnLuaNova/Source/ThirdParty/`）
+Comparison is not endorsement. Future imports need exact URL/revision, retained notices, modification notes, dependency review and attribution; an independent implementation should record its behavioral requirements and original tests.
 
-### 3. Luau
+## MIT Permission Text
 
-* 来源：<https://github.com/luau-lang/luau>
-* Copyright (C) Luau contributors.
-* 许可：MIT
-* 引入方式：git 子模块（`Plugins/UnLuaNova/Source/ThirdParty/`）
-
----
-
-## MIT License 条款原文
-
-以上组件均按下列条款授权：
+For the components identified as MIT above, preserve their component-specific copyright notices together with this permission text. This section does not replace BSD or other notices.
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -59,12 +57,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
----
+## Root License Scope
 
-## 关于归属
-
-UnLuaNova 保留上游 UnLua 的版权声明与 MIT 许可声明，以上游 MIT 授权发布的历史代码，
-任何人仍可按 MIT 的条款使用。
-
-本文件由 UnLuaNova 维护者整理，不是法律意见。若你的使用场景涉及合规审查，
-请以各组件官方仓库中的许可文本为准，并咨询你的法务。
+The repository root license contains PolyForm Small Business plus additional terms. Existing MIT code remains subject to its notices. The rights holder must reconcile file-level scope, contributor permissions and commercial explanations before release. This inventory records the issue; it does not change a grant.

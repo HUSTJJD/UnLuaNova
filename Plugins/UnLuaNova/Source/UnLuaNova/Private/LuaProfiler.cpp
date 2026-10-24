@@ -39,6 +39,27 @@ namespace UnLuaNova
      * is the thing holding the VM up. Keeping the shape byte-identical is the whole point
      * - it is what lets the upstream script open a capture taken from inside the editor.
      */
+    /**
+     * Fill Ar with the frame that is Level steps up; false when the stack ends first.
+     *
+     * The backends spell "give me frame N" differently: plain Lua splits it into
+     * lua_getstack (select the frame) plus lua_getinfo (fill it), while Luau folds the
+     * level into lua_getinfo and has no lua_getstack at all - it answers 0 for a level
+     * past the end of the stack, which is the same signal lua_getstack gives.
+     */
+    static bool GetStackFrame(lua_State* L, int Level, lua_Debug* Ar)
+    {
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+        return UNLUANOVA_GETINFO(L, Level, "snl", Ar) != 0;
+#else
+        if (!lua_getstack(L, Level, Ar))
+            return false;
+
+        UNLUANOVA_GETINFO(L, Level, "snl", Ar);
+        return true;
+#endif
+    }
+
     static FString CaptureStackTrace(lua_State* L, int GC)
     {
         FString Out;
@@ -49,10 +70,8 @@ namespace UnLuaNova
         for (int Level = 0; Level < 128; ++Level)
         {
             lua_Debug Ar;
-            if (!lua_getstack(L, Level, &Ar))
+            if (!GetStackFrame(L, Level, &Ar))
                 break;
-
-            lua_getinfo(L, "snl", &Ar);
 
             const TCHAR* Source = Ar.source ? UTF8_TO_TCHAR(Ar.source) : TEXT("");
             const TCHAR* Name = Ar.name ? UTF8_TO_TCHAR(Ar.name) : TEXT("");

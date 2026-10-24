@@ -5,6 +5,10 @@ description: "用 UE Automation 框架跑测试、生成报告与截图"
 
 # 测试与自动化
 
+当前工作树的验证状态见 [Lua](../test-lua-report.md) / [Luau](../test-luau-report.md)，完整性要求见 [测试架构](Testing_Architecture.md)。下方 RunTests 命令默认会编译；本轮审计未运行这些命令。
+
+仅检查仓库、不启动编译：`python -B Tools/AuditRepository.py`；工具回归：`python -B -m unittest discover -s Tools/tests -p "test_*.py"`。静态分类、用例名基线和通过数均不等于代码覆盖率。
+
 UnLuaNova 用 **UE 原生 Automation 框架**做测试，没有引入第三方框架。所有测试集中在插件
 `UnLuaNovaTestSuite` 里，跑一次就能得到通过率、失败原因和截图。
 

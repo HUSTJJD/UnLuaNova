@@ -30,8 +30,9 @@ default (see the code for the full list):
 
 ## Static binding code generation
 
-Beyond the types above, static binding tables can be generated for a project's own types, taking
-them off the reflection hot path.
+Binding tables can also be generated for project types, reducing some lookup and marshalling work.
+Generated thunks still call `ProcessEvent`; unsupported signatures fall back to reflection. Measure
+the benefit for the actual workload.
 
 Produced by a Commandlet at build time:
 

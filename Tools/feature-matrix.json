@@ -1,0 +1,922 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-10-24",
+  "scope": "Source audit, not a claim of exhaustive feature or execution coverage.",
+  "upstreams": {
+    "UnLua": {
+      "url": "https://github.com/Tencent/UnLua",
+      "revision": "3f112e8689405eaad79bd1f8f0bc8d598c8f7fc1"
+    },
+    "slua": {
+      "url": "https://github.com/Tencent/sluaunreal",
+      "revision": "7970ab72fd59118e1b3f86aac2d016828b54b748"
+    },
+    "FUnLua": {
+      "url": "https://github.com/fcscript/FUnLua",
+      "revision": "7c5f6b5b4521260fe7eb2e8bd5c50500af9b0fc3"
+    },
+    "Luau": {
+      "url": "https://github.com/luau-lang/luau",
+      "revision": "32c28089305f488f901aaf1dbf3fd1cb65fa3d11",
+      "integrated_revision": "6d36d483cb88973276af611198169f76f3ce05b0"
+    }
+  },
+  "features": [
+    {
+      "id": "UE-REFLECT",
+      "area": "UE",
+      "title": "Reflection and bidirectional calls",
+      "status": "implemented",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaBase.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/ReflectionUtils/FunctionDesc.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/UnLuaNovaBase.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Tutorials/08_CppCallLua.lua"
+      ],
+      "gap": "Inherited from UnLua; no current execution evidence.",
+      "acceptance": "Test null, exception, out/ref, defaults and backend equivalence.",
+      "upstream": [
+        "UnLua",
+        "slua",
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "UE-OVERRIDE",
+      "area": "UE",
+      "title": "Blueprint overrides, inheritance and RPC overrides",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaOverrider.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Overrides.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaOverrider.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Tutorials/02_OverrideBlueprintEvents.lua"
+      ],
+      "gap": "Ordinary overrides exist; inheritance/net/reinstance combinations incomplete.",
+      "acceptance": "Run parent/child/super, interface, RPC and Blueprint recompile scenarios.",
+      "upstream": [
+        "UnLua",
+        "slua",
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "UE-CONTAINER",
+      "area": "UE",
+      "title": "Containers, structs and borrowed views",
+      "status": "partial",
+      "priority": "P0",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/Registries/ContainerRegistry.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/BaseLib/LuaLib_Array.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_Array.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_Map.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_Set.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DanglingCheck.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Tutorials/06_NativeContainers.lua"
+      ],
+      "gap": "Borrowed child/iterator invalidation and property metadata need lifetime audit.",
+      "acceptance": "Destroy parent, mutate/reallocate containers, reinstance Blueprint and force GC.",
+      "upstream": [
+        "slua",
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "UE-DELEGATE",
+      "area": "UE",
+      "title": "Singlecast, multicast and callback ownership",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/Registries/DelegateRegistry.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_Delegate.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_MulticastDelegate.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Tutorials/05_BindDelegates.lua"
+      ],
+      "gap": "No complete token/dedup/owner teardown acceptance; preserve singlecast semantics.",
+      "acceptance": "Test duplicate binding, reentrant removal, owner destruction, hot reload, multiple Env.",
+      "upstream": [
+        "slua",
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "UE-INPUT",
+      "area": "UE",
+      "title": "Input, animation and UI workflows",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaManager.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Overrides.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Tutorials/03_BindInputs.lua",
+        "Content/Script/Tutorials/AN_FootStep.lua",
+        "Content/Script/Tutorials/11_ReleaseUMG.lua"
+      ],
+      "gap": "Examples exist; full EnhancedInput/animation/UMG lifecycle acceptance missing.",
+      "acceptance": "Run real RHI scenarios, input rebinding, UI release and animation callbacks on both backends.",
+      "upstream": [
+        "UnLua",
+        "slua",
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "BIND-TEMPLATE",
+      "area": "Binding",
+      "title": "Plain C++ template/static exports",
+      "status": "implemented",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaEx.inl"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/UnLuaNovaEx.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Tutorials/09_StaticExport.lua"
+      ],
+      "gap": "Not arbitrary C++ parsing; destructor and ABI behavior require current execution.",
+      "acceptance": "Test constructors/destructors, overloads, inheritance, globals and non-reflected methods.",
+      "upstream": [
+        "slua",
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "BIND-THUNK",
+      "area": "Binding",
+      "title": "Generated marshalling thunks",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/StaticBinding/StaticBindingThunk.h"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/StaticBinding.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/StaticBindingGenerator.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "Still calls ProcessEvent; unsupported/static/net/complex signatures fall back.",
+      "acceptance": "Prove generated/fallback equivalence and add a reproducible generation example.",
+      "upstream": [
+        "slua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "BIND-INSTANCE",
+      "area": "Binding",
+      "title": "Independent modules on same-class instances",
+      "status": "planned",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaManager.cpp"
+      ],
+      "tests": [],
+      "examples": [],
+      "gap": "UClass-keyed cache short-circuits binding; not FUnLua-style per-instance binding.",
+      "acceptance": "Bind A/B modules to same class, verify isolation through inheritance/reload/unbind.",
+      "upstream": [
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LIFE-MANUAL",
+      "area": "Lifetime",
+      "title": "Owned, borrowed and manual userdata finalization",
+      "status": "partial",
+      "priority": "P0",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/Registries/ObjectRegistry.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaEx.inl"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Lifetime.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "AddManualRef proxy relies on __gc on Luau; full allocation audit incomplete.",
+      "acceptance": "Force both collectors; prove release counts and safety under both teardown orders.",
+      "upstream": [
+        "Luau",
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LIFE-ENVS",
+      "area": "Lifetime",
+      "title": "Multiple VM/World environments",
+      "status": "partial",
+      "priority": "P0",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnvLocator.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaEnv.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Locators.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "Core multi-env exists; Timer and cache/diagnostic attribution need isolation checks.",
+      "acceptance": "Create/destroy/recreate Env and World, reuse addresses, forbid cross-environment handles.",
+      "upstream": [
+        "slua",
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LIFE-LATENT",
+      "area": "Lifetime",
+      "title": "Coroutines and latent calls",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaCoroutineTracker.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Latent.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Tutorials/07_CallLatentFunction.lua"
+      ],
+      "gap": "C boundary yield and abandoned coroutine teardown need coverage.",
+      "acceptance": "Test yield/resume/errors/cancellation with Env and World teardown.",
+      "upstream": [
+        "Luau",
+        "slua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "RUNTIME-TIMER",
+      "area": "Runtime",
+      "title": "World timers",
+      "status": "partial",
+      "priority": "P0",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaTimerSubsystem.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaLib_Timer.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "Raw coroutine state, no Env close cleanup, first-world lookup; existing tests mostly API shape.",
+      "acceptance": "Test due/pause/unscaled/reentry plus coroutine GC, Env-first/World-first destruction and multi-PIE.",
+      "upstream": [
+        "slua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "RUNTIME-EVENT",
+      "area": "Runtime",
+      "title": "Event bus and Once reentrancy",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Content/Script/UnLuaNova/Event.lua"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp",
+        "Content/Script/Tests/Lua/RuntimeContracts.spec.lua"
+      ],
+      "examples": [
+        "Content/Script/Examples/RuntimeContracts.lua"
+      ],
+      "gap": "Tokens retain owner until explicit unsubscribe; not automatic UObject lifecycle cleanup.",
+      "acceptance": "Run recursive Once and cleanup tests; add exception/reload/owner destruction scenarios.",
+      "upstream": [
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "RUNTIME-OOP",
+      "area": "Runtime",
+      "title": "Pure Lua classes",
+      "status": "implemented",
+      "priority": "P2",
+      "source": [
+        "Plugins/UnLuaNova/Content/Script/UnLuaNova/OOP.lua"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Examples/RuntimeContracts.lua"
+      ],
+      "gap": "Lua class helper is distinct from UE UClass and experimental Luau classes.",
+      "acceptance": "Validate constructor chain, Super, class/instance identity and both backend examples.",
+      "upstream": [
+        "slua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "RUNTIME-RELOAD",
+      "area": "Runtime",
+      "title": "Hot reload and closure identity",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Content/Script/UnLuaNova/HotReload.lua",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaScriptCompat.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "Luau upvalue identity is approximate; shared scalar aliases and rollback not proven.",
+      "acceptance": "Test shared closures, table cycles, delegates, active coroutine and failed reload rollback.",
+      "upstream": [
+        "slua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "NET-RPC",
+      "area": "Networking",
+      "title": "Declared server/client/multicast RPC",
+      "status": "experimental",
+      "priority": "P0",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaNet.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetMulticastTest.cpp"
+      ],
+      "examples": [
+        "Content/Script/Tests/Net/NetActor.lua"
+      ],
+      "gap": "Sorting added; inheritance, class/net caches, security and cooked acceptance incomplete.",
+      "acceptance": "Connected DS + 2 clients, ownership rejection, reliable/unreliable, reconnect and schema mismatch.",
+      "upstream": [
+        "slua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "NET-PROPS",
+      "area": "Networking",
+      "title": "Property conditions and schemas",
+      "status": "experimental",
+      "priority": "P0",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaReplicationComponent.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaNetPayload.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetClientServerTest.cpp"
+      ],
+      "examples": [
+        "Content/Script/Tests/Net/NetActor.lua"
+      ],
+      "gap": "Instance-derived class-cached conditions; type bucket conflicts; unknown conditions fall back.",
+      "acceptance": "Fix layout design; test mixed conditions/types across actors, owner/nonowner, late join and dormancy.",
+      "upstream": [
+        "slua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "NET-TYPES",
+      "area": "Networking",
+      "title": "Replication types, int64 and Iris/push model",
+      "status": "experimental",
+      "priority": "P0",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaReplicationComponent.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaNetDecl.h"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "Fixed primitive/math/object types; no arbitrary struct/container support; Luau int64 truncation.",
+      "acceptance": "Exact integer boundaries, object resolution, legacy/Iris/push combinations and packaged peers.",
+      "upstream": [
+        "slua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LUAU-SYNTAX",
+      "area": "Luau",
+      "title": "Language/compiler surface",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Luau/04_LuauSyntax.lua",
+        "Content/Script/Luau/01_StrictTyping.lua"
+      ],
+      "gap": "Pinned compiler supports syntax; not a full integrated conformance run.",
+      "acceptance": "Import pinned syntax/interpolation/if-expression/generics/iteration conformance with documented exclusions.",
+      "upstream": [
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LUAU-LIBS",
+      "area": "Luau",
+      "title": "base, math, string, table, utf8, bit32, coroutine",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Luau/04_LuauSyntax.lua"
+      ],
+      "gap": "VM libraries exposed; tests sample behavior rather than all upstream conformance.",
+      "acceptance": "Run library/metatable/error/weak-table conformance and host-specific exclusions.",
+      "upstream": [
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LUAU-VECTOR",
+      "area": "Luau",
+      "title": "Native vector and FVector interoperability",
+      "status": "implemented",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/MathLib/LuaLib_FVector.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_FVector.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Luau/05_VectorInterop.lua"
+      ],
+      "gap": "float vector versus UE double FVector loses precision.",
+      "acceptance": "Test conversion/parameter/operator edges and document precision budget.",
+      "upstream": [
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LUAU-BUFFER",
+      "area": "Luau",
+      "title": "Native buffer and UE array copies",
+      "status": "implemented",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaLib.cpp",
+        "Plugins/UnLuaNova/Content/Script/UnLuaNova/Buffer.lua"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Luau/06_BufferInterop.lua"
+      ],
+      "gap": "Copies rather than external-memory aliases; output array type differs from uint8.",
+      "acceptance": "Bounds/type/value tests and verify source/buffer independence; measure copy cost.",
+      "upstream": [
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LUAU-CODEGEN",
+      "area": "Luau",
+      "title": "Native compilation",
+      "status": "experimental",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "VM-scoped initialization fixed; request counter is not success count; platform acceptance absent.",
+      "acceptance": "Test VM/coroutine lifecycle, supported architectures, debug attachment, failures and executable-memory policy.",
+      "upstream": [
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LUAU-GC",
+      "area": "Luau",
+      "title": "Incremental GC and budgets",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaGcScheduler.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaGcScheduler.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "Not generational or multithreaded GC; budgets are not proven hard pause limits.",
+      "acceptance": "Measure pauses and allocation pressure; validate tuning, errors and destruction callbacks.",
+      "upstream": [
+        "Luau",
+        "slua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LUAU-SANDBOX",
+      "area": "Luau",
+      "title": "Readonly globals, threads and class tables",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Luau/02_SandboxBoundary.lua"
+      ],
+      "gap": "Default off; host UE/debug/io/socket capabilities remain; not an untrusted-code permission model.",
+      "acceptance": "Define capability policy and verify writable escape paths, new threads, imports and host limits.",
+      "upstream": [
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LUAU-TYPES",
+      "area": "Luau",
+      "title": "Type inference, declarations and LSP",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNovaEditor/Private/UnLuaNovaIntelliSenseGenerator.cpp",
+        "Tools/CheckLuauTypes.ps1"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/IntelliSense.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Luau/01_StrictTyping.lua"
+      ],
+      "gap": "External checker; declarations approximate containers/delegates and skips may occur.",
+      "acceptance": "Require checker and fresh declarations; verify inference/generics/overloads/type-functions and negative fixtures.",
+      "upstream": [
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LUAU-REQUIRE",
+      "area": "Luau",
+      "title": "Host module loader versus upstream Require",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaScriptCompat.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaEnv.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Tutorials/12_CustomLoader.lua"
+      ],
+      "gap": "Host searchers/preload differ from upstream Require relative paths/aliases/config.",
+      "acceptance": "Document resolution/cycle/cache contract and add alias/case/cook tests or explicit unsupported errors.",
+      "upstream": [
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LUAU-COVERAGE",
+      "area": "Luau",
+      "title": "Coverage export and quality gates",
+      "status": "planned",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp"
+      ],
+      "tests": [],
+      "examples": [],
+      "gap": "Compiler option exists; complete result export, source mapping and gate are absent.",
+      "acceptance": "Produce per-source counts with exclusions, aggregate backend runs, fail on missing data.",
+      "upstream": [
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LUAU-EXPERIMENTAL",
+      "area": "Luau",
+      "title": "Experimental integer and user-defined class libraries",
+      "status": "experimental",
+      "priority": "P2",
+      "source": [
+        "Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau.Build.cs"
+      ],
+      "tests": [],
+      "examples": [],
+      "gap": "Upstream flag-controlled APIs are not stable integration promises.",
+      "acceptance": "Record flags, compatibility/ABI/type declarations and tests before exposing as stable.",
+      "upstream": [
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "COMPAT-DEBUG",
+      "area": "Compatibility",
+      "title": "debug, upvalues and uservalues",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaScriptCompat.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "Registry/uservalue placeholders and approximate upvalue identity.",
+      "acceptance": "Reject unsupported operations or implement exact subset; test closure identity and error cases.",
+      "upstream": [
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "COMPAT-IO",
+      "area": "Compatibility",
+      "title": "Optional rooted buffered io",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaLib_Io.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "CRLF/path/read checks improved; modes/seek/errors/links/quotas remain incomplete; not Lua io parity.",
+      "acceptance": "Compare subset against Lua, including binary/large files, mutated handles, failure and root changes.",
+      "upstream": [
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "COMPAT-LANGUAGE",
+      "area": "Compatibility",
+      "title": "Lua 5.x integer, close, goto and bytecode differences",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/LuaBackend.h",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaScriptCompat.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "No language-level equivalence; source-only load mode and bytecode/version policy incomplete.",
+      "acceptance": "Publish migration contracts and explicit failures; verify int64, close alternatives and trusted bytecode.",
+      "upstream": [
+        "Luau",
+        "UnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "DEBUG-DAP",
+      "area": "Tooling",
+      "title": "Debug service and DAP",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaDebugService.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNovaEditor/Private/LuaDebugAdapter.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DebugService.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DebugAdapter.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Luau/03_NativeDebug.lua"
+      ],
+      "gap": "Attach/evaluate/pause exist; packaged remote support, authorization and reconnect unverified.",
+      "acceptance": "Break/step/locals/upvalues across multiple Env and coroutine; malformed frames and disconnect cleanup.",
+      "upstream": [
+        "slua",
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "PROFILE",
+      "area": "Tooling",
+      "title": "CPU, self time, memory and flamegraphs",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaProfiler.cpp",
+        "Tools/LuauPerfgraph/perfgraph.py"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Observability.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "Sampled/measured attribution differs; tool wrapper requires initialized pinned VM tools.",
+      "acceptance": "Validate stack/yield/GC attribution, overhead and malformed dumps; produce an end-to-end example.",
+      "upstream": [
+        "slua",
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "WATCHDOG",
+      "area": "Tooling",
+      "title": "Dead-loop and coroutine diagnostics",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaCoroutineTracker.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaDeadLoopCheck.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/ErrorHandling.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "Detection exists; quotas and cancellation are not complete hostile-code controls.",
+      "acceptance": "Test timeout/reset/teardown, native callbacks and abandoned coroutine attribution.",
+      "upstream": [
+        "slua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "EXTENSIONS",
+      "area": "Product",
+      "title": "Socket, protobuf and JSON",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNovaExtensions/LuaProtobuf/Source/src/pb.cpp",
+        "Plugins/UnLuaNovaExtensions/LuaSocket/Source/src/luasocket.cpp",
+        "Plugins/UnLuaNovaExtensions/LuaRapidjson/Source/src/rapidjson.cpp"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Extensions.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "Backend lifetime/ABI/error and distribution notices need component-level verification.",
+      "acceptance": "Large/malformed payloads, socket close/failure, userdata GC and packaged linkage on both backends.",
+      "upstream": [
+        "UnLua",
+        "slua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "QA-PROVENANCE",
+      "area": "Quality",
+      "title": "Test framework, reports and build identity",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Tools/RunTests.ps1",
+        "Tools/GenerateTestReport.py",
+        "Tools/ClassifyTests.py"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaSpecs.spec.cpp"
+      ],
+      "examples": [],
+      "gap": "Static classification is not coverage; reports lack complete reproducible build identity.",
+      "acceptance": "Fail missing/empty/malformed runs; record commit/dirty/dependencies/flags/topology; require type tools.",
+      "upstream": [
+        "UnLua",
+        "slua",
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "PERFORMANCE",
+      "area": "Quality",
+      "title": "Comparable benchmarks and regression gates",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Tools/RunTests.ps1"
+      ],
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Benchmark.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/BenchmarkParity.spec.cpp"
+      ],
+      "examples": [
+        "Content/Script/Tests/Benchmark/BP_UnLuaNovaBenchmark.lua"
+      ],
+      "gap": "Threshold code exists; committed perf baselines and controlled external results absent.",
+      "acceptance": "Same hardware/UE/config, raw multi-run distributions, memory/startup/GC/code-size metrics.",
+      "upstream": [
+        "slua",
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "PACKAGING",
+      "area": "Product",
+      "title": "Cooked targets, platforms and upgrades",
+      "status": "partial",
+      "priority": "P1",
+      "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/UnLuaNova.Build.cs"
+      ],
+      "tests": [],
+      "examples": [],
+      "gap": "No current platform/Shipping evidence; editor-only type/debug tools differ from runtime.",
+      "acceptance": "Cooked scripts/assets/extensions, DS/client, feature-off, executable-memory targets and upgrade tests.",
+      "upstream": [
+        "slua",
+        "FUnLua"
+      ],
+      "verification": "pending-runtime"
+    },
+    {
+      "id": "LEGAL",
+      "area": "Release",
+      "title": "License scope and provenance",
+      "status": "partial",
+      "priority": "P0",
+      "source": [
+        "LICENSE",
+        "LICENSE-THIRD-PARTY.md"
+      ],
+      "tests": [],
+      "examples": [],
+      "gap": "Root/file scope unresolved; extension notices incomplete; FUnLua license file missing.",
+      "acceptance": "Rights-holder scope decision, file/component provenance, complete notices in distributable artifact.",
+      "upstream": [
+        "UnLua",
+        "slua",
+        "FUnLua",
+        "Luau"
+      ],
+      "verification": "pending-runtime"
+    }
+  ]
+}
