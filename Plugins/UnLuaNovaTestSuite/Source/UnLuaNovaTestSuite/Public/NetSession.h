@@ -60,6 +60,9 @@ namespace UnLuaNovaTestSuite
         Client,
     };
 
+    /** What Spec.Port means when the test leaves it alone. */
+    constexpr int32 DefaultNetPort = 7777;
+
     /** One process in the topology. */
     struct FNetPeerSpec
     {
@@ -76,7 +79,13 @@ namespace UnLuaNovaTestSuite
         /** Client only: host (or URL) of the server. Empty = this peer does not connect. */
         FString ConnectTo;
 
-        int32 Port = 7777;
+        /**
+         * Left at DefaultNetPort (7777) it is shifted by the peer's index, so three peers on
+         * one machine get 7777 / 7778 / 7779: two clients both asking for 7777 fail in a way
+         * that reads as "the client could not reach the server", which is a day's work spent
+         * on the wrong thing. Set it explicitly when the peer must be on a known port.
+         */
+        int32 Port = DefaultNetPort;
 
         /** A dedicated server has no window: -NullRHI, and its log is all it leaves behind. */
         bool bHeadless = false;
@@ -128,13 +137,20 @@ namespace UnLuaNovaTestSuite
         static FString ResolvePeerExe();
 
         /**
-         * Launches one peer per call. False while peers are left.
+         * Launches every peer that is still pending (or just OnlyLabel), in one call.
          *
-         * One per tick on purpose: a topology that connects a client to a server needs the
-         * server to be listening first, and the driving test puts the delay between the two
-         * launches where it belongs - in its own latent command, where it is visible.
+         * A batch, not one per tick. Ordering - "the server has to be listening before a
+         * client dials it" - is not expressed by trickling launches out one frame at a time,
+         * which would make every topology pay a frame per peer and hide the real reason for
+         * the delay; it is expressed by the driving test launching the server with
+         * OnlyLabel, waiting, and then launching the rest. Two peers that never talk to each
+         * other (the declaration-comparison tests) start together, which is what keeps that
+         * test inside a minute.
          */
-        bool LaunchNext(FAutomationTestBase& Test, const FString& OnlyLabel = FString());
+        bool LaunchPending(FAutomationTestBase& Test, const FString& OnlyLabel = FString());
+
+        /** True when launching a peer failed - the wait for reports then stops instead of hanging. */
+        bool HasLaunchFailure() const { return bLaunchFailed; }
 
         bool AllReportsPresent() const;
         void TerminateAll();
@@ -143,10 +159,14 @@ namespace UnLuaNovaTestSuite
         /** Peers, roles and pids - read by RunTests.ps1 to name the recordings and keep the logs. */
         bool WriteTopology() const;
 
+        /** Port of the Server peer, for clients that connect without naming one. */
+        int32 GetServerPort() const;
+
     private:
         FString Name;
         FString MapName;
         TArray<FNetPeerRun> Peers;
+        bool bLaunchFailed = false;
     };
 
     // ---------------------------------------------------------------- peer side ----
@@ -168,7 +188,13 @@ namespace UnLuaNovaTestSuite
 
     // ------------------------------------------------------------ latent cmds ----
 
-    /** Launches every pending peer (or just OnlyLabel), one per tick. */
+    /**
+     * Launches every pending peer (or just OnlyLabel) in one call.
+     *
+     * The delay between "server up" and "client dials it" is the test's business - it puts a
+     * wait command between two of these - not something this command does by trickling
+     * launches out one frame at a time.
+     */
     class FNetLaunchPeersCommand : public IAutomationLatentCommand
     {
     public:

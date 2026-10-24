@@ -686,6 +686,7 @@ def render(
     encode_failures=None,
     benchmark=None,
     class_summary=None,
+    net_sessions=None,
 ):
     total = len(tests)
     failed = [t for t in tests if not t["passed"]]
@@ -853,6 +854,11 @@ def render(
         )
         lines.append("")
 
+    if net_sessions:
+        # 紧挨着录屏：联网会话的画面在上面，日志在这里，两者合起来才是"两端各看到了什么"。
+        # 缺了这一节，net/ 归档的东西就只是躺在磁盘上 —— 知道它存在的人才会去看。
+        lines.extend(render_net_sessions(net_sessions, published=published))
+
     if screenshots:
         lines.append("## 截图")
         lines.append("")
@@ -966,6 +972,84 @@ def default_baseline_path(backend):
     """Where the previous run of this backend is recorded, when nobody said otherwise."""
     name = (backend or "unknown").lower() + ".json"
     return Path(__file__).resolve().parent / "baseline" / name
+
+
+def load_net_sessions(reports_dir: Path) -> list:
+    """这一轮归档下来的联网拓扑（RunTests.ps1 把 Saved/UnLuaNovaNet 拷进 <RunDir>/net）。
+
+    跨进程用例的断言都在**报告文件**里，而报告文件在 Saved/ 下、会被下一轮删掉重写。归档
+    只是把东西挪到了这一轮的目录；不把它接进报告，就只有当时在场的人知道去哪儿找。
+    """
+    root = reports_dir / "net"
+    if not root.is_dir():
+        return []
+
+    out = []
+    for topology in sorted(root.glob("*/topology.json")):
+        try:
+            data = json.loads(topology.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+
+        session = data.get("session") or topology.parent.name
+        peers = []
+        for peer in data.get("peers") or []:
+            label = peer.get("label") or "?"
+            peers.append(
+                {
+                    "label": label,
+                    "role": peer.get("role") or "?",
+                    "headless": bool(peer.get("headless")),
+                    "pid": peer.get("pid") or 0,
+                    # topology 里的 log 是**那台机器**的绝对路径，报告不能引用它：拷到别人
+                    # 机器上就是死链。归档里的位置是固定的，用相对路径重写一遍。
+                    "log": f"net/{session}/logs/{label}.log",
+                    "report": f"net/{session}/{label}.json",
+                }
+            )
+        out.append({"session": session, "peers": peers})
+    return out
+
+
+def render_net_sessions(sessions, published=False) -> list:
+    lines = ["## 联网会话", ""]
+    lines.append(
+        "这一轮跑过的跨进程拓扑。用例用 `FNetSession` 声明要几个 peer、各自什么角色，"
+        "每个 peer 把自己的报告与日志写进 `Saved/UnLuaNovaNet/<会话>/`，"
+        "`Tools/RunTests.ps1` 再归档到本轮目录的 `net/` 下。"
+    )
+    lines.append("")
+    lines.append(
+        "headless 的独立服务器 `-NullRHI` 起、没有窗口，上面那段录屏里没有它 —— "
+        "它的日志是它唯一的痕迹，所以每个 peer 都列了。"
+    )
+    lines.append("")
+
+    for entry in sessions:
+        lines.append(f"### {entry['session']}")
+        lines.append("")
+        lines.append("| peer | 角色 | 窗口 | 报告 | 日志 |")
+        lines.append("|:--|:--|:--|:--|:--|")
+        for peer in entry["peers"]:
+            window = "headless（不录）" if peer["headless"] else "有（见上面的整场录屏）"
+            if published:
+                # 发布页只带页面与图片/视频，日志不跟着走。给一个点不开的链接比不给更糟。
+                report = f"`{peer['report']}`"
+                log = f"`{peer['log']}`"
+            else:
+                report = f"[{peer['report']}]({peer['report']})"
+                log = f"[{peer['log']}]({peer['log']})"
+            lines.append(
+                f"| {peer['label']} | {peer['role']} | {window} | {report} | {log} |"
+            )
+        lines.append("")
+
+    if published:
+        lines.append(
+            "> 日志不随页面发布：它们在本轮输出目录的 `net/` 下（本机跑完就能打开）。"
+        )
+        lines.append("")
+    return lines
 
 
 def load_classification(path: Path):
@@ -1250,6 +1334,7 @@ def main() -> None:
     if args.classification:
         classification = load_classification(Path(args.classification).resolve())
     class_summary = summarise_classes(tests, classification, None)
+    net_sessions = load_net_sessions(reports_dir)
 
     (out_dir / "report.md").write_text(
         render(
@@ -1267,6 +1352,7 @@ def main() -> None:
             encode_failures=encode_failures,
             benchmark=benchmark,
             class_summary=class_summary,
+            net_sessions=net_sessions,
         ),
         encoding="utf-8",
         newline="\n",
@@ -1291,6 +1377,11 @@ def main() -> None:
         # Kept as the single-file name so anything already reading summary.json keeps
         # working; it is the editor's own capture, which every run has had all along.
         "session_recording": sessions[0]["file"] if sessions else None,
+        # Empty on a run with no net test in it. The files themselves are archived under
+        # <RunDir>/net/, which is not published - this is the machine-readable index of them.
+        "net_sessions": [
+            {"session": e["session"], "peers": e["peers"]} for e in net_sessions
+        ],
         "videos_failed": len(encode_failures),
         "crashed": crash is not None,
         "crash_test": crash["test"] if crash else None,
@@ -1396,6 +1487,7 @@ def main() -> None:
                     encode_failures=encode_failures,
                     benchmark=benchmark,
                     class_summary=class_summary,
+                    net_sessions=net_sessions,
                 ),
                 repo_root,
             ),

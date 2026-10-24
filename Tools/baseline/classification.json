@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-24 18:36:20",
+  "generated": "2026-10-24 19:05:33",
   "classes": {
     "A": "纯逻辑（不需要 UWorld）",
     "B": "需要 UWorld，不联网",
@@ -9,7 +9,7 @@
     "?": "未分类（没找到注册宏）"
   },
   "counts": {
-    "A": 51,
+    "A": 53,
     "B": 62,
     "C": 3,
     "D": 1,
@@ -21,6 +21,8 @@
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/BenchmarkParity.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/CallUEFast.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/ConsoleCommands.spec.cpp": "A",
+    "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DanglingCheck.spec.cpp": "A",
+    "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DebugAdapter.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DebugService.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DefaultParamCollector.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/EditorCommands.spec.cpp": "A",
@@ -141,6 +143,8 @@
     "UnLuaNova.Perf.BenchmarkParity": "A",
     "UnLuaNova.API.CallUEFast": "A",
     "UnLuaNova.Editor.ConsoleCommands": "A",
+    "UnLuaNova.API.DanglingCheck": "A",
+    "UnLuaNova.API.DebugAdapter": "A",
     "UnLuaNova.API.DebugService": "A",
     "UnLuaNova.API.DefaultParamCollector": "A",
     "UnLuaNova.Editor.Commands": "A",

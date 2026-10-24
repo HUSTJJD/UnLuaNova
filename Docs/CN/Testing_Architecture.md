@@ -18,12 +18,12 @@ description: "把用例的‘跑在什么进程里’‘扮演什么网络角色
 现在这三件事被压成了一个常量："全都在一个 `UnrealEditor-Cmd.exe` 里跑，网络靠同进程
 PIE 模拟，断言直接摸对象指针"。
 
-现有 **118** 个用例文件按"真正需要什么"分（`Tools/ClassifyTests.py` 静态扫出来的，
+现有 **120** 个用例文件按"真正需要什么"分（`Tools/ClassifyTests.py` 静态扫出来的，
 `Tools/baseline/classification.json`，报告里也有一节）：
 
 | 类 | 需要什么 | 文件数 | 代表 |
 |:--|:--|--:|:--|
-| A | 纯逻辑，不需要 `UWorld` | **51** | `Specs/LuaBackend.spec.cpp`、`Specs/LuaNet.spec.cpp` |
+| A | 纯逻辑，不需要 `UWorld` | **53** | `Specs/LuaBackend.spec.cpp`、`Specs/LuaNet.spec.cpp` |
 | B | 要 `UWorld`，不联网 | **62** | `Tests/Issue276Test.cpp:27`、`Specs/LuaLib_World.spec.cpp:36` |
 | C | 联网（PIE 会话或跨进程 peer） | **3** | `Tests/LuaNetClientServerTest.cpp:391`、`Tests/LuaNetMulticastTest.cpp` |
 | D | 真实视口 / RHI | **1** | `Tests/Issue434Test.cpp:24` |
@@ -55,7 +55,7 @@ PrivateDependencyModuleNames (if Target.bBuildEditor) = { UnrealEd, UnLuaNovaEdi
 | 载体 | 启动 | 代价 | 什么时候用 |
 |:--|:--|:--|:--|
 | `Editor` | `UnrealEditor-Cmd` | 几十秒 | 只有要操作编辑器本身时：PIE 编排、资产、工具栏 |
-| `Game` | 同一 exe `-game` | 秒级 | **默认**。A / B 两类 113 个用例的真实归属 |
+| `Game` | 同一 exe `-game` | 秒级 | **默认**。A / B 两类 115 个用例的真实归属 |
 | `Packaged` | 打包二进制 | 构建一次，分钟级 | 只有要验证打包后的行为时，nightly |
 
 `Game` 才是接近真实部署的运行时：编辑器里 `UWorld` 的生命周期、`GetNetMode()`、
@@ -174,8 +174,16 @@ BEGIN_TESTSUITE_EX(FMyTest, "UnLuaNova.X",
   一个 peer 就写 `topology.json`（label / role / pid / headless），`RunTests.ps1` 在跑的
   过程中每 3 秒轮询一次，给新出现的非 headless peer 补一个录制，文件名 `session-<label>.mp4`
 * headless 的 DS 仍然不录屏，改为把它的日志归档到 `RunDir/logs/` —— ✅ peer 的 `-abslog`
-  就写在会话目录的 `logs/` 下，`Copy-NetArtifacts` 把整个 `Saved/UnLuaNovaNet`
-  （报告 JSON + 日志 + topology）归档到 `<RunDir>/net/`
+  就写在会话目录的 `logs/` 下，`Copy-NetArtifacts` 把本轮的会话目录（报告 JSON + 日志 +
+  topology）归档到 `<RunDir>/net/`
+* 报告里要有入口 —— ✅ `GenerateTestReport.py` 新增「联网会话」一节（peer / 角色 / 有没有
+  窗口 / 报告与日志的相对链接），`summary.json` 里也带 `net_sessions`。归档了却没入口，
+  等于只有当时在场的人知道去哪儿找
+* 收尾不能只靠用例 —— ✅ 用例崩在半路时 `FNetTerminatePeersCommand` 那一步根本没跑到，
+  所以 `RunTests.ps1` 在主进程退出后按 topology 的 pid 再收一次（对上进程名与启动时间才
+  动手，避免 pid 复用误杀）
+* 只看本轮 —— ✅ 轮询与归档都按时间戳过滤：`Saved/UnLuaNovaNet` 不自己清理，不区分就会
+  一直翻旧账（旧的 peer 每个干等 20 秒窗口超时；报告里出现两份同名 `Server.json`）
 * **验收**：一次双端跑挂了，报告里能同时看到两端画面 + DS 日志 —— ⚠️ 待实测
 
 ---

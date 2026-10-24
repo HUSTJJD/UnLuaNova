@@ -134,6 +134,9 @@ FUnLuaNovaDelegates
 `UnLuaNova` 既是 Lua 模块名（`require "UnLuaNova"`）也是运行期注入的全局表：
 
 * `UnLuaNova.GetBackend()` 返回当前构建的 Lua 后端：`"Lua"` 或 `"Luau"`
+* `UnLuaNova.BufferFromArray(array)` / `UnLuaNova.BufferToArray(buf)`：`buffer` ↔ `TArray`
+  的 C++ 实现，只有 Luau 后端注册（脚本侧入口是 `UnLuaNova.Buffer` 模块，它在有这两个函数时
+  自动走它们）—— 见 [Luau](Luau.md)
 * `UnLuaNova.HasFeature(Name)` 查询某项**特性**是否可用（大小写不敏感）。
   后端能力与配置开关走**同一个入口**，脚本不必知道这个值是从后端来的还是从 ini 来的：
 

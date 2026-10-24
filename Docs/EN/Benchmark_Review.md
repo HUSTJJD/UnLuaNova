@@ -300,10 +300,10 @@ The count is good; **the distribution has holes**.
 | `ULuaModuleLocator_ByBinding` (the default locator) resolution rules | zero cases |
 | `lua.profiler` / `memstats` / `gc` / `sandbox` | only "does not crash", not observable effects |
 | `UnLuaNovaDebugBase` (breakpoints / stack / **locals**) | no dedicated cases; `Observability.spec.cpp` covers registration and stepping only |
-| DAP adapter | zero cases |
-| `FLuaEnv::HotReload()` | never driven (`HotReload` only tests "the module loads") |
-| `FDanglingCheck` logic | never driven (only that the switch can be set) |
-| `Private/Perfs/*` | registers **0** automation cases, only emits CSV |
+| DAP adapter | ✅ `DebugAdapter.spec.cpp`: starts the real server, connects over loopback, exchanges `initialize` / `attach` / `evaluate` / `threads` / `disconnect` in DAP framing, asserts `supportsEvaluateRequest` and an evaluated result, plus "an unknown command answers with an error instead of hanging the connection" |
+| `FLuaEnv::HotReload()` | ⚠️ partially covered: `LuaEnv.spec.cpp` now has "does not break the env" and "callable twice, does not wipe globals". **"the module was actually replaced" is still uncovered** - that needs a file change or a hand-built loader to produce an mtime delta, which is not one more assertion |
+| `FDanglingCheck` logic | ✅ `DanglingCheck.spec.cpp`. The semantics were pinned down before any assertion: it is **not** "scan and report a count of dangling pointers" (there is no `Run()` and no number to assert) - it is a **per-call guard**: containers and structs first handed to Lua during a call are recorded, and when the outermost guard drops they are tagged and removed from the registry. The case asserts "the `ScriptContainerMap` entry is gone once the call returns", with "the entry survives with the switch off" as the control |
+| ~~`Private/Perfs/*` registers 0 cases~~ | **corrected**: there is no `Private/Perfs/` directory. The perf cases live in `Plugins/UnLuaNovaTestSuite/.../Private/Specs/Benchmark.spec.cpp` and `BenchmarkParity.spec.cpp`, and they are real automation cases (assert "ran N iterations", compare against the baseline) |
 | Lua side | `Content/Script/Tests/**` is mostly fixtures for the C++ side, with no assertions |
 
 ---
@@ -334,11 +334,15 @@ plus `lua.profiler mem`), coroutine leak detection (`FLuaCoroutineTracker` plus
   `Tools/baseline/`), but `Tools/baseline/` currently holds only `lua.json`, `luau.json` and
   `classification.json` - no `perf-*.json`. So the gate is in its "no baseline yet, warn
   instead of fail" state until a real run produces one
-* **#7, CI running the tests** - no nightly workflow exists yet
-* the rest of the coverage holes - `DebugService.spec.cpp` is new and the Overrides /
-  Locators / ConsoleCommands assertions are stronger, but the DAP adapter,
-  `FLuaEnv::HotReload()`, `FDanglingCheck` logic and `Private/Perfs/*` still register zero
-  automation cases
+* **#8 is half done** - `Enum` and `Text` are now thunkable (their storage is fixed by the
+  kind: an underlying numeric property, and one string). `Struct` / `Array` / `Set` / `Map`
+  are still out: their Lua representation is built by `FPropertyDesc`, which lives in
+  `Private/` and is unreachable from the generated file's side of the module boundary.
+  Making them thunkable needs a public `Push` / `Read(L, Property, ValuePtr)` pair and a
+  generator re-run - a design change, not another `||`.
+* the coverage holes are closed - `DebugService.spec.cpp`, `DebugAdapter.spec.cpp` (real
+  loopback), `DanglingCheck.spec.cpp`, the stronger Overrides / Locators /
+  ConsoleCommands assertions and two `HotReload` cases are all in place
 
 ### P0 - correctness
 

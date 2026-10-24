@@ -186,9 +186,12 @@ local Buf = UnLuaNova.Buffer.FromArray(Bytes)   -- TArray -> buffer
 local Back = UnLuaNova.Buffer.ToArray(Buf)      -- buffer -> TArray
 ```
 
-逐字节循环是 O(n)，适合一次性打包/解包，不要放进每帧的热路径。
-`UnLuaNova.Vector` / `UnLuaNova.Buffer` 两个模块在两个后端下都能安全调用
-（Lua 5.5 下 `HasVector()` / `HasBuffer()` 返回 false，转换函数返回 nil）。
+Luau 后端下这两个函数走 C++（`UnLuaNova.BufferFromArray` / `BufferToArray`）：元素宽度 1
+（字节数组 UPROPERTY 绑出来的就是 `TArray<uint8>`）时是一次 memcpy，更宽的元素逐元素读写但
+不来回跨边界；Lua 5.5 下没有 `buffer`，`HasBuffer()` 为 false，转换函数返回 nil。
+即便如此它仍是 O(n) 的一次拷贝——零拷贝做不到，原因见第七节。
+
+`UnLuaNova.Vector` / `UnLuaNova.Buffer` 两个模块在两个后端下都能安全调用。
 
 ---
 
@@ -278,7 +281,7 @@ luau-lsp analyze --platform=standard --definitions=@unluanova=Plugins/UnLuaNova/
 |---|---|---|
 | `lua_Integer` | **32 位** | 64 位 |
 | 64 位整数传递 | 绑定层走 `UNLUANOVA_PUSHINT64/TOINT64` | `lua_pushinteger` 直接够用 |
-| userdata `__gc` | **不存在**（`UNLUANOVA_HAS_USERDATA_GC = 0`） | 存在 |
+| userdata 怎么终结 | **没有 `__gc`**（`UNLUANOVA_HAS_GC_METAMETHOD = 0`），改走 `lua_newuserdatadtor`（`UNLUANOVA_HAS_USERDATA_FINALIZER = 1`） | `__gc` 元方法 |
 | 迭代元方法 | `__iter` | `__pairs` / `__ipairs` |
 | `load()` | 原生没有，UnLuaNova 补 | 原生有 |
 | `debug` 库 | 只有 traceback / info / profiler hooks，其余由 UnLuaNova 补 | 完整 |
@@ -288,9 +291,9 @@ luau-lsp analyze --platform=standard --definitions=@unluanova=Plugins/UnLuaNova/
 
 两条容易踩的实践结论：
 
-1. **不要把资源释放寄托在 `__gc` 上。** Luau 没有 userdata `__gc`，
-   容器（`TArray`/`TMap`/`TSet`）这类 userdata 在 Luau 下不会被终结器回收，
-   生命周期请交给引用链或显式的释放逻辑。
+1. **不要把资源释放寄托在 `__gc` 上。** Luau 没有 userdata `__gc`，注册它是静默无效的。
+   需要析构的东西要用 `UNLUANOVA_NEWDATA_DTOR` 分配（容器、`FText` 已经这么做了），
+   回调里只允许销毁 C++ 状态——它在收集器内部跑，碰 Lua 栈是非法的。
 2. **yield 边界更严格。** Luau 在跨过一层 C 调用边界后拒绝 `lua_yield()`，
    报 `attempt to yield across metamethod/C-call boundary`。
    从脚本里启动 Latent 函数没问题；从引擎回调里启动则可能失败，用 `UNLUANOVA_IS_YIELDABLE` 先问一句。
@@ -420,8 +423,9 @@ Luau 删掉 io 是有理由的（luau.org/sandbox：它能读文件、能起进�
 * 没有进程（没有 `io.popen`、没有 `os.execute`）
 * 没有 stdin（`io.read` 直接报错）
 
-文件对象是 Lua 表而不是 userdata：Luau **没有 `__gc`**，持有 `FString`/`TArray` 的 userdata
-在脚本丢掉句柄时会泄漏。字符串和整数放进表里，跟着表一起回收。
+文件对象是 Lua 表而不是 userdata：Luau **没有 `__gc`**，靠 VM 终结器兜底的 userdata 得走
+`UNLUANOVA_NEWDATA_DTOR` 那套（容器和 `FText` 是这么处理的），而一个文件句柄还要处理
+"脚本忘了关"这件事。放进表里的只有字符串和整数，句柄一丢，表跟着一起回收，没有中间状态。
 
 `package` 补了 `preload`（并且真的生效——preload 查找器挂在 `package.searchers[1]`，和
 Lua 一样优先于任何文件查找）、`config`、`path`、`cpath`。注意 `path`/`cpath` 只是**发布**
@@ -456,13 +460,13 @@ GC 时间会带一个合成的 `GC,GC,0;` 帧，跟官方一致。
 
 | 项 | 现状 | 备注 |
 |---|---|---|
-| `buffer` ↔ `TArray<uint8>` 的零拷贝 | 目前是显式逐字节转换 | 真正的零拷贝要让容器绑定直接读写 buffer 内存，而不是先拷一份 |
-| 容器 / FText / File 的 userdata 永不 `__gc` | Luau 明确不提供终结器（`LuaBackend.h:748`） | 只能靠显式 `Release`/重置；要么给容器加显式生命周期 API，要么别让它们持有需要析构的东西 |
+| 导出的文件类（`UE4File`）在 Luau 下不终结 | 它仍注册 `__gc`，而 Luau 没有 `__gc` | 容器和 FText 已经改走 `lua_newuserdatadtor`（`UNLUANOVA_HAS_USERDATA_FINALIZER=1`），剩下这一个走的是导出类的通用构造路径，得让那条路径也带析构回调 |
 
 已落地（原先在这个表里，现在不是了）：
 
 | 项 | 变成什么 |
 |---|---|
+| `buffer` ↔ `TArray` | 从逐字节的 Lua 循环下沉成 C++：`UnLuaNova.BufferFromArray` / `BufferToArray`。元素宽度 1（也就是字节数组 UPROPERTY 绑出来的 `TArray<uint8>`）时是一次 memcpy；更宽的元素逐元素读写，但循环在 C++ 里。反方向的元素类型仍是 int32——`FPropertyRegistry` 没有 byte 类型接口，要 `TArray<uint8>` 也没处要 |
 | 沙盒下冻结**类表** | `lua.sandbox.freezeclasstables`。阻塞点是"类表懒缓存首次访问会 `rawset`"——现在是写不进去就跳过（`CacheFieldIfWritable`），读照旧，只是下次多解析一次 |
 | DAP 适配器 | `lua.dap start [port]`（默认 5699），见 [调试](Debugging.md) |
 
@@ -470,6 +474,7 @@ GC 时间会带一个合成的 `GC,GC,0;` 帧，跟官方一致。
 
 | 项 | 为什么不进 |
 |---|---|
+| `buffer` 的零拷贝 | 做不到，而且不是我们没做：Luau 的 C API 只有 `lua_newbuffer` / `lua_tobuffer`，没有任何把外部内存包成 buffer 的接口，buffer 永远拥有 VM 自己分配的那一块内存，不可能成为数组存储的别名。1 字节元素下"一次 memcpy"就是上限 |
 | `luau-lsp` 进 CI | 一次 cmake 构建几分钟，而 CI 拿不到引擎、也拿不到编辑器导出的声明文件，`UE.xxx` 全是 `Unknown global`，跑出来的东西要人工二次判读。它是本地工具：`Tools/Build-LuauLsp.ps1` 构建，`Tools/CheckLuauTypes.ps1` 跑 |
 
 ---

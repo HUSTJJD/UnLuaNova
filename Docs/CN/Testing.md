@@ -144,7 +144,7 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout      # 或 <Projec
 | `Auto` | 按静态分类挑 | 同上 | **默认**。这一轮要跑的用例里没有 D/E/C 类（视口 / 截图 / 联网）就走 `Game` |
 
 分类来自 `Tools/ClassifyTests.py`（扫 `Specs/` 与 `Tests/` 的源码，不跑测试），报告里
-"按运行环境分类"那一节就是它。118 个用例文件里只有 2 个真的离不开编辑器。
+"按运行环境分类"那一节就是它。120 个用例文件里只有 2 个真的离不开编辑器。
 
 跟着载体一起变的还有三处，脚本都替你处理了：截图目录（`Saved/Screenshots/WindowsEditor`
 vs `Windows`）、日志名（`Editor.log` vs `Game.log`）、后端 DLL 名
@@ -165,8 +165,14 @@ vs `Windows`）、日志名（`Editor.log` vs `Game.log`）、后端 DLL 名
 
 约定：**慢用例自己站到 `UnLuaNova.Slow.*` 段里**。UE 的自动化只有过滤器、没有排除语法，
 所以 `Fast` 层的做法是——从分类里取出所有不落在慢段里的用例名，归并成"段"，每个段排一条
-`Automation RunTests <段>;`。代价是分类里没有的用例 Fast 层也不会跑（所以报告顶部的
-"未分类"计数必须是 0，`ClassifyTests.py` 会把它打到 stderr）。
+`Automation RunTests <段>;`。
+
+段切到哪一层跟着 `-Filter` 走：传 `UnLuaNova.API.TArray` 就按三段切，不会归并成整个
+`UnLuaNova.API`（"我只想跑 TArray"不能被放大成"跑了 API 全段"）；但最少两层，因为默认
+`-Filter UnLuaNova` 只有一段，只切一层等于原样全跑，慢段也就跟着回来了。
+
+代价是分类里没有的用例 Fast 层也不会跑（所以报告顶部的"未分类"计数必须是 0，
+`ClassifyTests.py` 会把它打到 stderr）。
 
 ## 用例清单
 
@@ -531,8 +537,18 @@ peer 补一个录制。**也就是说联网 peer 的窗口是自动录的，不�
 （这一条只适用于主窗口；单个 peer 没窗口不会拖着整屏一起录）。
 
 headless 的 DS 虽然没有录屏，但它的东西不会丢：每个 peer 的 `-abslog` 都写在会话目录的
-`logs/` 下，`RunTests.ps1` 跑完把整个 `Saved/UnLuaNovaNet`（报告 JSON + 日志 + topology）
-归档到这一轮的 `<RunDir>/net/`，控制台会打出归档了几份。
+`logs/` 下，`RunTests.ps1` 跑完把本轮的会话目录（报告 JSON + 日志 + topology）归档到
+`<RunDir>/net/`，控制台会打出归档了几份。报告里有一节**「联网会话」**逐个列出 peer、
+角色、有没有窗口，以及报告与日志的链接 —— 归档了却没人看，等于没归档。
+
+三处"只看本轮"的细节，都是被同一个事实逼出来的：`Saved/UnLuaNovaNet` 不会自己清理。
+
+* 轮询只认**本轮写过的** topology（按文件时间）。否则前几轮的 peer 会被当成新 peer 再试
+  一遍：进程早没了，于是每个旧 peer 干等 20 秒的窗口超时，一轮白搭好几分钟。
+* 归档只拷本轮的会话目录。否则报告里会同时出现两个 `Server.json`，哪一份是这轮的得靠人
+  去猜修改时间。
+* 主进程退出后，脚本按 topology 里的 pid **再收一次尾**（用例崩在半路时它自己那步清理没
+  跑到）。pid 会被复用，所以还要对上进程名和启动时间才动手。
 
 ### 编码器从哪来
 

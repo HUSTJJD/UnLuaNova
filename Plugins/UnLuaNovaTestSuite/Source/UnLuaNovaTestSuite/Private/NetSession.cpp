@@ -47,6 +47,14 @@ namespace UnLuaNovaTestSuite
 
     int32 FNetSession::AddPeer(FNetPeerSpec Spec)
     {
+        // Peers share one machine, and a port is per-process. Shifting the default by the
+        // peer's index is the difference between "three peers, three ports" and "the second
+        // client cannot connect, and nothing in the log says why".
+        if (Spec.Port == DefaultNetPort)
+        {
+            Spec.Port = DefaultNetPort + Peers.Num();
+        }
+
         FNetPeerRun Run;
         Run.Spec = MoveTemp(Spec);
         return Peers.Add(MoveTemp(Run));
@@ -103,6 +111,18 @@ namespace UnLuaNovaTestSuite
         return FPlatformProcess::ExecutablePath();
     }
 
+    int32 FNetSession::GetServerPort() const
+    {
+        for (const FNetPeerRun& Peer : Peers)
+        {
+            if (Peer.Spec.Role == ENetPeerRole::Server)
+            {
+                return Peer.Spec.Port;
+            }
+        }
+        return DefaultNetPort;
+    }
+
     FString FNetSession::BuildPeerCommandLine(const FNetPeerSpec& Spec) const
     {
         FString Args = FString::Printf(TEXT("\"%s\" "), *FPaths::GetProjectFilePath());
@@ -113,8 +133,16 @@ namespace UnLuaNovaTestSuite
         }
         else if (!Spec.ConnectTo.IsEmpty())
         {
-            // A client that connects is handed the address instead of a map.
-            Args += FString::Printf(TEXT("%s "), *Spec.ConnectTo);
+            // A client that connects is handed the address instead of a map. Without a port
+            // it dials 7777 by luck rather than by agreement - fill in the *server's* port
+            // (not this peer's, which was shifted by AddPeer) so moving the server to
+            // another port does not silently break every client.
+            FString Address = Spec.ConnectTo;
+            if (!Address.Contains(TEXT(":")))
+            {
+                Address = FString::Printf(TEXT("%s:%d"), *Address, GetServerPort());
+            }
+            Args += FString::Printf(TEXT("%s "), *Address);
         }
         else
         {
@@ -144,8 +172,10 @@ namespace UnLuaNovaTestSuite
         return Args;
     }
 
-    bool FNetSession::LaunchNext(FAutomationTestBase& Test, const FString& OnlyLabel)
+    bool FNetSession::LaunchPending(FAutomationTestBase& Test, const FString& OnlyLabel)
     {
+        int32 Launched = 0;
+
         for (FNetPeerRun& Peer : Peers)
         {
             if (Peer.bLaunched)
@@ -165,7 +195,8 @@ namespace UnLuaNovaTestSuite
                 Test.AddError(FString::Printf(
                     TEXT("no executable at %s to launch the %s peer with - build the game target, or run the suite with -Carrier Editor"),
                     *Exe, *Peer.Spec.Label));
-                return true;
+                bLaunchFailed = true;
+                break;
             }
 
             const FString Args = BuildPeerCommandLine(Peer.Spec);
@@ -177,18 +208,21 @@ namespace UnLuaNovaTestSuite
             {
                 Test.AddError(FString::Printf(TEXT("launching the %s peer failed: %s %s"),
                     *Peer.Spec.Label, *Exe, *Args));
-                return true;
+                bLaunchFailed = true;
+                break;
             }
 
+            ++Launched;
+            UE_LOG(LogTemp, Display, TEXT("[NetSession:%s] %s peer pid=%u port=%d: %s %s"),
+                *Name, *Peer.Spec.Label, Pid, Peer.Spec.Port, *Exe, *Args);
+        }
+
+        // One topology file for the batch: the runner reads it to find the peer windows, and
+        // it has to be written after the pids are known.
+        if (Launched > 0)
+        {
             IFileManager::Get().MakeDirectory(*GetLogDir(), true);
             WriteTopology();
-
-            UE_LOG(LogTemp, Display, TEXT("[NetSession:%s] %s peer pid=%u: %s %s"),
-                *Name, *Peer.Spec.Label, Pid, *Exe, *Args);
-
-            // One per tick: a client that connects has to come up after the server that is
-            // listening for it, and the delay belongs to the test's own latent command.
-            return OnlyLabel.IsEmpty() ? false : true;
         }
 
         return true;
@@ -405,7 +439,7 @@ namespace UnLuaNovaTestSuite
 
     bool FNetLaunchPeersCommand::Update()
     {
-        return Session->LaunchNext(Test, OnlyLabel);
+        return Session->LaunchPending(Test, OnlyLabel);
     }
 
     bool FNetWaitForReportsCommand::Update()
@@ -419,9 +453,34 @@ namespace UnLuaNovaTestSuite
             StartedAt = Now;
         }
 
+        // A launch that failed will never produce reports. Waiting out the timeout would turn
+        // "the peer never started" into a three-minute hang that ends on the same message.
+        if (Session->HasLaunchFailure())
+        {
+            Test.AddError(TEXT("a peer could not be launched - see the errors above; the rest of the reports were not waited for"));
+            return true;
+        }
+
         if (Session->AllReportsPresent())
         {
             return true;
+        }
+
+        // Fail as soon as a peer is gone: a process that exited without writing its report is
+        // already decided, and its log is on disk. Sitting out the timeout only buries which
+        // peer it was under a wall of identical "never produced" lines.
+        for (const FNetPeerRun& Peer : Session->GetPeers())
+        {
+            if (FPaths::FileExists(Session->ReportPath(Peer.Spec.Label)))
+            {
+                continue;
+            }
+            if (Peer.Handle.IsValid() && !FPlatformProcess::IsProcRunning(Peer.Handle))
+            {
+                Test.AddError(FString::Printf(TEXT("%s peer exited (%.0fs in) without writing a report - see %s"),
+                    *Peer.Spec.Label, Now - StartedAt, *Session->LogPath(Peer.Spec.Label)));
+                return true;
+            }
         }
 
         if (Now - StartedAt > TimeoutSeconds)

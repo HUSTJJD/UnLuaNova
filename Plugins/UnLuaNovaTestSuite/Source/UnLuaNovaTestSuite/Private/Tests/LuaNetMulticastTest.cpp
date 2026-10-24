@@ -299,9 +299,18 @@ namespace UnLuaNovaTestSuite
                     NetMode, (int32)(bServer ? NM_DedicatedServer : NM_Client));
             }
 
-            const TSharedPtr<FJsonObject>& Server = Reports[TEXT("Server")];
+            // Found, not indexed: TMap[] would happily insert a null pointer for a label this
+            // topology does not have, and the next line would dereference it. Renaming the
+            // server peer is a one-word edit that should not be able to crash the suite.
+            const TSharedPtr<FJsonObject>* ServerPtr = Reports.Find(TEXT("Server"));
+            if (!ServerPtr || !ServerPtr->IsValid())
+            {
+                Test.AddError(TEXT("no 'Server' peer in this topology - there is nothing to compare the clients against"));
+                return true;
+            }
+
             Test.TestTrue(TEXT("both clients connected to the server"),
-                Server->GetNumberField(TEXT("Clients")) >= 2.0);
+                (*ServerPtr)->GetNumberField(TEXT("Clients")) >= 2.0);
 
             // 3. the point of the test: one call on the server, seen by every client.
             for (const FString& Label : Labels)

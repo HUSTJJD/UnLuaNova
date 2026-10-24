@@ -189,9 +189,14 @@ local Buf = UnLuaNova.Buffer.FromArray(Bytes)   -- TArray -> buffer
 local Back = UnLuaNova.Buffer.ToArray(Buf)      -- buffer -> TArray
 ```
 
-That loop is O(n) byte by byte: fine for one-shot packing, wrong for a per-frame hot path.
-Both `UnLuaNova.Vector` and `UnLuaNova.Buffer` are safe to call on either backend
-(`HasVector()` / `HasBuffer()` answer false on Lua 5.5 and the conversions return nil).
+On the Luau backend both conversions drop into C++ (`UnLuaNova.BufferFromArray` /
+`BufferToArray`): a 1-byte element type - `TArray<uint8>`, which is what a byte-array
+UPROPERTY binds to - is a single memcpy, and anything wider is read element by element
+without crossing back into the VM. On Lua 5.5 there is no `buffer`, so `HasBuffer()` is
+false and the conversions return nil. Either way it stays an O(n) copy; zero copy is not
+available, and not because nobody wrote it.
+
+Both `UnLuaNova.Vector` and `UnLuaNova.Buffer` are safe to call on either backend.
 
 ---
 

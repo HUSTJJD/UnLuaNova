@@ -40,6 +40,8 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   见 [测试框架规划](Docs/CN/Testing_Architecture.md)
 - **多客户端 Multicast 用例** `UnLuaNova.Slow.Net.Multicast`：1 个 `-game -server` + 2 个客户端进程 ——
   见 [Lua 声明式网络](Docs/CN/LuaNetworking.md)
+- **报告新增「联网会话」一节**：列出本轮每个 peer 的角色、有无窗口、报告与日志 ——
+  见 [测试与自动化](Docs/CN/Testing.md)
 - **DAP 适配器**：`lua.dap start [port]`；`evaluate` 现含 upvalue，并补 `pause` ——
   见 [调试](Docs/CN/Debugging.md)
 - **内置库**：`UnLuaNova.Timer` / `Event` / `OOP`，均可插拔（`bTimer` / `bEvent` / `bOOP`）——
@@ -58,6 +60,9 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   [性能对照](Docs/CN/Performance_Parity_slua.md)
 - **六个英文页面补齐**：`StdLib` / `LuaNetworking` / `LuaDrivenObjects` /
   `Comparison_sluaunreal` / `Performance_Parity_slua` / `Benchmark_Review`，并进 mkdocs nav；
+- **`buffer` ↔ `TArray` 下沉到 C++**：`UnLuaNova.BufferFromArray` / `BufferToArray`，
+  `TArray<uint8>` 是一次 memcpy；`UnLuaNova.Buffer` 模块自动优先走它，逐字节的 Lua 版本留作
+  plain Lua 后端的回退 —— 见 [Luau](Docs/CN/Luau.md) 第七节
   `EN/Debugging.md` 补 DAP 段、upvalue 与多环境，并纠正"断点是 Luau 专属"的说法
 - **协程泄漏检测**：`FLuaCoroutineTracker`（弱键表 + 创建点，快照前先 collect）与
   `lua.coroutines` 人口普查 —— 见 [控制台命令](Docs/CN/ConsoleCommand.md)
@@ -65,6 +70,28 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   见 [控制台命令](Docs/CN/ConsoleCommand.md)
 - **多 Env 调试**：`FLuaEnv::GetAllEnvs()`（按主状态地址排序）、`lua.dbg env [n]`、
   DAP `arguments.env` —— 见 [调试](Docs/CN/Debugging.md)
+- **nightly 跑测试**：新增 `.github/workflows/nightly-tests.yml` —— preflight 探测
+  `[self-hosted, Windows, UnLuaNova]` 标签的 runner（3 分钟超时），有则跑
+  `RunTests.ps1 -NullRHI -NoScreenshots -NoVideo -FailOnDrift`，没有则**故意失败告警**，
+  不让"没人跑"伪装成"跑过了"。需要仓库侧配 runner 与可选变量 `UNREAL_ENGINE_PATH`
+- **thunk 覆盖扩到 Enum / Text**：`IsThunkableParamKind` 放行这两类（存储形式由 kind
+  完全确定），并补上 `FText` 的构造 / 析构与 `FEnumProperty` 的底层数值读写。
+  `Struct` / `Array` / `Set` / `Map` 仍走反射：它们的 Lua 表示由 `Private/` 里的
+  `FPropertyDesc` 构造，需要一个新的公共编组入口才够得着
+- **依赖版本补齐**：`Source/ThirdParty/VERSIONS.md` 记下 Lua `v5.5.1`
+  （`7579fc9d`，2026-07-23）与 Luau `0.743-1-g6d36d483`
+  （`6d36d483`，2026-10-20）—— 两个都是 submodule，指向即版本
+- **文档事实纠错**：`13_AnimNotify` 教程的脚本其实是
+  `Content/Script/Tutorials/AN_FootStep.lua`（跟 AnimNotify 类名走，不是 `13_*.lua`）；
+  `Private/Perfs/*` 这个目录不存在，性能用例一直在 TestSuite 的 spec 里
+- **`HotReload` 补一条用例**：可重复调用且不顺手清掉环境里的全局
+- **DAP 适配器用例**（`UnLuaNova.API.DebugAdapter`）：起真服务 + loopback 连接，按 DAP
+  帧格式跑完 `initialize` / `attach` / `evaluate` / `threads` / `disconnect`，
+  断言 `supportsEvaluateRequest` 与求值结果；另一条断言未知命令回 error 而不是挂死。
+  端口用 bind(0) 现取，不与本地已开的 `lua.dap` 抢
+- **`FDanglingCheck` 用例**（`UnLuaNova.API.DanglingCheck`）：先定语义再写断言 ——
+  它是按调用生效的 guard（调用返回时把首次交给 Lua 的容器/结构体从注册表摘掉），
+  不是"扫描并报告数量"；用例断言条目消失，并用"开关关闭时条目保留"作对照
 - **性能基线与回归门禁**：每轮落 `Saved/Benchmark/perf-<后端>.json`，与
   `Tools/baseline/perf-<后端>.json` 比对（容差 1.25），`RunTests.ps1 -UpdateBaseline` 更新。
   基线产物尚未提交（需先跑一次），在此之前缺基线只告警不失败 ——

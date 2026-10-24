@@ -157,6 +157,26 @@ void FRuntimeModulesSpec::Define()
             )");
             TEST_TRUE(lua_toboolean(L, -1));
         });
+
+        // 字节是 0..255 而不是 0..127，空数组也是一条独立的路径（C++ 版在 Num()==0 时直接返回）
+        It(TEXT("往返保留 0/255 边界值和空数组"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::RunChunk(L, R"(
+                local M = require('UnLuaNova.Buffer')
+                if not M.HasBuffer() then
+                    return true
+                end
+                local Empty = M.ToArray(M.FromArray(UE.TArray(0)))
+                if Empty:Length() ~= 0 then
+                    return false
+                end
+                local A = UE.TArray(0)
+                A:Add(0) A:Add(127) A:Add(255)
+                local B = M.ToArray(M.FromArray(A))
+                return B:Length() == 3 and B:Get(1) == 0 and B:Get(2) == 127 and B:Get(3) == 255
+            )");
+            TEST_TRUE(lua_toboolean(L, -1));
+        });
     });
 
     Describe(TEXT("Event"), [this]()

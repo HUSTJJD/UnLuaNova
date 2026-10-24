@@ -90,6 +90,11 @@ public class UnLuaNovaTestSuite : ModuleRules
 			// UnLuaNovaEditor: drives UnLuaNovaStaticBindingGenerator end to end
 			// (Private/Specs/StaticBindingGenerator.spec.cpp). Editor-only, like the module.
 			PrivateDependencyModuleNames.Add("UnLuaNovaEditor");
+
+			// ...and its Private/ folder, because DebugAdapter.spec.cpp has to reach
+			// LuaDebugAdapter.h: the DAP server is not part of the module's public API, and
+			// promoting it would be a promise to every other module for the sake of one test.
+			PrivateIncludePathModuleNames.Add("UnLuaNovaEditor");
 		}
 
 		DynamicallyLoadedModuleNames.AddRange(

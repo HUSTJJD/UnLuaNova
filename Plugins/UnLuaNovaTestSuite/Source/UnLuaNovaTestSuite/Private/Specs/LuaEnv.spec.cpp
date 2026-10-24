@@ -193,6 +193,23 @@ void FLuaEnvSpec::Define()
             TEST_TRUE(Env->DoString(TEXT("return 1")));
             TEST_EQUAL((int32)lua_tointeger(L, -1), 1);
         });
+
+        It(TEXT("HotReload 可重复调用，且不顺手清掉环境"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // The complement of the case above: that one only proves it does not explode,
+            // this one proves it did not rebuild the whole environment to do it. Hot
+            // reload is supposed to swap the modules that changed - a global the script put
+            // there itself has to survive, or every reload forces the project to
+            // re-initialise on its own initiative.
+            TEST_TRUE(Env->DoString(TEXT("SpecHotReloadSurvivor = 4242 return true")));
+            lua_pop(L, 1);
+
+            Env->HotReload();
+            Env->HotReload();
+
+            TEST_TRUE(Env->DoString(TEXT("return SpecHotReloadSurvivor")));
+            TEST_EQUAL((int32)lua_tointeger(L, -1), 4242);
+        });
     });
 
     Describe(TEXT("模块加载"), [this]()

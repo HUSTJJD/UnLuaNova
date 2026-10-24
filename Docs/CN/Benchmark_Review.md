@@ -276,10 +276,19 @@ slua 的 6.0x / 4.2x、thunk 覆盖 8123/11044）**在仓库里没有任何产�
 | `ULuaModuleLocator_ByBinding`（默认 locator）的解析规则 | ✅ `Locators.spec.cpp`：默认配置就是它、接口优先于配置、完整路径 / 裸类名 / 继承链、没配返回空串、命中后缓存 |
 | `lua.profiler` / `memstats` / `gc` / `sandbox` | ✅ `ConsoleCommands.spec.cpp` 新增"可观测效果"一组：profiler 真的开关、memstats 记账后 off 真的停、`lua.gc` 之后堆真的降下来、`lua.dbg` 真的挂上并登记断点 |
 | `UnLuaNovaDebugBase`（断点 / 栈 / **局部变量**） | ✅ 新增 `DebugService.spec.cpp`：断点停在声明的那一行且只停一次、不匹配的行不停、嵌套调用的栈逐层展开、局部变量名字与值；并交叉校验 `HasFeature('breakpoint')` 与编译期常量 |
-| DAP 适配器 | 零用例 |
-| `FLuaEnv::HotReload()` | 没被驱动（`HotReload` 只测"模块能加载"） |
-| `FDanglingCheck` 逻辑 | 没被驱动（只测开关可设） |
-| `Private/Perfs/*` | 注册 **0** 条自动化用例，只出 CSV |
+| DAP 适配器 | ✅ `DebugAdapter.spec.cpp`：起真服务、loopback 连上、按 DAP 帧格式收发
+  `initialize` / `attach` / `evaluate` / `threads` / `disconnect`，断言
+  `supportsEvaluateRequest` 与求值结果，外加"未知命令回 error 而不是挂死" |
+| `FLuaEnv::HotReload()` | ⚠️ 部分覆盖：`LuaEnv.spec.cpp` 有"不破坏环境"与"可重复调用且不清掉全局"两条。
+  **仍没覆盖"模块内容真被换掉"** —— 那需要改文件或自建 loader 造出 mtime 变化，
+  不是加一条断言的事 |
+| `FDanglingCheck` 逻辑 | ✅ `DanglingCheck.spec.cpp`。先确定语义再写断言：它**不是**"扫描并报告悬垂指针数量"
+  （没有 `Run()`，也没有可断言的数字），而是**按调用生效的 guard** —— 调用期间首次交给
+  Lua 的容器/结构体被记下，最外层 guard 释放时打标记并从注册表摘除。
+  用例断言"调用返回后 `ScriptContainerMap` 条目消失"，并用"关闭开关时条目保留"作对照 |
+| ~~`Private/Perfs/*` 注册 0 条用例~~ | **已更正**：`Private/Perfs/` 现在不存在。性能用例在
+  `Plugins/UnLuaNovaTestSuite/.../Private/Specs/Benchmark.spec.cpp` 与
+  `BenchmarkParity.spec.cpp` 里，是真自动化用例（断言"跑到 N 次"，并与基线比容差） |
 | Lua 侧 | `Content/Script/Tests/**` 大多是给 C++ 用的 fixture，无断言 |
 
 ---
@@ -290,8 +299,9 @@ slua 的 6.0x / 4.2x、thunk 覆盖 8123/11044）**在仓库里没有任何产�
 验收不到就不算做完，这是上一轮就定的规矩。
 
 **落地进度**（与本文同一批改动）：P0 三条**代码**全部落地（其中 #2 的产物还缺，见下）；
-P1 **四条里三条**落地 —— #7「CI 跑测试」**未落地**：`.github/workflows/` 下仍然只有
-`ci.yml` 与 `docs.yml`，没有 nightly workflow；P2 的 DAP upvalue 与文档校正
+P1 **四条全部落地** —— #7 的 workflow 已补上（`.github/workflows/nightly-tests.yml`）；
+但要真正跑起来还需要有人挂一个带 `[self-hosted, Windows, UnLuaNova]` 标签的 runner，
+在它到位之前这个 workflow 每次都是"no-runner"告警状态；P2 的 DAP upvalue 与文档校正
 （幽灵 API 部分）落地。P3 也落地了四条 —— Lua 内存按来源归因（Profiler 的 `NetBytes` +
 `lua.profiler mem`）、协程泄漏检测（`FLuaCoroutineTracker` + `lua.coroutines`）、
 跨进程 `RPCId` 一致（由 `UnLuaNova.API.Net.DedicatedServer` 覆盖）、
@@ -299,17 +309,24 @@ P1 **四条里三条**落地 —— #7「CI 跑测试」**未落地**：`.github
 
 **仍未落地**：
 
-* thunk 覆盖扩到容器/结构体 —— 需要重跑代码生成器，不是只改代码
+* `#7 CI 跑测试` —— 已补 `.github/workflows/nightly-tests.yml`：preflight 探测
+  `[self-hosted, Windows, UnLuaNova]` 标签的 runner（3 分钟超时），有则跑
+  `RunTests.ps1 -NullRHI -NoScreenshots -NoVideo -FailOnDrift`，没有则**故意失败告警**
+  而不是静默跳过。前提：仓库要配一个带这三个标签的 runner，以及可选变量
+  `UNREAL_ENGINE_PATH`（不配就让脚本自己找）
+* `#8 thunk 覆盖` —— `Enum` 与 `Text` 已可 thunk（存储形式由 kind 完全确定：底层数值属性
+  / 一个字符串）；`Struct` / `Array` / `Set` / `Map` 仍不行：它们的 Lua 侧表示由
+  `FPropertyDesc` 构造，而它在 `Private/`，生成的文件在模块边界另一侧拿不到。要支持需先
+  设计一个公共的 `Push` / `Read(L, Property, ValuePtr)` 入口，再重跑生成器
 * 热更补丁包 / 版本 / 回滚 —— 本轮明确不做
 * `#2 的基线产物本身` —— 落盘与门禁都写好了（`Benchmark.spec.cpp` 写
   `Saved/Benchmark/perf-<后端>.json`、`RunTests.ps1 -UpdateBaseline` 拷进
   `Tools/baseline/`），但 `Tools/baseline/` 下目前只有 `lua.json` / `luau.json` /
   `classification.json`，**没有 `perf-*.json`**。也就是说门禁现在处于"没有基线 →
   只告警不失败"的状态，要等一次真实运行才有刻度
-* `#7 CI 跑测试` —— 见上；缺一个 nightly workflow
-* 覆盖洞里剩下的部分 —— `DebugService.spec.cpp` 已补，Overrides / Locators /
-  ConsoleCommands 的加强断言已补；`DAP 适配器`、`FLuaEnv::HotReload()`、
-  `FDanglingCheck`、`Private/Perfs/*` 的 0 自动化仍是零用例
+* 覆盖洞基本补齐 —— `DebugService.spec.cpp`、`DebugAdapter.spec.cpp`（loopback 真连）、
+  `DanglingCheck.spec.cpp`、Overrides / Locators / ConsoleCommands 的加强断言、
+  `HotReload` 两条都已在位。`Private/Perfs/*` 那条是本文自己写错，已更正
 
 ### P0 —— 正确性
 

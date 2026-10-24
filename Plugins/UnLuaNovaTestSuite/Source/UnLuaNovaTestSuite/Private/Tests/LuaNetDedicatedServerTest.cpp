@@ -223,6 +223,10 @@ BEGIN_TESTSUITE(FLuaNetDedicatedServerTest,
         // that answered, and this test exists to catch a peer that did not.
         Session->CleanReports();
 
+        // Both at once: these two peers never talk to each other, so there is nothing for one
+        // to wait for in the other - launching them in the same tick is what keeps this test
+        // inside a minute. (A topology that connects launches the server first, waits, then
+        // launches the clients - see LuaNetMulticastTest.cpp.)
         ADD_LATENT_AUTOMATION_COMMAND(FNetLaunchPeersCommand(Session, *this));
         ADD_LATENT_AUTOMATION_COMMAND(FNetWaitForReportsCommand(Session, *this, 150.0));
         ADD_LATENT_AUTOMATION_COMMAND(FCompareNetReportsCommand(*this, Session));

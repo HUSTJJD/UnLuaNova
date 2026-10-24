@@ -422,6 +422,13 @@ function Resolve-RunFilters {
         return @($Filter)
     }
 
+    # 段切到哪一层，跟着 -Filter 走：传了 UnLuaNova.API.TArray 还按"前两段"归并，等于
+    # 把整个 UnLuaNova.API 都排进来 —— "我只想跑 TArray" 变成"跑了 API 全段"，而这是
+    # Fast 层最不该发生的事（它本来就是为了少跑）。
+    # 但最少两层：默认 Filter 就是 "UnLuaNova"，只切一层等于原样全跑，慢段也跟着回来。
+    $FilterDepth = @($Filter -split '\.' | Where-Object { $_ }).Count
+    $Depth = [Math]::Max(2, $FilterDepth)
+
     $Segments = @{}
     foreach ($Key in $Map.Keys) {
         if ($Key -notlike "$Filter*") { continue }
@@ -432,10 +439,9 @@ function Resolve-RunFilters {
         }
         if ($Slow) { continue }
 
-        # 取前两段（UnLuaNova.API）：再细就变成"每个用例一条命令"，排一次几百条。
         $Parts = $Key -split '\.'
-        $Segment = if ($Parts.Count -ge 2) { $Parts[0] + '.' + $Parts[1] } else { $Key }
-        $Segments[$Segment] = $true
+        $Take = [Math]::Min($Depth, $Parts.Count)
+        $Segments[(($Parts | Select-Object -First $Take) -join '.')] = $true
     }
 
     if ($Segments.Count -eq 0) {
@@ -955,21 +961,33 @@ function Stop-OneRecording {
 }
 
 # --- 联网 peer 的窗口：从拓扑里来，不从命令行里来 ---------------------------------
-# 一个联网用例的 peer 是用例自己起的（FNetSession::LaunchNext），脚本根本不知道它们
+# 一个联网用例的 peer 是用例自己起的（FNetSession::LaunchPending），脚本根本不知道它们
 # 什么时候出现、叫什么。所以 FNetSession 每起一个 peer 就把 topology.json 写到
 # Saved/UnLuaNovaNet/<session>/ 下，脚本在跑的过程中轮询它 —— 于是"客户端 1 的窗口"
 # 这种东西不用再手打 -RecordWindow 也能录到，标签还是用例自己取的（Client1）。
-function Get-NetRecordingTargets {
-    param(
-        [Parameter(Mandatory)] [string] $RunDir,
-        [string[]] $Done = @()
-    )
+#
+# -Since 是"这一轮开始的时间"。Saved/UnLuaNovaNet 不会自己清理，上一轮的 topology 一直
+# 躺在那里；不看时间的话，每 3 秒一次的轮询会把前几轮的 peer 全部当作新 peer 再试一遍
+# —— 进程早就没了，于是每个旧 peer 都要干等 20 秒的窗口超时，一轮下来白白多花好几分钟。
+function Get-NetTopologyFiles {
+    param([Parameter(Mandatory)] [datetime] $Since)
 
     $Root = Join-Path $RepoRoot "Saved/UnLuaNovaNet"
     if (-not (Test-Path $Root)) { return @() }
 
+    return @(Get-ChildItem -Path $Root -Filter "topology.json" -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTime -ge $Since })
+}
+
+function Get-NetRecordingTargets {
+    param(
+        [Parameter(Mandatory)] [string] $RunDir,
+        [Parameter(Mandatory)] [datetime] $Since,
+        [string[]] $Done = @()
+    )
+
     $Targets = @()
-    foreach ($Topology in @(Get-ChildItem -Path $Root -Filter "topology.json" -Recurse -File -ErrorAction SilentlyContinue)) {
+    foreach ($Topology in (Get-NetTopologyFiles -Since $Since)) {
         try {
             $Json = Get-Content $Topology.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
         } catch {
@@ -981,18 +999,33 @@ function Get-NetRecordingTargets {
             if ($Peer.headless) { continue }
             if ($Done -contains $Peer.label) { continue }
 
-            $Exe = [string]$Json.exe
-            if (-not $Exe) { continue }
-
             $Slug = ($Peer.label -replace '[^A-Za-z0-9_-]', '_')
             $Targets += @{
-                Label       = [string]$Peer.label
-                ProcessName = [System.IO.Path]::GetFileNameWithoutExtension($Exe)
-                OutFile     = (Join-Path $RunDir "videos/session-$Slug.mp4")
+                Label   = [string]$Peer.label
+                # 按 pid 认窗口，不按进程名：一次拓扑里的 peer 是同一个 exe，"名字匹配的
+                # 第一个窗口"会把 Client2 的录制指向 Client1 的窗口，两个文件一段画面。
+                Pid     = [int]$Peer.pid
+                OutFile = (Join-Path $RunDir "videos/session-$Slug.mp4")
             }
         }
     }
     return $Targets
+}
+
+function Wait-PeerWindow {
+    # 与 Wait-EditorWindow 的区别：按 pid，而且进程一没就立刻返回 —— 名字找窗口那套在
+    # 同名进程面前是不可用的，而"进程已经退出"不是"窗口还没出来"，等它没意义。
+    param([Parameter(Mandatory)] [int] $ProcessId, [int] $TimeoutSeconds = 20)
+
+    $Deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $Deadline) {
+        $Proc = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+        if (-not $Proc) { return $null }
+        if ($Proc.MainWindowTitle) { return $Proc }
+
+        Start-Sleep -Milliseconds 500
+    }
+    return $null
 }
 
 function Start-PeerRecording {
@@ -1001,14 +1034,13 @@ function Start-PeerRecording {
     # 整屏只会把主窗口那块画面再录一遍、换个名字。
     param(
         [Parameter(Mandatory)] [hashtable] $Target,
-        [int] $Fps = 15,
-        [int[]] $ExcludeId = @()
+        [int] $Fps = 15
     )
 
     $Ffmpeg = Resolve-FfmpegExe
     if (-not $Ffmpeg) { return $null }
 
-    $Window = Wait-EditorWindow -ProcessName $Target.ProcessName -TimeoutSeconds 20 -ExcludeId $ExcludeId
+    $Window = Wait-PeerWindow -ProcessId $Target.Pid
     $Region = if ($Window -and (Restore-EditorWindow -Process $Window)) { Get-WindowCaptureRegion -Process $Window } else { $null }
     if (-not $Region) { return $null }
 
@@ -1016,8 +1048,50 @@ function Start-PeerRecording {
     if (-not $Recording) { return $null }
 
     $Recording | Add-Member -NotePropertyName Label -NotePropertyValue $Target.Label -Force
-    $Recording | Add-Member -NotePropertyName WindowId -NotePropertyValue $Window.Id -Force
     return $Recording
+}
+
+function Stop-NetPeers {
+    # 用例自己会清理 peer（FNetTerminatePeersCommand），但那是"用例走到了最后一步"才成立：
+    # 崩了、被超时打断、主进程被 Ctrl-C 掉，peer 就留下了 —— 每个都是一个还在吃 CPU 的
+    # UE 进程，占着端口，下一次跑还会撞上。所以主进程退出后由脚本按 topology 再收一次尾。
+    param([Parameter(Mandatory)] [datetime] $Since)
+
+    $Killed = 0
+    foreach ($Topology in (Get-NetTopologyFiles -Since $Since)) {
+        try {
+            $Json = Get-Content $Topology.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+        } catch {
+            continue
+        }
+
+        $ExeName = [System.IO.Path]::GetFileNameWithoutExtension([string]$Json.exe)
+        foreach ($Peer in @($Json.peers)) {
+            $Pid = [int]$Peer.pid
+            if ($Pid -le 0) { continue }
+
+            $Proc = Get-Process -Id $Pid -ErrorAction SilentlyContinue
+            if (-not $Proc) { continue }
+
+            # pid 会被复用：确认这个 pid 现在装的还是那个 exe，别把别人的进程杀掉。
+            if ($ExeName -and ($Proc.ProcessName -ne $ExeName)) { continue }
+            # 还要确认它是**这一轮**起的：peer 跑完就退出，pid 完全可能已经归了另一次启动
+            # （甚至是用户自己开的那一份）。进程名一样，只有启动时间能分辨。
+            # 拿不到启动时间就不杀 —— 宁可留下一个孤儿，也不杀一个来路不明的进程。
+            try {
+                if ($Proc.StartTime -lt $Since) { continue }
+            } catch {
+                continue
+            }
+
+            Stop-Process -Id $Pid -Force -ErrorAction SilentlyContinue
+            $Killed++
+        }
+    }
+
+    if ($Killed -gt 0) {
+        Write-Host ("Net       : {0} 个残留 peer 进程已结束（用例没走到自己清理那一步）。" -f $Killed) -ForegroundColor Yellow
+    }
 }
 
 function Format-DataSize {
@@ -1185,20 +1259,31 @@ function Copy-NetArtifacts {
     # 联网用例的产物：每个 peer 一份报告 JSON、一份 -abslog 日志，加一份 topology.json。
     # headless 的独立服务器没有窗口也没录屏，它唯一的痕迹就是这份日志 —— 不归档的话，
     # "Server peer 没写出报告"只能靠猜。
-    param([Parameter(Mandatory)] [string] $RunDir)
+    #
+    # 只归档本轮：这个目录没人清理，把上一轮的会话目录一起拷进来，报告里就会同时出现
+    # 两个 "Server.json"，而"哪一份是这轮的"得靠人去猜 mtime。
+    param(
+        [Parameter(Mandatory)] [string] $RunDir,
+        [Parameter(Mandatory)] [datetime] $Since
+    )
 
     $Root = Join-Path $RepoRoot "Saved/UnLuaNovaNet"
     if (-not (Test-Path $Root)) { return 0 }
 
-    $Files = @(Get-ChildItem -Path $Root -Recurse -File -ErrorAction SilentlyContinue)
-    if ($Files.Count -eq 0) { return 0 }
+    $Sessions = @(Get-NetTopologyFiles -Since $Since)
+    if ($Sessions.Count -eq 0) { return 0 }
 
     $Dest = Join-Path $RunDir "net"
-    foreach ($F in $Files) {
-        $Relative = $F.FullName.Substring($Root.Length).TrimStart('\', '/')
-        $Target = Join-Path $Dest $Relative
-        New-Item -ItemType Directory -Path (Split-Path -Parent $Target) -Force | Out-Null
-        Copy-Item $F.FullName -Destination $Target -Force -ErrorAction SilentlyContinue
+    $Copied = 0
+    foreach ($Topology in $Sessions) {
+        $SessionDir = Split-Path -Parent $Topology.FullName
+        foreach ($F in @(Get-ChildItem -Path $SessionDir -Recurse -File -ErrorAction SilentlyContinue)) {
+            $Relative = $F.FullName.Substring($Root.Length).TrimStart('\', '/')
+            $Target = Join-Path $Dest $Relative
+            New-Item -ItemType Directory -Path (Split-Path -Parent $Target) -Force | Out-Null
+            Copy-Item $F.FullName -Destination $Target -Force -ErrorAction SilentlyContinue
+            $Copied++
+        }
     }
 
     $Logs = @(Get-ChildItem -Path $Dest -Filter "*.log" -Recurse -File -ErrorAction SilentlyContinue)
@@ -1206,7 +1291,7 @@ function Copy-NetArtifacts {
         $Logs.Count,
         @(Get-ChildItem -Path $Dest -Filter "*.json" -Recurse -File -ErrorAction SilentlyContinue).Count,
         $Dest)
-    return $Files.Count
+    return $Copied
 }
 
 # --- the Lua backend is a build-time setting ------------------------------------------
@@ -1496,6 +1581,9 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         $EditorProcessName = [System.IO.Path]::GetFileNameWithoutExtension($RunExe)
         $WantSessionVideo = -not $NoVideo -and -not $NoSessionVideo -and -not $NullRHI
         $Recording = $null
+        # 本轮开始时间：联网 peer 的产物（topology / 报告 / 日志）都按它区分"这轮的"和
+        # "以前留下的" —— 那个目录不会自己清理，不区分就会一直翻旧账。
+        $RunStart = Get-Date
 
         $sw = [System.Diagnostics.Stopwatch]::StartNew()
         # ProcessInfo + Process.Start, not Start-Process:
@@ -1512,12 +1600,10 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         $EditorPsi.UseShellExecute = $false
         $EditorProc = [System.Diagnostics.Process]::Start($EditorPsi)
         try {
-            # 联网 peer 的录制要边跑边发现（见下面的轮询），所以这两个列表在启动之前就建好：
-            # $RecordedLabels 是"已经录过 / 已经试过"的 peer，$UsedWindowIds 是"已经被某个
-            # 录制占住"的窗口。后者先用主进程的 id 垫上 —— peer 用编辑器 exe 起的时候
-            # （FNetSession::ResolvePeerExe 的兜底路径），进程名和主窗口是一样的。
+            # 联网 peer 的录制要边跑边发现（见下面的轮询）：$RecordedLabels 是"已经录过 /
+            # 已经试过"的 peer。窗口按 pid 认（Wait-PeerWindow），所以不需要"已占用的窗口"
+            # 这种名单 —— 同名进程也能分辨。
             $RecordedLabels = @()
-            $UsedWindowIds = @($EditorProc.Id)
 
             if ($WantSessionVideo) {
                 # The editor is always one target; -RecordWindow adds the peers a net run
@@ -1553,15 +1639,14 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
             # 在跑的过程中被发现：每 3 秒看一眼 topology.json，新出现的 peer 补一个录制。
             while (-not $EditorProc.WaitForExit(3000)) {
                 if (-not $WantSessionVideo) { continue }
-                $New = Get-NetRecordingTargets -RunDir $RunDir -Done $RecordedLabels
+                $New = Get-NetRecordingTargets -RunDir $RunDir -Since $RunStart -Done $RecordedLabels
                 foreach ($T in $New) {
                     # 试一次就登记：窗口没等到的 peer（headless 的、启动失败的）不该每 3
                     # 秒重试一次直到这轮结束。
                     $RecordedLabels += $T.Label
-                    $Started = Start-PeerRecording -Target $T -Fps $SessionFps -ExcludeId $UsedWindowIds
+                    $Started = Start-PeerRecording -Target $T -Fps $SessionFps
                     if ($Started) {
                         $Recording += $Started
-                        $UsedWindowIds += $Started.WindowId
                         Write-Host ("Record    : 联网 peer {0} 开始录制 -> {1}" -f $T.Label, $T.OutFile)
                     } else {
                         Write-Host ("Record    : 联网 peer {0} 没等到窗口（headless 或启动失败），不录。" -f $T.Label) -ForegroundColor Yellow
@@ -1572,6 +1657,8 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
             # Always stop it: a hung editor is exactly the run that has to end up on disk, and
             # it is stopped from here - not by the editor, which is the thing that hung.
             Stop-SessionRecording -Recording $Recording
+            # 用例崩在半路时，peer 进程没人收 —— 这里按 topology 再收一次。
+            Stop-NetPeers -Since $RunStart
         }
         $EditorExit = $EditorProc.ExitCode
         $sw.Stop()
@@ -1605,7 +1692,7 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
 
         # 联网 peer 的报告与日志（headless 的服务器只有日志）—— 归到这一轮的目录里，
         # 于是"某个 peer 没写报告"这句话后面能直接跟上一个可打开的文件。
-        Copy-NetArtifacts -RunDir $RunDir | Out-Null
+        Copy-NetArtifacts -RunDir $RunDir -Since $RunStart | Out-Null
 
         # Static type checking is not an automation test, so it never shows up in the JSON the
         # engine exports - run it here and leave its summary next to the JSON, which is the
