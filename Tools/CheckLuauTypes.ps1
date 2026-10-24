@@ -148,6 +148,10 @@ if (-not (Test-Path -LiteralPath $Target))
 $DefsPath = Resolve-InputPath $Defs
 if (-not (Test-Path -LiteralPath $DefsPath))
 {
+    if ($Require) {
+        Write-TypeCheckSummary @{ skipped = $true; checker = 'luau-lsp'; reason = 'Missing declarations'; files = 0 }
+        exit 1
+    }
     Write-Warning "没找到声明文件：$DefsPath"
     Write-Warning "先在编辑器里执行 UnLuaNova 工具栏 → 导出智能提示，它会生成 UnLuaNova.d.lua。"
     # 没有声明文件时检查仍然有意义（只是 UE 类型全是 any），所以继续跑而不是退出
@@ -169,6 +173,7 @@ if ($Files.Count -eq 0)
 {
     Write-TypeCheckSummary @{ skipped = $true; checker = "luau-lsp"; reason = "没有找到 .lua 文件：$Target"; mode = $Mode; files = 0 }
     Write-Host "没有找到 .lua / .luau 文件：$Target"
+    if ($Require) { exit 1 }
     exit 0
 }
 

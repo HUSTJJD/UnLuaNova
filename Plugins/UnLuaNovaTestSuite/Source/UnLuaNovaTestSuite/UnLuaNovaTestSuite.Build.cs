@@ -77,6 +77,10 @@ public class UnLuaNovaTestSuite : ModuleRules
 				"UMG",
 				// Showcase 截图的黑图检测要解码 PNG（TestCommands.cpp 的 DescribeUniformScreenshot）
 				"ImageWrapper",
+				// Sockets: DebugAdapter.spec.cpp probes the DAP port with ISocketSubsystem
+				// instead of guessing a free one. Not a public dependency - no header here
+				// exposes a socket type to a consumer.
+				"Sockets",
 				string.Equals(backend, "Lua", StringComparison.OrdinalIgnoreCase) ? "Lua" : "Luau"
 			}
 		);

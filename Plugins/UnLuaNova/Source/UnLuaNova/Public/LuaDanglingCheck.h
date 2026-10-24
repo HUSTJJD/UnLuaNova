@@ -21,12 +21,17 @@ namespace UnLuaNova
 {
     class FLuaEnv;
 
-    class FDanglingCheck
+    // Exported: the specs live in their own DLL (UnLuaNovaTestSuite) and drive the check
+    // from C++ - MakeGuard(), FGuard's destructor and Enabled all have to be importable.
+    class UNLUANOVA_API FDanglingCheck
     {
     public:
         static bool Enabled;
 
-        class FGuard final
+        // Exported in its own right: MSVC does not inherit the outer class's dllinterface
+        // into a nested class, so without this the guard's ctor/dtor stay private to
+        // UnLuaNova.dll and TUniquePtr<FGuard> in a consumer module cannot link.
+        class UNLUANOVA_API FGuard final
         {
         public:
             explicit FGuard(FDanglingCheck* Owner);

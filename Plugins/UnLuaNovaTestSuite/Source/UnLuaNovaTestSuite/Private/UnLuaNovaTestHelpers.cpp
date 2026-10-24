@@ -37,3 +37,11 @@ void AUnLuaNovaTestNetActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(AUnLuaNovaTestNetActor, EngineReplicatedInt);
 }
+
+int32 UUnLuaNovaTestStub::TestForIssue407(TArray<int32> Array)
+{
+    // Issue407: a TArray that Lua produced itself (TMap:Keys()/:Values()) handed back to
+    // C++. The count is the whole assertion - 2 for the stub's MapForIssue407 - so the
+    // body is deliberately trivial; what is under test is the marshalling, not this.
+    return Array.Num();
+}

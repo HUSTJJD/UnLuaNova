@@ -153,6 +153,11 @@
 
 [CmdletBinding()]
 param(
+    [ValidateSet("Release", "Development")]
+    [string] $Profile = "Release",
+    [ValidateRange(1, 1440)]
+    [int] $TimeoutMinutes = 60,
+    [switch] $ReleaseManaged,
     [string] $EnginePath = "",
     [string] $ProjectPath = "",
     [ValidateSet("Lua", "Luau", "Both")]
@@ -209,6 +214,20 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Dispatch before discovery, config writes, classification or Win32 Add-Type.
+if ($Profile -eq "Release") {
+    $Allowed = @('Profile', 'EnginePath', 'ProjectPath', 'OutputDir', 'TimeoutMinutes', 'DryRun')
+    foreach ($Key in $PSBoundParameters.Keys) {
+        if ($Key -notin $Allowed) {
+            throw "-$Key is a Development option. Release always runs the complete Win64 matrix. Use -Profile Development for a partial run."
+        }
+    }
+    & (Join-Path $PSScriptRoot 'ReleasePipeline.ps1') -EnginePath $EnginePath -ProjectPath $ProjectPath `
+        -OutputDir $OutputDir -TimeoutMinutes $TimeoutMinutes -DryRun:$DryRun
+    exit $LASTEXITCODE
+}
+Write-Host 'Development profile: this result is not a release verdict.' -ForegroundColor Yellow
 
 # Everything is derived from where this script lives, so no path in here belongs to one
 # particular machine.
@@ -342,7 +361,7 @@ if (-not $SkipBuild -and -not (Test-Path $BuildBat)) {
 # 用例真的离不开编辑器：要真实视口/截图的（D/E），和要 PIE 联网的（C）。
 # A（纯逻辑）和 B（只要一个 UWorld）在项目自己的 <Project>.exe -game 里一样跑。
 $ProjectName = [System.IO.Path]::GetFileNameWithoutExtension($ProjectPath)
-$ClassificationPath = Join-Path $RepoRoot "Tools/baseline/classification.json"
+$ClassificationPath = Join-Path $OutputDir "classification.json"
 $script:Classification = $null
 
 function Get-TestClassification {
@@ -480,6 +499,13 @@ $LockPath = Join-Path $RepoRoot "Saved/RunTests.lock"
 $LockStream = $null
 
 function Acquire-RunLock {
+    if ($ReleaseManaged) {
+        $Owner = Get-Content $LockPath -Raw -ErrorAction Stop
+        if (-not $env:UNLUANOVA_RELEASE_TOKEN -or $Owner -notlike "*token=$env:UNLUANOVA_RELEASE_TOKEN*") {
+            throw 'ReleaseManaged requires the owning release pipeline lock.'
+        }
+        return
+    }
     if (Test-Path $LockPath) {
         $Held = Get-Content $LockPath -Raw -ErrorAction SilentlyContinue
         $HeldPid = if ($Held -match "pid=(\d+)") { $Matches[1] } else { $null }
@@ -522,6 +548,7 @@ if you are certain it is not running.
 }
 
 function Release-RunLock {
+    if ($ReleaseManaged) { return }
     if ($script:LockStream) {
         $script:LockStream.Dispose()
         $script:LockStream = $null
@@ -538,9 +565,9 @@ $PluginRoot = Join-Path $RepoRoot "Plugins/UnLuaNova"
 function Get-BuiltBackend {
     # 中间目录按目标名分层：编辑器目标是 UnrealEditor，游戏目标是 <Project>。
     # 两个都试，因为一次 -game 的跑动只编了其中一个，另一个可能是上一轮留下的。
-    $Folders = if ($IsGameCarrier) { @($ProjectName, "UnrealEditor") } else { @("UnrealEditor", $ProjectName) }
+    $Folders = if ($IsGameCarrier) { @($ProjectName) } else { @('UnrealEditor') }
     foreach ($Folder in $Folders) {
-        $Definitions = Join-Path $PluginRoot "Intermediate/Build/Win64/x64/$Folder/Development/UnLuaNova/Definitions.UnLuaNova.h"
+        $Definitions = Join-Path $PluginRoot "Intermediate/Build/$Platform/x64/$Folder/$Configuration/UnLuaNova/Definitions.UnLuaNova.h"
         if (Test-Path $Definitions) { break }
         $Definitions = $null
     }
@@ -972,7 +999,7 @@ function Stop-OneRecording {
 function Get-NetTopologyFiles {
     param([Parameter(Mandatory)] [datetime] $Since)
 
-    $Root = Join-Path $RepoRoot "Saved/UnLuaNovaNet"
+    $Root = if ($env:UNLUANOVA_TEST_NET_ROOT) { $env:UNLUANOVA_TEST_NET_ROOT } else { Join-Path $RepoRoot "Saved/UnLuaNovaNet" }
     if (-not (Test-Path $Root)) { return @() }
 
     return @(Get-ChildItem -Path $Root -Filter "topology.json" -Recurse -File -ErrorAction SilentlyContinue |
@@ -1067,10 +1094,10 @@ function Stop-NetPeers {
 
         $ExeName = [System.IO.Path]::GetFileNameWithoutExtension([string]$Json.exe)
         foreach ($Peer in @($Json.peers)) {
-            $Pid = [int]$Peer.pid
-            if ($Pid -le 0) { continue }
+            $PeerProcessId = [int]$Peer.pid
+            if ($PeerProcessId -le 0) { continue }
 
-            $Proc = Get-Process -Id $Pid -ErrorAction SilentlyContinue
+            $Proc = Get-Process -Id $PeerProcessId -ErrorAction SilentlyContinue
             if (-not $Proc) { continue }
 
             # pid 会被复用：确认这个 pid 现在装的还是那个 exe，别把别人的进程杀掉。
@@ -1084,7 +1111,7 @@ function Stop-NetPeers {
                 continue
             }
 
-            Stop-Process -Id $Pid -Force -ErrorAction SilentlyContinue
+            Stop-Process -Id $PeerProcessId -Force -ErrorAction SilentlyContinue
             $Killed++
         }
     }
@@ -1267,13 +1294,14 @@ function Copy-NetArtifacts {
         [Parameter(Mandatory)] [datetime] $Since
     )
 
-    $Root = Join-Path $RepoRoot "Saved/UnLuaNovaNet"
+    $Root = if ($env:UNLUANOVA_TEST_NET_ROOT) { $env:UNLUANOVA_TEST_NET_ROOT } else { Join-Path $RepoRoot "Saved/UnLuaNovaNet" }
     if (-not (Test-Path $Root)) { return 0 }
 
     $Sessions = @(Get-NetTopologyFiles -Since $Since)
     if ($Sessions.Count -eq 0) { return 0 }
 
     $Dest = Join-Path $RunDir "net"
+    if ([IO.Path]::GetFullPath($Root) -eq [IO.Path]::GetFullPath($Dest)) { return $Sessions.Count }
     $Copied = 0
     foreach ($Topology in $Sessions) {
         $SessionDir = Split-Path -Parent $Topology.FullName
@@ -1304,7 +1332,7 @@ function Copy-NetArtifacts {
 $IniPath = Join-Path (Split-Path -Parent $ProjectPath) "Config/DefaultUnLuaNova.ini"
 $IniSection = "[/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]"
 $IniExisted = Test-Path $IniPath
-$IniBackup = if ($IniExisted) { [System.IO.File]::ReadAllText($IniPath) } else { $null }
+$IniBackup = $null
 
 function Get-IniBackend {
     if (-not (Test-Path $IniPath)) { return $null }
@@ -1361,11 +1389,12 @@ function Set-IniBackend {
 function Restore-IniBackend {
     try {
         if ($IniExisted) {
-            [System.IO.File]::WriteAllText($IniPath, $IniBackup, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllBytes($IniPath, $IniBackup)
         } elseif (Test-Path $IniPath) {
             Remove-Item $IniPath -Force
         }
     } catch {
+        $script:ExitCode = 1
         Write-Warning "Could not restore '$IniPath' - put LuaBackend back by hand. $_"
     }
 }
@@ -1404,6 +1433,7 @@ function Get-TestArgs {
     # world the tests left behind, not the one at startup.
     # One RunTests per filter: -Tier Fast 是"跑了 N 个段"而不是"跑了一个段再排除"。
     $Cmds = @()
+    if ($ReleaseManaged) { $Cmds += 'UnLuaNovaTest.ExportManifest' }
     foreach ($F in $RunFilters) { $Cmds += "Automation RunTests $F" }
     if ($ExtraCommands) { $Cmds += $ExtraCommands }
     $Cmds += "Quit"
@@ -1479,6 +1509,9 @@ $IntelliSenseExported = $false
 # Taken only now: -DryRun exits above without touching anything, and must not leave a lock
 # behind for the next run to trip over.
 Acquire-RunLock
+$IniExisted = Test-Path $IniPath
+$IniBackup = if ($IniExisted) { [System.IO.File]::ReadAllBytes($IniPath) } else { $null }
+$OriginalRecordFrames = $env:UNLUANOVA_RECORD_FRAMES
 
 try {
     foreach ($B in $Backends) {
@@ -1638,6 +1671,10 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
             # 联网 peer 不是脚本启动的，是用例启动的（FNetSession），所以它们的窗口只能
             # 在跑的过程中被发现：每 3 秒看一眼 topology.json，新出现的 peer 补一个录制。
             while (-not $EditorProc.WaitForExit(3000)) {
+                if ($sw.Elapsed.TotalMinutes -ge $TimeoutMinutes) {
+                    & taskkill.exe /PID $EditorProc.Id /T /F | Out-Null
+                    throw "Automation exceeded $TimeoutMinutes minutes. See $RunLog"
+                }
                 if (-not $WantSessionVideo) { continue }
                 $New = Get-NetRecordingTargets -RunDir $RunDir -Since $RunStart -Done $RecordedLabels
                 foreach ($T in $New) {
@@ -1654,6 +1691,7 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
                 }
             }
         } finally {
+            if (-not $EditorProc.HasExited) { & taskkill.exe /PID $EditorProc.Id /T /F | Out-Null }
             # Always stop it: a hung editor is exactly the run that has to end up on disk, and
             # it is stopped from here - not by the editor, which is the thing that hung.
             Stop-SessionRecording -Recording $Recording
@@ -1697,7 +1735,7 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         # Static type checking is not an automation test, so it never shows up in the JSON the
         # engine exports - run it here and leave its summary next to the JSON, which is the
         # only place the report generator will find it.
-        if (-not $NoReport) {
+        if (-not $NoReport -and -not $ReleaseManaged) {
             # 声明导出走的是编辑器 commandlet。-game 这一轮只编了游戏目标，编辑器那份
             # DLL 可能根本不存在（或者属于另一个后端）—— 与其拿一份来路不明的二进制去
             # 导出声明，不如明说这一步没做。
@@ -1734,7 +1772,7 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
             # 没有这一节，"把某一类挪出编辑器进程能省多少"只能靠估 —— 而这是决定要不要
             # 动测试框架的依据。分类是纯静态分析源码，跑一次几毫秒；失败也不该拖垮报告。
             $Classifier = Join-Path $ToolsDir "ClassifyTests.py"
-            $ClassFile = Join-Path $RepoRoot "Tools/baseline/classification.json"
+            $ClassFile = $ClassificationPath
             if (Test-Path $Classifier) {
                 & python $Classifier --out $ClassFile 2>&1 | Out-Null
                 if (Test-Path $ClassFile) { $GenArgs += @("--classification", $ClassFile) }
@@ -1775,6 +1813,7 @@ finally {
     # The ini is global state and this script edits it, so it goes back the way it was
     # found - including after a failed build, which restores it above and again here.
     Restore-IniBackend
+    $env:UNLUANOVA_RECORD_FRAMES = $OriginalRecordFrames
     Release-RunLock
 }
 

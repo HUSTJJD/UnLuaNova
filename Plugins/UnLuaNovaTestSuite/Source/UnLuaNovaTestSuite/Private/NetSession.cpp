@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "NetSession.h"
+#include "LuaBackend.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -24,6 +25,7 @@
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformProcess.h"
+#include "HAL/PlatformMisc.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
@@ -38,6 +40,11 @@
 
 namespace UnLuaNovaTestSuite
 {
+    static FString NetReportRoot()
+    {
+        const FString Override = FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_TEST_NET_ROOT"));
+        return Override.IsEmpty() ? FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("UnLuaNovaNet")) : Override;
+    }
     // ------------------------------------------------------------- paths ----
 
     FNetSession::FNetSession(FString InName, FString InMapName)
@@ -62,7 +69,7 @@ namespace UnLuaNovaTestSuite
 
     FString FNetSession::GetDir() const
     {
-        return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("UnLuaNovaNet"), Name);
+        return FPaths::Combine(NetReportRoot(), Name);
     }
 
     FString FNetSession::GetLogDir() const
@@ -95,6 +102,8 @@ namespace UnLuaNovaTestSuite
 
     FString FNetSession::ResolvePeerExe()
     {
+        const FString Override = FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_TEST_PEER_EXE"));
+        if (!Override.IsEmpty()) return Override;
 #if PLATFORM_WINDOWS
         const FString ExeName = FString(FApp::GetProjectName()) + TEXT(".exe");
 #else
@@ -125,7 +134,8 @@ namespace UnLuaNovaTestSuite
 
     FString FNetSession::BuildPeerCommandLine(const FNetPeerSpec& Spec) const
     {
-        FString Args = FString::Printf(TEXT("\"%s\" "), *FPaths::GetProjectFilePath());
+        const bool bPackagedPeer = !FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_TEST_PEER_EXE")).IsEmpty();
+        FString Args = bPackagedPeer ? FString() : FString::Printf(TEXT("\"%s\" "), *FPaths::GetProjectFilePath());
 
         if (Spec.Role == ENetPeerRole::Server)
         {
@@ -309,7 +319,7 @@ namespace UnLuaNovaTestSuite
 
     bool WriteNetReport(const FString& Label, const TSharedRef<FJsonObject>& Report)
     {
-        const FString Path = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("UnLuaNovaNet"),
+        const FString Path = FPaths::Combine(NetReportRoot(),
             GetNetSessionName(), Label + TEXT(".json"));
 
         // A stale report is the dangerous case: the driving process would read last run's
@@ -328,7 +338,7 @@ namespace UnLuaNovaTestSuite
 
     bool ReadNetReport(const FString& SessionName, const FString& Label, TSharedPtr<FJsonObject>& Out)
     {
-        const FString Path = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("UnLuaNovaNet"),
+        const FString Path = FPaths::Combine(NetReportRoot(),
             SessionName, Label + TEXT(".json"));
 
         FString Text;
@@ -386,6 +396,7 @@ namespace UnLuaNovaTestSuite
 
         // Recorded so a mismatch can be told apart from "the wrong process answered".
         Root->SetStringField(TEXT("Role"), GetNetRole());
+        Root->SetStringField(TEXT("Backend"), UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU ? TEXT("Luau") : TEXT("Lua"));
         return Root;
     }
 

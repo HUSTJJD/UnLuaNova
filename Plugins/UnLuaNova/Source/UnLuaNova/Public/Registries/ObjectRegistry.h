@@ -31,7 +31,9 @@ namespace UnLuaNova
         ~FManualRefProxy() { Release(); }
     };
 
-    class FObjectRegistry
+    // Exported: UnLuaNovaTestSuite is a separate module and reads the registry from C++
+    // (GetBoundRef, Push), so the out-of-line members need a dllinterface.
+    class UNLUANOVA_API FObjectRegistry
     {
     public:
         explicit FObjectRegistry(FLuaEnv* Env);
