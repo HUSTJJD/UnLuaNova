@@ -110,7 +110,7 @@ have to deal with C-compiled third-party Lua sources yourself. *Requires a recom
 
 ### Lua backend
 
-Set in `Config/DefaultUnLuaNovaEditor.ini` (a **recompile** is required - the backend is a
+Set in `Config/DefaultUnLuaNova.ini` (a **recompile** is required - the backend is a
 build-time choice):
 
 ```ini

@@ -17,13 +17,23 @@ description: UnLuaNova 中文文档导航 —— 从新手上手到进阶配置�
 
     [相对 UnLua：原理与优势](WhyUnLuaNova.md) —— 每个增量为什么这么做、收益与边界
 
+    [对标 slua-unreal：差距与吸收](Comparison_sluaunreal.md) —— 另一个主流方案做对了什么、我们怎么补
+
 - :material-book-open-variant: **编程**
 
     [编程指南](UnLuaNova_Programming_Guide.md) —— 绑定、双向调用、GC 的核心概念
 
     [Luau 后端](Luau.md) —— Luau 语言特性、沙盒、原生断点与类型检查
 
+    [Lua 驱动对象与 C++ 调 Lua](LuaDrivenObjects.md) —— 绑定对象的既有三条路、从 C++ 类型化调用 Lua
+
+    [Lua 声明式网络](LuaNetworking.md) —— 在 Lua 模块里声明 RPC 与复制属性
+
     [API 参考](API.md) · [如何实现覆写](How_To_Implement_Overriding.md)
+
+- :material-bookshelf: **内置库**
+
+    [内置库](StdLib.md) —— 随插件发布的 Timer / Event / Vector / Buffer …，以及"什么该进、什么不该进"的边界
 
 - :material-cog: **配置与工具**
 

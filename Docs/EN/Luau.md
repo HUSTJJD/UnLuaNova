@@ -10,7 +10,7 @@ This page is for script authors: what works, what does not, and what is not wire
 
 ## Switching backends
 
-Pick one in `Config/DefaultUnLuaNovaEditor.ini` and **rebuild**:
+Pick one in `Config/DefaultUnLuaNova.ini` and **rebuild**:
 
 ```ini
 [/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]

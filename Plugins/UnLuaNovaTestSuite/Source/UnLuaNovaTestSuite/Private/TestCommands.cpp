@@ -54,9 +54,54 @@ namespace UnLuaNovaTestSuite
         return false;
     }
 
-    FOpenMapLatentCommand::FOpenMapLatentCommand(FString MapName, bool bForceReload)
+    FOpenMapLatentCommand::FOpenMapLatentCommand(FString MapName, bool bForceReload, int32 InNumClients, EPlayNetMode InPlayNetMode)
         : MapName(MapName), bForceReload(bForceReload)
+        , NumClients(InNumClients), PlayNetMode(InPlayNetMode)
     {
+        // Server world + one per client. Standalone is just the one.
+        ExpectedWorlds = (PlayNetMode == EPlayNetMode::PIE_Standalone) ? 1 : (InNumClients + 1);
+    }
+
+    FPieNetWorlds GetPieNetWorlds()
+    {
+        FPieNetWorlds Result;
+        if (!GEngine)
+            return Result;
+
+        for (const FWorldContext& Context : GEngine->GetWorldContexts())
+        {
+            UWorld* World = Context.World();
+            if (!World || Context.WorldType != EWorldType::PIE)
+                continue;
+
+            const ENetMode Mode = World->GetNetMode();
+            if (Mode == NM_ListenServer || Mode == NM_DedicatedServer)
+            {
+                if (!Result.Server)
+                    Result.Server = World;
+            }
+            else if (Mode == NM_Client)
+            {
+                Result.Clients.Add(World);
+            }
+        }
+
+        return Result;
+    }
+
+    static int32 CountPieWorlds()
+    {
+        int32 Count = 0;
+        if (!GEngine)
+            return Count;
+
+        for (const FWorldContext& Context : GEngine->GetWorldContexts())
+        {
+            if (Context.WorldType == EWorldType::PIE && Context.World())
+                ++Count;
+        }
+
+        return Count;
     }
 
     bool FOpenMapLatentCommand::Update()
@@ -91,8 +136,16 @@ namespace UnLuaNovaTestSuite
 
         // Phase 2: wait for this map to be up. Matched by name, not just "some game
         // world", so a session that is still shutting down cannot stand in for it.
+        //
+        // For a C/S session this is necessary but not sufficient: every peer loads the same
+        // map, so the first one to finish satisfies the name wait while the clients are still
+        // coming up. Assertions made against a client that has not joined yet fail for a
+        // reason that has nothing to do with what is being tested, so wait for them too.
         if (WaitForMapToLoad->Update())
-            return true;
+        {
+            if (CountPieWorlds() >= ExpectedWorlds)
+                return true;
+        }
 
         if (FPlatformTime::Seconds() > WaitDeadline)
         {
@@ -175,8 +228,11 @@ namespace UnLuaNovaTestSuite
 
         FRequestPlaySessionParams RequestParams;
         ULevelEditorPlaySettings* EditorPlaySettings = NewObject<ULevelEditorPlaySettings>();
-        EditorPlaySettings->SetPlayNumberOfClients(1);
+        EditorPlaySettings->SetPlayNumberOfClients(NumClients);
+        // Separate servers run in another process, and a test can only reach peers that
+        // share its process - which is the whole point of a listen server here.
         EditorPlaySettings->bLaunchSeparateServer = false;
+        EditorPlaySettings->SetPlayNetMode(PlayNetMode);
         RequestParams.EditorPlaySettings = EditorPlaySettings;
         RequestParams.DestinationSlateViewport = ActiveLevelViewport;
 

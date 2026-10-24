@@ -1,50 +1,34 @@
 // Tencent is pleased to support the open source community by making UnLuaNova available.
-// 
+//
 // Copyright (C) 2019 Tencent. All rights reserved.
 //
-// Licensed under the MIT License (the "License"); 
-// you may not use this file except in compliance with the License. You may obtain a copy of the License at
+// Licensed under the MIT License (the "License");
+// you may obtain a copy of the License at
 //
-// http://opensource.org/licenses/MIT
+// http://opensource.org/MIT
 //
-// Unless required by applicable law or agreed to in writing, 
-// software distributed under the License is distributed on an "AS IS" BASIS, 
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaTestHelpers.h"
-#include "UnLuaNova.h"
-#include "UnLuaNovaEx.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#include "Net/UnrealNetwork.h"
 
-BEGIN_EXPORT_CLASS(FUnLuaNovaTestLib)
-    ADD_SHARED_PTR_CONSTRUCTOR(ESPMode::NotThreadSafe)
-    ADD_STATIC_FUNCTION(TestForBaseSpec1)
-    ADD_STATIC_FUNCTION(TestForBaseSpec2)
-END_EXPORT_CLASS()
-
-IMPLEMENT_EXPORTED_CLASS(FUnLuaNovaTestLib)
-
-BEGIN_EXPORT_ENUM_EX(EScopedEnum::Type, EScopedEnum)
-    ADD_SCOPED_ENUM_VALUE(Value1)
-    ADD_SCOPED_ENUM_VALUE(Value2)
-END_EXPORT_ENUM(EScopedEnum)
-
-BEGIN_EXPORT_ENUM(EEnumClass)
-    ADD_SCOPED_ENUM_VALUE(Value1)
-    ADD_SCOPED_ENUM_VALUE(Value2)
-END_EXPORT_ENUM(EEnumClass)
-
-BEGIN_EXPORT_REFLECTED_CLASS(UUnLuaNovaTestStub)
-    ADD_PROPERTY(ScopedEnum)
-    ADD_PROPERTY(EnumClass)
-END_EXPORT_CLASS()
-
-IMPLEMENT_EXPORTED_CLASS(UUnLuaNovaTestStub)
-
-#endif
-int32 UUnLuaNovaTestStub::TestForIssue407(TArray<int32> Array)
+AUnLuaNovaTestNetActor::AUnLuaNovaTestNetActor()
 {
-    return Array.Num();
+    bReplicates = true;
+
+    // Created unconditionally rather than only when the Lua module declares fields: the
+    // component decides for itself at BeginPlay whether there is anything to do, and a
+    // component added on demand would have to be added from inside a bind that may never
+    // happen on the client.
+    Replication = CreateDefaultSubobject<UUnLuaNovaReplicationComponent>(TEXT("LuaReplication"));
+}
+
+void AUnLuaNovaTestNetActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+    DOREPLIFETIME(AUnLuaNovaTestNetActor, EngineReplicatedInt);
 }

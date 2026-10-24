@@ -58,14 +58,18 @@ nav:
           - UE 新手快速上手: CN/Quickstart_For_UE_Newbie.md
           - 功能清单: CN/Features.md
           - 相对 UnLua：原理与优势: CN/WhyUnLuaNova.md
+          - 对标 slua-unreal：差距与吸收: CN/Comparison_sluaunreal.md
       - 编程:
           - 编程指南: CN/UnLuaNova_Programming_Guide.md
           - Luau 后端: CN/Luau.md
           - API 参考: CN/API.md
           - C++ API 参考: CN/CxxApi.md
+          - Lua 驱动对象: CN/LuaDrivenObjects.md
+          - Lua 声明式网络: CN/LuaNetworking.md
           - 架构: CN/Architecture.md
           - 如何实现覆写: CN/How_To_Implement_Overriding.md
           - 静态导出绑定: CN/StaticExportBinding.md
+      - 内置库: CN/StdLib.md
       - 配置与工具:
           - 设置项: CN/Settings.md
           - 控制台命令: CN/ConsoleCommand.md

@@ -208,7 +208,7 @@ end
 
 ### 优势
 
-- **切换后端只改一个 ini 键**（`Config/DefaultUnLuaNovaEditor.ini` 的 `LuaBackend`）；
+- **切换后端只改一个 ini 键**（`Config/DefaultUnLuaNova.ini` 的 `LuaBackend`）；
   后端是编译期选择，改完重编即可，业务代码一行不动。
 - **两个 VM 都以 git 子模块引入**，源码归上游、包装（`*.Build.cs`、单一 TU 聚合文件、
   Luau 的生成包装）归本项目，升级 VM 是移动子模块指针。

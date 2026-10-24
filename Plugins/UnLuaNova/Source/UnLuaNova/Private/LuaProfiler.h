@@ -10,6 +10,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/Array.h"
+#include "Containers/Map.h"
+#include "Containers/UnrealString.h"
 
 #include <atomic>
 
@@ -18,6 +21,26 @@ struct lua_Debug;
 
 namespace UnLuaNova
 {
+    /** One Lua function's aggregated cost, for the self-time report. */
+    struct FLuaProfilerFuncStat
+    {
+        FString Name;
+        FString Source;
+        int32 Line = 0;
+
+        /** Number of completed calls (Luau: number of safe points hit, see below). */
+        uint64 Hits = 0;
+
+        /**
+         * Time spent in this function excluding its callees, in milliseconds.
+         *
+         * Zero on the Luau backend: it has no call/return pairing, so there is nothing
+         * to subtract. Hits still counts there - it counts samples, not calls, and a
+         * function that dominates the samples is the hot one regardless.
+         */
+        double SelfMs = 0.0;
+    };
+
     /**
      * Lua CPU profiler, feeding Unreal Insights.
      *
@@ -57,6 +80,24 @@ namespace UnLuaNova
         /** Number of distinct Lua functions registered so far. */
         int32 NumTrackedFunctions() const { return SpecIds.Num(); }
 
+        /**
+         * Per-function aggregation, for the self-time report.
+         *
+         * Insights is the right tool for a timeline and the wrong one for "which of my
+         * 400 Lua functions is actually hot" - it has no bottom-up view. This is that
+         * view, and it is off by default because it costs a stack push/pop per call.
+         */
+        void SetAggregateEnabled(bool bInEnabled);
+        bool IsAggregateEnabled() const { return bAggregate.load(std::memory_order_relaxed); }
+        void ResetAggregate();
+        int32 NumAggregatedFunctions() const { return FuncStats.Num(); }
+
+        /** Bottom-up table, hottest first, as CSV. */
+        FString BuildReport(int32 MaxRows = 40) const;
+
+        /** Write BuildReport() to disk so a CI run can diff two commits. */
+        bool DumpToFile(const FString& Path, int32 MaxRows = INDEX_NONE) const;
+
         /** Entry point used when the backend can distinguish call from return. */
         static void Hook(lua_State* L, lua_Debug* Ar);
 
@@ -72,7 +113,24 @@ namespace UnLuaNova
         std::atomic<bool> bEnabled{false};
         lua_State* Attached = nullptr;
 
+        void RecordEnter(lua_State* L, lua_Debug* Ar, uint64 Key, uint64 NowCycles);
+        void RecordLeave(uint64 NowCycles);
+        void RecordSample(lua_State* L, lua_Debug* Ar, uint64 Key);
+
         /** Function id (see UNLUANOVA_DEBUG_PROTOID) -> Insights spec id. */
         TMap<uint64, uint32> SpecIds;
+
+        /** Same key -> aggregated cost. Only populated while aggregation is on. */
+        TMap<uint64, FLuaProfilerFuncStat> FuncStats;
+
+        struct FFrame
+        {
+            uint64 Key;
+            uint64 StartCycles;
+            uint64 ChildCycles;
+        };
+        TArray<FFrame> CallStack;
+
+        std::atomic<bool> bAggregate{false};
     };
 }

@@ -80,6 +80,9 @@ public class UnLuaNovaEditor : ModuleRules
                 "Sockets",
                 "UnLuaNova",
                 "ToolMenus",
+                // DAP 适配器的 JSON 编解码（LuaDebugAdapter）
+                "Json",
+                "JsonUtilities",
                 // The IntelliSense generator and its commandlet read blueprint assets out of
                 // the registry (and wait for its scan) instead of relying on the cache alone.
                 "AssetRegistry"

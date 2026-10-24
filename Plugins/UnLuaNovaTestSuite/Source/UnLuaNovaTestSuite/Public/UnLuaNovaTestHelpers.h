@@ -23,6 +23,7 @@
 #include "UnLuaNovaInterface.h"
 #include "LuaEnvLocator.h"
 #include "LuaModuleLocator.h"
+#include "UnLuaNovaReplicationComponent.h"
 #include "UnLuaNovaTestHelpers.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FUnLuaNovaTestSimpleEvent);
@@ -128,6 +129,35 @@ public:
 
     UFUNCTION(BlueprintCallable)
     int32 ProbeWithoutStaticBinding(int32 In) { return In + 1; }
+};
+
+/**
+ * Actor for the networked tests: replicated, and carrying the Lua replication component.
+ *
+ * It exists because a C/S test needs an actor the engine will actually replicate, and a
+ * spec .cpp cannot declare a UCLASS - UHT only reads headers. So it lives here next to the
+ * other stubs.
+ *
+ * bReplicates in the constructor rather than in a blueprint: the C/S spec spawns this in a
+ * bare PIE world, with no level and no blueprint to set the flag on.
+ */
+UCLASS()
+class UNLUANOVATESTSUITE_API AUnLuaNovaTestNetActor : public AActor
+{
+    GENERATED_BODY()
+
+public:
+    AUnLuaNovaTestNetActor();
+
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+    /** Replicated by the engine, not by Lua - the control in a C/S test. If this does not
+     *  arrive on the client, the session is broken and nothing Lua does can be judged. */
+    UPROPERTY(Replicated)
+    int32 EngineReplicatedInt = 0;
+
+    UPROPERTY()
+    TObjectPtr<UUnLuaNovaReplicationComponent> Replication;
 };
 
 UCLASS()

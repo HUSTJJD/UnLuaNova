@@ -21,7 +21,7 @@ namespace UnLuaNova
           ),
           CollectGarbageCommand(
               TEXT("lua.gc"),
-              *LOCTEXT("CommandText_CollectGarbage", "Force collect garbage in lua env.").ToString(),
+              *LOCTEXT("CommandText_CollectGarbage", "Lua GC. Args: auto | slice [kb] | budget <kb> | mult <pct> | limit <kb> | stats, or none for a full collect.").ToString(),
               FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::CollectGarbage)
           ),
           MemStatsCommand(
@@ -31,7 +31,7 @@ namespace UnLuaNova
           ),
           ProfilerCommand(
               TEXT("lua.profiler"),
-              *LOCTEXT("CommandText_Profiler", "Lua CPU profiling into Unreal Insights. Args: on | off, or none for status.").ToString(),
+              *LOCTEXT("CommandText_Profiler", "Lua CPU profiling into Unreal Insights. Args: on | off | agg on|off | reset | top [n] | dump [file], or none for status.").ToString(),
               FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::Profiler)
           ),
           DebugCommand(
@@ -176,7 +176,73 @@ namespace UnLuaNova
             return;
         }
 
-        Env->GC();
+        if (Args.Num() == 0)
+        {
+            Env->GC();
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: full collect done, heap = %.1f KB"), Env->GetGCStats().HeapBytes / 1024.0);
+            return;
+        }
+
+        // Sizes on the command line are Kbytes because that is what `lua.memstats` and
+        // every other Lua tool reports; the API underneath is in bytes.
+        const FString& Sub = Args[0];
+
+        if (Sub == TEXT("auto"))
+        {
+            Env->SetGCMode(UnLuaNova::ELuaGcMode::Automatic);
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: automatic (VM-paced); the per-frame slice is off."));
+            return;
+        }
+
+        if (Sub == TEXT("slice"))
+        {
+            int64 Kb = 0;
+            if (Args.Num() >= 2)
+            {
+                Kb = FCString::Atoi64(*Args[1]);
+                Env->SetGCStepBudget(Kb * 1024);
+            }
+            Env->SetGCMode(UnLuaNova::ELuaGcMode::TimeSliced);
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: time sliced, budget = %lld KB/frame (0 = uncapped)"), Kb);
+            return;
+        }
+
+        if (Sub == TEXT("budget") && Args.Num() >= 2)
+        {
+            const int64 Kb = FCString::Atoi64(*Args[1]);
+            Env->SetGCStepBudget(Kb * 1024);
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: per-frame budget = %lld KB (0 = uncapped)"), Kb);
+            return;
+        }
+
+        if (Sub == TEXT("mult") && Args.Num() >= 2)
+        {
+            const int32 Percent = FCString::Atoi(*Args[1]);
+            Env->SetGCStepMultiplier(Percent);
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: step multiplier = %d%% (100 = keep pace with the allocator)"), Percent);
+            return;
+        }
+
+        if (Sub == TEXT("limit") && Args.Num() >= 2)
+        {
+            const int64 Kb = FCString::Atoi64(*Args[1]);
+            Env->SetGCHardLimit(Kb * 1024);
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: hard limit = %lld KB (0 = disabled)"), Kb);
+            return;
+        }
+
+        if (Sub == TEXT("stats"))
+        {
+            const auto& S = Env->GetGCStats();
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: mode=%s heap=%.1f KB peak=%.1f KB debt=%.1f KB"),
+                Env->GetGCMode() == UnLuaNova::ELuaGcMode::TimeSliced ? TEXT("time-sliced") : TEXT("automatic"),
+                S.HeapBytes / 1024.0, S.PeakHeapBytes / 1024.0, S.PendingDebtBytes / 1024.0);
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: frames=%d stepped=%d fullcollects=%d steppedMB=%.2f total=%.2f ms worst frame=%.3f ms"),
+                S.Frames, S.SteppedFrames, S.FullCollects, S.BytesSteppedTotal / (1024.0 * 1024.0), S.TotalStepMs, S.WorstFrameMs);
+            return;
+        }
+
+        UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.gc [auto | slice [kb] | budget <kb> | mult <pct> | limit <kb> | stats]"));
     }
 
     void FUnLuaNovaConsoleCommands::MemStats(const TArray<FString>& Args) const
@@ -250,13 +316,46 @@ namespace UnLuaNova
                 return;
             }
 
-            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.profiler [on|off]"));
+            // Per-function self-time aggregation. Separate switch from on/off because it
+            // costs a stack push/pop per call, which the timeline alone does not.
+            if (Arg.Equals(TEXT("agg"), ESearchCase::IgnoreCase))
+            {
+                const bool bOn = !(Args.Num() >= 2 && Args[1].Equals(TEXT("off"), ESearchCase::IgnoreCase));
+                Profiler.SetAggregateEnabled(bOn);
+                UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiler aggregation %s."), bOn ? TEXT("ON") : TEXT("OFF"));
+                return;
+            }
+
+            if (Arg.Equals(TEXT("reset"), ESearchCase::IgnoreCase))
+            {
+                Profiler.ResetAggregate();
+                UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiler aggregates reset."));
+                return;
+            }
+
+            if (Arg.Equals(TEXT("top"), ESearchCase::IgnoreCase))
+            {
+                const int32 Rows = Args.Num() >= 2 ? FCString::Atoi(*Args[1]) : 20;
+                UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Profiler.BuildReport(Rows));
+                return;
+            }
+
+            if (Arg.Equals(TEXT("dump"), ESearchCase::IgnoreCase))
+            {
+                const FString File = Args.Num() >= 2 ? Args[1] : TEXT("lua-profiler.csv");
+                if (!Profiler.DumpToFile(File))
+                    UE_LOG(LogUnLuaNova, Error, TEXT("Failed to write the profiler report to '%s'."), *File);
+                return;
+            }
+
+            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.profiler [on|off|agg on|off|reset|top [n]|dump [file]]"));
             return;
         }
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiling is %s (%d functions tracked)."),
+        UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiling is %s (%d functions tracked, %d aggregated)."),
                Profiler.IsEnabled() ? TEXT("ON") : TEXT("OFF"),
-               Profiler.NumTrackedFunctions());
+               Profiler.NumTrackedFunctions(),
+               Profiler.NumAggregatedFunctions());
     }
 }
 

@@ -58,7 +58,8 @@ public class UnLuaNovaTestSuite : ModuleRules
 		// Read the same key UnLuaNova does so the choice can never disagree with it; naming
 		// the other backend would put both on the include path and trip LuaBackend.h's
 		// check for two backend modules in one build.
-		var configFile = new FileReference(Path.Combine(Target.ProjectFile.Directory.FullName, "Config", "DefaultUnLuaNovaEditor.ini"));
+		// 全插件只有一个配置文件：Config/DefaultUnLuaNova.ini
+		var configFile = new FileReference(Path.Combine(Target.ProjectFile.Directory.FullName, "Config", "DefaultUnLuaNova.ini"));
 		var config = new ConfigHierarchy(new[] { FileReference.Exists(configFile) ? new ConfigFile(configFile) : new ConfigFile() });
 		const string section = "/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings";
 

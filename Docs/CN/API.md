@@ -139,15 +139,24 @@ FUnLuaNovaDelegates
 `UnLuaNova` 既是 Lua 模块名（`require "UnLuaNova"`）也是运行期注入的全局表：
 
 * `UnLuaNova.GetBackend()` 返回当前构建的 Lua 后端：`"Lua"` 或 `"Luau"`
-* `UnLuaNova.HasFeature(Name)` 查询某项能力在当前后端是否可用。已知的名字：
+* `UnLuaNova.HasFeature(Name)` 查询某项**特性**是否可用（大小写不敏感）。
+  后端能力与配置开关走**同一个入口**，脚本不必知道这个值是从后端来的还是从 ini 来的：
 
-  | 名字 | 含义 | Lua 5.x | Luau |
-  |---|---|---|---|
-  | `sandbox` | 原生沙盒（`luaL_sandbox`） | 否 | 是 |
-  | `breakpoint` | VM 级断点/单步通道 | 否 | 是 |
-  | `allocCallbacks` | 分类内存回调（`lua.memstats` 的分类视图） | 否 | 是 |
-  | `vector` | 原生 `vector` 与 `FVector` 直接互换 | 否 | 是 |
-  | `buffer` | `buffer` 库 | 否 | 是 |
+  | 名字 | 含义 | 来源 |
+  |---|---|---|
+  | `sandbox` | 原生沙盒（`luaL_sandbox`） | 后端（Luau 有） |
+  | `breakpoint` | VM 级断点/单步通道 | 后端（Luau 有） |
+  | `allocCallbacks` | 分类内存回调（`lua.memstats` 的分类视图） | 后端（Luau 有） |
+  | `vector` | 原生 `vector` 与 `FVector` 直接互换 | 后端（Luau 有） |
+  | `buffer` | `buffer` 库 | 后端（Luau 有） |
+  | `timer` | 内置库 `UnLuaNova.Timer` | 配置 `bTimer` |
+  | `event` | 内置库 `UnLuaNova.Event` | 配置 `bEvent` |
+  | `oop` | 内置库 `UnLuaNova.OOP` | 配置 `bOOP` |
+  | `datadrivenbinding` | 数据驱动绑定 | 配置 `bDataDrivenBinding` |
+  | `debugadapter` | `lua.dap` | 配置 `bDebugAdapter` |
+
+  配置开关全在 `Config/DefaultUnLuaNova.ini` 的 `[/Script/UnLuaNova.UnLuaNovaSettings]`，
+  键名就是 `b<CamelCase>`。详见[内置库](StdLib.md#插拔所有特性同一种开关格式)。
 
   未知名字返回 `false` 而不是报错，所以照着更新版本写的脚本在旧构建上是降级而不是崩。
 
@@ -180,15 +189,27 @@ FUnLuaNovaDelegates
 | `Input` | 输入绑定 |
 | `EnhancedInput` | 增强输入绑定 |
 | `HotReload` | 热重载：接管 `require`，使已加载模块可以被替换 |
+| `Event` | 事件总线（快照广播、错误隔离、`UnbindOwner`），详见[内置库](StdLib.md#event纯-lua) |
+| `OOP` | 脚本面向对象（单继承、构造链、`Super`），详见[内置库](StdLib.md#oop纯-lua) |
+| `Timer` | 脚本计时器（**内建 native 模块**，走世界时间），详见[内置库](StdLib.md#timerc-驱动) |
 
 !!! warning "别把这些模块放进工程目录"
-    `package.path` 是 `Content/Script/?.lua;Plugins/UnLuaNova/Content/Script/?.lua`，
-    **工程在前**。放在 `Content/Script/UnLuaNova/` 下的模块在本仓库能加载，
+    `package.path` **工程在前**（`Content/Script/?.lua`），插件脚本目录按插件实例解析在后。
+    放在 `Content/Script/UnLuaNova/` 下的模块在本仓库能加载，
     但任何只装插件的工程都拿不到它 —— 而且本仓库不会有任何用例失败。
     `UnLuaNova.API.RuntimeModules` 这条用例就是断言"文件在插件目录里"，防止再犯。
 
+!!! note "Timer 没有 .lua 文件"
+    `Timer` 是内建模块，由 `FLuaEnv::AddBuiltInLoader` 提供加载器（`require` 的第四个 searcher），
+    所以它在文件系统里找不到 —— 这是有意的：到期时间必须由 C++ 用世界时间算。
+
 ## 宏定义
 以下宏定义可通过 `UnLuaNova.Build.cs` 修改：
+
+* `UNLUANOVA_HAS_STDLIB_TIMER` / `UNLUANOVA_HAS_STDLIB_EVENT` / `UNLUANOVA_HAS_STDLIB_OOP`
+内置库的**编译期**开关，由 `Config/DefaultUnLuaNova.ini` 的 `bTimer` / `bEvent` / `bOOP`
+生成（与运行时设置同名同键，不是另起一套），默认全为 `1`。关掉后该库不注册、`HasFeature`
+回答 false、Lua 库 require 时明确报错。详见[内置库](StdLib.md#插拔所有特性同一种开关格式)。
 * `AUTO_UNLUA_STARTUP` 是否自动启动UnLuaNova环境，默认**启用**。
 
 * `WITH_UE4_NAMESPACE` 是否提供一个统一的 `UE` 命名空间 `table` 作为对引擎侧类型的访问入口，默认**启用**。

@@ -182,7 +182,7 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `UnLuaNova.Editor.StaticBindingGenerator` | 静态绑定生成器 | 仅编辑器 |
 | `UnLuaNova.Extensions` | LuaRapidjson / LuaProtobuf / LuaSocket | 需可选扩展插件 |
 | `UnLuaNova.Lua` | 执行 `Content/Script/Tests/Lua/*.spec.lua`，把每条 Lua 侧结果搬回 C++ | 失败带 Lua 文件名与行号 |
-| `UnLuaNova.Perf.Benchmark` | 跨语言调用（Native / 反射 / Lua）+ 纯 VM 计算（算术 / 函数调用 / 表增长 / 表读取），按后端写 CSV 到 `Saved/Benchmark/` | 报告里与**同一后端**的上一轮环比，只告警不判定 |
+| `UnLuaNova.Perf.Benchmark` | 跨语言调用（Native / 反射 / Lua）+ 纯 VM 计算（算术 / 函数调用 / 表增长 / 表读取）+ 容器传参（`Lua.Container.PointsAreCoplanar`），按后端写 CSV 到 `Saved/Benchmark/` | 报告里与**同一后端**的上一轮环比，只告警不判定 |
 | `UnLuaNova.Regression.Issue276` | 游戏世界暂停后 `coroutine delay` 不工作 | |
 | `UnLuaNova.Regression.Issue286` | 蓝图 `TMap FindRef` 错误 | |
 | `UnLuaNova.Regression.Issue295` | 动态绑定的 UMG 对象切换地图时 Destruct 崩溃 | |
@@ -218,7 +218,7 @@ Lua 后端是**编译期选择**（见[设置项](Settings.md)里的"Lua 后端"
 
 对每个后端依次做：
 
-1. 写 `Config/DefaultUnLuaNovaEditor.ini` 的 `LuaBackend=<后端>`；
+1. 写 `Config/DefaultUnLuaNova.ini` 的 `LuaBackend=<后端>`；
 2. 什么都不用清 —— `UnLuaNova.Build.cs` 把这个 ini 登记进了 `ExternalDependencies`，
    改它就让 UBT 的 makefile 失效，Build.cs 重新求值、宏跟着变、只有真正用到宏的模块重编
    （以前是整目录删掉：69 个 `.obj` 里有 62 个是 Luau VM，跟后端一点关系都没有）；
@@ -260,6 +260,48 @@ ini 是仓库级可变状态、二进制又是编译期产物，两者一旦分�
 两份报告都带后端标记（标题、结论表里的"Lua 后端"一行），不会看着看着忘了自己看的是哪份。
 只想跑一个后端就用 `-Backend Lua` 或 `-Backend Luau`。
 
+
+## 性能基线：数字要进版本库
+
+性能有两套入口，结论都落到文件里 —— 屏幕上闪一个数字、没人提交，那叫截图不叫基线。
+
+| 入口 | 怎么用 | 产物 |
+|---|---|---|
+| 关卡手跑 | 打开 `UnLuaNovaTestSuite/Content/Tests/Benchmark/Benchmark.umap`，读屏 | 无（人肉） |
+| 自动化 | `UnLuaNova.Perf.Benchmark` | `Saved/Benchmark/latest-<后端>.csv`，与 `previous-<后端>.csv` 环比 |
+
+关卡脚本在 `Content/Script/Tests/Benchmark/`：`BP_UnLuaNovaBenchmark.lua`（直连 UObject）与
+`UnLuaNovaBenchmarkProxy.lua`（经一层 `UObject` 属性），逐项 `StartTimer` / `StopTimer`。
+**加新用例时两份都要加**，否则两条路径就对不上数了。
+
+自动化那套按后端分开写 CSV（`latest-Luau.csv` / `latest-Lua.csv`）—— 共用一份文件的后果是
+`-Backend Both` 时 Luau 那轮把 Lua 5.5 的上一轮当成"previous"，把两个 VM 的差异报成 20% 回归。
+
+### 容器用例（`Lua.Container.PointsAreCoplanar`）
+
+一条迭代里做三件事：建 `TArray<FVector>` → 塞 8 个 `FVector` → 整个作为 `const TArray<FVector>&`
+传给 `UKismetMathLibrary::PointsAreCoplanar`。它压的是**容器构造 + 整包传参**这条链，
+而单调用那几行只压"参数编组 + UFunction 解析"，两者不是一回事，别拿其中一个的数去推断另一个。
+
+关卡脚本里拆成两行计时，报告里能看出贵的是"建"还是"传"：
+
+```lua
+StartTimer("UE.TArray(UE.FVector) + Add x8")                                    -- 只建
+StartTimer("TArray<FVector> x8 + PointsAreCoplanar(const TArray<FVector>&, float)") -- 建 + 传
+```
+
+第二行减第一行 ≈ 调用本身的成本。
+
+自动化那套只跑一行，且迭代数是 `ContainerIterations = 20000`，不是手跑脚本常见的 `1024 * 1024`：
+一次迭代比单个跨语言调用贵一个量级，CI 每次构建都要跑，得压在几秒预算里。
+
+### 往里加一行要注意什么
+
+- **`TEST_EQUAL(Rows.Num(), 8)` 要跟着改**：断言的是行数，漏改就是红
+- **chunk 必须两个后端都能编**：不要 `continue`、不要复合赋值、不要类型标注
+- **结果要写进 `SpecResult`**，不能留在局部变量里 —— 没人读的值编译器有权连循环一起删掉
+- 断言只验"跑过、耗时非零、记下来了"。**不验绝对时长**：负载高的 CI 上一红就是 flaky，
+  flaky 的用例还不如没有用例；30% 的回归由报告告警，不是由测试判定
 
 ## 测试资产
 

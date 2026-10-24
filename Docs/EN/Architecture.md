@@ -26,7 +26,7 @@ Plugins/UnLuaNova/
 │   │   │   ├── MathLib/          10 LuaLib_F* (FVector/FQuat/FTransform…) plus the shared LuaLib_Math.h
 │   │   │   ├── Containers/       container headers (LuaArray/LuaMap/LuaSet)
 │   │   │   └── StaticBinding/    the static binding registry implementation
-│   │   └── UnLuaNova.Build.cs  backend selection lives here (reads LuaBackend from Config/DefaultUnLuaNovaEditor.ini)
+│   │   └── UnLuaNova.Build.cs  backend selection lives here (reads LuaBackend from Config/DefaultUnLuaNova.ini)
 │   ├── UnLuaNovaEditor/        editor module: toolbars, IntelliSense, 3 commandlets, settings
 │   ├── UnLuaNovaDefaultParamCollector/  C# UBT plugin (not a module) collecting UFunction default parameters
 │   └── ThirdParty/             the Lua and Luau git submodules plus each one's Build.cs and generator

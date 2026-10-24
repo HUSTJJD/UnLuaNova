@@ -16,6 +16,9 @@
 
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationCommon.h"
+// EPlayNetMode (PIE_Standalone / PIE_ListenServer / PIE_Client) lives here. Editor-only
+// like the rest of this file's PIE machinery - see UnLuaNovaTestSuite.Build.cs.
+#include "Settings/LevelEditorPlaySettings.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -39,13 +42,24 @@ namespace UnLuaNovaTestSuite
     class FOpenMapLatentCommand : public IAutomationLatentCommand
     {
     public:
-        explicit FOpenMapLatentCommand(FString MapName, bool bForceReload = false);
+        /**
+         * @param NumClients  How many client windows. 1 = standalone (the default, what
+         *                    every existing test wants). >1 only makes sense with a net mode.
+         * @param PlayNetMode PIE_Standalone (default) or PIE_ListenServer for a C/S session.
+         *                    The server runs in-process - bLaunchSeparateServer is left off - so
+         *                    one editor process holds every peer, which is what lets a single
+         *                    test reach into all of them.
+         */
+        explicit FOpenMapLatentCommand(FString MapName, bool bForceReload = false,
+            int32 NumClients = 1, EPlayNetMode PlayNetMode = EPlayNetMode::PIE_Standalone);
 
         virtual bool Update() override;
 
         void LoadMap();
 
     private:
+        /** How many PIE worlds to wait for. Server + clients, or just the one. */
+        int32 ExpectedWorlds = 1;
         // How long a session is allowed to take before this gives up on it. Generous on
         // purpose: starting PIE compiles blueprints and can take a second or two, and a
         // false alarm here turns into a failed test rather than a slow one.
@@ -53,6 +67,8 @@ namespace UnLuaNovaTestSuite
 
         FString MapName;
         bool bForceReload;
+        int32 NumClients = 1;
+        EPlayNetMode PlayNetMode = EPlayNetMode::PIE_Standalone;
         bool bEndingPreviousSession = false;
         double WaitDeadline = 0.0;
         TUniquePtr<FWaitForSpecifiedMapToLoadCommand> WaitForMapToLoad;
@@ -63,6 +79,24 @@ namespace UnLuaNovaTestSuite
     public:
         virtual bool Update() override;
     };
+
+    /**
+     * The peers of the PIE session currently running, split by role.
+     *
+     * Classified by GetNetMode() rather than by PIE instance index: the index is an
+     * editor-side bookkeeping number that says nothing about who is the authority, and
+     * every assertion a networked test wants to make is about authority.
+     */
+    struct FPieNetWorlds
+    {
+        /** The listen server (NM_ListenServer) or dedicated server (NM_DedicatedServer). */
+        UWorld* Server = nullptr;
+        /** One entry per connected client, in world-context order. */
+        TArray<UWorld*> Clients;
+    };
+
+    /** Collect the PIE worlds of the running session. Empty when PIE is not up. */
+    FPieNetWorlds GetPieNetWorlds();
 
     // Takes a screenshot and waits until the PNG is actually on disk.
     //

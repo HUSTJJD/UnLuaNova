@@ -225,7 +225,7 @@ on older or newer builds.
 
 ### Payoff
 
-- **Switching backends is one ini key** (`LuaBackend` in `Config/DefaultUnLuaNovaEditor.ini`).
+- **Switching backends is one ini key** (`LuaBackend` in `Config/DefaultUnLuaNova.ini`).
   It is a compile-time choice, so you rebuild — and touch no business code.
 - **Both VMs are git submodules**: sources belong upstream, wrappers (`*.Build.cs`, the single-TU
   aggregate, Luau's generated wrappers) belong to this project. Upgrading is moving a pointer.

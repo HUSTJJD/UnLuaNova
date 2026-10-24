@@ -43,6 +43,46 @@ description: "运行时与编辑器全部设置项的含义，含 Lua 后端切�
 
 针对这类需求，可以继承 `ULuaModuleLocator` 来实现自己的自动绑定规则。如此一来，也可以避免不确定哪些蓝图绑定了哪些脚本的情形，更便于管理。
 
+默认值是 `ULuaModuleLocator_ByBinding`，它按下面顺序找模块名，**前两级不需要在 UE 侧写一行代码**：
+
+| 顺序 | 方式 | 怎么写 |
+|---|---|---|
+| 1 | 实现接口 | `IUnLuaNovaInterface::GetModuleName()`（C++ 或蓝图，老路子） |
+| 2 | 配置映射 | 运行时设置里的 **类模块绑定表**（见下） |
+| 3 | 绑定组件 | 蓝图 Actor 上加 `UnLuaNova Binding` 组件，填模块名 |
+
+想换成完全自己的规则，继承 `ULuaModuleLocator` 并覆写 `Locate()` 即可 ——
+"给不给没实现接口的对象绑"不是 locator 的属性，是下面的配置项。
+
+### 类模块绑定表
+
+`DefaultUnLuaNova.ini`：
+
+```ini
+[/Script/UnLuaNova.UnLuaNovaSettings]
++ClassModuleBindings=(Class="/Script/UAKDemo.AKDemoCharacter",ModuleName="UAKDemoCharacter")
+```
+
+- 匹配**沿继承链向上找**：绑基类即覆盖它的所有蓝图子类（蓝图子类的类名不是基类名，
+  只能靠父类链命中），不想要这个行为就写完整路径精确匹配
+- 只比字符串，**不解析 `Class` 资产**：`TryBind` 是在 UObject 创建过程中调的，那里 `LoadObject` 是自找麻烦
+- 编辑器里不缓存"这个类没绑"的结论，改完配置即时生效；打包构建里会缓存
+
+### 允许数据驱动绑定
+
+`bDataDrivenBinding`：允许给**没有实现 `IUnLuaNovaInterface`** 的对象绑 Lua 模块，**默认关**。
+
+```ini
+[/Script/UnLuaNova.UnLuaNovaSettings]
+bDataDrivenBinding=true
+```
+
+这是一条安全边界，不是性能开关：开着的时候，凡是能匹配上类模块绑定表或绑定组件的对象，
+都会在它自己不知情的情况下被绑上脚本。把它做成**配置**而不是代码里的常量，是因为
+"要不要冒这个险"是项目决策 —— 库不该替项目决定，也不该把这个开关焊死在某个 locator 子类上。
+
+关着的时候，绑定只发生在实现了接口或走动态绑定的对象上，与旧版本逐字一致。
+
 ### 预绑定类型列表
 
 在编辑器环境下，类似 `UBlueprintFunctionLibary` 和 `UAnimNotifyState` 这种类型在退出PIE后是不会销毁的。第二次进入PIE时候UnLuaNova无法捕获到它们的构造事件，会导致Lua绑定失效。将这种 “常驻” 类型加入到配置中，在启动Lua环境后立即进行绑定内存中它们的子类。
@@ -58,6 +98,49 @@ description: "运行时与编辑器全部设置项的含义，含 Lua 后端切�
 ### 生成智能提示信息
 
 是否为Lua生成智能提示信息，使用流程参考[这里](IntelliSense.md)
+
+### 启动时自动生成智能提示
+
+产物目录还不存在时，编辑器启动就自动导出一次（受上一项控制，即关掉生成就都不会生成）。
+
+只跑**首次**，目录已存在就交给工具栏与目录监听做增量，不会拖慢每次启动。之所以要它：
+没产物就没有补全，而"没有补全"很容易被误判成"这个方案不好用"。
+
+### 默认值写在哪
+
+**全插件只有一个配置文件**：`Config/DefaultUnLuaNova.ini`，运行时 section 与编辑器 section
+同处其中。插件自带 `Plugins/UnLuaNova/Config/DefaultUnLuaNova.ini` 按注释写全了默认值 ——
+**打开它就能看见有哪些开关**。
+工程侧 `Config/DefaultXxx.ini` **只写覆盖项**，不要整份抄过来：抄了之后插件升级改默认值，
+工程那份还停在旧值上，而且看不出来。
+
+标 `[需重编]` 的键有个坑：`UnLuaNova.Build.cs` 只认**工程** `Config/` 下那份 ini，
+不读插件自带的。要改这类开关就改工程那份，写在插件那份里不会影响编译结果。
+
+`LuaBackend` 不是 UPROPERTY —— 它由 Build.cs 直接从工程 ini 读，所以在编辑器 UI 里看不到，
+也只能写在工程 `Config/DefaultUnLuaNova.ini`。
+
+### 特性开关（统一格式）
+
+全插件的特性开关都在这一节，格式固定：键名 `b<CamelCase>`，查询名是去掉 `b` 的小写形式。
+
+| 键 | 查询名 | 默认 | 说明 |
+|---|---|---|---|
+| `bTimer` | `timer` | true | 内置库 `UnLuaNova.Timer`（**改动需重编**） |
+| `bEvent` | `event` | true | 内置库 `UnLuaNova.Event`（**改动需重编**） |
+| `bOOP` | `oop` | true | 内置库 `UnLuaNova.OOP`（**改动需重编**） |
+| `bDataDrivenBinding` | `datadrivenbinding` | false | 数据驱动绑定（见下节） |
+| `bDebugAdapter` | `debugadapter` | true | `lua.dap` |
+| `DebugAdapterPort` | — | 5699 | `lua.dap` 默认端口 |
+
+脚本侧只通过 `UnLuaNova.HasFeature('<查询名>')` 问（大小写不敏感）；
+后端能力（`sandbox` / `vector` / `buffer` …）不可配置，但走同一个入口。
+详见[内置库](StdLib.md#插拔所有特性同一种开关格式)。
+
+!!! note "编辑器设置里不再有特性开关"
+    `UUnLuaNovaEditorSettings`（`DefaultUnLuaNova.ini`）只管编辑器行为与构建配置
+    （热重载模式、智能提示、后端选择…）。特性开关一律归 `UUnLuaNovaSettings`，避免"同一个东西
+    两处配置、还不同名"。
 
 ### 自动启动
 
@@ -103,7 +186,7 @@ description: "运行时与编辑器全部设置项的含义，含 Lua 后端切�
 
 ### Lua后端
 
-在 `Config/DefaultUnLuaNovaEditor.ini` 中设置（改完需要**重新编译**，后端是编译期选择）：
+在 `Config/DefaultUnLuaNova.ini` 中设置（改完需要**重新编译**，后端是编译期选择）：
 
 ```ini
 [/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]
@@ -116,7 +199,7 @@ LuaBackend=Luau
 | `Luau` | Luau（`github.com/luau-lang/luau`）；提供渐进类型、原生沙盒、原生断点调试等能力 |
 
 **没写这个键时的默认值是 `Luau`**（`UnLuaNova.Build.cs` 读不到键就用它）。
-本仓库 `Config/DefaultUnLuaNovaEditor.ini` 里当前写的是 `Lua`，因为最后一次提交前的全量测试
+本仓库 `Config/DefaultUnLuaNova.ini` 里当前写的是 `Lua`，因为最后一次提交前的全量测试
 跑完把配置还原成了 Lua；`Tools/RunTests.ps1` 每次跑完都会把 ini 恢复原样，所以这个值会跟着
 你本地最后一次跑的后端走，别把它当成"项目选了 Lua"。
 想固定成 Luau 就把这一行删掉，或者显式写 `LuaBackend=Luau`。

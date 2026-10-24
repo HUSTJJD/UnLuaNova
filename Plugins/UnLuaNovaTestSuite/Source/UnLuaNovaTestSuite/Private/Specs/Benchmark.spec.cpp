@@ -54,6 +54,14 @@ static constexpr int32 SpecIterations = 20000;
 // cross-language call, so they need a proportionally longer run to clear timer noise.
 static constexpr int32 VmIterations = 200000;
 
+static constexpr int32 ContainerIterations = 20000;
+
+// One container iteration is "build a TArray<FVector>, push 8 FVectors, hand the whole thing
+// to a UFunction" - roughly an order of magnitude more work than the single call the
+// SpecIterations rows measure, so it gets its own count to stay in the same few-seconds
+// budget. (The hand-run version of this case in the benchmark level uses 1024*1024; that is
+// fine when a human is waiting for a number on screen and not when CI runs it every build.)
+
 // Which backend this build compiled, used to name the CSV. A run that cannot say which VM
 // produced its numbers is not a baseline - see the file comment.
 static const TCHAR* BackendTag()
@@ -193,6 +201,31 @@ void FBenchmarkSpec::Define()
                 "SpecResult[3] = s"), VmIterations));
         });
 
+        // ---- container marshalling ----------------------------------------
+        // TArray<FVector> built in Lua and passed to a UFunction as a whole: the cost is
+        // split between constructing the container and marshalling it back across the
+        // boundary, and only a row that does both per iteration says what a real script
+        // pays. Same "no dead code" rule as the VM rows - the result is stored, not dropped.
+        //
+        // Written in the syntax both VMs accept (no `continue`, no compound assignment, no
+        // type annotations) so one chunk compiles either way.
+        Measure(TEXT("Lua.Container.PointsAreCoplanar"), ContainerIterations, [this]()
+        {
+            Env->DoString(FString::Printf(TEXT(
+                "for i = 1, %d do\n"
+                "  local TestVec = UE.TArray(UE.FVector)\n"
+                "  TestVec:Add(UE.FVector(0, 0, 0))\n"
+                "  TestVec:Add(UE.FVector(0, 0, 1))\n"
+                "  TestVec:Add(UE.FVector(0, 1, 0))\n"
+                "  TestVec:Add(UE.FVector(1, 0, 0))\n"
+                "  TestVec:Add(UE.FVector(1, 1, 0))\n"
+                "  TestVec:Add(UE.FVector(1, 0, 1))\n"
+                "  TestVec:Add(UE.FVector(0, 1, 1))\n"
+                "  TestVec:Add(UE.FVector(1, 1, 1))\n"
+                "  SpecResult[4] = UE.UKismetMathLibrary.PointsAreCoplanar(TestVec, 0.1)\n"
+                "end"), ContainerIterations));
+        });
+
         Proxy->RemoveFromRoot();
 
         // ---- write the CSV -------------------------------------------------
@@ -228,8 +261,9 @@ void FBenchmarkSpec::Define()
         TEST_TRUE(bWritten);
 
         // Sanity: work happened and was measured. Not an absolute duration - see the file
-        // comment. Seven rows: three crossing into C++, four staying inside the VM.
-        TEST_EQUAL(Rows.Num(), 7);
+        // comment. Eight rows: three crossing into C++, four staying inside the VM, one
+        // building a container and marshalling it across.
+        TEST_EQUAL(Rows.Num(), 8);
         for (const FRow& Row : Rows)
         {
             TestTrue(*FString::Printf(TEXT("%s 跑了 %d 次"), *Row.Case, Row.Iterations), Row.Iterations > 0);

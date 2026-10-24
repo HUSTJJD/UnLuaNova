@@ -106,7 +106,7 @@ Luau 子模块增删文件后，重新运行 `python LuauLib/GenerateWrappers.py
 **A2 · Luau 后端目前不可编译**
 `LuauLib/Luau.Build.cs` 是 External 模块，链接 `build/Release/Luau.VM.lib` 等，而 `ThirdParty/Luau/build/` **不存在**。
 已加明确报错（告诉你该跑哪两条 CMake 命令），并已把默认后端切回 Lua55，所以**这不再阻塞主流程**。
-要启用 Luau：先 CMake 构建 Luau，再 `Config/DefaultUnLuaNovaEditor.ini` 设 `LuaBackend=Luau`。
+要启用 Luau：先 CMake 构建 Luau，再 `Config/DefaultUnLuaNova.ini` 设 `LuaBackend=Luau`。
 
 ### B. 文档与代码实际不符
 

@@ -28,6 +28,7 @@
 #include "HAL/Platform.h"
 #include "LuaDanglingCheck.h"
 #include "LuaDeadLoopCheck.h"
+#include "LuaGcScheduler.h"
 #include "LuaModuleLocator.h"
 
 namespace UnLuaNova
@@ -78,7 +79,34 @@ namespace UnLuaNova
 
         bool DoString(const FString& Chunk, const FString& ChunkName = "chunk");
 
+        /**
+         * Full, synchronous collection. Unchanged in behaviour - it is still two
+         * LUA_GCCOLLECT passes on the calling thread and it still costs a frame spike.
+         * Reach for SetGCMode(TimeSliced) instead when the point is to avoid that spike.
+         */
         virtual void GC();
+
+        /** Hand the heap to the per-frame scheduler (see FLuaGcScheduler). */
+        void SetGCMode(ELuaGcMode InMode);
+        ELuaGcMode GetGCMode() const;
+
+        /** Cap on collector work per frame, in bytes. 0 = uncapped. */
+        void SetGCStepBudget(int64 BytesPerFrame);
+
+        /** How fast the collector chases the allocator, in percent (100 = keep pace). */
+        void SetGCStepMultiplier(int32 Percent);
+
+        /** Heap size above which the scheduler takes a full collect. 0 = disabled. */
+        void SetGCHardLimit(int64 Bytes);
+
+        /**
+         * One frame of scheduled collection. Driven from FCoreDelegates::OnEndFrame, so
+         * there is normally nothing to call - it is exposed for commandlets and tests,
+         * where no frame runs.
+         */
+        void TickGC(float DeltaSeconds = 0.0f);
+
+        const FLuaGcScheduler::FStats& GetGCStats() const;
 
         virtual void HotReload();
 
@@ -159,6 +187,8 @@ namespace UnLuaNova
 
         void OnWorldTickStart(UWorld* World, ELevelTick TickType, float DeltaTime);
 
+        void OnEndFrame();
+
         void RegisterDelegates();
 
         void UnRegisterDelegates();
@@ -181,9 +211,11 @@ namespace UnLuaNova
         FEnumRegistry* EnumRegistry;
         FDanglingCheck* DanglingCheck;
         FDeadLoopCheck* DeadLoopCheck;
+        FLuaGcScheduler* GcScheduler;
         TMap<lua_State*, int32> ThreadToRef;
         TMap<int32, lua_State*> RefToThread;
         FDelegateHandle OnAsyncLoadingFlushUpdateHandle;
+        FDelegateHandle OnEndFrameHandle;
         TArray<UInputComponent*> CandidateInputComponents;
         FDelegateHandle OnWorldTickStartHandle;
         FString Name = TEXT("Env_0");

@@ -66,6 +66,54 @@ FORCEINLINE lua_State* GetMainState() const;
 
 `DoString` 返回 `false` 表示失败；失败**不会**把环境搞脏，后续调用照常工作。
 
+### 帧分摊 GC
+
+```cpp
+void SetGCMode(ELuaGcMode InMode);              // Automatic | TimeSliced
+ELuaGcMode GetGCMode() const;
+void SetGCStepBudget(int64 BytesPerFrame);      // 0 = 不限
+void SetGCStepMultiplier(int32 Percent);        // 100 = 分配多少收多少
+void SetGCHardLimit(int64 Bytes);               // 0 = 关闭
+void TickGC(float DeltaSeconds = 0.0f);
+const FLuaGcScheduler::FStats& GetGCStats() const;
+```
+
+`TickGC()` 平时由 `FCoreDelegates::OnEndFrame` 驱动；暴露出来是给 commandlet 与测试用的
+（那里没有帧）。`GC()` 仍是同步全量回收，语义未变。
+
+`FLuaGcScheduler` 定义在 `Public/LuaGcScheduler.h`：
+
+```cpp
+enum class ELuaGcMode : uint8 { Automatic, TimeSliced };
+
+class UNLUANOVA_API FLuaGcScheduler
+{
+public:
+    struct FStats
+    {
+        int64 HeapBytes, PeakHeapBytes, PendingDebtBytes, BytesSteppedTotal;
+        int32 Frames, SteppedFrames, FullCollects;
+        double TotalStepMs, WorstFrameMs;
+    };
+
+    explicit FLuaGcScheduler(lua_State* InL);
+    void SetMode(ELuaGcMode InMode);
+    void SetStepMultiplier(int32 InPercent);
+    void SetMaxStepBytesPerFrame(int64 InBytes);
+    void SetHardLimitBytes(int64 InBytes);
+    void Tick(float DeltaSeconds);
+    void Collect();
+    bool Step(int64 Bytes);
+    int64 GetHeapBytes() const;
+    bool IsCycleComplete() const;
+    const FStats& GetStats() const;
+    void ResetStats();
+};
+```
+
+后端差异（`lua_gc(LUA_GCSTEP)` 的单位：Luau 是 KB，Lua 5.5 是"工作量"）收敛在
+`LuaBackend.h` 的 `UNLUANOVA_GC_STEP_BYTES` 与 `UNLUANOVA_GC_HEAP_BYTES` 两个宏里。
+
 ### 协程（线程）
 
 ```cpp
@@ -390,6 +438,46 @@ class UNLUANOVA_API ULuaOverridesClass : public UClass   // 承载运行时覆�
 ```
 
 写完用例记得 `AfterEach` 里 `ULuaFunction::RestoreOverrides(Class)`，否则会污染后续用例。
+
+---
+
+## 从 C++ 调用 Lua — `Public/UnLuaNovaOverrider.h`
+
+```cpp
+// 绑定（幂等；对象已绑定时只花一次 map 查找）
+bool TryHookLua(UObject* Self);
+
+// 查询
+bool IsLuaFunctionExist(const UObject* Self, const FString& FunctionName);
+
+// 调用：self 是第一个参数，返回值取第一个结果并按 Ret 转换
+template <typename Ret, typename... Args>
+Ret CallLuaFunction(UObject* Self, const FString& FunctionName, Args&&... Args);
+
+template <typename Ret, typename... Args>
+Ret CallLuaFunctionIfExist(UObject* Self, const FString& FunctionName, Args&&... Args);
+
+template <typename... Args>
+void CallLuaFunctionVoid(UObject* Self, const FString& FunctionName, Args&&... Args);
+
+// 拆成两步的底层入口（模板在头文件里，VM 那半在 .cpp）
+struct FLuaMemberCall { lua_State* L; FLuaEnv* Env; int32 Top; bool IsValid() const; };
+FLuaMemberCall BeginLuaMemberCall(const UObject* Self, const FString& FunctionName, bool bRequireExist);
+FLuaRetValues EndLuaMemberCall(const FLuaMemberCall& Call, int32 NumArgs);   // NumArgs 含 self
+```
+
+要点：
+
+* 环境按 `ULuaEnvLocator::Locate(Self)` 取，**不是**主环境。
+* 查找复用 `PushFunction()`（覆写路径同一个函数），所以共享 self 表、Super 链与
+  `ReportLuaCallError` —— "C++ 能调"与"Lua 能调"在构造上等价。
+* `BeginLuaMemberCall` 成功时栈为 `[message handler][function][self]`；`EndLuaMemberCall`
+  用 `CallFunction(L, NumArgs, LUA_MULTRET)` 执行，并把栈恢复到 `Call.Top` + 结果。
+* 入口处装了 `FDeadLoopCheck` 与 `FDanglingCheck` 的 guard，与 `FLuaEnv::DoString` 一致。
+
+**这里没有 `ALua*` 基类，是故意的**：`ULuaFunction::IsOverridable` 认 `FUNC_BlueprintEvent`，
+原生类本来就可覆写；再搞一套平行基类只会丢掉 `self.Overridden.Xxx(self)`。
+详见 [Lua 驱动对象与 C++ 调 Lua](LuaDrivenObjects.md)。
 
 ---
 

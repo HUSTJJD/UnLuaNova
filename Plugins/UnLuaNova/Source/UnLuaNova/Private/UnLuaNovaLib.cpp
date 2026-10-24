@@ -4,6 +4,10 @@
 #include "LuaEnv.h"
 #include "UnLuaNovaBase.h"
 #include "UnLuaNovaSandbox.h"
+#include "UnLuaNovaSettings.h"   // 特性开关（bTimer / bEvent / bOOP / bDataDrivenBinding / bDebugAdapter）
+
+#include "Interfaces/IPluginManager.h"
+#include "Misc/Paths.h"
 
 namespace UnLuaNova
 {
@@ -101,22 +105,87 @@ namespace UnLuaNova
         // point of the capability flags in LuaBackend.h is that call sites branch on what
         // is actually available. Unknown names answer false rather than raising, so a
         // script written against a newer build degrades instead of dying.
+        /**
+         * 特性表：全插件**唯一**的开关清单。
+         *
+         * 统一格式，不管这个值从哪来：
+         *   * 后端能力（sandbox / vector / buffer …）—— 由后端决定，不可配置
+         *   * 配置开关（timer / event / oop / datadrivenbinding / debugadapter …）
+         *     —— 读 UUnLuaNovaSettings 的 `b<CamelCase>`，见 UUnLuaNovaSettings 的 Features 段
+         *
+         * 对外只有一个入口：UnLuaNova.HasFeature('<名>')，名字大小写不敏感
+         * （`oop` 与 `OOP` 同义，省掉"到底是大写还是小写"这种问题）。
+         * 加一个特性 = 表里加一行 + 设置类里加一个 `b<Name>`，不再有别的地方。
+         */
+        struct FFeature
+        {
+            const char* Name;
+            /** 每次查询都重新取值：设置可以在编辑器里改，不能缓存成常量。 */
+            bool (*Get)();
+        };
+
+        /** ASCII 大小写不敏感比较：不引平台相关的 stricmp，两个后端/两个平台都同一个行为。 */
+        static bool NameEquals(const char* A, const char* B)
+        {
+            for (; *A && *B; ++A, ++B)
+            {
+                const char CA = (*A >= 'A' && *A <= 'Z') ? static_cast<char>(*A + 32) : *A;
+                const char CB = (*B >= 'A' && *B <= 'Z') ? static_cast<char>(*B + 32) : *B;
+                if (CA != CB)
+                    return false;
+            }
+            return *A == *B;
+        }
+
+        // --- 后端能力：编译期常量 ---
+        static bool FeatureSandbox() { return UNLUANOVA_HAS_SANDBOX != 0; }
+        static bool FeatureBreakpoint() { return UNLUANOVA_HAS_BREAKPOINT != 0; }
+        static bool FeatureAllocCallbacks() { return UNLUANOVA_HAS_ALLOC_CALLBACKS != 0; }
+        static bool FeatureVector() { return UNLUANOVA_HAS_NATIVE_VECTOR != 0; }
+        static bool FeatureBuffer() { return UNLUANOVA_HAS_NATIVE_BUFFER != 0; }
+
+        // --- 配置开关：读 UUnLuaNovaSettings ---
+        static bool FeatureTimer()
+        {
+            // 编译期关掉的库不在这里注册（见 FLuaEnv），但值仍以宏为准，两边不会打架
+            return UNLUANOVA_HAS_STDLIB_TIMER != 0 && GetDefault<UUnLuaNovaSettings>()->bTimer;
+        }
+
+        static bool FeatureEvent() { return UNLUANOVA_HAS_STDLIB_EVENT != 0 && GetDefault<UUnLuaNovaSettings>()->bEvent; }
+        static bool FeatureOOP() { return UNLUANOVA_HAS_STDLIB_OOP != 0 && GetDefault<UUnLuaNovaSettings>()->bOOP; }
+        static bool FeatureDataDrivenBinding() { return GetDefault<UUnLuaNovaSettings>()->bDataDrivenBinding; }
+        static bool FeatureDebugAdapter() { return GetDefault<UUnLuaNovaSettings>()->bDebugAdapter; }
+
+        static const FFeature Features[] = {
+            // 后端能力
+            {"sandbox", FeatureSandbox},
+            {"breakpoint", FeatureBreakpoint},
+            {"allocCallbacks", FeatureAllocCallbacks},
+            {"vector", FeatureVector},
+            {"buffer", FeatureBuffer},
+            // 配置开关（UUnLuaNovaSettings 的 b<Name>）
+            {"timer", FeatureTimer},
+            {"event", FeatureEvent},
+            {"oop", FeatureOOP},
+            {"datadrivenbinding", FeatureDataDrivenBinding},
+            {"debugadapter", FeatureDebugAdapter},
+        };
+
         static int HasFeature(lua_State* L)
         {
             const char* Name = lua_tostring(L, 1);
             bool bAvailable = false;
             if (Name)
             {
-                if (strcmp(Name, "sandbox") == 0)
-                    bAvailable = UNLUANOVA_HAS_SANDBOX != 0;
-                else if (strcmp(Name, "breakpoint") == 0)
-                    bAvailable = UNLUANOVA_HAS_BREAKPOINT != 0;
-                else if (strcmp(Name, "allocCallbacks") == 0)
-                    bAvailable = UNLUANOVA_HAS_ALLOC_CALLBACKS != 0;
-                else if (strcmp(Name, "vector") == 0)
-                    bAvailable = UNLUANOVA_HAS_NATIVE_VECTOR != 0;
-                else if (strcmp(Name, "buffer") == 0)
-                    bAvailable = UNLUANOVA_HAS_NATIVE_BUFFER != 0;
+                for (const FFeature& Feature : Features)
+                {
+                    // 大小写不敏感：bOOP ↔ "oop" ↔ "OOP" 是同一个开关
+                    if (NameEquals(Name, Feature.Name))
+                    {
+                        bAvailable = Feature.Get();
+                        break;
+                    }
+                }
             }
 
             lua_pushboolean(L, bAvailable ? 1 : 0);
@@ -283,11 +352,48 @@ namespace UnLuaNova
 
 #pragma endregion
 
+        /**
+         * package.path：**按插件实例**拼，不再硬编码 "Plugins/UnLuaNova/Content/Script"。
+         *
+         * 硬编码的后果是"工程套插件"（submodule 是个工程，真正的插件在内层
+         * Plugins/UnLuaNova/Plugins/UnLuaNova/）时，插件随包发布的那几个模块
+         * （StringEx / Vector / Buffer / Input / HotReload / Event）全部 require 不到 ——
+         * 而本仓库的扁平布局下一切正常，于是没人会发现。
+         *
+         * 顺序保持不变：工程目录在前，插件目录在后（工程侧可以覆盖插件侧的模块）。
+         */
+        static FString BuildPackagePath()
+        {
+            TArray<FString> Entries;
+            Entries.Add(TEXT("Content/Script/?.lua"));
+
+            if (IPluginManager::IsAvailable())
+            {
+                for (const TSharedRef<IPlugin>& Plugin : IPluginManager::Get().GetEnabledPlugins())
+                {
+                    if (!Plugin->CanContainContent())
+                        continue;
+
+                    if (!Plugin->GetName().StartsWith(TEXT("UnLuaNova")))
+                        continue;
+
+                    FString Entry = Plugin->GetContentDir() / TEXT("?.lua");
+                    if (FPaths::MakePathRelativeTo(Entry, *FPaths::ProjectDir()))
+                        Entries.AddUnique(Entry);
+                }
+            }
+
+            // 兜底：插件管理器还没起来（很早的启动阶段）或布局又变了的场合，
+            // 至少保留老的那条，行为不比从前差
+            Entries.AddUnique(TEXT("Plugins/UnLuaNova/Content/Script/?.lua"));
+            return FString::Join(Entries, TEXT(";"));
+        }
+
         static int LuaOpen(lua_State* L)
         {
             lua_newtable(L);
             luaL_setfuncs(L, UNLUANOVA_Functions, 0);
-            lua_pushstring(L, "Content/Script/?.lua;Plugins/UnLuaNova/Content/Script/?.lua");
+            lua_pushstring(L, TCHAR_TO_UTF8(*BuildPackagePath()));
             lua_setfield(L, -2, PACKAGE_PATH_KEY);
             return 1;
         }

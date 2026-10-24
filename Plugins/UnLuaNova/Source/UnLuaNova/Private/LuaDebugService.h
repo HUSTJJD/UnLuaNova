@@ -79,6 +79,35 @@ namespace UnLuaNova
         // Release a stopped VM. Safe to call from another thread.
         void Continue();
 
+        /**
+         * Ask for a stop at the next line - the DAP `pause` request.
+         *
+         * Only meaningful while blocked: there is no way to interrupt a VM that is
+         * happily running, so this arms whatever the backend needs for the *next* line
+         * to be a stop, and the stop happens shortly after. Call it from the thread that
+         * owns the lua_State (AsyncTask(GameThread)) - it touches VM state.
+         */
+        void RequestPause();
+        bool IsPauseRequested() const { return bPauseRequested; }
+
+        /**
+         * Evaluate an expression, DAP `evaluate`.
+         *
+         * While paused, FrameIndex selects whose locals the expression can see: the chunk
+         * is compiled as
+         *     return (function(<locals...>) return <expr> end)(...)
+         * and called with that frame's locals, so `self.HP` and `i + 1` do what they look
+         * like they do. Upvalues are not captured - they need the function object on the
+         * stack and that is a per-backend spelling nobody here needs yet.
+         *
+         * Not paused (or FrameIndex < 0) means evaluate against globals only, which is
+         * what a watch/repl expression wants when nothing is stopped.
+         *
+         * Returns false with OutError filled on a compile or runtime error; the Lua stack
+         * is restored to where it was either way.
+         */
+        bool Evaluate(const FString& Expression, int32 FrameIndex, FString& OutValue, FString& OutError);
+
         // Whether a stop should spin until Continue() is called. Off by default: blocking
         // the game thread while waiting for an external front end would hang the editor,
         // so this is opt-in for out-of-process tooling only.
@@ -102,6 +131,7 @@ namespace UnLuaNova
         bool bPaused = false;
         bool bSingleStep = false;
         bool bBlocking = false;
+        bool bPauseRequested = false;
         int32 HitCount = 0;
     };
 }

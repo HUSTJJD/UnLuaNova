@@ -29,7 +29,9 @@
 #include "UnLuaNovaLegacy.h"
 #include "UnLuaNovaLib.h"
 #include "UnLuaNovaSettings.h"
+#include "UnLuaNovaBase.h"   // UNLUANOVA_HAS_STDLIB_*（由 Build.cs 定义）
 #include "LuaBackend.h"
+#include "LuaLib_Timer.h"
 #include "LuaMemoryStats.h"
 #include "LuaProfiler.h"
 #include "UnLuaNovaSandbox.h"
@@ -245,6 +247,10 @@ namespace UnLuaNova
             UNLUANOVA_SETUP_GC(L);
         }
 
+        // Created after the setup above so it starts in the mode the VM was actually
+        // configured for. It does nothing per frame until someone asks for TimeSliced.
+        GcScheduler = new FLuaGcScheduler(L);
+
         FUnLuaNovaDelegates::OnPreStaticallyExport.Broadcast();
 
         // register statically exported classes
@@ -263,6 +269,16 @@ namespace UnLuaNova
             Enum->Register(L);
 
         UnLuaNovaLib::Open(L);
+
+        // 内建（native）模块：require('UnLuaNova.Timer') 走 LoadFromBuiltinLibs 拿到这里注册的
+        // 加载器。计时器必须由 C++ 持有到期时间，是因为它要用世界时间 —— 见
+        // UUnLuaNovaTimerSubsystem 的头注释。
+        //
+        // 开关是编译期的：关掉就一个字都不注册，require 直接失败、HasFeature 回答 false，
+        // 而不是"注册了但里面空转"。
+#if UNLUANOVA_HAS_STDLIB_TIMER
+        AddBuiltInLoader(TEXT("UnLuaNova.Timer"), UnLuaNova::LuaTimerLib::Open);
+#endif
 
         OnCreated.Broadcast(*this);
         FUnLuaNovaDelegates::OnLuaStateCreated.Broadcast(L);
@@ -303,6 +319,7 @@ namespace UnLuaNova
         delete PropertyRegistry;
         delete DanglingCheck;
         delete DeadLoopCheck;
+        delete GcScheduler;
 
         if (!IsEngineExitRequested() && Manager)
         {
@@ -556,26 +573,46 @@ namespace UnLuaNova
 
         static UClass* InterfaceClass = UUnLuaNovaInterface::StaticClass();
         const bool bImplUnluaInterface = Class->ImplementsInterface(InterfaceClass);
+        const bool bDynamicBinding = GLuaDynamicBinding.IsValid(Class);
+
+        // 数据驱动绑定：没实现接口的对象要不要也问 locator 要模块名
+        // （ini 的 ClassModuleBindings / Actor 上的 UUnLuaNovaBindingComponent），
+        // 由配置决定而不是代码里的常量 —— 见 UUnLuaNovaSettings::bDataDrivenBinding。
+        // 默认关，所以老行为逐字不变。
+        const bool bCanLocateWithoutInterface =
+            ModuleLocator
+            && GetDefault<UUnLuaNovaSettings>()
+            && GetDefault<UUnLuaNovaSettings>()->bDataDrivenBinding;
 
         if (IsInAsyncLoadingThread())
         {
             // avoid adding too many objects, affecting performance.
-            if (bImplUnluaInterface || (!bImplUnluaInterface && GLuaDynamicBinding.IsValid(Class)))
+            if (bImplUnluaInterface || bDynamicBinding || bCanLocateWithoutInterface)
             {
                 // all bind operation should be in game thread, include dynamic bind
                 FScopeLock Lock(&CandidatesLock);
                 Candidates.AddUnique(Object);
-                return false;
             }
+            return false;
         }
 
         if (!bImplUnluaInterface)
         {
             // dynamic binding
-            if (!GLuaDynamicBinding.IsValid(Class))
-                return false;
+            if (bDynamicBinding)
+                return GetManager()->Bind(Object, *GLuaDynamicBinding.ModuleName, GLuaDynamicBinding.InitializerTableRef);
 
-            return GetManager()->Bind(Object, *GLuaDynamicBinding.ModuleName, GLuaDynamicBinding.InitializerTableRef);
+            // 数据驱动绑定：模块名由 locator 决定，拿不到就不绑（与旧行为一致）
+            if (bCanLocateWithoutInterface)
+            {
+                const auto ModuleName = ModuleLocator->Locate(Object);
+                if (ModuleName.IsEmpty())
+                    return false;
+
+                return GetManager()->Bind(Object, *ModuleName, GLuaDynamicBinding.InitializerTableRef);
+            }
+
+            return false;
         }
 
         if (Class->GetName().Contains(TEXT("SKEL_")))
@@ -665,6 +702,59 @@ namespace UnLuaNova
     {
         lua_gc(L, LUA_GCCOLLECT, 0);
         lua_gc(L, LUA_GCCOLLECT, 0);
+
+        // Keep the scheduler's bookkeeping honest: a manual collect settles debt the
+        // scheduler would otherwise still try to pay off over the next few frames.
+        if (GcScheduler)
+            GcScheduler->Collect();
+    }
+
+    void FLuaEnv::SetGCMode(ELuaGcMode InMode)
+    {
+        if (GcScheduler)
+            GcScheduler->SetMode(InMode);
+    }
+
+    ELuaGcMode FLuaEnv::GetGCMode() const
+    {
+        return GcScheduler ? GcScheduler->GetMode() : ELuaGcMode::Automatic;
+    }
+
+    void FLuaEnv::SetGCStepBudget(int64 BytesPerFrame)
+    {
+        if (GcScheduler)
+            GcScheduler->SetMaxStepBytesPerFrame(BytesPerFrame);
+    }
+
+    void FLuaEnv::SetGCStepMultiplier(int32 Percent)
+    {
+        if (GcScheduler)
+            GcScheduler->SetStepMultiplier(Percent);
+    }
+
+    void FLuaEnv::SetGCHardLimit(int64 Bytes)
+    {
+        if (GcScheduler)
+            GcScheduler->SetHardLimitBytes(Bytes);
+    }
+
+    void FLuaEnv::TickGC(float DeltaSeconds)
+    {
+        if (GcScheduler)
+            GcScheduler->Tick(DeltaSeconds);
+    }
+
+    const FLuaGcScheduler::FStats& FLuaEnv::GetGCStats() const
+    {
+        static const FLuaGcScheduler::FStats Empty;
+        return GcScheduler ? GcScheduler->GetStats() : Empty;
+    }
+
+    void FLuaEnv::OnEndFrame()
+    {
+        // Nothing to do in the default mode; the call is cheap enough to leave
+        // unconditional rather than add/remove the delegate on every mode switch.
+        TickGC();
     }
 
     void FLuaEnv::HotReload()
@@ -1026,6 +1116,10 @@ namespace UnLuaNova
     FORCEINLINE void FLuaEnv::RegisterDelegates()
     {
         OnAsyncLoadingFlushUpdateHandle = FCoreDelegates::OnAsyncLoadingFlushUpdate.AddRaw(this, &FLuaEnv::OnAsyncLoadingFlushUpdate);
+        // The per-frame GC slice needs a per-frame callback. OnEndFrame rather than a
+        // world tick: it also runs in PIE-less editor worlds and in standalone games
+        // between level loads, none of which have a world ticking every frame.
+        OnEndFrameHandle = FCoreDelegates::OnEndFrame.AddRaw(this, &FLuaEnv::OnEndFrame);
         GUObjectArray.AddUObjectDeleteListener(this);
         bObjectArrayListenerRegistered = true;
     }
@@ -1033,6 +1127,7 @@ namespace UnLuaNova
     FORCEINLINE void FLuaEnv::UnRegisterDelegates()
     {
         FCoreDelegates::OnAsyncLoadingFlushUpdate.Remove(OnAsyncLoadingFlushUpdateHandle);
+        FCoreDelegates::OnEndFrame.Remove(OnEndFrameHandle);
         if (!bObjectArrayListenerRegistered)
             return;
         GUObjectArray.RemoveUObjectDeleteListener(this);

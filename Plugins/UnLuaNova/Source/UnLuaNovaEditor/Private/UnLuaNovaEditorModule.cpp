@@ -20,6 +20,9 @@
 #include "BlueprintEditorModule.h"
 #include "UnLuaNovaIntelliSenseGenerator.h"
 #include "UnLuaNova.h"
+#include "UnLuaNovaBase.h"   // LogUnLuaNova
+#include "UnLuaNovaSettings.h"   // 特性开关（bDebugAdapter / DebugAdapterPort）
+#include "LuaDebugAdapter.h"
 #include "ISettingsModule.h"
 #include "ISettingsSection.h"
 #include "UnLuaNovaEditorSettings.h"
@@ -68,10 +71,20 @@ public:
         UPackage::PackageSavedEvent.AddRaw(this, &FUnLuaNovaEditorModule::OnPackageSaved);
 #endif
         SetupPackagingSettings();
+        RegisterDapCommand();
     }
 
     virtual void ShutdownModule() override
     {
+        if (FLuaDebugAdapter::Get().IsRunning())
+            FLuaDebugAdapter::Get().StopServer();
+
+        if (DapCommand)
+        {
+            IConsoleManager::Get().UnregisterConsoleObject(DapCommand);
+            DapCommand = nullptr;
+        }
+
         FUnLuaNovaEditorCommands::Unregister();
         FCoreDelegates::GetOnPostEngineInit().RemoveAll(this);
         UnregisterSettings();
@@ -100,9 +113,84 @@ private:
         BlueprintToolbar->Initialize();
         AnimationBlueprintToolbar->Initialize();
         FUnLuaNovaIntelliSenseGenerator::Get()->Initialize();
+        MaybeAutoGenerateIntelliSense();
 
         IMainFrameModule& MainFrameModule = FModuleManager::LoadModuleChecked<IMainFrameModule>(TEXT("MainFrame"));
         MainFrameModule.OnMainFrameCreationFinished().AddRaw(this, &FUnLuaNovaEditorModule::OnMainFrameCreationFinished);
+    }
+
+    /**
+     * lua.dap —— 把 headless 的 FLuaDebugService 暴露成 DAP 服务，IDE 直接 attach。
+     *
+     * FLuaDebugService 刻意不带 socket / 线协议（"that belongs in the DAP layer"），
+     * 缺的这一层在 FLuaDebugAdapter 里。命令只是开关，协议实现不在本文件。
+     */
+    void RegisterDapCommand()
+    {
+        DapCommand = IConsoleManager::Get().RegisterConsoleCommand(
+            TEXT("lua.dap"),
+            TEXT("Lua DAP server for IDE attach. usage: lua.dap start [port] | stop | status"),
+            FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaEditorModule::OnLuaDapCommand),
+            ECVF_Default);
+    }
+
+    void OnLuaDapCommand(const TArray<FString>& Args)
+    {
+        auto& Adapter = FLuaDebugAdapter::Get();
+
+        if (Args.Num() == 0 || Args[0] == TEXT("status"))
+        {
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.dap: %s (port=%d)"),
+                Adapter.IsRunning() ? TEXT("running") : TEXT("stopped"), Adapter.GetPort());
+            return;
+        }
+
+        if (Args[0] == TEXT("start"))
+        {
+            // 端口默认值来自设置（UUnLuaNovaSettings::DebugAdapterPort），命令行参数只做临时覆盖
+            const int32 DefaultPort = GetDefault<UUnLuaNovaSettings>()->DebugAdapterPort;
+            const int32 Port = Args.Num() > 1 ? FCString::Atoi(*Args[1]) : DefaultPort;
+
+            // 和其他特性一样走统一开关：关掉就起不来，而不是"起来了但没人连"
+            if (!GetDefault<UUnLuaNovaSettings>()->bDebugAdapter)
+            {
+                UE_LOG(LogUnLuaNova, Warning,
+                    TEXT("lua.dap: 该特性已关闭（DefaultUnLuaNovaSettings.ini 的 bDebugAdapter=false）"));
+                return;
+            }
+
+            Adapter.Start(Port);
+            return;
+        }
+
+        if (Args[0] == TEXT("stop"))
+        {
+            Adapter.StopServer();
+            return;
+        }
+
+        UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.dap [start [port] | stop | status]"));
+    }
+
+    /**
+     * 首次启动自动导出一次 IntelliSense。
+     *
+     * 判据是"产物目录在不在"，不是"这次会话要不要刷新"：已经生成过就交给工具栏与
+     * 目录监听去做增量，避免每次开编辑器都全量导出一遍蓝图表。
+     */
+    void MaybeAutoGenerateIntelliSense() const
+    {
+        const auto* Settings = GetDefault<UUnLuaNovaEditorSettings>();
+        if (!Settings || !Settings->bGenerateIntelliSense || !Settings->bAutoGenerateIntelliSenseOnStartup)
+            return;
+
+        const auto& Generator = FUnLuaNovaIntelliSenseGenerator::Get();
+        const FString& OutputDir = Generator->GetOutputDir();
+        if (OutputDir.IsEmpty() || IFileManager::Get().DirectoryExists(*OutputDir))
+            return;
+
+        UE_LOG(LogUnLuaNova, Display, TEXT("IntelliSense: first-time generation into %s"), *OutputDir);
+        Generator->UpdateAll();
     }
 
     void OnMainFrameCreationFinished(TSharedPtr<SWindow> InRootWindow, bool bIsNewProjectWindow)
@@ -189,22 +277,27 @@ private:
     {
         auto ScriptPaths = TArray<FString>{TEXT("Script"), TEXT("../Plugins/UnLuaNova/Content/Script")};
 
+        // 凡名字以 UnLuaNova 开头、且带 Content/Script 的插件，都把它的脚本目录 stage 进去。
+        //
+        // 早先这里只认 "UnLuaNovaExtensions"，于是嵌套布局（submodule 是"工程套插件"，
+        // 真正的插件在 Plugins/UnLuaNova/Plugins/UnLuaNova/）下**插件自己的运行时模块
+        // 会被漏掉**：编辑器里一切正常，打包后 require('UnLuaNova.Vector') 才失败。
+        // 按插件实例枚举而不是拼字符串，工程套插件 / 插件套插件都不会漏。
         const auto Plugins = IPluginManager::Get().GetEnabledPlugins();
         for (const auto Plugin : Plugins)
         {
             if (!Plugin->CanContainContent())
                 continue;
 
-            const auto ContentDir = Plugin->GetContentDir();
-            if (!ContentDir.Contains("UnLuaNovaExtensions"))
+            if (!Plugin->GetName().StartsWith(TEXT("UnLuaNova")))
                 continue;
 
-            auto ScriptPath = ContentDir / "Script";
+            auto ScriptPath = Plugin->GetContentDir() / "Script";
             if (!FPaths::DirectoryExists(ScriptPath))
                 continue;
 
             if (FPaths::MakePathRelativeTo(ScriptPath, *FPaths::ProjectContentDir()))
-                ScriptPaths.Add(ScriptPath);
+                ScriptPaths.AddUnique(ScriptPath);
         }
 
         const auto PackagingSettings = GetMutableDefault<UProjectPackagingSettings>();
@@ -246,6 +339,7 @@ private:
     TSharedPtr<FUnLuaNovaIntelliSenseGenerator> IntelliSenseGenerator;
     TSharedPtr<ISlateStyle> Style;
     TMap<UPackage*, UClass*> SuspendedPackages;
+    IConsoleObject* DapCommand = nullptr;
 };
 
 #undef LOCTEXT_NAMESPACE

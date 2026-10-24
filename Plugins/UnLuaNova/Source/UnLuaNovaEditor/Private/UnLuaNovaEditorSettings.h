@@ -36,7 +36,9 @@ enum class EHotReloadMode : uint8
     Never
 };
 
-UCLASS(config=UnLuaNovaEditor, defaultconfig, meta=(DisplayName="UnLuaNovaEditor"))
+// config=UnLuaNova：和运行时设置类指向**同一份** Config/DefaultUnLuaNova.ini（见上同款注释）。
+// 两个 section 同处一个文件：运行时与编辑器分属两个模块，但配置只该有一个入口。
+UCLASS(config=UnLuaNova, defaultconfig, meta=(DisplayName="UnLuaNovaEditor"))
 class UNLUANOVAEDITOR_API UUnLuaNovaEditorSettings : public UObject
 {
     GENERATED_BODY()
@@ -50,6 +52,16 @@ public:
     UPROPERTY(config, EditAnywhere, Category = "Coding")
     bool bGenerateIntelliSense = true;
 
+    /**
+     * 产物目录还不存在时，编辑器启动就自动导出一次 IntelliSense。
+     *
+     * 省掉"装完插件还得知道要去工具栏点一下"这一步 —— 这是新用户最常卡住的地方：
+     * 没产物就没有补全，而"没有补全"往往被误判成"这个方案不好用"。
+     * 只在**首次**跑（目录已存在就交给工具栏 / 目录监听做增量），不会拖慢每次启动。
+     */
+    UPROPERTY(config, EditAnywhere, Category = "Coding")
+    bool bAutoGenerateIntelliSenseOnStartup = true;
+
     /** Whether or not startup UnLuaNova module on game start. (Requires restart to take effect) */
     UPROPERTY(config, EditAnywhere, Category = "Build")
     bool bAutoStartup = true;
@@ -57,6 +69,9 @@ public:
     /** Enable UnLuaNova debug routine codes. (Requires restart to take effect) */
     UPROPERTY(config, EditAnywhere, Category = "Build")
     bool bEnableDebug = false;
+
+    // 特性开关**不在这里**：统一在 UUnLuaNovaSettings（Config/DefaultUnLuaNovaSettings.ini）。
+    // 这个文件只放编辑器行为与构建配置（热重载模式、智能提示、后端选择…）。
 
     /** Enable persistent buffer for UFunction's parameters. (Requires restart to take effect) */
     UPROPERTY(config, EditAnywhere, Category = "Build")

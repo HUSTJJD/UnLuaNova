@@ -15,6 +15,7 @@
 #include "LuaDebugService.h"
 
 #include "LuaVmHooks.h"
+#include "UnLuaNovaDebugBase.h"
 
 #include "HAL/PlatformProcess.h"
 #include "Logging/LogMacros.h"
@@ -160,10 +161,23 @@ namespace UnLuaNova
 
         // Trust the VM when it says we are on a breakpoint; otherwise fall back to
         // matching source:line ourselves, which is the only mechanism plain Lua has.
-        if (!bAtBreakpoint && !bSingleStep && !MatchesBreakpoint(Source, Line))
+        // bPauseRequested is the fourth way in: `pause` asked for the next line to stop.
+        if (!bAtBreakpoint && !bPauseRequested && !bSingleStep && !MatchesBreakpoint(Source, Line))
             return;
 
         ++HitCount;
+
+        if (bPauseRequested)
+        {
+            bPauseRequested = false;
+#if UNLUANOVA_HAS_BREAKPOINT
+            // The request armed a single step to get here. Disarm it, or the VM stops on
+            // every following line until someone calls Continue() again.
+            if (!bSingleStep)
+                UNLUANOVA_SINGLESTEP(L, 0);
+#endif
+        }
+
         CaptureStackTrace(L);
         CaptureLocals(L);
         bPaused = true;
@@ -259,5 +273,110 @@ namespace UnLuaNova
     void FLuaDebugService::Continue()
     {
         bPaused = false;
+    }
+
+    void FLuaDebugService::RequestPause()
+    {
+        bPauseRequested = true;
+
+#if UNLUANOVA_HAS_BREAKPOINT
+        // Luau's debug hook fires only at breakpoints and single steps - unlike plain
+        // Lua's line hook, which fires constantly - so the only way to make the *next*
+        // line a stop is to arm a single step. OnStop disarms it the moment it lands.
+        if (Attached)
+            UNLUANOVA_SINGLESTEP(Attached, 1);
+#endif
+        // Plain Lua needs nothing: FLuaVmHooks already installed a LUA_MASKLINE hook,
+        // so OnStop runs on the next line and sees the flag.
+    }
+
+    bool FLuaDebugService::Evaluate(const FString& Expression, int32 FrameIndex, FString& OutValue, FString& OutError)
+    {
+        OutValue.Empty();
+        OutError.Empty();
+
+        if (!Attached)
+        {
+            OutError = TEXT("debug service is not attached");
+            return false;
+        }
+
+        lua_State* L = Attached;
+        const int32 Top = lua_gettop(L);
+
+        // Locals of the requested frame become the parameters of a wrapper function, so
+        // the expression can name them. Two passes: names first (the VM pops each value
+        // as it hands it over), then the values in the same order left on the stack.
+        TArray<FString> Names;
+        if (bPaused && FrameIndex >= 0)
+        {
+            const int32 Level = FMath::Min(FrameIndex, 127);
+
+            for (int32 Index = 1; Index < 64; ++Index)
+            {
+                const char* Name = nullptr;
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+                Name = lua_getlocal(L, Level, Index);
+#else
+                lua_Debug Ar;
+                if (!lua_getstack(L, Level, &Ar))
+                    break;
+                Name = lua_getlocal(L, &Ar, Index);
+#endif
+                if (!Name)
+                    break;
+
+                Names.Add(ANSI_TO_TCHAR(Name));
+                lua_pop(L, 1); // the value it pushed; the name is what we wanted
+            }
+
+            for (int32 Index = 0; Index < Names.Num(); ++Index)
+            {
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+                lua_getlocal(L, Level, Index + 1);
+#else
+                lua_Debug Ar;
+                if (!lua_getstack(L, Level, &Ar))
+                    break;
+                lua_getlocal(L, &Ar, Index + 1);
+#endif
+            }
+        }
+
+        FString Source = TEXT("return (function(");
+        for (int32 Index = 0; Index < Names.Num(); ++Index)
+        {
+            if (Index > 0)
+                Source += TEXT(", ");
+            Source += Names[Index];
+        }
+        Source += TEXT(") return ");
+        Source += Expression;
+        Source += TEXT(" end)(...)");
+
+        const FTCHARToUTF8 Bytes(*Source);
+        if (UNLUANOVA_LOAD(L, "=evaluate", Bytes.Get(), Bytes.Length()) != LUA_OK)
+        {
+            OutError = FString::Printf(TEXT("compile error: %s"), ANSI_TO_TCHAR(lua_tostring(L, -1)));
+            lua_settop(L, Top);
+            return false;
+        }
+
+        // [args...][chunk] -> [chunk][args...]
+        lua_insert(L, Top + 1);
+
+        if (lua_pcall(L, Names.Num(), 1, 0) != LUA_OK)
+        {
+            OutError = FString::Printf(TEXT("runtime error: %s"), ANSI_TO_TCHAR(lua_tostring(L, -1)));
+            lua_settop(L, Top);
+            return false;
+        }
+
+        FLuaDebugValue Value;
+        Value.Build(L, -1, 1);
+        OutValue = Value.ToString();
+
+        lua_settop(L, Top);
+        return true;
     }
 }

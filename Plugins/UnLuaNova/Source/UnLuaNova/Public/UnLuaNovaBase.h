@@ -17,6 +17,12 @@
 #include "CoreUObject.h"
 #include "Runtime/Launch/Resources/Version.h"
 
+// --- 内置库开关（编译期） ---------------------------------------------------
+// UNLUANOVA_HAS_STDLIB_TIMER / _EVENT / _OOP 只有一个来源：UnLuaNova.Build.cs
+// 读 Config/DefaultUnLuaNova.ini 的 bTimer / bEvent / bOOP（见 Build.cs 的 loadFeature）。
+// 这里刻意不写 #ifndef 默认值 —— 那样等于"同一件事两个答案"，
+// 而且宏没定义时会静默变成"库被打开"，与本意相反。没定义就是构建脚本没跑。
+
 UNLUANOVA_API DECLARE_LOG_CATEGORY_EXTERN(LogUnLuaNova, Log, All);
 UNLUANOVA_API DECLARE_LOG_CATEGORY_EXTERN(UnLuaNovaDelegate, Log, All);
 

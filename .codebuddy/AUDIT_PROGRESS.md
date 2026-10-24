@@ -13,7 +13,7 @@
 所以这一轮交付的是"照现有 spec 模式写出来的代码 + 文档"，**必须先
 `.\Tools\RunTests.ps1 -Backend Both -BuildOnly` 过一遍编译**，再看行为。
 
-已收掉的尾巴：`_scan_log.py` 已 `git rm --cached`；`Config/DefaultUnLuaNovaEditor.ini`
+已收掉的尾巴：`_scan_log.py` 已 `git rm --cached`；`Config/DefaultUnLuaNova.ini`
 的 `LuaBackend=Luau` 确认是**当前 HEAD 的原值**（`f88325ea` 引入，且 Luau 已改为 UBT
 源码编译，`ThirdParty/LuauLib/Generated/` 有 61 个文件），不是被中断的运行留下的脏值。
 
@@ -206,7 +206,7 @@
  M .codebuddy/AUDIT_PROGRESS.md                                   ← 本文档
  D .codebuddy/_scan_log.py                                        ← 我建的临时脚本，被别人误提交后又删了；需要 git rm 或 restore
  M CHANGELOG.md                                                   ← 批次 3 + 3 个缺陷修复的条目
- M Config/DefaultUnLuaNovaEditor.ini                              ← LuaBackend=Lua（确认是不是原值，别直接提交）
+ M Config/DefaultUnLuaNova.ini                              ← LuaBackend=Lua（确认是不是原值，别直接提交）
  M Plugins/.../Commandlets/UnLuaNovaShowcaseDressingCommandlet.cpp ← SkyAtmosphere include 修复（关键）
 ```
 
@@ -243,7 +243,7 @@ Get-Process UnrealEditor-Cmd -ErrorAction SilentlyContinue
 git rm --cached .codebuddy/_scan_log.py
 
 # 3) 确认 ini 后端是原值（LuaBackend=Lua），不是被中断的运行留在 Luau
-Select-String Config\DefaultUnLuaNovaEditor.ini -Pattern LuaBackend
+Select-String Config\DefaultUnLuaNova.ini -Pattern LuaBackend
 
 # 4) 复跑两处修正 + 刷新基线 + 出报告（约 25 分钟）
 powershell -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -Backend Both -UpdateBaseline

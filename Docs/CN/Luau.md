@@ -10,7 +10,7 @@ description: UnLuaNova 的 Luau 后端：立即可用的语言特性、类型声
 
 ## 切换后端
 
-在 `Config/DefaultUnLuaNovaEditor.ini` 里选择，然后**重新编译**：
+在 `Config/DefaultUnLuaNova.ini` 里选择，然后**重新编译**：
 
 ```ini
 [/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]

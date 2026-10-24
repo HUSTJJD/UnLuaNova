@@ -8,7 +8,111 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
 
 ## [Unreleased]
 
-还没有内容。改动累积到这里，下一个版本发布时再把这一节整体换成版本号。
+### Added
+- **Lua 声明式网络**（`Public/UnLuaNovaNet.h` / `UnLuaNovaNetDecl.h` /
+  `UnLuaNovaNetPayload.h` / `UnLuaNovaReplicationComponent.h`）
+  - **RPC**：Lua 模块声明 `M.ServerRPC` / `ClientRPC` / `MulticastRPC`，自动生成带
+    `FUNC_Net` 的 UFunction。此前 `ULuaFunction::IsOverridable` 明确排除 `FUNC_Net`，
+    Lua 只能重新实现引擎已声明的 RPC，不能自己声明
+  - **复制属性**：`M:GetLifetimeReplicatedProps()` 声明字段与条件，由
+    `UUnLuaNovaReplicationComponent` 承载（复制属性必须挂在真正的
+    `UPROPERTY(Replicated)` 上，这是运行时唯一造不出来的东西，所以用一个组件而不是基类）
+  - 实现复用 `FLuaOverrides::Override` 已有的 `bAddNew` 分支，PIE 退出由
+    `RestoreOverrides` 自动还原 —— 不需要 slua 那套运行时改 UClass + 清理逻辑
+  - 参数类型与条件一律用**字符串**声明，声明层因此不需要 UHT 参与
+  - 文档 [Lua 声明式网络](Docs/CN/LuaNetworking.md)；其中"已知边界"记了两点：
+    RPC 的跨端行为待 C/S PIE 验证（`RPCId` 两端是否一致），复制属性为整体发送且条件单一
+- **从 C++ 类型化调用 Lua 成员函数**（`Public/UnLuaNovaOverrider.h`）
+  - `UnLuaNova::CallLuaFunction<Ret>(Object, Name, Args...)`，另有
+    `CallLuaFunctionVoid` / `CallLuaFunctionIfExist`。此前引擎侧只能调**全局**函数
+    （`Call` / `CallTableFunc`），没有"按对象调用并按类型取回返回值"的入口
+  - 实现建立在既有的 `PushFunction` / `CallFunction` 之上，因此与 Lua 侧共享同一套
+    self 表、Super 链与 `ReportLuaCallError`，不会各自漂移
+  - 另附文档 [Lua 驱动对象与 C++ 调 Lua](Docs/CN/LuaDrivenObjects.md)，其中记录了一个
+    已纠正的误判：**不需要 slua 那套 `ALua*` 平行基类** —— `ULuaFunction::IsOverridable`
+    认 `FUNC_BlueprintEvent`，原生类本来就可覆写，而"不建蓝图"本来就有
+    ini `ClassModuleBindings` / `IUnLuaNovaInterface` / `UnLuaNovaBindingComponent` 三条路
+- **显式 GC 可分片**：`FLuaGcScheduler` + `lua.gc slice/budget/mult/limit/stats`。
+  债务按**距上一次完整周期以来堆的增长**记账（不是每帧分配量 —— 否则"先建 4 MB 再整个
+  丢掉"的脚本永远不会被记账）；硬上限触发时改整轮回收。
+  **默认仍是 `Automatic` 且推荐保持**：这里本来没有周期性尖峰（`GC()` 的唯一调用方是
+  `lua.gc` 命令，两个后端本就在跑分代 / 增量），`slice` 会 `LUA_GCSTOP` 从而放弃 Lua 5.5
+  的 `LUA_GCGEN` 分代模式，只在过场 / 加载界面主动调 GC 时才划算。
+  不做多线程 GC，理由见[架构](Docs/CN/Architecture.md#垃圾回收)
+- **Profiler 按函数聚合**：`lua.profiler agg on|off` / `reset` / `top [n]` / `dump [file]`。
+  Self 时间自底向上排行，补 Insights 没有的"哪个函数最热"视角；CSV 便于 CI 跨提交对比。
+  该能力只在 Lua 5.5 后端给出 Self 时间 —— Luau 的 hook 分不出 call/return，只能采样
+- **DAP 补 `pause` 与 `evaluate`**：`pause` 让下一行成为停止点（Lua 无法从外部强行打断；
+  Luau 后端靠临时武装单步，落地即解除）；`evaluate` 按帧把局部变量编成形参求值，
+  未暂停时只对全局求值
+- **跨项目性能对照用例**：`UnLuaNova.Perf.BenchmarkParity`，用例名与迭代次数对齐
+  slua-unreal 的 `TestPerf` 表，产出 `Saved/Benchmark/parity-latest-<Backend>.csv`，
+  并额外跑两行 `ProcessEvent` 裸开销用于拆分"UE 调用成本"与"UnLuaNova 编组成本"
+- **文档**：新增 [对标 slua-unreal：差距与吸收](Docs/CN/Comparison_sluaunreal.md)，
+  逐项对照双方能力矩阵、写明哪三处不抄
+- **数据驱动绑定**：新增 `ULuaModuleLocator_ByBinding` 并设为默认定位器。对象到 Lua 模块的映射
+  可以不写一行 UE 侧代码：① `DefaultUnLuaNova.ini` 的 `ClassModuleBindings`（改配置即生效，
+  匹配沿继承链向上找，绑基类即覆盖蓝图子类）② 蓝图 Actor 上的 `UUnLuaNovaBindingComponent`
+  ③ 老路子 `IUnLuaNovaInterface`。"给不给没实现接口的对象绑"由配置项
+  `bDataDrivenBinding` 决定（**默认关**）—— 它是项目决策，不是某个 locator 子类的属性，
+  所以没有做成 C++ 里覆写的虚函数
+- **DAP 适配器**：`lua.dap start [port]`（默认 5699）。`FLuaDebugService` 刻意不带 socket
+  与线协议，缺的这层现在有了：VSCode 以 attach 方式连上即可断点 / 单步 / 看栈 / 看局部变量
+  （`initialize` / `attach` / `setBreakpoints` / `threads` / `stackTrace` / `scopes` /
+  `variables` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`）。
+  命中断点时游戏线程阻塞自旋等 `Continue()`；不支持 `pause` 与 `evaluate`
+- **IntelliSense 首次启动自动生成**：编辑器设置 `bAutoGenerateIntelliSenseOnStartup`（默认开），
+  产物目录不存在时启动即导出一次，之后仍交给工具栏与目录监听做增量
+- **内置库 `UnLuaNova.Timer`**（C++ 驱动）：`Set / Clear / Pause / IsValid / ClearAll / Time / Count`。
+  到期时间存在世界时间上（`GetTimeSeconds()`，受暂停与时间膨胀；`bUnscaled` 时取 `GetRealTimeSeconds()`），
+  只比较不累加；到期项先快照再回调；掉帧时按 `Interval` 追平并夹紧。
+  由 `UTickableWorldSubsystem` 驱动，经 `FLuaEnv::AddBuiltInLoader` 注册为内建模块
+- **内置库 `UnLuaNova.Event`**（纯 Lua）：`On / Once / Off / Emit / UnbindOwner / Count / Clear`。
+  快照广播（广播中增删不漏不重）、逐个 `pcall`（一个监听者报错不带崩整条）、
+  owner 弱键索引 + `UnbindOwner`（摘掉抓着已死对象的闭包，也是热重载后清残留的正解）
+- **内置库 `UnLuaNova.OOP`**（纯 Lua，可插拔）：`Class / New / Super / Is / IsClass / NameOf`。
+  单继承 + 方法查找沿父类链；`New` 从基类到子类依次调 `Ctor` 且参数透传；
+  `Class.Super` 显式可用。不提供多继承、不继承 UE 类型（那是 native 的 `UnLuaNova.Class()`）
+- **配置文件合并成一份**：`Config/DefaultUnLuaNova.ini`。两个设置类都改成 `Config=UnLuaNova`
+  （运行时 section 与编辑器 section 同处一个文件），不再有 `DefaultUnLuaNovaSettings.ini` /
+  `DefaultUnLuaNovaEditor.ini` 两份 —— 拆开之后"改一个开关该去哪个文件找"本身就成问题。
+  ⚠️ **破坏性变更**：`DefaultUnLuaNovaSettings.ini` / `DefaultUnLuaNovaEditor.ini` 不再读取，
+  不做兼容分支（配置入口只有一个，读的地方也就只该有一个）。升级请把配置迁到新文件。
+  所有读配置的 Build.cs（UnLuaNova / 三个扩展插件 / Demo / TestSuite）与 `Tools/RunTests.ps1`
+  已一并改到新文件
+- **插件自带默认值 ini**：`Plugins/UnLuaNova/Config/DefaultUnLuaNova.ini`，按注释写全默认值
+  （此前插件 Config/ 下只有 Localization 与 LuaTemplates，默认值只存在于 C++ 初始化器里
+  —— 等于"两处"，且装完插件看不见有哪些开关）。工程侧 ini 只写覆盖项
+- **特性开关统一格式**：全插件只有 `[/Script/UnLuaNova.UnLuaNovaSettings]` 一处定义特性开关，
+  键名一律 `b<CamelCase>`（`bTimer` / `bEvent` / `bOOP` / `bDataDrivenBinding` / `bDebugAdapter` /
+  `DebugAdapterPort`），查询名是去掉 `b` 的小写且大小写不敏感。
+  原先散在 `DefaultUnLuaNova.ini` 的 `bWithStdLibXxx` 全部并入，编辑器设置只留编辑器行为
+- **内置库可插拔**：`bTimer` / `bEvent` / `bOOP` 同时是编译期开关（Build.cs 读**同一份 ini、
+  同一批键名**生成 `UNLUANOVA_HAS_STDLIB_*`，这样"改一处"就够了）。
+  关掉后：native 库不注册、Lua 库 require 明确报错、`HasFeature` 回答 false。
+  宏**只有 Build.cs 一个来源**：`UnLuaNovaBase.h` 里的 `#ifndef` 兜底默认值已删除 ——
+  同一件事不该有两个答案，且"忘记定义"应表现为构建没跑
+- **`HasFeature` 改成一张特性表**（`Features[]`，每项一个取值函数）：后端能力（不可配置）
+  与配置开关（可配置）对外走同一个入口，加一个特性就是"设置类加 `b<Name>` + 表里加一行"
+- `UnLuaNova.HasFeature('event')` / `('oop')` / `('timer')`：内建模块也按能力暴露
+- **文档**：新增 [内置库](Docs/CN/StdLib.md)，写明"机制 vs 策略"的边界与下沉 C++ 的四条判据
+- **性能用例**：`Lua.Container.PointsAreCoplanar`（自动化 CSV 第八行）与关卡脚本里同名两行
+  —— 每轮"建 `TArray<FVector>` + 塞 8 个 `FVector` + 整包传给 UFunction"，
+  拆成"只建"与"建+传"两行计时，第二行减第一行 ≈ 调用成本
+
+### Changed
+- **默认模块定位器**由 `ULuaModuleLocator` 换成 `ULuaModuleLocator_ByBinding`。没配任何绑定时
+  行为逐字不变（接口优先、其余返回空串），已有项目无需改动
+- **`package.path` 改为按插件实例拼**，不再硬编码 `Plugins/UnLuaNova/Content/Script/?.lua`。
+  硬编码的后果是"工程套插件"（真正的插件在 `Plugins/UnLuaNova/Plugins/UnLuaNova/`）时，
+  随包发布的模块（StringEx / Vector / Buffer / Input / HotReload / Event）全部 require 不到，
+  而扁平布局的本仓库一切正常，没人会发现。顺序不变：工程在前，插件在后
+- **用例**：`UnLuaNova.API.RuntimeModules` 补 Event 与 Timer；Event 断言的是手写版本最易错的
+  四件事（广播中增删、单个监听者报错、owner 摘除、Once 语义）
+- **打包 stage 路径按插件实例枚举**：原来只补名字含 `UnLuaNovaExtensions` 的插件，工程套插件
+  （真正的插件在 `Plugins/<名>/Plugins/<名>/`）时插件自己的运行时模块会被漏掉，
+  表现为编辑器一切正常、打包后 `require` 失败。现在凡名字以 `UnLuaNova` 开头且带
+  `Content/Script` 的已启用插件都会补上
 
 ---
 
@@ -84,7 +188,7 @@ Lua 可观测性（Profiler、内存统计、headless 调试服务、沙盒、�
   脚本化的改写弄丢，所以 `RunTests.ps1` 在调用 `CheckLuaTypes.ps1` / `CheckLuauTypes.ps1`
   之前用 `Ensure-Utf8Bom` 检查并补回，而不是默认它还在
 - **切后端不再删 `Plugins/UnLuaNova/Intermediate/`**：`UnLuaNova.Build.cs` 把
-  `Config/DefaultUnLuaNovaEditor.ini` 登记进 `ExternalDependencies`，改 ini 即让 UBT 的
+  `Config/DefaultUnLuaNova.ini` 登记进 `ExternalDependencies`，改 ini 即让 UBT 的
   makefile 失效，Build.cs 重新求值。以前 UBT 不盯着这个 ini，只能整目录删掉来逼它重编 ——
   75 MB、69 个 `.obj`，其中 62 个是跟后端无关的 Luau VM。现在只重编真正用到
   `UNLUANOVA_LUA_BACKEND` 的模块（切后端本身免不了重编：那两个后端的头文件不是同一份）

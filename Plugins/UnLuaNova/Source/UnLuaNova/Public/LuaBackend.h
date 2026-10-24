@@ -523,6 +523,26 @@ inline int lua_gc(lua_State* L, int What)
 	} while (false)
 #endif
 
+// One explicit incremental step, asked for in BYTES.
+//
+// Neither VM promises byte accuracy - plain Lua documents LUA_GCSTEP's data argument as
+// controlling the amount of work "in a non-specific way", and Luau reads it as kilobytes -
+// so callers pass bytes and this converts. FLuaGcScheduler is the only place that has to
+// know which backend it is talking to.
+//
+// Returns non-zero when the step finished a collection cycle, on both backends.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_GC_STEP_BYTES(L, Bytes) lua_gc(L, LUA_GCSTEP, FMath::Max<int32>(1, int32(int64(Bytes) >> 10)))
+#else
+#define UNLUANOVA_GC_STEP_BYTES(L, Bytes) lua_gc(L, LUA_GCSTEP, int32(Bytes))
+#endif
+
+// Heap size in bytes. LUA_GCCOUNT is whole Kbytes and LUA_GCCOUNTB the remainder below
+// 1K, which is the only way to see small heaps move at all - a 600-byte heap is 0 Kbytes
+// and would look frozen.
+#define UNLUANOVA_GC_HEAP_BYTES(L) \
+	((int64(lua_gc(L, LUA_GCCOUNT, 0)) << 10) + int64(lua_gc(L, LUA_GCCOUNTB, 0)))
+
 // --- coroutine resume ---------------------------------------------------------
 // Lua 5.4/5.5 report the number of results through an out param; Luau's lua_resume
 // takes only three arguments. Callers pass &NResults and it is simply ignored on Luau.

@@ -58,7 +58,8 @@ public class LuaProtobuf : ModuleRules
         //
         // Which backend is a compile-time choice owned by UnLuaNova, so read the same
         // key instead of naming one here.
-        var configFile = new FileReference(Path.Combine(Target.ProjectFile.Directory.FullName, "Config", "DefaultUnLuaNovaEditor.ini"));
+        // 全插件只有一个配置文件：Config/DefaultUnLuaNova.ini
+        var configFile = new FileReference(Path.Combine(Target.ProjectFile.Directory.FullName, "Config", "DefaultUnLuaNova.ini"));
         var config = new ConfigHierarchy(new[] { FileReference.Exists(configFile) ? new ConfigFile(configFile) : new ConfigFile() });
         const string section = "/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings";
 

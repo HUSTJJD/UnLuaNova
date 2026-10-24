@@ -1,0 +1,300 @@
+// Tencent is pleased to support the open source community by making UnLuaNova available.
+//
+// Copyright (C) 2019 Tencent. All rights reserved.
+//
+// Licensed under the MIT License (the "License");
+// you may obtain a copy of the License at
+//
+// http://opensource.org/MIT
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and limitations under the License.
+
+// Lua-declared networking: RPCs and replicated fields.
+//
+// What these cases can and cannot prove. They can prove the declarations are parsed, the
+// UFunctions are built with the right flags and typed parameters, they land in the class's
+// function map, and they are removed again on teardown. They cannot prove an RPC actually
+// reaches the other peer - that needs a client/server PIE, and it depends on the engine
+// assigning (or us assigning) matching RPC ids on both ends. That last part is the one
+// thing here that still needs a networked run; see the "已知边界" note in the docs.
+
+#include "UnLuaNovaBase.h"
+#include "LuaBackend.h"
+#include "LuaEnv.h"
+#include "LuaFunction.h"
+#include "UnLuaNovaManager.h"
+#include "UnLuaNovaNet.h"
+#include "UnLuaNovaTestHelpers.h"
+#include "Misc/AutomationTest.h"
+#include "UObject/UnrealType.h"
+#include "Perfs/UnLuaNovaBenchmarkProxy.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+static const TCHAR* SpecNetModuleName = TEXT("Spec.NetModule");
+
+namespace
+{
+    int SpecNetModuleLoader(lua_State* L)
+    {
+        lua_newtable(L);                                   // M
+
+        lua_newtable(L);                                   // M.ServerRPC
+        lua_pushboolean(L, 1);
+        lua_setfield(L, -2, "Ping");                       // Ping = true -> unreliable
+        lua_newtable(L);                                   // { Reliable = true, Params = {...} }
+        lua_pushboolean(L, 1);
+        lua_setfield(L, -2, "Reliable");
+        lua_newtable(L);
+        lua_pushstring(L, "Int");
+        lua_rawseti(L, -2, 1);
+        lua_pushstring(L, "Str");
+        lua_rawseti(L, -2, 2);
+        lua_setfield(L, -2, "Params");
+        lua_setfield(L, -2, "Chat");
+        lua_setfield(L, -2, "ServerRPC");
+
+        lua_newtable(L);
+        lua_pushboolean(L, 1);
+        lua_setfield(L, -2, "ShowDamage");
+        lua_setfield(L, -2, "ClientRPC");
+
+        lua_newtable(L);
+        lua_pushboolean(L, 1);
+        lua_setfield(L, -2, "Explode");
+        lua_setfield(L, -2, "MulticastRPC");
+
+        lua_pushcfunction(L, [](lua_State* Inner) -> int
+        {
+            lua_pushboolean(Inner, 1);
+            lua_setglobal(Inner, "SpecNetPropsCalled");
+            lua_newtable(Inner);
+            lua_newtable(Inner);
+            lua_pushstring(Inner, "HP");
+            lua_setfield(Inner, -2, "Name");
+            lua_pushstring(Inner, "Float");
+            lua_setfield(Inner, -2, "Type");
+            lua_rawseti(Inner, -2, 1);
+            lua_newtable(Inner);
+            lua_pushstring(Inner, "Name");
+            lua_setfield(Inner, -2, "Name");
+            lua_pushstring(Inner, "String");
+            lua_setfield(Inner, -2, "Type");
+            lua_pushstring(Inner, "OwnerOnly");
+            lua_setfield(Inner, -2, "Condition");
+            lua_rawseti(Inner, -2, 2);
+            return 1;
+        });
+        lua_setfield(L, -2, "GetLifetimeReplicatedProps");
+
+        return 1;
+    }
+
+    UFunction* FindOwn(UClass* Class, const TCHAR* Name)
+    {
+        return Class->FindFunctionByName(FName(Name), EIncludeSuperFlag::ExcludeSuper);
+    }
+}
+
+BEGIN_DEFINE_SPEC(FNetSpec, "UnLuaNova.API.Net", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+    TSharedPtr<UnLuaNova::FLuaEnv> Env;
+    lua_State* L;
+    UObject* Bound;
+END_DEFINE_SPEC(FNetSpec)
+
+void FNetSpec::Define()
+{
+    BeforeEach([this]
+    {
+        Env = MakeShared<UnLuaNova::FLuaEnv>();
+        L = Env->GetMainState();
+        Env->AddBuiltInLoader(SpecNetModuleName, SpecNetModuleLoader);
+
+        Bound = NewObject<AUnLuaBenchmarkProxy>();
+        Bound->AddToRoot();
+        Env->GetManager()->Bind(Bound, SpecNetModuleName);
+    });
+
+    AfterEach([this]
+    {
+        // Take the RPCs back off the class. Without this the UFunctions stay on
+        // AUnLuaBenchmarkProxy for the rest of the process and the next case sees them.
+        ULuaFunction::RestoreOverrides(Bound->GetClass());
+        UnLuaNova::FUnLuaNovaNet::Cleanup();
+
+        if (Bound)
+        {
+            Bound->RemoveFromRoot();
+            Bound = nullptr;
+        }
+        Env.Reset();
+        L = nullptr;
+    });
+
+    Describe(TEXT("类型与条件解析"), [this]()
+    {
+        It(TEXT("参数类型名解析，且大小写不敏感"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::ELuaNetParamType Type = UnLuaNova::ELuaNetParamType::Int;
+            TEST_TRUE(UnLuaNova::ParseLuaNetParamType(TEXT("vector"), Type));
+            TEST_TRUE(Type == UnLuaNova::ELuaNetParamType::Vector);
+            TEST_TRUE(UnLuaNova::ParseLuaNetParamType(TEXT("FString"), Type));
+            TEST_TRUE(Type == UnLuaNova::ELuaNetParamType::String);
+            TEST_FALSE(UnLuaNova::ParseLuaNetParamType(TEXT("notatype"), Type));
+        });
+
+        It(TEXT("复制条件用引擎自己的常量"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            uint8 Condition = COND_None;
+            TEST_TRUE(UnLuaNova::ParseLifetimeCondition(TEXT("OwnerOnly"), Condition));
+            TEST_EQUAL((int32)Condition, (int32)COND_OwnerOnly);
+            TEST_FALSE(UnLuaNova::ParseLifetimeCondition(TEXT("Whatever"), Condition));
+        });
+    });
+
+    Describe(TEXT("RPC 声明"), [this]()
+    {
+        It(TEXT("三种 RPC 都注册上，并带上正确的 Net 标记"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Class = Bound->GetClass();
+
+            UFunction* Ping = FindOwn(Class, TEXT("Ping"));
+            TEST_TRUE(Ping != nullptr);
+            if (Ping)
+            {
+                TEST_TRUE(Ping->HasAnyFunctionFlags(FUNC_Net));
+                TEST_TRUE(Ping->HasAnyFunctionFlags(FUNC_NetServer));
+                // `Ping = true` declares it; reliability stays opt-in, like UFUNCTION(Server).
+                TEST_FALSE(Ping->HasAnyFunctionFlags(FUNC_NetReliable));
+            }
+
+            UFunction* ShowDamage = FindOwn(Class, TEXT("ShowDamage"));
+            TEST_TRUE(ShowDamage != nullptr);
+            if (ShowDamage)
+                TEST_TRUE(ShowDamage->HasAnyFunctionFlags(FUNC_NetClient));
+
+            UFunction* Explode = FindOwn(Class, TEXT("Explode"));
+            TEST_TRUE(Explode != nullptr);
+            if (Explode)
+                TEST_TRUE(Explode->HasAnyFunctionFlags(FUNC_NetMulticast));
+        });
+
+        It(TEXT("Reliable 与参数表被采纳"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UFunction* Chat = FindOwn(Bound->GetClass(), TEXT("Chat"));
+            TEST_TRUE(Chat != nullptr);
+            if (!Chat)
+                return;
+
+            TEST_TRUE(Chat->HasAnyFunctionFlags(FUNC_NetReliable));
+            TEST_EQUAL(Chat->NumParms, 2);
+
+            // Params = { "Int", "Str" } -> FIntProperty then FStrProperty, in order.
+            FProperty* First = Chat->ChildProperties;
+            TEST_TRUE(First != nullptr);
+            TEST_TRUE(First && First->IsA<FIntProperty>());
+            FProperty* Second = First ? First->Next : nullptr;
+            TEST_TRUE(Second != nullptr);
+            TEST_TRUE(Second && Second->IsA<FStrProperty>());
+        });
+
+        It(TEXT("带 Net 标记的函数不会被当成普通覆写"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // The reason this feature exists at all: IsOverridable() rejects FUNC_Net, so
+            // none of these could have been created by the ordinary override path.
+            UFunction* Ping = FindOwn(Bound->GetClass(), TEXT("Ping"));
+            TEST_TRUE(Ping != nullptr);
+            TEST_FALSE(ULuaFunction::IsOverridable(Ping));
+        });
+
+        It(TEXT("RPCId 被分配，且重复声明时得到同一个值"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // This is the one thing about RPCs that a single-process test can still settle,
+            // and it is the one that decides whether the whole feature works across peers.
+            //
+            // An RPC travels as an id, not as a name. Two processes that build the same
+            // UFunction from the same Lua module have to land on the same id or the receiver
+            // resolves it to the wrong function. We cannot run two processes here, but
+            // "declare, tear down, declare again" reproduces the interesting half of it:
+            // the second declaration starts from exactly the class state the first one did,
+            // so identical ids is the same property a second process would need.
+            auto* Class = Bound->GetClass();
+
+            UFunction* First = FindOwn(Class, TEXT("Ping"));
+            TEST_TRUE(First != nullptr);
+            if (!First)
+                return;
+
+            // 0 would mean nobody assigned one, and an RPC sent with id 0 is not an RPC.
+            TEST_TRUE(First->RPCId != 0);
+            const int32 FirstId = First->RPCId;
+
+            TMap<FName, int32> Before;
+            for (const TCHAR* Name : { TEXT("Ping"), TEXT("Chat"), TEXT("ShowDamage"), TEXT("Explode") })
+                if (UFunction* F = FindOwn(Class, Name)) Before.Add(FName(Name), F->RPCId);
+
+            ULuaFunction::RestoreOverrides(Class);
+
+            // Re-declare from a fresh env, exactly as another process would.
+            TSharedPtr<UnLuaNova::FLuaEnv> SecondEnv = MakeShared<UnLuaNova::FLuaEnv>();
+            SecondEnv->AddBuiltInLoader(SpecNetModuleName, SpecNetModuleLoader);
+            UObject* Second = NewObject<AUnLuaBenchmarkProxy>();
+            Second->AddToRoot();
+            SecondEnv->GetManager()->Bind(Second, SpecNetModuleName);
+
+            for (const auto& Pair : Before)
+            {
+                UFunction* F = FindOwn(Class, *Pair.Key.ToString());
+                TEST_TRUE(F != nullptr);
+                if (F)
+                    TEST_EQUAL(F->RPCId, Pair.Value);
+            }
+
+            Second->RemoveFromRoot();
+            SecondEnv.Reset();
+        });
+
+        It(TEXT("RestoreOverrides 会把声明的 RPC 撤掉"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Class = Bound->GetClass();
+            TEST_TRUE(FindOwn(Class, TEXT("Ping")) != nullptr);
+
+            ULuaFunction::RestoreOverrides(Class);
+
+            TEST_TRUE(FindOwn(Class, TEXT("Ping")) == nullptr);
+        });
+    });
+
+    Describe(TEXT("复制属性声明"), [this]()
+    {
+        It(TEXT("GetLifetimeReplicatedProps 的返回值被读出来"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const TArray<UnLuaNova::FLuaRepDecl>& Decls =
+                UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Bound->GetClass());
+
+            TEST_EQUAL(Decls.Num(), 2);
+            if (Decls.Num() != 2)
+                return;
+
+            TEST_TRUE(Decls[0].Name == FName(TEXT("HP")));
+            TEST_TRUE(Decls[0].Type == UnLuaNova::ELuaNetParamType::Float);
+            TEST_EQUAL((int32)Decls[0].Condition, (int32)COND_None);
+
+            TEST_TRUE(Decls[1].Name == FName(TEXT("Name")));
+            TEST_TRUE(Decls[1].Type == UnLuaNova::ELuaNetParamType::String);
+            TEST_EQUAL((int32)Decls[1].Condition, (int32)COND_OwnerOnly);
+        });
+
+        It(TEXT("没有声明时返回空表而不是崩溃"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const TArray<UnLuaNova::FLuaRepDecl>& Decls =
+                UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(UObject::StaticClass());
+            TEST_EQUAL(Decls.Num(), 0);
+        });
+    });
+}
+
+#endif //WITH_DEV_AUTOMATION_TESTS

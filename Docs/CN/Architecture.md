@@ -25,7 +25,7 @@ Plugins/UnLuaNova/
 │   │   │   ├── MathLib/          10 个 LuaLib_F*（FVector/FQuat/FTransform…）+ 共用 LuaLib_Math.h
 │   │   │   ├── Containers/       容器头（LuaArray/LuaMap/LuaSet）
 │   │   │   └── StaticBinding/    静态绑定注册表的实现
-│   │   └── UnLuaNova.Build.cs  后端选择在这里（读 Config/DefaultUnLuaNovaEditor.ini 的 LuaBackend）
+│   │   └── UnLuaNova.Build.cs  后端选择在这里（读 Config/DefaultUnLuaNova.ini 的 LuaBackend）
 │   ├── UnLuaNovaEditor/        编辑器模块：工具栏、IntelliSense、3 个 Commandlet、设置项
 │   ├── UnLuaNovaDefaultParamCollector/  C# UBT 插件（非模块），收集 UFunction 的默认参数
 │   └── ThirdParty/             Lua / Luau 两个 git 子模块 + 各自的 Build.cs 与生成脚本
@@ -113,6 +113,42 @@ UFunction 安装的闭包。它取（或新建）协程，然后：
 - **从引擎 C 回调进来的线程** → 先查 `UNLUANOVA_IS_YIELDABLE(L)`，给出可读的错误，
   而不是让 Luau 抛出那句很难懂的 *attempt to yield across metamethod/C-call boundary*；
 - 正常路径 → `Function->CallUE(L, NumParams, &ThreadRef)` 后 `lua_yield`。
+
+---
+
+## 垃圾回收
+
+`Private/LuaGcScheduler.cpp`（头文件在 `Public/LuaGcScheduler.h`）持有每个环境的堆调度。
+`FLuaEnv` 在构造完 VM、跑完 `UNLUANOVA_SETUP_GC` 之后建它，并在
+`FCoreDelegates::OnEndFrame` 上每帧 `TickGC()` 一次。
+
+两种模式：
+
+* **Automatic**（默认，也是推荐值）：VM 自己调度。Lua 5.5 跑 `LUA_GCGEN` 分代、Luau 跑
+  增量，`TickGC()` 只更新基线。
+* **TimeSliced**：`LUA_GCSTOP` 停掉 VM 自己的节奏，改为每帧按预算 `LUA_GCSTEP`。
+
+**为什么默认不是 TimeSliced**：这里本来没有周期性 GC 尖峰要修。全仓库对
+`FLuaEnv::GC()` 的调用方只有 `lua.gc` 控制台命令一处，没有任何自动调用；而
+`UNLUANOVA_SETUP_GC` 已经在跑分代 / 增量。切到 `TimeSliced` 等于拿一个调过的分代回收器
+换一个手写的步进器 —— 只在"项目于已知安全点（过场、加载界面）主动调 GC 并希望它摊开"
+时才划算。
+
+债务的定义是这套东西里唯一需要想清楚的地方：
+
+> 债务 = 距上一次**完整周期**以来堆增长了多少，而不是这一帧分配了多少。
+
+Lua 在跑完一轮之前不释放任何东西，所以"先建 4 MB 再整个丢掉"的脚本，这一帧分配量是 0、
+待回收的垃圾是 4 MB。按每帧分配量记账永远不会去收它 —— 这是第一版实现的 bug，也是这里
+用"基线（上次完整周期后的存活集）"而不是"上一帧堆大小"的原因。
+
+后端差异只有一处：`lua_gc(LUA_GCSTEP)` 的 `data`，Luau 读作 KB、Lua 5.5 读作"工作量"
+（且不承诺字节精度）。连同堆大小读取一起收在 `LuaBackend.h` 的
+`UNLUANOVA_GC_STEP_BYTES` / `UNLUANOVA_GC_HEAP_BYTES` 里。
+
+**为什么不是多线程 GC**：Lua 堆是单个 `lua_State`，判断可达性要遍历持有（也被持有于）
+UObject 的 userdata —— 只能在游戏线程。把清扫搬去工作线程意味着改 VM 的回收器并给每次
+分配加锁；摊到若干帧，延迟收益一样，风险小得多。
 
 ---
 

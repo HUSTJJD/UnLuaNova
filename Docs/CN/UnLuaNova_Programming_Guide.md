@@ -13,6 +13,22 @@ UnLuaNova提供了两种绑定Lua和引擎层的方式，分别是静态绑定�
 
 ## 静态绑定
 
+静态绑定有三种写法，**都不要求在 UE 侧写 C++**，按需选一种：
+
+| 方式 | 怎么写 | 适合 |
+|---|---|---|
+| 配置映射（推荐） | `DefaultUnLuaNova.ini` 的 `ClassModuleBindings`，见[设置项](Settings.md#类模块绑定表) | 改配置就生效，连蓝图都不用开；基类能覆盖蓝图子类 |
+| 绑定组件 | 蓝图 Actor 上加 `UnLuaNova Binding` 组件，填模块名 | 纯蓝图团队，按资产逐个配 |
+| 实现接口 | C++ 或蓝图里实现 `IUnLuaNovaInterface`，覆写 `GetModuleName()` | 老项目迁移、模块名要按实例算 |
+
+优先级就是上表的顺序。前两种（配置映射 / 绑定组件）都是"给没实现接口的对象也找得到模块名"，
+但**找得到不等于会绑**：还要在 `DefaultUnLuaNova.ini` 里打开
+`bDataDrivenBinding`（默认关，见[设置项](Settings.md#特性开关统一格式)）。
+关着的时候，绑定只发生在实现了接口或走动态绑定的对象上 —— 不会在你不知情时把脚本挂上去。
+
+"实现接口"这种写法分 C++ 与蓝图两种（"绑定组件"就是在蓝图里 Add Component 搜
+`UnLuaNova Binding`，填 `Lua Module`，不需要下面这些）：
+
 #### C++
 你的 UCLASS 只需要实现 `IUnLuaNovaInterface` 接口，在 `GetModuleName_Implementation()` 里返回Lua文件路径即可。
 

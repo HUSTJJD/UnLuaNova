@@ -52,7 +52,9 @@ public class UnLuaNova : ModuleRules
                 "CoreUObject",
                 "Engine",
                 "Slate",
-                "InputCore"
+                "InputCore",
+                // IPluginManager：按插件实例解析脚本根目录与 ini，别再拼"Plugins/UnLuaNova/..."
+                "Projects"
             }
         );
 
@@ -65,11 +67,27 @@ public class UnLuaNova : ModuleRules
         }
 
         var projectDir = Target.ProjectFile.Directory;
-        var configFilePath = projectDir + "/Config/DefaultUnLuaNovaEditor.ini";
-        var configFileReference = new FileReference(configFilePath); 
+
+        // 全插件只有一个配置文件：Config/DefaultUnLuaNova.ini，两个 section 同处其中。
+        // 没有旧文件名的兼容分支 —— 配置入口只有一个，读的地方也就只该有一个。
+        var configFilePath = projectDir + "/Config/DefaultUnLuaNova.ini";
+        var configFileReference = new FileReference(configFilePath);
         var configFile = FileReference.Exists(configFileReference) ? new ConfigFile(configFileReference) : new ConfigFile();
         var config = new ConfigHierarchy(new[] { configFile });
+
         const string section = "/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings";
+        const string settingsSection = "/Script/UnLuaNova.UnLuaNovaSettings";
+
+        bool TryGetBool(string sect, string key, out bool value)
+        {
+            return config.GetBool(sect, key, out value);
+        }
+
+        string GetString(string sect, string key, string defaultValue)
+        {
+            string value;
+            return config.GetString(sect, key, out value) ? value : defaultValue;
+        }
 
         // Everything below is read out of this ini, and UBT has no reason to watch it: the
         // makefile it caches holds the rules' output, and without this the only file it checks
@@ -86,7 +104,7 @@ public class UnLuaNova : ModuleRules
         Action<string, string, bool> loadBoolConfig = (key, macro, defaultValue) =>
         {
             bool flag;
-            if (!config.GetBool(section, key, out flag))
+            if (!TryGetBool(section, key, out flag))
                 flag = defaultValue;
             PublicDefinitions.Add(string.Format("{0}={1}", macro, (flag ? "1" : "0")));
         };
@@ -116,13 +134,11 @@ public class UnLuaNova : ModuleRules
         // This is a compile-time choice, not a runtime one: the two backends export the
         // same lua_* symbols and have incompatible bytecode, so they cannot coexist in a
         // single build. Set it here (or override per-project in
-        // Config/DefaultUnLuaNovaEditor.ini -> LuaBackend=Lua).
+        // Config/DefaultUnLuaNova.ini -> LuaBackend=Lua).
         //
         // Values are matched case-insensitively; anything other than "Lua" selects Luau,
         // which is what LuaBackend.h defaults to when the macro is absent.
-        string backend;
-        if (!config.GetString(section, "LuaBackend", out backend))
-            backend = "Luau";
+        var backend = GetString(section, "LuaBackend", "Luau");
 
         // The selected backend's headers must be on disk before anything is compiled.
         // They are submodules, and an uninitialised one used to fail in the worst way
@@ -171,11 +187,26 @@ public class UnLuaNova : ModuleRules
         // source tree UBT compiles - but which of the two is current cannot be read off
         // the directory, hence the line above.
 
-        string hotReloadMode;
-        if (!config.GetString(section, "HotReloadMode", out hotReloadMode))
-            hotReloadMode = "Manual";
-
+        var hotReloadMode = GetString(section, "HotReloadMode", "Manual");
         var withHotReload = hotReloadMode != "Never";
         PublicDefinitions.Add("UNLUANOVA_WITH_HOT_RELOAD=" + (withHotReload ? "1" : "0"));
+
+        // --- 特性开关（编译期那部分） -----------------------------------------
+        // 内置库是编译期开关：关掉的代码不进二进制，require 直接失败。
+        // 键就在**同一个文件**的运行时 section 里（bTimer / bEvent / bOOP），
+        // 和运行时设置完全同名同处 —— 不存在"第二处开关"。
+        // 其余特性（数据驱动绑定、DAP…）是运行时的，由 UUnLuaNovaSettings 直接读，不经过这里。
+
+        Action<string, string, bool> loadFeature = (key, macro, defaultValue) =>
+        {
+            bool flag;
+            if (!TryGetBool(settingsSection, key, out flag))
+                flag = defaultValue;
+            PublicDefinitions.Add(string.Format("{0}={1}", macro, (flag ? "1" : "0")));
+        };
+
+        loadFeature("bTimer", "UNLUANOVA_HAS_STDLIB_TIMER", true);
+        loadFeature("bEvent", "UNLUANOVA_HAS_STDLIB_EVENT", true);
+        loadFeature("bOOP", "UNLUANOVA_HAS_STDLIB_OOP", true);
     }
 }

@@ -10,7 +10,7 @@
             -ExecCmds="Automation RunTests <filter>; Quit"
             -ReportExportPath=<dir> -abslog=<dir>\Editor.log
 
-    The Lua backend is a compile-time choice (Config/DefaultUnLuaNovaEditor.ini ->
+    The Lua backend is a compile-time choice (Config/DefaultUnLuaNova.ini ->
     LuaBackend, read by UnLuaNova.Build.cs), so this builds before it tests: otherwise the
     binaries silently come from whichever backend was built last and the report labels the
     run with the wrong one. -Backend Both (the default) therefore switches the setting,
@@ -847,7 +847,9 @@ function Copy-Screenshots {
 # is picked by UnLuaNova.Build.cs reading LuaBackend out of this ini. Running both backends
 # therefore means editing it, rebuilding, testing, and putting it back afterwards.
 
-$IniPath = Join-Path (Split-Path -Parent $ProjectPath) "Config/DefaultUnLuaNovaEditor.ini"
+# 全插件只有一个配置文件；旧的 DefaultUnLuaNova.ini 仍被 Build.cs 当兜底读，
+# 但脚本一律写新文件，避免"改了一个、另一个还是旧值"。
+$IniPath = Join-Path (Split-Path -Parent $ProjectPath) "Config/DefaultUnLuaNova.ini"
 $IniSection = "[/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]"
 $IniExisted = Test-Path $IniPath
 $IniBackup = if ($IniExisted) { [System.IO.File]::ReadAllText($IniPath) } else { $null }
@@ -1038,7 +1040,7 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
             $CurrentBackend = $B
 
             # Nothing to delete here on purpose. There used to be a wipe of
-            # Plugins/UnLuaNova/Intermediate: UBT does not watch Config/DefaultUnLuaNovaEditor.ini,
+            # Plugins/UnLuaNova/Intermediate: UBT does not watch Config/DefaultUnLuaNova.ini,
             # so a backend switch left the previous backend's objects in place and the only way
             # to force the issue was to throw the directory away - 75 MB of build output, and a
             # full recompile whether or not anything relevant changed.
