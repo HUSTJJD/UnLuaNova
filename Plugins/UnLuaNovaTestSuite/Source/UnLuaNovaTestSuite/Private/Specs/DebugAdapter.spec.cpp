@@ -12,37 +12,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and limitations under the License.
 
-// A real loopback session against the DAP server, because the interesting failures are all
-// in the wire layer. Everything below `FLuaDebugAdapter` - the service, the breakpoints, the
-// stack - is covered by UnLuaNova.API.DebugService; what has never been tested is the part
-// that decides whether an IDE can drive any of it: the Content-Length framing, the request
-// dispatch, and the capability flags in `initialize`.
-//
-// Concretely, `supportsEvaluateRequest` was false while `OnEvaluate` was fully implemented,
-// which turns the watch window grey in every IDE. A unit test of `OnEvaluate` would have
-// passed the whole time. Only reading the actual bytes off the socket catches it.
-//
-// Design notes, because a socket test is where hangs come from:
-//   * The body runs on ThreadPool, not the game thread. `OnAttach` and `OnDisconnect` queue
-//     an AsyncTask(GameThread), so blocking the game thread waiting for them would deadlock.
-//   * Every wait is bounded and returns false instead of spinning forever; a failure is a
-//     failed assertion, never a hung suite.
-//   * The port comes from binding port 0 rather than 5699, so a developer with `lua.dap`
-//     already running does not get a spurious red.
-
-#if WITH_EDITOR
+// Socket traffic is polled by the game-thread ticker. Spec teardown removes the ticker
+// before closing the client/server, including when the automation framework times out.
+#if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
 
 #include "UnLuaNovaBase.h"
 #include "Misc/AutomationTest.h"
 #include "UnLuaNovaTestHelpers.h"
-
 #include "LuaDebugAdapter.h"
 #include "LuaDebugService.h"
-
+#include "Async/Async.h"
+#include "Containers/Ticker.h"
 #include "Dom/JsonObject.h"
+#include "HAL/Event.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
-#include "Interfaces/IPv4/IPv4Address.h"
+#include "Misc/Parse.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Sockets.h"
@@ -50,306 +35,370 @@
 
 namespace
 {
-	constexpr double WaitSeconds = 5.0;
+    constexpr double RequestTimeout = 5.0;
+    constexpr double SessionTimeout = 20.0;
 
-	int32 FindFreePort()
-	{
-		ISocketSubsystem* Sockets = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
-		if (!Sockets)
-			return 0;
+    TArray<uint8> FrameDap(const FString& Json)
+    {
+        const FTCHARToUTF8 Body(*Json);
+        const FTCHARToUTF8 Header(*FString::Printf(TEXT("Content-Length: %d\r\n\r\n"), Body.Length()));
+        TArray<uint8> Frame;
+        Frame.Append(reinterpret_cast<const uint8*>(Header.Get()), Header.Length());
+        Frame.Append(reinterpret_cast<const uint8*>(Body.Get()), Body.Length());
+        return Frame;
+    }
 
-		FSocket* Probe = Sockets->CreateSocket(NAME_Stream, TEXT("UnLuaNovaDapPortProbe"));
-		if (!Probe)
-			return 0;
+    class FDapFrames
+    {
+    public:
+        void Append(const uint8* Data, int32 Size) { Pending.Append(Data, Size); }
 
-		TSharedRef<FInternetAddr> Addr = Sockets->CreateInternetAddr();
-		Addr->SetAnyAddress();
-		Addr->SetPort(0);
+        bool Pop(FString& Json)
+        {
+            int32 HeaderEnd = INDEX_NONE;
+            for (int32 Index = 0; Index + 3 < Pending.Num(); ++Index)
+            {
+                if (Pending[Index] == '\r' && Pending[Index + 1] == '\n'
+                    && Pending[Index + 2] == '\r' && Pending[Index + 3] == '\n')
+                {
+                    HeaderEnd = Index + 4;
+                    break;
+                }
+            }
+            if (HeaderEnd == INDEX_NONE) return false;
 
-		int32 Port = 0;
-		if (Probe->Bind(*Addr))
-			Port = Probe->GetPortNo();
+            const FUTF8ToTCHAR Header(reinterpret_cast<const ANSICHAR*>(Pending.GetData()), HeaderEnd);
+            const FString HeaderText(Header.Length(), Header.Get());
+            int32 Length = -1;
+            if (!FParse::Value(*HeaderText, TEXT("Content-Length:"), Length)
+                || Length < 0 || Length > 1024 * 1024 || Pending.Num() - HeaderEnd < Length)
+                return false;
 
-		Probe->Close();
-		Sockets->DestroySocket(Probe);
-		return Port;
-	}
+            const FUTF8ToTCHAR Body(reinterpret_cast<const ANSICHAR*>(Pending.GetData() + HeaderEnd), Length);
+            Json = FString(Body.Length(), Body.Get());
+            Pending.RemoveAt(0, HeaderEnd + Length, EAllowShrinking::No);
+            return true;
+        }
 
-	FSocket* ConnectLoopback(int32 Port)
-	{
-		ISocketSubsystem* Sockets = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
-		if (!Sockets || Port <= 0)
-			return nullptr;
+    private:
+        TArray<uint8> Pending;
+    };
 
-		FSocket* Client = Sockets->CreateSocket(NAME_Stream, TEXT("UnLuaNovaDapClient"));
-		if (!Client)
-			return nullptr;
+    class FDapClient
+    {
+    public:
+        explicit FDapClient(int32 InWriteChunkSize) : WriteChunkSize(InWriteChunkSize) {}
 
-		Client->SetNonBlocking(false);
+        ~FDapClient()
+        {
+            if (Socket)
+            {
+                Socket->Close();
+                ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(Socket);
+            }
+        }
 
-		TSharedRef<FInternetAddr> Addr = Sockets->CreateInternetAddr();
-		Addr->SetLoopbackAddress();
-		Addr->SetPort(Port);
+        bool Connect(int32 Port)
+        {
+            auto* Subsystem = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
+            Socket = Subsystem ? Subsystem->CreateSocket(NAME_Stream, TEXT("UnLuaNovaDapClient")) : nullptr;
+            if (!Socket || !Socket->SetNonBlocking(true)) return false;
 
-		// The listener may not be up the instant Start() returns, so a failure to connect
-		// is retried for a moment rather than reported immediately.
-		const double Start = FPlatformTime::Seconds();
-		while (!Client->Connect(*Addr))
-		{
-			if (FPlatformTime::Seconds() - Start > WaitSeconds)
-			{
-				Client->Close();
-				Sockets->DestroySocket(Client);
-				return nullptr;
-			}
-			FPlatformProcess::Sleep(0.02f);
-		}
+            const auto Address = Subsystem->CreateInternetAddr();
+            Address->SetLoopbackAddress();
+            Address->SetPort(Port);
+            if (Socket->Connect(*Address)) return true;
+            const ESocketErrors Error = Subsystem->GetLastErrorCode();
+            return Error == SE_EWOULDBLOCK || Error == SE_EINPROGRESS;
+        }
 
-		return Client;
-	}
+        bool IsConnected() const { return Socket && Socket->GetConnectionState() == SCS_Connected; }
+        void Queue(const FString& Json) { Outgoing.Append(FrameDap(Json)); }
+        bool Pop(FString& Json) { return Incoming.Pop(Json); }
 
-	bool SendDap(FSocket* Client, const FString& Json)
-	{
-		const FTCHARToUTF8 Body(*Json);
-		const FString Header = FString::Printf(TEXT("Content-Length: %d\r\n\r\n"), Body.Length());
+        bool Pump()
+        {
+            if (!Socket) return false;
+            if (Sent < Outgoing.Num())
+            {
+                int32 Count = 0;
+                if (Socket->Send(Outgoing.GetData() + Sent, FMath::Min(WriteChunkSize, Outgoing.Num() - Sent), Count))
+                    Sent += Count;
+                else if (ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->GetLastErrorCode() != SE_EWOULDBLOCK)
+                    return false;
+                if (Sent == Outgoing.Num())
+                {
+                    Outgoing.Reset();
+                    Sent = 0;
+                }
+            }
 
-		int32 Sent = 0;
-		if (!Client->Send((const uint8*)TCHAR_TO_ANSI(*Header), Header.Len(), Sent))
-			return false;
+            // Bound work per frame even if a faulty server keeps writing.
+            for (int32 Chunk = 0; Chunk < 16; ++Chunk)
+            {
+                uint8 Buffer[4096];
+                int32 Read = 0;
+                if (!Socket->Recv(Buffer, sizeof(Buffer), Read) || Read <= 0) break;
+                Incoming.Append(Buffer, Read);
+            }
+            return true;
+        }
 
-		Sent = 0;
-		return Client->Send((const uint8*)Body.Get(), Body.Length(), Sent);
-	}
+    private:
+        FSocket* Socket = nullptr;
+        FDapFrames Incoming;
+        TArray<uint8> Outgoing;
+        int32 Sent = 0;
+        int32 WriteChunkSize;
+    };
 
-	// Reads one framed message. Accumulates ASCII only - which is all DAP traffic here
-	// carries, and a chunk boundary in the middle of a multi-byte sequence is the one thing
-	// this deliberately does not handle.
-	bool ReadDapMessage(FSocket* Client, FString& OutJson)
-	{
-		FString Pending;
-		const double Start = FPlatformTime::Seconds();
+    class FDapSession
+    {
+    public:
+        FDapSession(bool bInUnknownCommand, int32 WriteChunkSize) : Client(WriteChunkSize), bUnknownCommand(bInUnknownCommand) {}
+        bool Connect(int32 Port) { return Client.Connect(Port); }
 
-		while (FPlatformTime::Seconds() - Start < WaitSeconds)
-		{
-			uint8 Buffer[4096];
-			int32 Read = 0;
-			if (Client->Recv(Buffer, sizeof(Buffer), Read) && Read > 0)
-			{
-				Pending.AppendChars((const ANSICHAR*)Buffer, Read);
-			}
-			else
-			{
-				FPlatformProcess::Sleep(0.01f);
-			}
+        bool Tick(FAutomationTestBase& Test)
+        {
+            const double Now = FPlatformTime::Seconds();
+            if (Now - Started >= SessionTimeout || Now - StepStarted >= RequestTimeout)
+                return Fail(Test, FString::Printf(TEXT("DAP timeout at step %d"), static_cast<int32>(Step)));
 
-			const int32 HeaderEnd = Pending.Find(TEXT("\r\n\r\n"));
-			if (HeaderEnd == INDEX_NONE)
-				continue;
+            if (Step == EStep::Connecting)
+            {
+                if (!Client.IsConnected()) return false;
+                Send(bUnknownCommand ? EStep::Unknown : EStep::Initialize,
+                    bUnknownCommand ? TEXT("notARealCommand") : TEXT("initialize"));
+            }
+            if (!Client.Pump()) return Fail(Test, TEXT("DAP socket send failed"));
 
-			const FString Header = Pending.Left(HeaderEnd);
-			int32 Length = 0;
-			if (!FParse::Value(*Header, TEXT("Content-Length:"), Length))
-				continue;
+            auto& Service = UnLuaNova::FLuaDebugService::Get();
+            if (Step == EStep::Attached)
+            {
+                if (!Service.IsAttached()) return false;
+                auto Args = MakeShared<FJsonObject>();
+                Args->SetStringField(TEXT("expression"), TEXT("1 + 1 == 2 and '中文' == '中文'"));
+                Args->SetStringField(TEXT("context"), TEXT("repl"));
+                Send(EStep::Evaluate, TEXT("evaluate"), Args);
+                return false;
+            }
+            if (Step == EStep::Detached) return !Service.IsAttached();
 
-			const int32 BodyStart = HeaderEnd + 4;
-			if (Pending.Len() - BodyStart < Length)
-				continue;
+            FString Json;
+            while (Client.Pop(Json))
+            {
+                TSharedPtr<FJsonObject> Reply;
+                if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Json), Reply) || !Reply.IsValid())
+                    return Fail(Test, TEXT("Malformed DAP JSON response"));
+                if (Reply->GetStringField(TEXT("type")) != TEXT("response")
+                    || static_cast<int32>(Reply->GetNumberField(TEXT("request_seq"))) != Seq)
+                    continue;
 
-			OutJson = Pending.Mid(BodyStart, Length);
-			return true;
-		}
+                if (Step == EStep::Unknown)
+                {
+                    Test.TestFalse(TEXT("Unknown command is rejected"), Reply->GetBoolField(TEXT("success")));
+                    return true;
+                }
+                if (!Reply->GetBoolField(TEXT("success"))) return Fail(Test, TEXT("DAP request failed"));
 
-		return false;
-	}
+                switch (Step)
+                {
+                case EStep::Initialize:
+                {
+                    const auto Body = Reply->GetObjectField(TEXT("body"));
+                    if (!Body.IsValid() || !Body->GetBoolField(TEXT("supportsEvaluateRequest")))
+                        return Fail(Test, TEXT("Missing evaluate capability"));
+                    auto Args = MakeShared<FJsonObject>();
+                    Args->SetNumberField(TEXT("env"), 0);
+                    Send(EStep::Attach, TEXT("attach"), Args);
+                    break;
+                }
+                case EStep::Attach:
+                    Step = EStep::Attached;
+                    StepStarted = Now;
+                    break;
+                case EStep::Evaluate:
+                {
+                    const auto Body = Reply->GetObjectField(TEXT("body"));
+                    if (!Body.IsValid() || Body->GetStringField(TEXT("result")) != TEXT("true"))
+                        return Fail(Test, TEXT("DAP evaluate returned the wrong value"));
+                    Send(EStep::Threads, TEXT("threads"));
+                    break;
+                }
+                case EStep::Threads:
+                {
+                    const auto Body = Reply->GetObjectField(TEXT("body"));
+                    const TArray<TSharedPtr<FJsonValue>>* Threads = nullptr;
+                    if (!Body.IsValid() || !Body->TryGetArrayField(TEXT("threads"), Threads) || Threads->Num() == 0)
+                        return Fail(Test, TEXT("DAP returned no threads"));
+                    Send(EStep::Disconnect, TEXT("disconnect"));
+                    break;
+                }
+                case EStep::Disconnect:
+                    Step = EStep::Detached;
+                    StepStarted = Now;
+                    break;
+                default:
+                    return Fail(Test, TEXT("Unexpected DAP response"));
+                }
+            }
+            return false;
+        }
 
-	// Sends a request and waits for *its* response. `initialize` also emits an `initialized`
-	// event, so the first message back is not necessarily the answer - match on
-	// request_seq, and drop anything that is not a response to this request.
-	TSharedPtr<FJsonObject> RoundTrip(FSocket* Client, int32& Seq, const FString& Command,
-		const TSharedPtr<FJsonObject>& Arguments)
-	{
-		const int32 ThisSeq = ++Seq;
+    private:
+        enum class EStep { Connecting, Initialize, Attach, Attached, Evaluate, Threads, Disconnect, Detached, Unknown };
+        void Send(EStep Next, const FString& Command, TSharedPtr<FJsonObject> Args = nullptr)
+        {
+            auto Request = MakeShared<FJsonObject>();
+            Request->SetNumberField(TEXT("seq"), ++Seq);
+            Request->SetStringField(TEXT("type"), TEXT("request"));
+            Request->SetStringField(TEXT("command"), Command);
+            Request->SetObjectField(TEXT("arguments"), Args.IsValid() ? Args.ToSharedRef() : MakeShared<FJsonObject>());
+            FString Json;
+            FJsonSerializer::Serialize(Request, TJsonWriterFactory<>::Create(&Json));
+            Client.Queue(Json);
+            Step = Next;
+            StepStarted = FPlatformTime::Seconds();
+        }
 
-		const TSharedRef<FJsonObject> Request = MakeShared<FJsonObject>();
-		Request->SetNumberField(TEXT("seq"), ThisSeq);
-		Request->SetStringField(TEXT("type"), TEXT("request"));
-		Request->SetStringField(TEXT("command"), Command);
-		if (Arguments.IsValid())
-			Request->SetObjectField(TEXT("arguments"), Arguments);
+        static bool Fail(FAutomationTestBase& Test, const FString& Message)
+        {
+            Test.AddError(Message);
+            return true;
+        }
 
-		FString Out;
-		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Out);
-		FJsonSerializer::Serialize(Request, Writer);
-
-		if (!SendDap(Client, Out))
-			return nullptr;
-
-		const double Start = FPlatformTime::Seconds();
-		while (FPlatformTime::Seconds() - Start < WaitSeconds)
-		{
-			FString Json;
-			if (!ReadDapMessage(Client, Json))
-				return nullptr;
-
-			const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Json);
-			TSharedPtr<FJsonObject> Message;
-			if (!FJsonSerializer::Deserialize(Reader, Message) || !Message.IsValid())
-				continue;
-
-			if (Message->GetStringField(TEXT("type")) != TEXT("response"))
-				continue;
-
-			if ((int32)Message->GetNumberField(TEXT("request_seq")) == ThisSeq)
-				return Message;
-		}
-
-		return nullptr;
-	}
+        FDapClient Client;
+        bool bUnknownCommand;
+        EStep Step = EStep::Connecting;
+        int32 Seq = 0;
+        double Started = FPlatformTime::Seconds();
+        double StepStarted = Started;
+    };
 }
 
 BEGIN_DEFINE_SPEC(FDebugAdapterSpec, "UnLuaNova.API.DebugAdapter", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
-	lua_State* L;
+    FTSTicker::FDelegateHandle PollHandle;
+    TSharedPtr<FDapSession> Session;
+    bool bOwnsServer = false;
+    void BeginSession(bool bUnknownCommand, const FDoneDelegate& Done, int32 WriteChunkSize = MAX_int32);
 END_DEFINE_SPEC(FDebugAdapterSpec)
+
+void FDebugAdapterSpec::BeginSession(bool bUnknownCommand, const FDoneDelegate& Done, int32 WriteChunkSize)
+{
+    auto& Adapter = FLuaDebugAdapter::Get();
+    bOwnsServer = Adapter.Start(0);
+    if (!bOwnsServer)
+    {
+        AddError(TEXT("Could not start the DAP test server"));
+        Done.Execute();
+        return;
+    }
+    TestTrue(TEXT("OS-assigned port is available"), Adapter.GetPort() > 0);
+    Session = MakeShared<FDapSession>(bUnknownCommand, WriteChunkSize);
+    if (!Session->Connect(Adapter.GetPort()))
+    {
+        AddError(TEXT("Could not connect the DAP test client"));
+        Done.Execute();
+        return;
+    }
+    PollHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([this, Done](float)
+    {
+        if (!Session->Tick(*this)) return true;
+        Done.Execute();
+        return false;
+    }));
+}
 
 void FDebugAdapterSpec::Define()
 {
-	BeforeEach([this]
-	{
-		// The adapter attaches to an env, so there has to be one.
-		UnLuaNova::Startup();
-		L = UnLuaNova::GetState();
-	});
+    BeforeEach([this]
+    {
+        UnLuaNova::Startup();
+        TestNotNull(TEXT("Lua environment exists"), UnLuaNova::GetState());
+    });
 
-	AfterEach([this]
-	{
-		// Leave no server listening and no debug hook installed: both are process-wide, and
-		// a breakpoint hook left behind would slow every later spec down.
-		FLuaDebugAdapter::Get().StopServer();
-		UnLuaNova::FLuaDebugService::Get().Detach();
-		L = nullptr;
-	});
+    AfterEach([this]
+    {
+        FTSTicker::GetCoreTicker().RemoveTicker(PollHandle);
+        PollHandle.Reset();
+        Session.Reset();
+        if (bOwnsServer)
+        {
+            FLuaDebugAdapter::Get().StopServer();
+            UnLuaNova::FLuaDebugService::Get().Detach();
+            bOwnsServer = false;
+        }
+    });
 
-	It(TEXT("一轮真实会话：initialize / attach / evaluate / threads / disconnect"), EAsyncExecution::ThreadPool, [this]()
-	{
-		const int32 Port = FindFreePort();
-		TEST_TRUE(Port > 0);
+    LatentIt(TEXT("一轮真实会话：initialize / attach / evaluate / threads / disconnect"), [this](const FDoneDelegate& Done)
+    {
+        BeginSession(false, Done);
+    });
 
-		FLuaDebugAdapter& Adapter = FLuaDebugAdapter::Get();
-		TEST_TRUE(Adapter.Start(Port));
-		TEST_TRUE(Adapter.IsRunning());
-		TEST_EQUAL(Adapter.GetPort(), Port);
+    LatentIt(TEXT("未知命令回 error 而不是把连接挂死"), [this](const FDoneDelegate& Done)
+    {
+        BeginSession(true, Done);
+    });
 
-		FSocket* Client = ConnectLoopback(Port);
-		TEST_TRUE(Client != nullptr);
-		if (!Client)
-		{
-			Adapter.StopServer();
-			return;
-		}
+    LatentIt(TEXT("DAP session accepts fragmented UTF-8 requests"), [this](const FDoneDelegate& Done)
+    {
+        BeginSession(false, Done, 7);
+    });
 
-		int32 Seq = 0;
+    It(TEXT("DAP framing preserves coalesced messages"), [this]
+    {
+        const FString First = TEXT("{\"type\":\"event\",\"event\":\"initialized\"}");
+        const FString Second = TEXT("{\"type\":\"response\",\"request_seq\":2}");
+        TArray<uint8> Bytes = FrameDap(First);
+        Bytes.Append(FrameDap(Second));
+        FDapFrames Frames;
+        Frames.Append(Bytes.GetData(), Bytes.Num());
+        FString Json;
+        TestTrue(TEXT("First message"), Frames.Pop(Json));
+        TestEqual(TEXT("First body"), Json, First);
+        TestTrue(TEXT("Second message survives the first read"), Frames.Pop(Json));
+        TestEqual(TEXT("Second body"), Json, Second);
+        TestFalse(TEXT("No phantom third message"), Frames.Pop(Json));
+    });
 
-		// ── initialize: the capability flags are what the IDE reads to decide whether the
-		// watch window is usable at all ──
-		const TSharedRef<FJsonObject> InitArgs = MakeShared<FJsonObject>();
-		InitArgs->SetStringField(TEXT("adapterID"), TEXT("unluanova"));
-		const TSharedPtr<FJsonObject> Init = RoundTrip(Client, Seq, TEXT("initialize"), InitArgs);
-		TEST_TRUE(Init.IsValid());
-		if (Init.IsValid())
-		{
-			TEST_TRUE(Init->GetBoolField(TEXT("success")));
-			const TSharedPtr<FJsonObject> Body = Init->GetObjectField(TEXT("body"));
-			TEST_TRUE(Body.IsValid());
-			if (Body.IsValid())
-			{
-				// False here greys out every watch expression, for a feature that is
-				// implemented. See the file header.
-				TEST_TRUE(Body->GetBoolField(TEXT("supportsEvaluateRequest")));
-			}
-		}
+    It(TEXT("DAP framing preserves fragmented UTF-8 bytes"), [this]
+    {
+        const FString Expected = TEXT("{\"value\":\"中文\"}");
+        const TArray<uint8> Bytes = FrameDap(Expected);
+        FDapFrames Frames;
+        FString Json;
+        for (int32 Index = 0; Index < Bytes.Num(); ++Index)
+        {
+            Frames.Append(&Bytes[Index], 1);
+            TestEqual(TEXT("Only a complete byte frame can be read"), Frames.Pop(Json), Index == Bytes.Num() - 1);
+        }
+        TestEqual(TEXT("UTF-8 byte length is not TCHAR length"), Json, Expected);
+    });
 
-		// ── attach: which env. Queued to the game thread, hence the wait below rather than
-		// an assumption that it has already happened ──
-		const TSharedRef<FJsonObject> AttachArgs = MakeShared<FJsonObject>();
-		AttachArgs->SetNumberField(TEXT("env"), 0);
-		const TSharedPtr<FJsonObject> Attach = RoundTrip(Client, Seq, TEXT("attach"), AttachArgs);
-		TEST_TRUE(Attach.IsValid());
-		TEST_TRUE(Attach.IsValid() && Attach->GetBoolField(TEXT("success")));
-
-		auto& Service = UnLuaNova::FLuaDebugService::Get();
-		const double Start = FPlatformTime::Seconds();
-		while (!Service.IsAttached() && FPlatformTime::Seconds() - Start < WaitSeconds)
-			FPlatformProcess::Sleep(0.02f);
-		TEST_TRUE(Service.IsAttached());
-
-		// ── evaluate: no frameId means "globals only", which is a watch/repl window ──
-		const TSharedRef<FJsonObject> EvalArgs = MakeShared<FJsonObject>();
-		EvalArgs->SetStringField(TEXT("expression"), TEXT("1 + 1 == 2"));
-		EvalArgs->SetStringField(TEXT("context"), TEXT("repl"));
-		const TSharedPtr<FJsonObject> Eval = RoundTrip(Client, Seq, TEXT("evaluate"), EvalArgs);
-		TEST_TRUE(Eval.IsValid());
-		if (Eval.IsValid())
-		{
-			TEST_TRUE(Eval->GetBoolField(TEXT("success")));
-			const TSharedPtr<FJsonObject> Body = Eval->GetObjectField(TEXT("body"));
-			TEST_TRUE(Body.IsValid());
-			if (Body.IsValid())
-				TEST_EQUAL(Body->GetStringField(TEXT("result")), FString(TEXT("true")));
-		}
-
-		// ── threads ──
-		const TSharedPtr<FJsonObject> Threads = RoundTrip(Client, Seq, TEXT("threads"), nullptr);
-		TEST_TRUE(Threads.IsValid());
-		if (Threads.IsValid())
-		{
-			TEST_TRUE(Threads->GetBoolField(TEXT("success")));
-			const TArray<TSharedPtr<FJsonValue>>* List = nullptr;
-			const TSharedPtr<FJsonObject> Body = Threads->GetObjectField(TEXT("body"));
-			TEST_TRUE(Body.IsValid() && Body->TryGetArrayField(TEXT("threads"), List));
-			if (List)
-				TEST_TRUE(List->Num() >= 1);
-		}
-
-		// ── disconnect ──
-		const TSharedPtr<FJsonObject> Bye = RoundTrip(Client, Seq, TEXT("disconnect"), nullptr);
-		TEST_TRUE(Bye.IsValid() && Bye->GetBoolField(TEXT("success")));
-
-		Client->Close();
-		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(Client);
-
-		Adapter.StopServer();
-		TEST_FALSE(Adapter.IsRunning());
-	});
-
-	It(TEXT("未知命令回 error 而不是把连接挂死"), EAsyncExecution::ThreadPool, [this]()
-	{
-		const int32 Port = FindFreePort();
-		TEST_TRUE(Port > 0);
-
-		FLuaDebugAdapter& Adapter = FLuaDebugAdapter::Get();
-		TEST_TRUE(Adapter.Start(Port));
-
-		FSocket* Client = ConnectLoopback(Port);
-		TEST_TRUE(Client != nullptr);
-		if (!Client)
-		{
-			Adapter.StopServer();
-			return;
-		}
-
-		int32 Seq = 0;
-		const TSharedPtr<FJsonObject> Reply = RoundTrip(Client, Seq, TEXT("notARealCommand"), nullptr);
-
-		// The alternative is silence: no response at all, and an IDE that sits there waiting
-		// while looking like it is still connected.
-		TEST_TRUE(Reply.IsValid());
-		if (Reply.IsValid())
-			TEST_FALSE(Reply->GetBoolField(TEXT("success")));
-
-		Client->Close();
-		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(Client);
-		Adapter.StopServer();
-	});
+    It(TEXT("Concurrent stop and restart use a fresh server"), [this]
+    {
+        auto& Adapter = FLuaDebugAdapter::Get();
+        bOwnsServer = Adapter.Start(0);
+        TestTrue(TEXT("Start"), bOwnsServer);
+        if (!bOwnsServer) return;
+        FEvent* Ready = FPlatformProcess::GetSynchEventFromPool(true);
+        auto Stop = [&Adapter, Ready]
+        {
+            Ready->Wait();
+            Adapter.StopServer();
+        };
+        auto FirstStop = Async(EAsyncExecution::Thread, Stop);
+        auto SecondStop = Async(EAsyncExecution::Thread, Stop);
+        Ready->Trigger();
+        // Both callers finish before teardown can touch the singleton again.
+        FirstStop.Wait();
+        SecondStop.Wait();
+        FPlatformProcess::ReturnSynchEventToPool(Ready);
+        Adapter.StopServer();
+        TestFalse(TEXT("Stopped"), Adapter.IsRunning());
+        bOwnsServer = Adapter.Start(0);
+        TestTrue(TEXT("Restart"), bOwnsServer);
+    });
 }
 
 #endif

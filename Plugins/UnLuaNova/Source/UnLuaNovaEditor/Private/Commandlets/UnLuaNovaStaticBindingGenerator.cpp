@@ -89,8 +89,13 @@ namespace
 	void AppendArray(FString& Out, const FString& ElementType, const FString& Name,
 		const TArray<FString>& Lines, const TCHAR* DummyElement)
 	{
+		// Only the count is const. The tables themselves are writable on purpose:
+		// FStaticBindingRegistry::Resolve() fills in the runtime-only fields (FProperty*,
+		// UFunction*, offsets, flags) *in place*, at the first lookup. Emitting them as
+		// const puts them in a read-only section and the first resolve is an access
+		// violation - see Resolve() in StaticBindingRegistry.cpp.
 		Out += FString::Printf(TEXT("static const int32 Num%s_%s = %d;\n"), *ElementType, *Name, Lines.Num());
-		Out += FString::Printf(TEXT("static const %s %s_%s[] =\n{\n"), *ElementType, *ElementType, *Name);
+		Out += FString::Printf(TEXT("static %s %s_%s[] =\n{\n"), *ElementType, *ElementType, *Name);
 		if (Lines.Num() > 0)
 			Out += FString::Join(Lines, TEXT("\n")) + TEXT("\n");
 		else
@@ -314,7 +319,8 @@ namespace UnLuaNova
 		for (const FString& Name : Names)
 			Crc = FCrc::StrCrc32(*Name, Crc);
 
-		return FString::Printf(TEXT("%d-%08X"), Names.Num(), Crc);
+		// Generator fixes must invalidate existing output even when the type set is unchanged.
+		return FString::Printf(TEXT("v2-%d-%08X"), Names.Num(), Crc);
 	}
 
 	FString ReadStaticBindingFingerprint(const FString& File)
@@ -478,7 +484,9 @@ namespace UnLuaNova
 				TEXT("{ nullptr, 0, MAX_uint16, 0, FStaticFuncFlags(), nullptr, nullptr }"));
 
 			Out += FString::Printf(
-				TEXT("static const FStaticTypeBinding TypeBinding_%s =\n{\n"
+				// Not const either: Resolve() sets bResolved on it, same reason as the
+				// arrays above.
+				TEXT("static FStaticTypeBinding TypeBinding_%s =\n{\n"
 					 "    TEXT(\"%s\"),\n"
 					 "    FStaticPropBinding_%s, NumFStaticPropBinding_%s,\n"
 					 "    FStaticFuncBinding_%s, NumFStaticFuncBinding_%s,\n"

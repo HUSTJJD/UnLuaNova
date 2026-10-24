@@ -85,7 +85,7 @@ namespace UnLuaNova
 	UNLUANOVAEDITOR_API TArray<FString> CollectExportedReflectedTypeNames();
 
 	/**
-	 * A cheap identity for the type set: count plus a CRC over the sorted names.
+	 * Output format version plus the type count and CRC over the sorted names.
 	 *
 	 * Deliberately not a hash of every signature - that would mean walking every
 	 * UPROPERTY and UFUNCTION of every type on every editor start, which is exactly the

@@ -41,22 +41,30 @@ FLuaDebugAdapter& FLuaDebugAdapter::Get()
 // ── 生命周期 ───────────────────────────────────────────────────────────────
 bool FLuaDebugAdapter::Start(int32 InPort)
 {
+    FScopeLock Lifecycle(&LifecycleLock);
     if (bRunning)
     {
         UE_LOG(LogUnLuaNova, Warning, TEXT("lua.dap: already running on port %d"), Port);
         return false;
     }
 
-    Port = InPort > 0 ? InPort : DefaultPort;
+    Port = InPort >= 0 ? InPort : DefaultPort;
     if (!Listen())
         return false;
 
     bStopping = false;
+    ++ServerGeneration;
+    Seq = 0;
+    PendingBreakpoints.Reset();
     bRunning = true;
     Thread = FRunnableThread::Create(this, TEXT("LuaDapThread"), 0, TPri_BelowNormal);
     if (!Thread)
     {
         bRunning = false;
+        bStopping = true;
+        ListenerSocket->Close();
+        ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ListenerSocket);
+        ListenerSocket = nullptr;
         return false;
     }
 
@@ -66,10 +74,13 @@ bool FLuaDebugAdapter::Start(int32 InPort)
 
 void FLuaDebugAdapter::StopServer()
 {
+    // A timed-out caller and module teardown can arrive together. Only one owns Thread.
+    FScopeLock Lifecycle(&LifecycleLock);
     if (!bRunning)
         return;
 
     bStopping = true;
+    ++ServerGeneration;
     if (Thread)
     {
         Thread->WaitForCompletion();
@@ -79,6 +90,12 @@ void FLuaDebugAdapter::StopServer()
     bRunning = false;
 
     UE_LOG(LogUnLuaNova, Display, TEXT("lua.dap: stopped"));
+}
+
+int32 FLuaDebugAdapter::GetPort() const
+{
+    FScopeLock Lifecycle(&LifecycleLock);
+    return Port;
 }
 
 bool FLuaDebugAdapter::Listen()
@@ -99,7 +116,7 @@ bool FLuaDebugAdapter::Listen()
     ListenerSocket->SetRecvErr();
 
     const TSharedRef<FInternetAddr> Addr = Subsystem->CreateInternetAddr();
-    Addr->SetAnyAddress();
+    Addr->SetLoopbackAddress();
     Addr->SetPort(Port);
 
     if (!ListenerSocket->Bind(*Addr))
@@ -118,6 +135,7 @@ bool FLuaDebugAdapter::Listen()
         return false;
     }
 
+    Port = ListenerSocket->GetPortNo();
     return true;
 }
 
@@ -160,7 +178,7 @@ bool FLuaDebugAdapter::ReadMessage(FString& OutJson)
 
     uint8 Chunk[4096];
     int32 Read = 0;
-    while (ClientSocket->Recv(Chunk, sizeof(Chunk), Read) && Read > 0)
+    while (!bStopping && ClientSocket->Recv(Chunk, sizeof(Chunk), Read) && Read > 0)
         ReadBuffer.Append(Chunk, Read);
 
     if (ReadBuffer.Num() == 0)
@@ -183,7 +201,7 @@ bool FLuaDebugAdapter::ReadMessage(FString& OutJson)
 
     // 头部是 ASCII，直接按字节转
     FUTF8ToTCHAR Converter(Data, HeaderEnd);
-    FString HeaderText(Converter.Get());
+    FString HeaderText(Converter.Length(), Converter.Get());
 
     int32 ContentLength = -1;
     TArray<FString> Lines;
@@ -204,7 +222,7 @@ bool FLuaDebugAdapter::ReadMessage(FString& OutJson)
         return false;
 
     FUTF8ToTCHAR BodyConverter(Data + HeaderEnd, ContentLength);
-    OutJson = FString(BodyConverter.Get());
+    OutJson = FString(BodyConverter.Length(), BodyConverter.Get());
     ReadBuffer.RemoveAt(0, HeaderEnd + ContentLength, EAllowShrinking::No);
     return true;
 }
@@ -288,8 +306,10 @@ void FLuaDebugAdapter::RequestBreakpointSync()
     }
 
     // 游戏线程在断点处是阻塞自旋的：这里排队执行，"暂停中改断点"要等 Continue 后生效
-    AsyncTask(ENamedThreads::GameThread, [Copy]()
+    const uint64 Generation = ServerGeneration.load();
+    AsyncTask(ENamedThreads::GameThread, [this, Generation, Copy]()
     {
+        if (bStopping || ServerGeneration.load() != Generation) return;
         auto& Service = UnLuaNova::FLuaDebugService::Get();
         Service.ClearBreakpoints();
         for (const FLuaDapBreakpoint& Bp : Copy)
@@ -336,8 +356,10 @@ void FLuaDebugAdapter::OnAttach(const TSharedRef<FJsonObject>& Request)
     }
 
     // Attach 要装 debug hook，必须在游戏线程做；这里只排队，不等结果
-    AsyncTask(ENamedThreads::GameThread, [EnvIndex]()
+    const uint64 Generation = ServerGeneration.load();
+    AsyncTask(ENamedThreads::GameThread, [this, Generation, EnvIndex]()
     {
+        if (bStopping || ServerGeneration.load() != Generation) return;
         const TArray<UnLuaNova::FLuaEnv*> Envs = UnLuaNova::FLuaEnv::GetAllEnvs();
         if (!Envs.IsValidIndex(EnvIndex))
         {
@@ -559,8 +581,10 @@ void FLuaDebugAdapter::OnPause(const TSharedRef<FJsonObject>& Request)
     // RequestPause() touches VM state (it arms Luau's single step), so it has to run on
     // the game thread. The stop itself is picked up by PumpStoppedState, which sends the
     // `stopped` event - this response is only the acknowledgement.
-    AsyncTask(ENamedThreads::GameThread, []
+    const uint64 Generation = ServerGeneration.load();
+    AsyncTask(ENamedThreads::GameThread, [this, Generation]
     {
+        if (bStopping || ServerGeneration.load() != Generation) return;
         UnLuaNova::FLuaDebugService::Get().RequestPause();
     });
 
@@ -600,8 +624,10 @@ void FLuaDebugAdapter::OnDisconnect(const TSharedRef<FJsonObject>& Request)
     Service.SetSingleStep(false);
     Service.Continue();
 
-    AsyncTask(ENamedThreads::GameThread, []()
+    const uint64 Generation = ServerGeneration.load();
+    AsyncTask(ENamedThreads::GameThread, [this, Generation]()
     {
+        if (bStopping || ServerGeneration.load() != Generation) return;
         auto& Service2 = UnLuaNova::FLuaDebugService::Get();
         Service2.SetBlocking(false);
         Service2.Detach();
@@ -649,7 +675,7 @@ uint32 FLuaDebugAdapter::Run()
         if (ClientSocket)
         {
             FString Json;
-            while (ReadMessage(Json))
+            while (!bStopping && ReadMessage(Json))
             {
                 const auto Reader = TJsonReaderFactory<TCHAR>::Create(Json);
                 TSharedPtr<FJsonObject> Request;

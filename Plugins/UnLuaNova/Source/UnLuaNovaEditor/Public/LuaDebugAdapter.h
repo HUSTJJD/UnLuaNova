@@ -53,7 +53,7 @@ class UNLUANOVAEDITOR_API FLuaDebugAdapter : public FRunnable
 public:
     static FLuaDebugAdapter& Get();
 
-    /** 起服务；已在跑就只报错。成功返回 true。 */
+    /** 起服务；已在跑就只报错。0 selects an OS-assigned port. */
     bool Start(int32 InPort = DefaultPort);
 
     /**
@@ -65,7 +65,7 @@ public:
     void StopServer();
 
     bool IsRunning() const { return bRunning; }
-    int32 GetPort() const { return Port; }
+    int32 GetPort() const;
 
     // FRunnable
     virtual uint32 Run() override;
@@ -112,6 +112,8 @@ private:
     class FSocket* ListenerSocket = nullptr;
     class FSocket* ClientSocket = nullptr;
     class FRunnableThread* Thread = nullptr;
+    mutable FCriticalSection LifecycleLock;
+    std::atomic<uint64> ServerGeneration{0};
 
     TArray<uint8> ReadBuffer;
     int32 Port = DefaultPort;

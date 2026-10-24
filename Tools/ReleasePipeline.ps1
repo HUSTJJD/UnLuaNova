@@ -13,7 +13,7 @@ Release / Win64 / Lua + Luau (no operations performed):
   1. Lock project; snapshot config/environment and source provenance.
   2. Initialize pinned submodules; prepare isolated Python tools and MSVC environment.
   3. Repository audit, Python and PowerShell tooling regressions; build both analyzers.
-  4. Per backend: enable Timer/Event/OOP/static binding; build Editor; generate bindings; rebuild.
+  4. Per backend: enable features; archive old bindings; build Editor/generator; regenerate; rebuild.
   5. Build/cook/archive Development game; build Development Server target.
   6. Full Editor automation including Slow, connected cooked peers, screenshots and benchmark.
   7. Fresh declaration export and mandatory backend type checking.
@@ -44,6 +44,7 @@ foreach ($BackendName in @('Lua', 'Luau')) {
 $Started = [DateTime]::UtcNow
 $LockStream = $null
 $ConfigCaptured = $false
+$BindingBackups = [Collections.Generic.List[object]]::new()
 $SavedEnvironment = @{}
 $EnvironmentNames = @('PATH', 'LUA_LANGUAGE_SERVER', 'LUAU_LSP', 'UNLUANOVA_RELEASE_TOKEN',
     'UNLUANOVA_TEST_MANIFEST', 'UNLUANOVA_TEST_PEER_EXE', 'UNLUANOVA_TEST_NET_ROOT', 'UNLUANOVA_RECORD_FRAMES')
@@ -188,9 +189,16 @@ try {
             Set-ReleaseIniValue $IniPath '[/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]' 'bStaticBinding' 'True'
             Set-ReleaseIniValue $IniPath '[/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]' 'bAutoGenerateStaticBinding' 'False'
         }
-        Invoke-Stage "$B-editor-build" { Build-Target ($ProjectName + 'Editor') "$B-editor-build" } @('tool-environment', "$B-config")
+        Invoke-Stage "$B-editor-build" {
+            $script:BindingState = Backup-ReleaseStaticBindings $ProjectPath (Join-Path $BackendDir 'metadata/static-binding-backup')
+            $BindingBackups.Add($BindingState)
+            Build-Target ($ProjectName + 'Editor') "$B-editor-build"
+        } @('tool-environment', "$B-config")
         Invoke-Stage "$B-static-bindings" {
             Run $Editor @($ProjectPath, '-run=UnLuaNovaStaticBindingGenerator', '-unattended', '-NoSplash', '-stdout') "$B-generate-bindings"
+            if (-not (Test-Path -LiteralPath $BindingState.Source -PathType Leaf)) {
+                throw "Static binding generator produced no source: $($BindingState.Source)"
+            }
             Build-Target ($ProjectName + 'Editor') "$B-rebuild-bindings"
         } @("$B-editor-build")
         Invoke-Stage "$B-package-development" { Package-Game 'Development' $DevArchive "$B-package-development" } @("$B-static-bindings")
@@ -272,6 +280,10 @@ try {
     $Stages.Add([ordered]@{ name = 'pipeline'; status = 'failed'; seconds = 0; detail = $_.Exception.Message })
     Write-Warning $_.Exception.Message
 } finally {
+    for ($Index = $BindingBackups.Count - 1; $Index -ge 0; $Index--) {
+        try { Restore-ReleaseStaticBindings $BindingBackups[$Index] }
+        catch { $Stages.Add([ordered]@{ name = 'restore-static-bindings'; status = 'failed'; seconds = 0; detail = $_.Exception.Message }) }
+    }
     try {
         if ($ConfigCaptured) {
             if ($IniExisted) { [IO.File]::WriteAllBytes($IniPath, $IniBytes) }

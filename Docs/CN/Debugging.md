@@ -25,7 +25,10 @@ lua.dap stop
 
 VSCode 侧用 **attach** 方式连 `127.0.0.1:5699`（`request: "attach"`）。已实现：
 `initialize` / `attach` / `setBreakpoints` / `threads` / `stackTrace` / `scopes` /
-`variables` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`。
+`variables` / `pause` / `evaluate` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`。
+
+服务仅监听回环地址。端口 `0` 由系统分配，实际端口可通过 `lua.dap status` 查看。
+启动与停止串行化，停止后排队的旧服务任务不会作用于重启后的服务。
 
 几个行为要先知道，不然会以为坏了：
 
@@ -45,8 +48,8 @@ VSCode 侧用 **attach** 方式连 `127.0.0.1:5699`（`request: "attach"`）。�
   **让下一行成为停止点**。Luau 后端的 debug hook 只在断点与单步时触发，因此实现是
   临时武装一次单步、落地后立即解除（`FLuaDebugService::RequestPause`）。
   请求发生在游戏线程（`AsyncTask`），停止事件由 `PumpStoppedState` 推出。
-* **`evaluate`**：求值必须跑在 Lua 所在线程 —— 而断点命中时游戏线程正阻塞在 `Continue()`
-  自旋里，这恰好是唯一安全的时机。表达式被编译成
+* **`evaluate`**：当前在适配线程执行，运行中的 VM 缺少并发求值同步保护；应在断点暂停后使用，
+  不能据此宣称运行中求值是线程安全的。表达式被编译成
 
   ```lua
   return (function(<该帧的局部变量...>) return <表达式> end)(...)

@@ -28,6 +28,7 @@
 #include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
 #include "HAL/FileManager.h"
+#include "Internationalization/Regex.h"
 #include "UnLuaNovaTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
@@ -44,7 +45,7 @@ static bool SpecGenerate(const FString& OutputDir, FString& OutContent)
     IFileManager::Get().DeleteDirectory(*OutputDir, false, true);
 
     UUnLuaNovaStaticBindingGeneratorCommandlet* Commandlet = NewObject<UUnLuaNovaStaticBindingGeneratorCommandlet>();
-    const FString Params = FString::Printf(TEXT("-OutputDir=%s"), *OutputDir);
+    const FString Params = FString::Printf(TEXT("-OutputDir=\"%s\" -Selection=Modules -Modules=/Script/UnLuaNovaTestSuite"), *OutputDir);
     if (Commandlet->Main(Params) != 0)
         return false;
 
@@ -54,13 +55,39 @@ static bool SpecGenerate(const FString& OutputDir, FString& OutContent)
 
 void FStaticBindingGeneratorSpec::Define()
 {
+    It(TEXT("Generated thunk parameters use qualified enum values"), [this]()
+    {
+        const FString OutputDir = FPaths::ProjectSavedDir() / TEXT("Static Binding Generator Spec");
+        FString Content;
+        TEST_TRUE(SpecGenerate(OutputDir, Content));
+        TestTrue(TEXT("Int return and argument are qualified"),
+            Content.Contains(TEXT("StaticFuncThunk<EStaticPropKind::Int, EStaticPropKind::Int>")));
+        TestTrue(TEXT("Generator format participates in the fingerprint"), Content.Contains(TEXT("fingerprint: v2-")));
+
+        FRegexMatcher Thunks(FRegexPattern(TEXT("StaticFuncThunk<([^>]+)>")), Content);
+        int32 Count = 0;
+        while (Thunks.FindNext())
+        {
+            ++Count;
+            TArray<FString> Arguments;
+            Thunks.GetCaptureGroup(1).ParseIntoArray(Arguments, TEXT(","), true);
+            for (FString& Argument : Arguments)
+            {
+                Argument.TrimStartAndEndInline();
+                TestTrue(*Argument, Argument.StartsWith(TEXT("EStaticPropKind::")));
+            }
+        }
+        TestTrue(TEXT("At least one generated thunk was checked"), Count > 0);
+        IFileManager::Get().DeleteDirectory(*OutputDir, false, true);
+    });
+
     It(TEXT("生成静态绑定表到 -OutputDir 指定的目录"), EAsyncExecution::TaskGraphMainThread, [this]()
     {
         const FString OutputDir = FPaths::ProjectSavedDir() / TEXT("StaticBindingGeneratorSpec");
         IFileManager::Get().DeleteDirectory(*OutputDir, false, true);
 
         UUnLuaNovaStaticBindingGeneratorCommandlet* Commandlet = NewObject<UUnLuaNovaStaticBindingGeneratorCommandlet>();
-        const FString Params = FString::Printf(TEXT("-OutputDir=%s"), *OutputDir);
+        const FString Params = FString::Printf(TEXT("-OutputDir=\"%s\" -Selection=Modules -Modules=/Script/UnLuaNovaTestSuite"), *OutputDir);
         const int32 Result = Commandlet->Main(Params);
         TEST_EQUAL(Result, 0);
 

@@ -20,7 +20,7 @@ The default `Release` profile orchestrates the current **Win64** matrix. Operato
 | Repository/tools | Capability and link audit; Python regressions; PowerShell syntax, argument, process and timeout tests |
 | Analyzers | Initialize the MSVC environment and build pinned LuaLS and luau-lsp |
 | Backends | Run both Lua and Luau with Timer/Event/OOP and static binding enabled |
-| Editor | Build, generate static bindings, rebuild to compile the generated code |
+| Editor | Archive old static binding source, build Editor/generator, regenerate and rebuild the generated code |
 | Development | Build/cook/package/archive the game and build the Server target |
 | Editor automation | All registered UnLuaNova tests, including Slow, lifetime, extensions, showcase media and benchmarks |
 | Connected peers | Launch the current backend's cooked game, retaining topology, reports and logs; verify multicast reaches two clients |
@@ -30,6 +30,10 @@ The default `Release` profile orchestrates the current **Win64** matrix. Operato
 | Cleanup | Restore original config bytes and changed environment variables, clean up owned processes, write an aggregate verdict |
 
 `Saved/RunTests.lock` prevents concurrent runner backend changes. Avoid editing/building the same project in another process during validation. Configuration is restored; the last built binaries still belong to the last backend.
+
+Static binding backups live in each backend's `metadata/static-binding-backup/`. Only the fixed output file bearing the generator's ownership marker is archived. If no replacement exists when the pipeline finishes, the original is restored and the backup retained. Old generated code therefore cannot prevent the updated generator from building, and operators need no manual source cleanup. Fingerprints include a generator format version to invalidate obsolete output.
+
+DAP session tests use OS-assigned loopback ports and nonblocking game-thread polling with persistent TCP and UTF-8 byte buffers. Requests time out after 5 seconds and sessions after 20 seconds; cleanup removes polling before closing sockets. Full Editor runs for both backends include session, unknown-command, fragmented-request, frame-decoding, concurrent-stop and restart regressions.
 
 ## Verdict
 
@@ -65,4 +69,4 @@ Register new `UnLuaNova.*` suites in the test plugin's `Private/Specs` or `Priva
 
 This entry covers the defined Win64 matrix, not every unfinished product requirement or 100% code coverage. Feature-off combinations, other platforms/devices, Shipping runtime smoke, Iris/push-model modes and external benchmark adapters remain [audit work](Benchmark_Review.md). License scope and third-party notices also require separate maintenance.
 
-Only tool regressions, script parsing and safe DryRun were executed during this change. No compilation, UE, UAT or analyzer build was initiated. The full pipeline and new C++ manifest still await execution of the single command above.
+Validation status: tool regressions, script parsing and safe DryRun have passed. The full release pipeline and new C++ regressions still await validation through the single command above. Script checks do not establish successful compilation or UE runtime behavior.

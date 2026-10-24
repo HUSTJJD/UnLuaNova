@@ -4,10 +4,14 @@
 // cross-boundary access (reflection lookups, virtual dispatch, flag tests) into a
 // pre-resolved, POD, generator-friendly table.
 //
-// They are POD on purpose: the build-time generator emits them as `static constexpr`
-// tables, so there is zero start-up parsing cost and the compiler can keep them in
-// read-only memory. Fields that can only be known at runtime (FProperty*/UFunction*)
-// are filled in once by FStaticBindingRegistry::Register().
+// They are POD on purpose: the build-time generator emits them as plain static tables,
+// so there is zero start-up parsing cost.
+//
+// They are deliberately NOT const. Fields that can only be known at runtime
+// (FProperty*/UFunction*, offsets, flags, bResolved) are filled in *in place* by
+// FStaticBindingRegistry::Resolve() at the first lookup. A const table is placed in a
+// read-only section, and the first resolve then writes into it - an access violation,
+// not a compile error, which is why the generator must keep these writable.
 
 #pragma once
 

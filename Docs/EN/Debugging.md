@@ -26,7 +26,11 @@ lua.dap stop
 
 From VSCode, **attach** to `127.0.0.1:5699` (`request: "attach"`). Implemented:
 `initialize` / `attach` / `setBreakpoints` / `threads` / `stackTrace` / `scopes` /
-`variables` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`.
+`variables` / `pause` / `evaluate` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`.
+
+The listener binds only to loopback. Port `0` selects an OS-assigned port, shown by
+`lua.dap status`. Start and stop are serialized; queued work from a stopped server
+cannot affect a restarted server.
 
 Behaviour worth knowing before you conclude it is broken:
 
@@ -47,9 +51,9 @@ Neither is free, so both are worth spelling out:
   a stop; it **makes the next line a stop**. On Luau the debug hook only fires at breakpoints
   and single steps, so the implementation arms a single step and disarms it the moment it
   lands (`FLuaDebugService::RequestPause`).
-* **`evaluate`** - evaluation has to run on the thread that owns the VM, and when a breakpoint
-  hits that thread is exactly where it is blocked, which is the only safe moment. The
-  expression is compiled as
+* **`evaluate`** - currently executes on the adapter thread without synchronization against
+  a running VM. Use it while stopped at a breakpoint; evaluation during VM execution is
+  not thread-safe. The expression is compiled as
 
   ```lua
   return (function(<that frame's locals...>) return <expr> end)(...)
