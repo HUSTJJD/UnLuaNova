@@ -1,278 +1,33 @@
-<div align="center">
-
-<img src="Docs/Images/UnLuaNova.png" alt="UnLuaNova" width="160" />
-
 # UnLuaNova
 
-**A Lua scripting solution for Unreal Engine — the community continuation of [Tencent/UnLua](https://github.com/Tencent/UnLua)**
+Unreal Engine scripting with Lua / Luau, forked from [Tencent/UnLua](https://github.com/Tencent/UnLua).
 
-[![CI](https://github.com/HUSTJJD/UnLuaNova/actions/workflows/ci.yml/badge.svg)](https://github.com/HUSTJJD/UnLuaNova/actions/workflows/ci.yml)
-[![Docs](https://github.com/HUSTJJD/UnLuaNova/actions/workflows/docs.yml/badge.svg)](https://hustjjd.github.io/UnLuaNova/)
-[![License: Polyform Small Business](https://img.shields.io/badge/License-Polyform%20Small%20Business-0175C2.svg)](LICENSE)
-[![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.8-blueviolet.svg)](https://www.unrealengine.com/)
-[![Lua](https://img.shields.io/badge/Lua-5.5%20%2F%20Luau-blue.svg)](https://www.lua.org/)
-[![GitHub stars](https://img.shields.io/github/stars/HUSTJJD/UnLuaNova?style=social)](https://github.com/HUSTJJD/UnLuaNova/stargazers)
+[中文](README.md) | [Documentation](Docs/EN/index.md) | [Current audit](Docs/EN/Benchmark_Review.md)
 
-[Documentation](https://hustjjd.github.io/UnLuaNova/) · [Quick Start](#quick-start) · [Docs Index](#docs-index) · [中文](README.md)
+## Goal and State
 
-</div>
+The goal combines UnLua interoperability, slua-unreal product capabilities, FUnLua ownership and binding ideas, and Luau language/tooling support. **Complete parity, full Lua compatibility and superior performance have not been established.**
 
----
+The source includes reflection and overrides, static exports and generated thunks, containers and delegates, Lua 5.5.1 / Luau backends, debugging, profiling, type declarations, runtime libraries and experimental networking. Generated thunks still invoke `ProcessEvent`. Native Luau compilation is opt-in.
 
-## What is this
+The 2026-10-24 audit identifies release blockers in replication conditions, timer lifetime and Luau manual object references. Current C++ changes have not been built or executed. Old reports do not certify this working tree.
 
-The official UnLua release line froze at **v2.3.6 (2023-11)** — its `develop` branch still gets
-occasional fixes, but there is no release and no maintainer. UnLuaNova pulls those scattered
-community contributions into **one maintained release line**, and adds three things on top:
+- [Audit and acceptance order](Docs/EN/Benchmark_Review.md)
+- [Source, test and example matrix](Docs/feature-matrix.md)
+- [slua-unreal and FUnLua comparison](Docs/EN/Comparison_sluaunreal.md)
+- [Luau capabilities and compatibility](Docs/EN/Luau.md)
+- [Performance acceptance](Docs/EN/Performance_Parity_slua.md)
 
-| | What | Why it matters |
-|---|---|---|
-| **Static binding** | Binding tables are generated at build time for declared types | Skips the reflection hot path and runtime lookups |
-| **Two Lua backends** | [Lua 5.5](https://www.lua.org/) and [Luau](https://luau.org) (default), both as git submodules | Backend differences live behind a single abstraction layer |
-| **Lua observability** | CPU profiler (into Unreal Insights), headless debug service, sandbox, infinite-loop watchdog | Lua stops being a black box: performance and failures are traceable |
+## Integration
 
-In short: **keep UnLua's programming feel, add the maintenance, performance and debugging it never had.**
+Copy the required plugins from `Plugins/` into your UE project, initialize submodules with `git submodule update --init --recursive`, select the backend in `Config/DefaultUnLuaNova.ini`, and build the matching UE target. Bind a Blueprint module through the toolbar and place scripts in `Content/Script/`.
 
-## Why UnLuaNova
+Backend changes require rebuilding. UE 5.8.3 is the local baseline; other versions and platforms require explicit acceptance. Exact dependencies are recorded in [VERSIONS.md](Plugins/UnLuaNova/Source/ThirdParty/VERSIONS.md).
 
-| | Tencent/UnLua v2.3.6 | UnLuaNova |
-|:---|:---|:---|
-| Maintained | No (since 2023-11) | Yes |
-| Engine | UE 4.17 – 5.x (newer versions need porting) | Baseline **UE 5.8.3**, community UE 5.4 / 5.6 fixes merged |
-| Lua backend | One single Lua version | **Lua 5.5 / Luau**, switchable |
-| Binding | Runtime reflection | Build-time **static binding** (opt-out type selection) |
-| Performance | — | `CallUEFast` skips redundant lookups, persistent parameter buffers |
-| Observability | Minimal | CPU profiler / memory stats / debug service / sandbox / watchdog |
-| Type checking | LuaLS + generated EmmyLua annotations | Generated Luau `.d.lua`, checked by `luau-lsp` |
+See the [quickstart](Docs/EN/Quickstart_For_UE_Newbie.md), [programming guide](Docs/EN/UnLuaNova_Programming_Guide.md) and [examples](Docs/EN/Showcase.md).
 
-For **why each of these is built the way it is, what it buys and what it costs**:
-[Why UnLuaNova](Docs/EN/WhyUnLuaNova.md) (Chinese: [相对 UnLua：原理与优势](Docs/CN/WhyUnLuaNova.md)).
+## Validation and Licensing
 
-## Test results
+`python Tools/AuditRepository.py` checks the repository without compiling. It does not prove runtime correctness. [Test instructions](Docs/EN/Testing.md) describe maintainer-run UE validation; `RunTests.ps1` builds by default. No build was started during this audit.
 
-The suite runs **in full, once per backend**, and the reports are generated by
-`Tools/RunTests.ps1` and shipped with the repo — not a sample, every case in the tree:
-
-| Backend | Cases | Passed | Failed | Skipped | Duration | Static type check |
-|:---|---:|---:|---:|---:|---:|:---|
-| **Luau** (default) | **518** | 518 ✅ | 0 | 0 | 205.9s | `luau-lsp` strict: **0 errors** |
-| Lua 5.5 | 509 | 509 ✅ | 0 | 0 | 225.1s | LuaLS: **0 errors** |
-
-Full reports: [Luau backend](Docs/test-luau-report.md) · [Lua 5.5 backend](Docs/test-lua-report.md)
-
-59 of those 518 are **regression tests for upstream issues** (`Issue276` … `Issue668`) —
-problems that were reported and patched upstream but never verified; here each one is a case
-that turns red, rather than a conversation left sitting in the issue tracker.
-
-The 9 cases Luau has over Lua 5.5 are the Luau-only capabilities: native `vector` ↔ `FVector`,
-`buffer` reads and writes, sandbox interception, **native breakpoints and single-stepping**
-(zero cost when idle), and categorised allocation stats. Under Lua 5.5 these **do not exist** —
-they are not degraded fallbacks — see [Luau Backend](Docs/EN/Luau.md).
-
-### It actually runs
-
-These four are not staged screenshots; they are frames the automation captured itself
-(cases `UnLuaNova.Showcase.*`):
-
-<div align="center">
-
-<table>
-<tr>
-<td align="center"><img src="Docs/Images/tests-luau/Showcase_Binding.png" width="400"><br><b>Static binding</b></td>
-<td align="center"><img src="Docs/Images/tests-luau/Showcase_Container.png" width="400"><br><b>Container access</b></td>
-</tr>
-<tr>
-<td align="center"><img src="Docs/Images/tests-luau/Showcase_Override.png" width="400"><br><b>Blueprint event override</b></td>
-<td align="center"><img src="Docs/Images/tests-luau/Showcase_UMG.png" width="400"><br><b>UMG and Lua lifetime</b></td>
-</tr>
-</table>
-
-</div>
-
-Each showcase also has a 60-frame clip recorded from the live run
-(`Tools/RunTests.ps1 -Video`, standard H.264 mp4):
-
-[Static binding](Docs/Images/tests-luau/Showcase_Binding_Clip.mp4) ｜
-[Container access](Docs/Images/tests-luau/Showcase_Container_Clip.mp4) ｜
-[Blueprint event override](Docs/Images/tests-luau/Showcase_Override_Clip.mp4) ｜
-[UMG and Lua lifetime](Docs/Images/tests-luau/Showcase_UMG_Clip.mp4) ｜
-[Whole session: first case to last](Docs/Images/tests-luau/session.mp4)
-
-> GitHub does not play mp4 files stored in the repo inline — open the links above. The
-> [report pages](https://hustjjd.github.io/UnLuaNova/) on the docs site do play them.
-
-### Call overhead
-
-`UnLuaNova.Perf.Benchmark`, measured locally on UE 5.8.3 Development:
-
-| Path | Iterations | Lua 5.5 | Luau |
-|---|---:|---:|---:|
-| Direct C++ call | 20000 | 0.0014 | 0.0016 |
-| UE reflection `ProcessEvent` | 20000 | 0.4588 | 0.4435 |
-| Calling a UE function from Lua | 20000 | 1.4388 | 1.4340 |
-| Pure VM: arithmetic loop | 200000 | 0.0099 | **0.0063** |
-| Pure VM: function call | 200000 | 0.0297 | **0.0203** |
-| Pure VM: table grow (empty table, key by key) | 200000 | 0.0124 | **0.0119** |
-| Pure VM: table read (array index) | 200000 | 0.0124 | **0.0074** |
-
-µs per op. The first three rows cross the language boundary, the last four do not — that split is
-the point:
-
-+ **Crossing into C++ costs microseconds, and costs the same on both backends** (1.44 µs). That
-  hop is UnLuaNova's parameter marshalling and function resolution, not the VM — switching
-  backends neither speeds up nor slows down calling the engine from script.
-+ **For the script itself, Luau is faster across the board**: arithmetic loops 36% faster,
-  function calls 32% faster, table reads 40% faster. Table *growth* is only 4% faster — that row
-  is memory allocation and rehash, where VM optimisations have little room.
-+ **Table grow and table read have to be measured separately.** Growing an empty table one key at
-  a time is dominated by rehash, not by lookup. Measuring them together tells you neither whether
-  building a table is expensive nor whether reading one is, and those are different problems for
-  whoever writes the script.
-
-> Single sample, but the two backends ran back to back about a minute apart under comparable load
-> — the first three rows landing on top of each other is the evidence. For a tighter number, run
-> several rounds and take the median.
-
-Then there is what Lua 5.5 simply does not have, `vector` being the clearest one:
-
-```lua
-local Native = vector.create(1, 2, 3)
-local Sum = (Native + Native) * 2     -- value type arithmetic, zero allocation
-
-local Vec = UE.FVector(1, 2, 3)
-local Sum2 = (Vec + Vec) * 2          -- every + allocates a userdata, then collects it
-```
-
-`vector` keeps its three components inside the TValue, so arithmetic allocates nothing;
-`FVector` is a userdata with a metatable, so every `a + b` allocates one and hands it to the
-GC. Math-heavy scripts — directions, velocities, offsets, interpolation — can skip that whole
-allocation chain under Luau.
-
-> To reproduce: `.\Tools\RunTests.ps1 -Backend Both -Publish` — one report per backend, with
-> the timings written to `Saved/Benchmark/`.
-
-## Quick start
-
-```bash
-# 1. Copy the Plugins directory into your UE project root
-# 2. Initialize submodules (Lua 5.5 and Luau are submodules - without them the VM sources are missing)
-git submodule update --init --recursive
-```
-
-3. Restart the project
-4. Create a Blueprint → `Bind` in the UnLuaNova toolbar → fill in the Lua module path (e.g. `GameModes.BP_MyGameMode`)
-5. Pick `Create Lua Template File` and write code in `Content/Script/GameModes/BP_MyGameMode.lua`
-
-## What the code looks like
-
-Access `UCLASS` / `UPROPERTY` / `UFUNCTION` / `USTRUCT` / `UENUM` directly with no glue code,
-and replace Blueprint implementations outright:
-
-```lua
-local BP_PlayerController_C = UnLuaNova.Class()
-
-function BP_PlayerController_C:ReceiveBeginPlay()
-    -- call engine APIs directly
-    local Widget = UE.UWidgetBlueprintLibrary.Create(
-        self, UE.UClass.Load("/Game/Core/UI/UMG_Main_C"))
-    Widget:AddToViewport()
-
-    -- keep the original Blueprint implementation by calling it explicitly
-    self.Overridden.ReceiveBeginPlay(self)
-end
-
--- override a Blueprint event with return values
-function BP_PlayerController_C:GetCharacterInfo(HP, Position, Name)
-    return true, 99, UE.FVector(128.0, 128.0, 0.0), "Marcus"
-end
-
-return BP_PlayerController_C
-```
-
-The same pattern covers **Replication Notify**, **Animation Notify** and **Input Event**:
-match the Lua function name (`AnimNotify_xxx`) and the replacement is done — no helper code.
-
-## Status
-
-| Item | Value |
-|---|---|
-| Current version | **1.0.0** ([CHANGELOG](CHANGELOG.md)) |
-| Engine baseline | **UE 5.8.3** (source build) |
-| Lua backend | **Luau (default)** / Lua 5.5 — both as submodules |
-| Upstream baseline | Tencent/UnLua v2.3.6 + `develop` (2026-04) |
-| License | Polyform Small Business 1.0.0 / paid above threshold |
-
-The Luau backend is green on all 518 automated cases (see [Test results](#test-results)) — ready to
-evaluate and adopt. Before shipping, pin a version and read the two known-limits sections:
-[Why UnLuaNova](Docs/EN/WhyUnLuaNova.md#6-costs-and-known-limits) and
-[Luau Backend](Docs/EN/Luau.md#6-what-is-still-missing).
-
-## Docs index
-
-<div align="center">
-
-| Chinese | English |
-|:---|:---|
-| [UE 新手快速上手](Docs/CN/Quickstart_For_UE_Newbie.md) | [Programming Guide](Docs/EN/UnLuaNova_Programming_Guide.md) |
-| [功能清单](Docs/CN/Features.md) | [API Reference](Docs/EN/API.md) |
-| [相对 UnLua：原理与优势](Docs/CN/WhyUnLuaNova.md) | [Why UnLuaNova](Docs/EN/WhyUnLuaNova.md) |
-| [Luau 后端](Docs/CN/Luau.md) | [Luau Backend](Docs/EN/Luau.md) |
-| [编程指南](Docs/CN/UnLuaNova_Programming_Guide.md) | [How To Implement Overriding](Docs/EN/How_To_Implement_Overriding.md) |
-| [API 参考](Docs/CN/API.md) | [FAQ](Docs/EN/FAQ.md) |
-| [设置项](Docs/CN/Settings.md) | [Docs site](https://hustjjd.github.io/UnLuaNova/) |
-| [调试](Docs/CN/Debugging.md) · [IntelliSense](Docs/CN/IntelliSense.md) | |
-| [静态导出绑定](Docs/CN/StaticExportBinding.md) · [控制台命令](Docs/CN/ConsoleCommand.md) | |
-| [测试与自动化](Docs/CN/Testing.md) · [FAQ](Docs/CN/FAQ.md) | |
-
-</div>
-
-Upstream changelog for 2019–2023: [`Docs/Archive/UnLua_CHANGELOG.md`](Docs/Archive/UnLua_CHANGELOG.md).
-
-## Migrating from UnLua
-
-The Lua global was renamed from `UnLua` to **`UnLuaNova`** — a bulk rename is enough:
-
-```lua
-local M = UnLua.Class()       -- UnLua
-local M = UnLuaNova.Class()   -- UnLuaNova
-```
-
-UCLASS names changed too (`UUnLuaSettings` → `UUnLuaNovaSettings`, etc.), so assets need a
-resave and `Config/*.ini` section names need migrating.
-
-## Contributing
-
-A star is the cheapest way to help ⭐ — also welcome:
-
-- Issues: build problems, engine version porting, API questions
-- PRs: docs fixes, new tests, merging unmerged community fixes from upstream
-- Tests: `.\Tools\RunTests.ps1` (see [Testing and Automation](Docs/EN/Testing.md))
-
-## License
-
-UnLuaNova is released under the **[Polyform Small Business License 1.0.0](https://polyformproject.org/licenses/small-business/1.0.0)**,
-with additional terms that tighten the size thresholds (see [LICENSE](LICENSE)):
-
-| Who you are | May you use it? |
-|:---|:---|
-| An individual: learning, hobby projects, open source | Yes, free |
-| An organization: **< 10** employees + contractors **and** **< $1M** revenue/funding in the prior tax year | Yes, free, including commercial use |
-| Anyone above either threshold | Commercial license required, see [COMMERCIAL.md](COMMERCIAL.md) |
-
-Size is counted for the **whole group** — parents, subsidiaries and entities under common
-control count as one, so a small studio owned by a large publisher cannot count only itself.
-
-In short: the source is public, small teams may use it commercially for free, and those who
-make money from it pay.
-
-Contributions require signing the [CLA](CLA.md), which grants the maintainers the right to
-sublicense your contribution to commercial licensees. Without it a commercial license cannot
-be granted cleanly, and there is no revenue to keep the project maintained.
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-The upstream components remain MIT-licensed and are unaffected by this change:
-[Tencent/UnLua](https://github.com/Tencent/UnLua), [Lua 5.5](https://www.lua.org/) and
-[Luau](https://github.com/luau-lang/luau) — see [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md).
-
-Lua VM: [Lua 5.5](https://www.lua.org/) (MIT); Luau: [luau-lang/luau](https://github.com/luau-lang/luau) (MIT).
-Both are git submodules — run `git submodule update --init --recursive` after cloning.
+Preserve upstream UnLua MIT notices. The root license contains PolyForm Small Business terms plus additional terms; file notices and the scope of the root license require reconciliation by the rights holder. See [third-party notices](LICENSE-THIRD-PARTY.md) and [license status](Docs/EN/License.md). Comparison does not imply endorsement or permission to copy source.

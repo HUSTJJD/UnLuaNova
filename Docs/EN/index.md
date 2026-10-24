@@ -1,40 +1,17 @@
----
-title: English Docs
-description: UnLuaNova English documentation — programming guide, API reference and FAQ
----
+# Documentation
 
-# English Docs
+## Product and Status
 
-Start with the Programming Guide, or jump straight to the reference you need.
+- [Quickstart](Quickstart_For_UE_Newbie.md), [features](Features.md), [design goals](WhyUnLuaNova.md)
+- [Audit and roadmap](Benchmark_Review.md), [capability matrix](../feature-matrix.md)
+- [slua-unreal / FUnLua comparison](Comparison_sluaunreal.md), [performance acceptance](Performance_Parity_slua.md)
 
-<div class="grid cards" markdown>
+## Usage
 
-- :material-book-open-variant: **[Programming Guide](UnLuaNova_Programming_Guide.md)**
-
-    Binding, calling the engine from Lua, calling Lua from the engine, garbage collection.
-
-- :material-help-circle: **[Why UnLuaNova](WhyUnLuaNova.md)**
-
-    Pain, mechanism, payoff and limits for every addition over UnLua v2.3.6.
-
-- :material-language-lua: **[Luau Backend](Luau.md)**
-
-    Language features available today, sandboxing, native breakpoints and luau-lsp.
-
-- :material-api: **[API Reference](API.md)**
-
-    C++ API, Lua API and the build-time macros.
-
-- :material-call-split: **[How To Implement Overriding](How_To_Implement_Overriding.md)**
-
-    How Blueprint events get replaced by Lua implementations.
-
-- :material-help-circle: **[FAQ](FAQ.md)**
-
-    Frequently asked questions.
-
-</div>
-
-!!! tip "Looking for more?"
-    The Chinese docs are the source of truth and get new topics first.
-    Machine translation of [中文文档](../CN/index.md) works well enough in a pinch.
+- [Programming](UnLuaNova_Programming_Guide.md), [API](API.md), [C++ API](CxxApi.md)
+- [Luau](Luau.md), [runtime libraries](StdLib.md), [settings](Settings.md)
+- [Object binding](LuaDrivenObjects.md), [experimental networking](LuaNetworking.md)
+- [Architecture](Architecture.md), [static exports](StaticExportBinding.md), [overrides](How_To_Implement_Overriding.md)
+- [Debugging](Debugging.md), [commands](ConsoleCommand.md), [IntelliSense](IntelliSense.md)
+- [Testing](Testing.md), [test status](TestReports.md), [examples](Showcase.md)
+- [Licensing](License.md), [FAQ](FAQ.md)
