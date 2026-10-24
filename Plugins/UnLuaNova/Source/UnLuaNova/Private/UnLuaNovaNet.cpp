@@ -247,7 +247,7 @@ namespace UnLuaNova
             if (Decl.bReliable)
                 Flags |= FUNC_NetReliable;
 
-            Function->FunctionFlags = Flags;
+            Function->FunctionFlags = static_cast<EFunctionFlags>(Flags);
 
             FProperty* Previous = nullptr;
             for (const FLuaRpcParam& Param : Decl.Params)

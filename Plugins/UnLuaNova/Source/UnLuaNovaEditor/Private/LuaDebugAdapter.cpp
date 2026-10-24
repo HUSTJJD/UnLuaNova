@@ -15,6 +15,7 @@
 #include "LuaDebugAdapter.h"
 
 #include "LuaDebugService.h"
+#include "LuaEnv.h"
 #include "UnLuaNovaModule.h"
 #include "UnLuaNovaBase.h"
 
@@ -301,7 +302,10 @@ void FLuaDebugAdapter::OnInitialize(const TSharedRef<FJsonObject>& Request)
 {
     const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
     Body->SetBoolField(TEXT("supportsConfigurationDoneRequest"), false);
-    Body->SetBoolField(TEXT("supportsEvaluateRequest"), false);
+    // OnEvaluate is implemented - locals and upvalues of the requested frame are bound as
+    // parameters of a wrapper, and the expression runs with them in scope. Declaring it
+    // false here is what made IDEs grey out the watch window entirely.
+    Body->SetBoolField(TEXT("supportsEvaluateRequest"), true);
     Body->SetBoolField(TEXT("supportsSetVariable"), false);
     Body->SetBoolField(TEXT("supportsSingleThreadExecutionRequests"), true);
 
@@ -319,18 +323,31 @@ void FLuaDebugAdapter::OnInitialize(const TSharedRef<FJsonObject>& Request)
 
 void FLuaDebugAdapter::OnAttach(const TSharedRef<FJsonObject>& Request)
 {
-    // Attach 要装 debug hook，必须在游戏线程做；这里只排队，不等结果
-    AsyncTask(ENamedThreads::GameThread, []()
+    // Which env to attach to. "The" env is not a well-defined thing once
+    // ULuaEnvLocator_ByGameInstance is in play - one per game instance, so a listen server
+    // with two clients has three, and attaching to the wrong one means breakpoints that
+    // never fire with no error anywhere. A launch.json that names an index is explicit;
+    // leaving it out keeps the old single-env behaviour.
+    int32 EnvIndex = 0;
+    const TSharedPtr<FJsonObject> Args = Request->GetObjectField(TEXT("arguments"));
+    if (Args.IsValid() && Args->HasField(TEXT("env")))
     {
-        auto* Env = IUnLuaNovaModule::Get().GetEnv();
-        if (!Env)
+        EnvIndex = (int32)Args->GetNumberField(TEXT("env"));
+    }
+
+    // Attach 要装 debug hook，必须在游戏线程做；这里只排队，不等结果
+    AsyncTask(ENamedThreads::GameThread, [EnvIndex]()
+    {
+        const TArray<UnLuaNova::FLuaEnv*> Envs = UnLuaNova::FLuaEnv::GetAllEnvs();
+        if (!Envs.IsValidIndex(EnvIndex))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("lua.dap: no lua env to attach"));
+            UE_LOG(LogUnLuaNova, Warning, TEXT("lua.dap: no lua env at index %d (%d env(s) exist)"),
+                EnvIndex, Envs.Num());
             return;
         }
 
         auto& Service = UnLuaNova::FLuaDebugService::Get();
-        Service.Attach(Env->GetMainState());
+        Service.Attach(Envs[EnvIndex]->GetMainState());
         // 阻塞模式：命中断点后游戏线程自旋等 Continue()，IDE 才有机会看栈
         Service.SetBlocking(true);
     });
@@ -398,10 +415,12 @@ void FLuaDebugAdapter::OnSetBreakpoints(const TSharedRef<FJsonObject>& Request)
 void FLuaDebugAdapter::OnThreads(const TSharedRef<FJsonObject>& Request)
 {
     TArray<TSharedPtr<FJsonValue>> Threads;
-    const TSharedRef<FJsonObject> Thread = MakeShared<FJsonObject>();
-    Thread->SetNumberField(TEXT("id"), 1);
-    Thread->SetStringField(TEXT("name"), TEXT("Lua"));
-    Threads.Add(MakeShared<FJsonValueObject>(Thread));
+    // Not named Thread: FLuaDebugAdapter has a member by that name (the DAP socket
+    // thread), and shadowing it is an error under the plugin's warning settings.
+    const TSharedRef<FJsonObject> ThreadEntry = MakeShared<FJsonObject>();
+    ThreadEntry->SetNumberField(TEXT("id"), 1);
+    ThreadEntry->SetStringField(TEXT("name"), TEXT("Lua"));
+    Threads.Add(MakeShared<FJsonValueObject>(ThreadEntry));
 
     const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
     Body->SetArrayField(TEXT("threads"), Threads);

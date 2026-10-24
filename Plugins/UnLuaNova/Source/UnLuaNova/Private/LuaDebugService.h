@@ -121,6 +121,7 @@ namespace UnLuaNova
 
         void OnStop(lua_State* L, lua_Debug* Ar, bool bAtBreakpoint);
         bool MatchesBreakpoint(const FString& Source, int32 Line) const;
+        void SyncVmBreakpoints();
         void CaptureStackTrace(lua_State* L);
         void CaptureLocals(lua_State* L);
 

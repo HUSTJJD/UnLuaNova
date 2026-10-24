@@ -179,6 +179,23 @@ namespace UnLuaNova
     {
         return GCompiledChunks;
     }
+
+    bool IsClassTableFreezeEnabled()
+    {
+#if UNLUANOVA_HAS_READONLY_TABLES
+        static auto CVar = IConsoleManager::Get().RegisterConsoleVariable(
+            TEXT("lua.sandbox.freezeclasstables"),
+            0,
+            TEXT("Make each class table read-only as it is registered, so a script cannot add to or replace "
+                 "class members. 0=off (default), 1=on. Opt-in because it is observable: code that monkey-patches "
+                 "a class from Lua stops working. Only affects classes registered after the change. Luau backend only."),
+            ECVF_Default);
+
+        return CVar->GetInt() != 0;
+#else
+        return false;
+#endif
+    }
 }
 
 #else // plain-Lua backend
@@ -208,6 +225,11 @@ namespace UnLuaNova
     int32 GetNativeCodeGenChunkCount()
     {
         return 0;
+    }
+
+    bool IsClassTableFreezeEnabled()
+    {
+        return false;
     }
 }
 

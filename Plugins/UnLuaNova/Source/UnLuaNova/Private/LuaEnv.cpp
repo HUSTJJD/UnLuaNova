@@ -434,6 +434,29 @@ namespace UnLuaNova
         return AllEnvs;
     }
 
+    TArray<FLuaEnv*> FLuaEnv::GetAllEnvs()
+    {
+        TArray<FLuaEnv*> Envs;
+        Envs.Reserve(AllEnvs.Num());
+
+        for (const auto& Pair : AllEnvs)
+        {
+            if (Pair.Value)
+                Envs.Add(Pair.Value);
+        }
+
+        // Ordered by main state address: it is the only identity an env has that is both
+        // stable and comparable, and it keeps the index a user typed valid until that env
+        // is destroyed. Sorted by name instead would reshuffle the moment Env_10 appears
+        // ("Env_10" < "Env_2").
+        Envs.Sort([](const FLuaEnv& A, const FLuaEnv& B)
+        {
+            return A.GetMainState() < B.GetMainState();
+        });
+
+        return Envs;
+    }
+
     FLuaEnv* FLuaEnv::FindEnv(const lua_State* L)
     {
         if (!L)

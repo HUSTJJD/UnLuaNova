@@ -62,14 +62,22 @@ Plugins/UnLuaNovaTestSuite/
 
 # 不录（只截静态图）
 .\Tools\RunTests.ps1 -NoVideo
+
+# 快层：跳过慢用例（UnLuaNova.Slow.*），改完代码想马上知道有没有弄坏时用
+.\Tools\RunTests.ps1 -Tier Fast -Backend Luau
+
+# 强制在编辑器里跑 / 强制在游戏进程里跑（默认 Auto，见下）
+.\Tools\RunTests.ps1 -Carrier Editor
+.\Tools\RunTests.ps1 -Carrier Game -Filter UnLuaNova.API
 ```
 
-脚本封装的就是这条命令，team 里不用再手敲 `-ExecCmds`：
+脚本封装的就是这条命令，team 里不用再手敲 `-ExecCmds`（过滤器可以有多条，`-Tier Fast`
+就是靠排多个 `RunTests` 实现的）：
 
 ```
-UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
-    -ExecCmds="Automation RunTests <filter>; Quit"
-    -ReportExportPath=<dir> -abslog=<dir>\Editor.log
+UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout      # 或 <Project>.exe ... -game
+    -ExecCmds="Automation RunTests <filter>; ...; Quit"
+    -ReportExportPath=<dir> -abslog=<dir>\Editor.log               # -game 时是 Game.log
 ```
 
 `-Backend` 默认 `Both`，所以上面那条"跑全部"实际上是**两轮**：改配置 → 编译 → 跑测试 →
@@ -87,6 +95,9 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `-SkipBuild` | 关 | 跳过编译，直接跑现有二进制；**不允许同时切换后端**（见下） |
 | `-BuildOnly` | 关 | 只编译不跑：编完就退出，不启动编辑器、不生成报告。给 nightly 与"改完 spec 先确认能编过"用，与 `-SkipBuild` 互斥 |
 | `-Filter` | `UnLuaNova` | 用例过滤器，前缀匹配 |
+| `-Carrier` | `Auto` | 测试跑在哪个进程：`Editor`（`UnrealEditor-Cmd`）、`Game`（`<Project>.exe -game`）、`Auto`（按静态分类挑：这一轮没有要视口/截图/联网的用例就用 `Game`） |
+| `-Tier` | `All` | `Fast` 跳过慢用例（见 `-SlowPrefix`），给本地快速验证用；`All` 全跑，给 nightly 用 |
+| `-SlowPrefix` | `UnLuaNova.Slow.` | `Fast` 层要跳过的用例名前缀。UE 的自动化没有排除语法，所以"除了慢的之外全跑"= 把剩下的段各排一条 `RunTests` |
 | `-Map` | 空 | 场景测试要开哪个关卡；多数用例自建 World，不需要 |
 | `-OutputDir` | `Saved/TestReports/<时间戳>` | 报告输出根目录，每个后端一个子目录 |
 | `-ExtraCommands` | 空 | 跑完追加执行的控制台命令（截图用） |
@@ -121,6 +132,41 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 ```
 
 少跑的那几条不会被算成通过——把无头跑不了的条件判成"通过"才是假结果。
+
+### 载体：测试跑在哪个进程里
+
+`-Carrier` 决定这一轮用什么进程装用例：
+
+| 载体 | 进程 | 编的目标 | 什么时候用 |
+|:--|:--|:--|:--|
+| `Editor` | `UnrealEditor-Cmd.exe` | `<Project>Editor` | 要编辑器本身：PIE 编排、视口截图、静态绑定生成器 |
+| `Game` | `<Project>.exe -game` | `<Project>` | 其余用例：不起编辑器，启动快，且 `UWorld` 生命周期 / `GetNetMode()` 更接近玩家手上的运行时 |
+| `Auto` | 按静态分类挑 | 同上 | **默认**。这一轮要跑的用例里没有 D/E/C 类（视口 / 截图 / 联网）就走 `Game` |
+
+分类来自 `Tools/ClassifyTests.py`（扫 `Specs/` 与 `Tests/` 的源码，不跑测试），报告里
+"按运行环境分类"那一节就是它。118 个用例文件里只有 2 个真的离不开编辑器。
+
+跟着载体一起变的还有三处，脚本都替你处理了：截图目录（`Saved/Screenshots/WindowsEditor`
+vs `Windows`）、日志名（`Editor.log` vs `Game.log`）、后端 DLL 名
+（`UnrealEditor-Lua.dll` vs `<Project>-Lua.dll`）。
+
+`Game` 载体第一次跑要编一次游戏目标，之后是增量；静态类型检查要用编辑器 commandlet，
+若这台机器没有对应后端的编辑器二进制，脚本会明说"跳过"而不是拿一份来路不明的 DLL 去跑。
+
+### 分层：快层与全层
+
+```powershell
+# 快层：跳过 UnLuaNova.Slow.*（跨进程联网用例都在这一段里）
+.\Tools\RunTests.ps1 -Tier Fast -Backend Luau
+
+# 全层（默认）：nightly / 发版前
+.\Tools\RunTests.ps1 -Backend Both
+```
+
+约定：**慢用例自己站到 `UnLuaNova.Slow.*` 段里**。UE 的自动化只有过滤器、没有排除语法，
+所以 `Fast` 层的做法是——从分类里取出所有不落在慢段里的用例名，归并成"段"，每个段排一条
+`Automation RunTests <段>;`。代价是分类里没有的用例 Fast 层也不会跑（所以报告顶部的
+"未分类"计数必须是 0，`ClassifyTests.py` 会把它打到 stderr）。
 
 ## 用例清单
 
@@ -182,6 +228,10 @@ UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash -stdout
 | `UnLuaNova.Editor.StaticBindingGenerator` | 静态绑定生成器 | 仅编辑器 |
 | `UnLuaNova.Extensions` | LuaRapidjson / LuaProtobuf / LuaSocket | 需可选扩展插件 |
 | `UnLuaNova.Lua` | 执行 `Content/Script/Tests/Lua/*.spec.lua`，把每条 Lua 侧结果搬回 C++ | 失败带 Lua 文件名与行号 |
+| `UnLuaNova.API.Net` | Lua 声明式网络：解析、UFunction 标记、类型化参数、函数表、卸载还原 | 不需要网络 |
+| `UnLuaNova.API.Net.ClientServer` | 同进程 PIE listenserver：每种 RPC 在哪一端执行、参数过线、Lua 声明的复制字段到达客户端 | 单进程 |
+| `UnLuaNova.API.Net.DedicatedServer` | 两个 `-game` 进程各自声明出的 RPC 编号一致（服务器那台是 `NM_DedicatedServer`） | 跨进程，peer 之间不连 |
+| `UnLuaNova.Slow.Net.Multicast` | 服务器一次 Lua 声明的 multicast 到达两个客户端进程各自的 Lua | **慢层**，跨进程且真连（`-Tier Fast` 会跳过） |
 | `UnLuaNova.Perf.Benchmark` | 跨语言调用（Native / 反射 / Lua）+ 纯 VM 计算（算术 / 函数调用 / 表增长 / 表读取）+ 容器传参（`Lua.Container.PointsAreCoplanar`），按后端写 CSV 到 `Saved/Benchmark/` | 报告里与**同一后端**的上一轮环比，只告警不判定 |
 | `UnLuaNova.Regression.Issue276` | 游戏世界暂停后 `coroutine delay` 不工作 | |
 | `UnLuaNova.Regression.Issue286` | 蓝图 `TMap FindRef` 错误 | |
@@ -461,19 +511,28 @@ $env:UNLUANOVA_RECORD_FRAMES = "0"; .\Tools\RunTests.ps1 -Backend Luau
 
 #### 多窗口
 
-联网用例里画面不止一个：`-RecordWindow` 可以把 peer 的窗口一起录进来，每个窗口一个
-文件。
+联网用例里画面不止一个。`-RecordWindow` 可以手工登记一个窗口：
 
 ```powershell
 .\Tools\RunTests.ps1 -RecordWindow "客户端1=UnrealEditor" -RecordWindow "客户端2=UnrealEditor"
 ```
 
-产物是 `videos/session.mp4`（编辑器）+ `videos/session-客户端1.mp4` /
-`videos/session-客户端2.mp4`，报告里逐个列出。同名进程的多个窗口不会录重
-（已录过的窗口会被排除）。
+但联网 peer 是用例自己起的（`FNetSession`），脚本事先不知道它们什么时候出现、叫什么。
+所以 `FNetSession` 每起一个 peer 就往 `Saved/UnLuaNovaNet/<session>/topology.json` 里写一行
+（label / role / pid / 是否 headless），脚本一边跑一边每 3 秒看一次，给新出现的非 headless
+peer 补一个录制。**也就是说联网 peer 的窗口是自动录的，不用填 `-RecordWindow`** —— 文件
+名直接用用例给 peer 取的 label：`videos/session-Client1.mp4`、`session-Client2.mp4`。
+
+产物是 `videos/session.mp4`（主进程）+ 每个 peer 一个文件，报告里逐个列出。同名进程的
+多个窗口不会录重（已录过的窗口 id 会被排除）。
 
 **没有窗口的进程不录**（独立服务器是 headless 的，没有 `MainWindowTitle`），日志里会
-说明哪一个被跳过了 —— 它要看的是日志，不是画面。只有所有窗口都没起来时才退回整屏录制。
+说明哪一个被跳过了 —— 它要看的是日志，不是画面。只有所有窗口都没起来时才退回整屏录制
+（这一条只适用于主窗口；单个 peer 没窗口不会拖着整屏一起录）。
+
+headless 的 DS 虽然没有录屏，但它的东西不会丢：每个 peer 的 `-abslog` 都写在会话目录的
+`logs/` 下，`RunTests.ps1` 跑完把整个 `Saved/UnLuaNovaNet`（报告 JSON + 日志 + topology）
+归档到这一轮的 `<RunDir>/net/`，控制台会打出归档了几份。
 
 ### 编码器从哪来
 

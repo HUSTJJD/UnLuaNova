@@ -14,9 +14,11 @@
 
 #include "LuaLib_Io.h"
 
-#include "FileHelpers.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/FileManager.h"
+// Misc/FileHelper.h, not FileHelpers.h: the latter is editor-only, and this is a runtime
+// module that has to build for a packaged game.
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "UnLuaNovaBase.h"
 

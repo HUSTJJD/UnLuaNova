@@ -84,6 +84,31 @@ namespace UnLuaNova
         FLuaVmHooks::Get().Add(L, LUA_MASKLINE, this,
             [](lua_State* InL, lua_Debug* Ar) { DebugHook(InL, Ar); });
 #endif
+
+        // A service that is attached with breakpoints already registered - the console
+        // lets you set one before anything is running, and a DAP client sends
+        // setBreakpoints before attach - has to arm them now, not at the next AddBreakpoint.
+        SyncVmBreakpoints();
+    }
+
+    void FLuaDebugService::SyncVmBreakpoints()
+    {
+#if UNLUANOVA_HAS_BREAKPOINT
+        if (!Attached)
+            return;
+
+        // Luau's debug hook runs only at a LOP_BREAK instruction or a single step
+        // (lvmexecute.cpp:3338); there is no per-line callback to match source:line
+        // against. Its real breakpoint, lua_breakpoint(), takes the function *on the
+        // stack* and patches that one Proto - and a (source, line) pair does not identify
+        // a Proto until something is executing it, so it cannot be armed from here.
+        //
+        // So while any breakpoint exists we run in single step and do the line matching
+        // ourselves, exactly like plain Lua. That is the honest trade: breakpoints work on
+        // the default backend instead of silently never firing, at the cost of a hook per
+        // line while a breakpoint session is armed.
+        UNLUANOVA_SINGLESTEP(Attached, (bSingleStep || Breakpoints.Num() > 0) ? 1 : 0);
+#endif
     }
 
     void FLuaDebugService::Detach()
@@ -112,27 +137,28 @@ namespace UnLuaNova
             return false;
 
         Breakpoints.Add(Breakpoint);
+        SyncVmBreakpoints();
         return true;
     }
 
     bool FLuaDebugService::RemoveBreakpoint(const FString& Source, int32 Line)
     {
-        return Breakpoints.Remove(FBreakpoint{Source, Line}) > 0;
+        const bool bRemoved = Breakpoints.Remove(FBreakpoint{Source, Line}) > 0;
+        if (bRemoved)
+            SyncVmBreakpoints();
+        return bRemoved;
     }
 
     void FLuaDebugService::ClearBreakpoints()
     {
         Breakpoints.Empty();
+        SyncVmBreakpoints();
     }
 
     void FLuaDebugService::SetSingleStep(bool bInEnabled)
     {
         bSingleStep = bInEnabled;
-
-#if UNLUANOVA_HAS_BREAKPOINT
-        if (Attached)
-            UNLUANOVA_SINGLESTEP(Attached, bInEnabled ? 1 : 0);
-#endif
+        SyncVmBreakpoints();
     }
 
     void FLuaDebugService::DebugHook(lua_State* L, lua_Debug* Ar)
@@ -171,9 +197,10 @@ namespace UnLuaNova
         {
             bPauseRequested = false;
 #if UNLUANOVA_HAS_BREAKPOINT
-            // The request armed a single step to get here. Disarm it, or the VM stops on
-            // every following line until someone calls Continue() again.
-            if (!bSingleStep)
+            // The request armed a single step to get here. Disarm it - but only when
+            // nothing else needs the per-line hook, or answering `pause` would silently
+            // disable every breakpoint the user has set.
+            if (!bSingleStep && Breakpoints.Num() == 0)
                 UNLUANOVA_SINGLESTEP(L, 0);
 #endif
         }

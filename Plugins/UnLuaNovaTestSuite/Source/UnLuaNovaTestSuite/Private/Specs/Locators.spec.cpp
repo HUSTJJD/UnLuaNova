@@ -38,6 +38,7 @@ BEGIN_DEFINE_SPEC(FLocatorsSpec, "UnLuaNova.API.Locators", EAutomationTestFlags:
     TSharedPtr<UnLuaNova::FLuaEnv> Env;
     TSubclassOf<ULuaModuleLocator> SavedModuleLocatorClass;
     TSubclassOf<ULuaEnvLocator> SavedEnvLocatorClass;
+    TArray<FUnLuaNovaClassModuleBinding> SavedBindings;
 END_DEFINE_SPEC(FLocatorsSpec)
 
 void FLocatorsSpec::Define()
@@ -48,6 +49,7 @@ void FLocatorsSpec::Define()
         const auto& Settings = *GetDefault<UUnLuaNovaSettings>();
         SavedModuleLocatorClass = Settings.ModuleLocatorClass;
         SavedEnvLocatorClass = Settings.EnvLocatorClass;
+        SavedBindings = Settings.ClassModuleBindings;
     });
 
     AfterEach([this]
@@ -55,6 +57,10 @@ void FLocatorsSpec::Define()
         auto& Settings = *GetMutableDefault<UUnLuaNovaSettings>();
         Settings.ModuleLocatorClass = SavedModuleLocatorClass;
         Settings.EnvLocatorClass = SavedEnvLocatorClass;
+        // The ByBinding cases below write bindings into the settings CDO. It is shared with
+        // every other spec and with the editor session, so leaving a binding behind would
+        // silently bind an unrelated test's objects to a module named "Spec...".
+        Settings.ClassModuleBindings = SavedBindings;
         Env.Reset();
     });
 
@@ -117,6 +123,113 @@ void FLocatorsSpec::Define()
 
             Settings.ModuleLocatorClass = SavedModuleLocatorClass;
             TEST_EQUAL(Settings.ModuleLocatorClass, SavedModuleLocatorClass);
+        });
+    });
+
+    // ULuaModuleLocator_ByBinding is what UUnLuaNovaSettings actually defaults to, and it
+    // is the one that answers "no interface, no problem" - the reason a project can bind a
+    // class without touching C++. The cases above exercise the base class, so until this
+    // block existed the *default* policy had no coverage at all: every one of them would
+    // still pass if the default were changed to something else.
+    Describe(TEXT("默认定位器（ByBinding）"), [this]()
+    {
+        It(TEXT("配置默认值就是 ByBinding"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // Compared as raw UClass*, same reason as the settings case above.
+            TEST_EQUAL(GetDefault<UUnLuaNovaSettings>()->ModuleLocatorClass.Get(),
+                ULuaModuleLocator_ByBinding::StaticClass());
+        });
+
+        It(TEXT("接口优先于配置"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Settings = *GetMutableDefault<UUnLuaNovaSettings>();
+            Settings.ClassModuleBindings.Empty();
+            FUnLuaNovaClassModuleBinding Binding;
+            Binding.Class = FSoftClassPath(TEXT("/Script/UnLuaNovaTestSuite.UnLuaNovaTestStubForOverrides"));
+            Binding.ModuleName = TEXT("Spec.Module.FromConfig");
+            Settings.ClassModuleBindings.Add(Binding);
+
+            const auto Locator = NewObject<ULuaModuleLocator_ByBinding>();
+            const auto Stub = NewObject<UUnLuaNovaTestStubForOverrides>();
+
+            // The documented order is interface -> config -> component. It matters because
+            // both answers are "correct" for this object, and silently preferring config
+            // would change what every existing interface-based project binds to.
+            TEST_EQUAL(Locator->Locate(Stub), FString(TEXT("Tests.Specs.Overrides.OverridesStub")));
+        });
+
+        It(TEXT("配置写完整路径能命中原生类"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Settings = *GetMutableDefault<UUnLuaNovaSettings>();
+            Settings.ClassModuleBindings.Empty();
+            FUnLuaNovaClassModuleBinding Binding;
+            Binding.Class = FSoftClassPath(TEXT("/Script/UnLuaNovaTestSuite.UnLuaNovaTestStub"));
+            Binding.ModuleName = TEXT("Spec.Module.FromConfig");
+            Settings.ClassModuleBindings.Add(Binding);
+
+            const auto Locator = NewObject<ULuaModuleLocator_ByBinding>();
+            const auto Stub = NewObject<UUnLuaNovaTestStub>();
+
+            // The whole point of the feature: a class that does not implement
+            // IUnLuaNovaInterface still gets a module, from ini alone.
+            TEST_EQUAL(Locator->Locate(Stub), FString(TEXT("Spec.Module.FromConfig")));
+        });
+
+        It(TEXT("配置只写类名也能命中，并沿继承链向上找"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Settings = *GetMutableDefault<UUnLuaNovaSettings>();
+            Settings.ClassModuleBindings.Empty();
+            FUnLuaNovaClassModuleBinding Binding;
+            // Bare class name, not a path: what a user actually types in the ini.
+            Binding.Class = FSoftClassPath(TEXT("UnLuaNovaTestStub"));
+            Binding.ModuleName = TEXT("Spec.Module.FromShortName");
+            Settings.ClassModuleBindings.Add(Binding);
+
+            const auto Locator = NewObject<ULuaModuleLocator_ByBinding>();
+            const auto Stub = NewObject<UUnLuaNovaTestStub>();
+
+            TEST_EQUAL(Locator->Locate(Stub), FString(TEXT("Spec.Module.FromShortName")));
+        });
+
+        It(TEXT("什么都没配时返回空串"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Settings = *GetMutableDefault<UUnLuaNovaSettings>();
+            Settings.ClassModuleBindings.Empty();
+
+            const auto Locator = NewObject<ULuaModuleLocator_ByBinding>();
+            const auto Stub = NewObject<UUnLuaNovaTestStub>();
+
+            // Empty is the answer that makes TryBind stop early. Non-empty here would mean
+            // data-driven binding happened without a binding, which is the safety边界
+            // bDataDrivenBinding exists to keep shut by default.
+            TEST_TRUE(Locator->Locate(Stub).IsEmpty());
+        });
+
+        It(TEXT("命中之后缓存，改配置不影响已解析过的类"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Settings = *GetMutableDefault<UUnLuaNovaSettings>();
+            const auto Locator = NewObject<ULuaModuleLocator_ByBinding>();
+            const auto Stub = NewObject<UUnLuaNovaTestStub>();
+
+            Settings.ClassModuleBindings.Empty();
+            FUnLuaNovaClassModuleBinding First;
+            First.Class = FSoftClassPath(TEXT("UnLuaNovaTestStub"));
+            First.ModuleName = TEXT("Spec.Module.First");
+            Settings.ClassModuleBindings.Add(First);
+            const FString A = Locator->Locate(Stub);
+
+            Settings.ClassModuleBindings.Empty();
+            FUnLuaNovaClassModuleBinding Second;
+            Second.Class = FSoftClassPath(TEXT("UnLuaNovaTestStub"));
+            Second.ModuleName = TEXT("Spec.Module.Second");
+            Settings.ClassModuleBindings.Add(Second);
+            const FString B = Locator->Locate(Stub);
+
+            // TryBind asks once per object creation, so the cache is what keeps the ini out
+            // of the hot path - and it is also why editing the ini needs a restart. Pinning
+            // the behaviour beats leaving it to be discovered.
+            TEST_EQUAL(A, FString(TEXT("Spec.Module.First")));
+            TEST_EQUAL(B, A);
         });
     });
 

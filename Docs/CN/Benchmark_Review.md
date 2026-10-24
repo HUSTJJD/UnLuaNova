@@ -89,7 +89,7 @@ description: "第二轮对标。覆盖功能丰富度、性能、易用性、多
 | 能力 | Luau | Lua 5.5 | 证据 |
 |:---|:---|:---|:---|
 | userdata `__gc` | ❌ | ✅ | `LuaBackend.h:748/758` |
-| 真断点 / 单步 | ✅ | ⚠️ 退化为行号匹配 | `LuaDebugService.cpp:77-99, 241` |
+| 真断点 / 单步 | ⚠️ 行匹配（`lua_breakpoint` 未接线，见下） | ⚠️ 行号匹配 | `LuaDebugService.cpp:77-99, 241` |
 | Profiler 调用区间 | ⚠️ 仅采样 | ✅ | `LuaProfiler.cpp:73-79` |
 | 内存分类统计 | ✅ | ❌ | `LuaMemoryStats.cpp:66-98` |
 | 沙盒 | ✅ | ❌ | `LuaEnv.cpp:196-213` |
@@ -104,6 +104,15 @@ description: "第二轮对标。覆盖功能丰富度、性能、易用性、多
 `HasFeature()` 目前能问 5 个后端能力（`sandbox` / `breakpoint` / `allocCallbacks` /
 `vector` / `buffer`，`Private/UnLuaNovaLib.cpp:161-165`）。**userdata 回收与
 Profiler 精度这两条问不出来**，而它们恰恰是最影响项目的两条。
+
+> 补记（写 `DebugService.spec.cpp` 时发现，已修）：上表"真断点 ✅"这一格**原来是错的**。
+> Luau 的 debug hook 只在 `LOP_BREAK` 或 single step 时触发（`lvmexecute.cpp:3338`），
+> 而 `AddBreakpoint()` 只往一个 `TArray` 里加了一条记录，**从没调过 `lua_breakpoint()`** ——
+> 也就是说在默认后端上 `lua.dbg bp` 与 DAP `setBreakpoints` **从来不会命中**。
+> 现在改成了：存在断点时借 `lua_singlestep` 让 hook 按行触发，再自己匹配 source:line，
+> 与 Lua 后端同一套机制。代价是有断点的那段时间每行一次 hook；
+> 收益是"真断点"从一个不成立的说法变成了能停下来的事实。
+> 真要用到 VM 断点，得先能按 (source, line) 找到 Proto —— 那是另一件事。
 
 ### 1.5 【P1】依赖版本不可复现
 
@@ -201,7 +210,7 @@ slua 的 6.0x / 4.2x、thunk 覆盖 8123/11044）**在仓库里没有任何产�
 | "引擎版本 4.17–5.x"，基线实为 UE 5.8.3 | `Docs/CN/Features.md` |
 | 5 个页面只有中文（含本文依赖的 `LuaNetworking` / `StdLib` / 对标两篇） | `Docs/` |
 | `EN/Testing.md` 比 `CN/Testing.md` 新（CN 缺 `-FailOnTypeErrors`） | `Docs/` |
-| 教程 `13_AnimNotify` 有地图、没有 `13_*.lua` | `Content/Tutorials/` |
+| ~~教程 `13_AnimNotify` 缺脚本~~ | ~~`Content/Tutorials/`~~ **已更正**：脚本在 `Content/Script/Tutorials/AN_FootStep.lua`，跟着 AnimNotify 类的名字走（`UnLuaNova.Class()` 绑的是 `AN_FootStep`），不是 `13_*.lua`。当初这条是没核文件就下的结论 |
 | 文档只有 latest，没有版本选择器 | `mkdocs.yml` |
 
 对一个把"文档质量"当作卖点的项目，这些是自伤。
@@ -239,8 +248,8 @@ slua 的 6.0x / 4.2x、thunk 覆盖 8123/11044）**在仓库里没有任何产�
 | 自动化测试 | ✅ 518 条 / 双后端 | ❌ | 用例数我们强，**门禁 0**（3.1） |
 | 引擎版本 | ✅ UE 5.8.3 | 4.18/4.26/5.1 | 我们更强 |
 | 热更补丁包 / 版本 / 回滚 | ❌ | ❌ | 空位，可抢 |
-| Lua 内存按来源归因 | ❌ | ❌ | 空位，可抢 |
-| 协程泄漏检测 | ❌ | ❌ | 空位，可抢 |
+| Lua 内存按来源归因 | ✅ `NetBytes` + `lua.profiler mem` | ❌ | **已抢**（P3-13） |
+| 协程泄漏检测 | ✅ `FLuaCoroutineTracker` + `lua.coroutines` | ❌ | **已抢**（P3-14） |
 
 > puerts（TypeScript / V8）是同一赛道上另一个主要对手，主打静态类型与 VSCode 调试，
 > 与我们的 Luau 路线正面重叠。**本仓库没有任何对照物**，本表不列 —— 若要做，
@@ -259,13 +268,14 @@ slua 的 6.0x / 4.2x、thunk 覆盖 8123/11044）**在仓库里没有任何产�
 > 没有走 `bAddNew` 分支；`Locators` 完全没有覆盖默认的 `ULuaModuleLocator_ByBinding`；
 > `ConsoleCommands` 对 `lua.profiler` / `memstats` / `gc` / `sandbox` 只断言"没崩"，
 > 不断言可观测效果。（这是写这段时没核文件就下的结论，属本文自己的教训。）
+> 这几条已在同一批改动里补齐，下表逐条列了补在哪。
 
 | 区域 | 现状 |
 |:---|:---|
-| `IsOverridable()` 的 flag 规则 / 同名不重复添加 / `bAddNew` 分支 | 只有间接覆盖 |
-| `ULuaModuleLocator_ByBinding`（默认 locator）的解析规则 | 零用例 |
-| `lua.profiler` / `memstats` / `gc` / `sandbox` | 只测"没崩"，不测可观测效果 |
-| `UnLuaNovaDebugBase`（断点 / 栈 / **局部变量**） | 无专有用例；`Observability.spec.cpp` 只覆盖注册与单步 |
+| `IsOverridable()` 的 flag 规则 / 同名不重复添加 / `bAddNew` 分支 | ✅ `Overrides.spec.cpp`：手工造 UFunction 测两条分支（含 `FUNC_Net` 被排除），并测"新增函数挂上去、还原后摘掉"与"第二个对象不二次覆写" |
+| `ULuaModuleLocator_ByBinding`（默认 locator）的解析规则 | ✅ `Locators.spec.cpp`：默认配置就是它、接口优先于配置、完整路径 / 裸类名 / 继承链、没配返回空串、命中后缓存 |
+| `lua.profiler` / `memstats` / `gc` / `sandbox` | ✅ `ConsoleCommands.spec.cpp` 新增"可观测效果"一组：profiler 真的开关、memstats 记账后 off 真的停、`lua.gc` 之后堆真的降下来、`lua.dbg` 真的挂上并登记断点 |
+| `UnLuaNovaDebugBase`（断点 / 栈 / **局部变量**） | ✅ 新增 `DebugService.spec.cpp`：断点停在声明的那一行且只停一次、不匹配的行不停、嵌套调用的栈逐层展开、局部变量名字与值；并交叉校验 `HasFeature('breakpoint')` 与编译期常量 |
 | DAP 适配器 | 零用例 |
 | `FLuaEnv::HotReload()` | 没被驱动（`HotReload` 只测"模块能加载"） |
 | `FDanglingCheck` 逻辑 | 没被驱动（只测开关可设） |
@@ -279,11 +289,27 @@ slua 的 6.0x / 4.2x、thunk 覆盖 8123/11044）**在仓库里没有任何产�
 排序原则：**先修正确的，再坐实卖点，最后补缺口。** 每条都给了验收 ——
 验收不到就不算做完，这是上一轮就定的规矩。
 
-**落地进度**（与本文同一批改动）：P0 三条、P1 四条全部落地；P2 的 DAP upvalue 与
-文档校正（幽灵 API 部分）落地；P3 的 DAP upvalue 属于调试项，已落地。
-**仍未落地**：thunk 覆盖扩到容器/结构体（需要重跑代码生成器，不是只改代码）、
-热更补丁包/版本/回滚、Lua 内存按来源归因、协程泄漏检测、多 Env 调试、
-五个 EN 页面、覆盖洞里剩下的 DebugService 专用用例。原因见各条下方标注。
+**落地进度**（与本文同一批改动）：P0 三条**代码**全部落地（其中 #2 的产物还缺，见下）；
+P1 **四条里三条**落地 —— #7「CI 跑测试」**未落地**：`.github/workflows/` 下仍然只有
+`ci.yml` 与 `docs.yml`，没有 nightly workflow；P2 的 DAP upvalue 与文档校正
+（幽灵 API 部分）落地。P3 也落地了四条 —— Lua 内存按来源归因（Profiler 的 `NetBytes` +
+`lua.profiler mem`）、协程泄漏检测（`FLuaCoroutineTracker` + `lua.coroutines`）、
+跨进程 `RPCId` 一致（由 `UnLuaNova.API.Net.DedicatedServer` 覆盖）、
+多 Env 调试（`FLuaEnv::GetAllEnvs()` + `lua.dbg env <n>` + DAP `arguments.env`）。
+
+**仍未落地**：
+
+* thunk 覆盖扩到容器/结构体 —— 需要重跑代码生成器，不是只改代码
+* 热更补丁包 / 版本 / 回滚 —— 本轮明确不做
+* `#2 的基线产物本身` —— 落盘与门禁都写好了（`Benchmark.spec.cpp` 写
+  `Saved/Benchmark/perf-<后端>.json`、`RunTests.ps1 -UpdateBaseline` 拷进
+  `Tools/baseline/`），但 `Tools/baseline/` 下目前只有 `lua.json` / `luau.json` /
+  `classification.json`，**没有 `perf-*.json`**。也就是说门禁现在处于"没有基线 →
+  只告警不失败"的状态，要等一次真实运行才有刻度
+* `#7 CI 跑测试` —— 见上；缺一个 nightly workflow
+* 覆盖洞里剩下的部分 —— `DebugService.spec.cpp` 已补，Overrides / Locators /
+  ConsoleCommands 的加强断言已补；`DAP 适配器`、`FLuaEnv::HotReload()`、
+  `FDanglingCheck`、`Private/Perfs/*` 的 0 自动化仍是零用例
 
 ### P0 —— 正确性
 
@@ -316,10 +342,10 @@ slua 的 6.0x / 4.2x、thunk 覆盖 8123/11044）**在仓库里没有任何产�
 | # | 项 | 说明 |
 |:---|:---|:---|
 | 12 | 热更补丁包 / 版本 / 校验 / 回滚 | 两条发行线都需要，我们有 `HotReload.lua` 这个起点 |
-| 13 | Lua 内存按来源归因 | `lua.memstats` 有分类，还答不了"哪个模块的哪个函数分配的" |
-| 14 | 协程泄漏检测 | Latent 函数建协程，悬挂协程没有检测手段 |
-| 15 | 多 Env 调试 | `ByGameInstance` 下 dbg/dap 只对一个环境工作 |
-| 16 | 跨进程 `RPCId` 一致 | 单进程 C/S PIE 证明不了（两端共用同一个 UClass），需真双进程联机 |
+| 13 | Lua 内存按来源归因 ✅ | `lua.memstats` 有分类，还答不了"哪个模块的哪个函数分配的" → 已由 Profiler 的 `NetBytes` 与 `lua.profiler mem` 回答 |
+| 14 | 协程泄漏检测 ✅ | Latent 函数建协程，悬挂协程没有检测手段 → 已由 `FLuaCoroutineTracker`（弱键表 + 创建点）与 `lua.coroutines` 提供 |
+| 15 | 多 Env 调试 ✅ | `ByGameInstance` 下 dbg/dap 只对一个环境工作 → 已由 `FLuaEnv::GetAllEnvs()`、`lua.dbg env <n>`、DAP `arguments.env` 解决 |
+| 16 | 跨进程 `RPCId` 一致 ✅ | 单进程 C/S PIE 证明不了（两端共用同一个 UClass）→ 已由 `UnLuaNova.API.Net.DedicatedServer`（两个独立进程比对 `名字:RPCId`）覆盖 |
 
 ---
 

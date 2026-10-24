@@ -16,7 +16,7 @@
 
 #include "LuaCore.h"
 #include "Net/UnrealNetwork.h"
-#include "Net/Core/PushModel.h"
+#include "Net/Core/PushModel/PushModel.h"
 #include "Registries/ObjectRegistry.h"
 #include "UnLuaNovaBase.h"
 #include "UnLuaNovaModule.h"

@@ -16,7 +16,8 @@ The version is part of the vendored artifact, not a note about it.
 |:---|:---|
 | Version | **5.5.1** |
 | Where that comes from | `LuaLib/Lua/lua.h`, `LUA_VERSION_MAJOR/MINOR/RELEASE` (lines 20-22) |
-| Upstream | https://www.lua.org/versions.html |
+| Vendored at | tag **v5.5.1**, commit `7579fc9d7ed90240487251dfb69168f8e64e9294` (`7579fc9d`, 2026-07-23) |
+| Upstream | https://github.com/lua/lua |
 | Local patches | see below |
 
 `Config/DefaultUnLuaNova.ini` used to advertise `LuaVersion=lua-5.4.3` with a comment
@@ -27,22 +28,25 @@ carries the same number as this file; if they ever disagree, this file wins.
 
 | | |
 |:---|:---|
-| Upstream release | **not recorded** - see the gap below |
+| Upstream release | **0.743 + 1 commit** (`git describe` = `0.743-1-g6d36d483`) |
+| Vendored at | commit `6d36d483cb88973276af611198169f76f3ce05b0` (`6d36d483`, 2026-10-20) |
 | Bytecode version | `LBC_VERSION_MAX = 14` (`Luau/Bytecode.h`) |
-| Earliest known upstream | `release/743` (`Source/ThirdParty/LuauLib/Luau.Build.cs`) |
 | Upstream | https://github.com/luau-lang/luau |
 
-**Known gap, stated rather than papered over:** the vendored Luau has no recorded tag or
-commit. `release/743` is a floor, not a version - it says what the tree is *at least*, not
-what it *is*. Until it is filled in, an upgrade cannot answer "from where to where", and a
-behaviour change cannot be attributed to a specific upstream commit.
+Both trees are submodules (`.gitmodules` at the repo root), so the exact commit is the
+submodule pointer rather than a copied tree - and `git submodule status` in a fresh clone
+lands on exactly these commits.
 
-To close it, run this in the vendored tree and paste the result above:
+Keep this current on every sync:
 
 ```
 git -C Source/ThirdParty/LuauLib/Luau describe --tags --long --dirty
 git -C Source/ThirdParty/LuauLib/Luau rev-parse HEAD
 ```
+
+`release/743` in `Luau.Build.cs` is now redundant with the row above; it is kept because it
+documents *why* the 743-era code paths (`LBC_VERSION_MAX`, the incremental GC defaults) are
+assumed elsewhere, not because it is the version.
 
 ---
 

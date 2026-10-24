@@ -411,18 +411,18 @@ void FLuaBackendSpec::Define()
             // Pinned because scripts cannot ask about any of these, and each one is a place
             // where "it still loads" hides "it stopped doing anything":
             //
-            // USERDATA_GC - Luau has no __gc at all, so there every container, struct and
-            //               smart-pointer finalizer is dead code that never runs.
-            // HOOK_EVENT  - only plain Lua's lua_Debug carries an event, so only there can the
-            //               profiler pair begin/end events; Luau samples instead.
+            // GC_METAMETHOD - Luau has no __gc at all, so there every container, struct and
+            //                 smart-pointer finalizer is dead code that never runs.
+            // HOOK_EVENT    - only plain Lua's lua_Debug carries an event, so only there can
+            //                 the profiler pair begin/end events; Luau samples instead.
             // ITER / READONLY - the metamethod name and the table flag each exist on one side.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
-            TEST_TRUE(UNLUANOVA_HAS_USERDATA_GC == 0);
+            TEST_TRUE(UNLUANOVA_HAS_GC_METAMETHOD == 0);
             TEST_TRUE(UNLUANOVA_HAS_HOOK_EVENT == 0);
             TEST_TRUE(UNLUANOVA_HAS_ITER_METAMETHOD != 0);
             TEST_TRUE(UNLUANOVA_HAS_READONLY_TABLES != 0);
 #else
-            TEST_TRUE(UNLUANOVA_HAS_USERDATA_GC != 0);
+            TEST_TRUE(UNLUANOVA_HAS_GC_METAMETHOD != 0);
             TEST_TRUE(UNLUANOVA_HAS_HOOK_EVENT != 0);
             TEST_TRUE(UNLUANOVA_HAS_ITER_METAMETHOD == 0);
             TEST_TRUE(UNLUANOVA_HAS_READONLY_TABLES == 0);

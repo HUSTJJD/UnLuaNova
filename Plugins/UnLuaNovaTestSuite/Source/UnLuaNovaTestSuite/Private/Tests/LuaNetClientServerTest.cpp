@@ -388,7 +388,7 @@ BEGIN_TESTSUITE(FLuaNetClientServerTest, TEXT("UnLuaNova.API.Net.ClientServer Lu
         // Two clients requested rather than one: how the editor reads "number of players"
         // for a listen server is not the same number everywhere, and what this test needs is
         // "a server and a client", not a specific count.
-        ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName, false, 2, EPlayNetMode::PIE_ListenServer));
+        ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName, false, 2, EUnLuaNovaPlayNetMode::ListenServer));
         ADD_LATENT_AUTOMATION_COMMAND(UnLuaNovaTestSuite::FLuaNetScenarioCommand(*this));
         ADD_LATENT_AUTOMATION_COMMAND(FEndPieSessionCommand());
         ADD_LATENT_AUTOMATION_COMMAND(UnLuaNovaTestSuite::FLuaNetTeardownCommand());

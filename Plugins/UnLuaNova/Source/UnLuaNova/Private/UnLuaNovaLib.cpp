@@ -1,11 +1,16 @@
 #include "UnLuaNovaLib.h"
 #include "LowLevel.h"
 #include "LuaBackend.h"
+#include "LuaCore.h"             // GetCppInstanceFast - containers are userdata with a descriptor header
 #include "LuaEnv.h"
 #include "LuaProfiler.h"        // FLuaProfiler::IsSelfTimeSampled() - the 'profilerselftime' feature
 #include "UnLuaNovaBase.h"
 #include "UnLuaNovaSandbox.h"
 #include "UnLuaNovaSettings.h"   // 特性开关（bTimer / bEvent / bOOP / bDataDrivenBinding / bDebugAdapter）
+
+#include "Containers/LuaArray.h"
+#include "Registries/ContainerRegistry.h"
+#include "Registries/PropertyRegistry.h"
 
 #include "Interfaces/IPluginManager.h"
 #include "Misc/Paths.h"
@@ -212,6 +217,98 @@ namespace UnLuaNova
             return 1;
         }
 
+#if UNLUANOVA_HAS_NATIVE_BUFFER
+        /**
+         * TArray -> buffer, in one pass instead of one VM call per element.
+         *
+         * The interesting case is a 1-byte element type (TArray<uint8>, which is what a
+         * byte-array UPROPERTY binds to): the array's storage *is* the byte sequence, so
+         * the whole conversion is a single memcpy. Anything wider has to go element by
+         * element, but still inside C++ - the Lua version paid a call into the VM per byte.
+         *
+         * "Zero copy" is not on offer and cannot be: Luau's C API has lua_newbuffer and
+         * lua_tobuffer and nothing else, so a buffer always owns VM-allocated memory and
+         * can never alias the array's. One memcpy is the ceiling here, and for a 1-byte
+         * element it is the whole cost.
+         */
+        static int BufferFromArray(lua_State* L)
+        {
+            FLuaArray* Array = (FLuaArray*)GetCppInstanceFast(L, 1);
+            if (!Array)
+                return luaL_error(L, "UnLuaNova.BufferFromArray: expected a TArray");
+
+            const int32 Count = Array->Num();
+            uint8* Dest = (uint8*)lua_newbuffer(L, size_t(Count));
+            if (Count == 0)
+                return 1;
+
+            if (Array->Inner->GetSize() == 1)
+            {
+                FMemory::Memcpy(Dest, Array->GetData(0), size_t(Count));
+                return 1;
+            }
+
+            for (int32 Index = 0; Index < Count; ++Index)
+            {
+                Array->Inner->ReadValue(L, Array->GetData(Index), false);
+                if (lua_type(L, -1) != LUA_TNUMBER)
+                {
+                    lua_pop(L, 1);
+                    return luaL_error(L, "UnLuaNova.BufferFromArray: element %d is not a number", Index + 1);
+                }
+
+                Dest[Index] = (uint8)lua_tointeger(L, -1);
+                lua_pop(L, 1);
+            }
+
+            return 1;
+        }
+
+        /**
+         * buffer -> TArray.
+         *
+         * The element type is int32, i.e. exactly what `UE.TArray(0)` produces, so this is
+         * a drop-in replacement for the Lua version and not a behaviour change. TArray<uint8>
+         * would be the natural answer for bytes, but FPropertyRegistry has no byte type
+         * interface (bool/int/int64/float/string/name/text/struct only), so there is nothing
+         * to ask for - and widening bytes to int32 is the cheaper direction to be stuck with.
+         */
+        static int BufferToArray(lua_State* L)
+        {
+            size_t Len = 0;
+            const uint8* Src = (const uint8*)lua_tobuffer(L, 1, &Len);
+            if (!Src)
+                return luaL_error(L, "UnLuaNova.BufferToArray: expected a buffer");
+
+            auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
+
+            lua_pushinteger(L, 0); // element type, exactly what `UE.TArray(0)` passes
+            auto ElementType = Env.GetPropertyRegistry()->CreateTypeInterface(L, -1);
+            lua_pop(L, 1);
+            if (!ElementType)
+                return luaL_error(L, "UnLuaNova.BufferToArray: could not resolve the element type");
+
+            FLuaArray* Array = Env.GetContainerRegistry()->NewArray(L, ElementType, FLuaArray::OwnedBySelf);
+            if (!Array)
+                return luaL_error(L, "UnLuaNova.BufferToArray: failed to create the array");
+
+            if (Len == 0)
+                return 1;
+
+            // One grow for the whole buffer rather than Len separate Add() calls.
+            Array->AddUninitialized((int32)Len);
+
+            for (size_t Index = 0; Index < Len; ++Index)
+            {
+                lua_pushinteger(L, Src[Index]);
+                Array->Inner->WriteValue_InContainer(L, Array->GetData((int32)Index), -1);
+                lua_pop(L, 1);
+            }
+
+            return 1;
+        }
+#endif // UNLUANOVA_HAS_NATIVE_BUFFER
+
         static constexpr luaL_Reg UNLUANOVA_Functions[] = {
             {"Log", LogInfo},
             {"LogWarn", LogWarn},
@@ -221,6 +318,10 @@ namespace UnLuaNova
             {"Unref", Unref},
             {"GetBackend", GetBackend},
             {"HasFeature", HasFeature},
+#if UNLUANOVA_HAS_NATIVE_BUFFER
+            {"BufferFromArray", BufferFromArray},
+            {"BufferToArray", BufferToArray},
+#endif
             {"FTextEnabled", nullptr},
             {NULL, NULL}
         };
@@ -387,20 +488,20 @@ namespace UnLuaNova
             TArray<FString> Entries;
             Entries.Add(TEXT("Content/Script/?.lua"));
 
-            if (IPluginManager::IsAvailable())
+            // No IsAvailable() gate: it was removed from IPluginManager, and it could only
+            // ever have been false before Projects was loaded - which cannot happen in a
+            // module that links against Projects.
+            for (const TSharedRef<IPlugin>& Plugin : IPluginManager::Get().GetEnabledPlugins())
             {
-                for (const TSharedRef<IPlugin>& Plugin : IPluginManager::Get().GetEnabledPlugins())
-                {
-                    if (!Plugin->CanContainContent())
-                        continue;
+                if (!Plugin->CanContainContent())
+                    continue;
 
-                    if (!Plugin->GetName().StartsWith(TEXT("UnLuaNova")))
-                        continue;
+                if (!Plugin->GetName().StartsWith(TEXT("UnLuaNova")))
+                    continue;
 
-                    FString Entry = Plugin->GetContentDir() / TEXT("?.lua");
-                    if (FPaths::MakePathRelativeTo(Entry, *FPaths::ProjectDir()))
-                        Entries.AddUnique(Entry);
-                }
+                FString Entry = Plugin->GetContentDir() / TEXT("?.lua");
+                if (FPaths::MakePathRelativeTo(Entry, *FPaths::ProjectDir()))
+                    Entries.AddUnique(Entry);
             }
 
             // 兜底：插件管理器还没起来（很早的启动阶段）或布局又变了的场合，

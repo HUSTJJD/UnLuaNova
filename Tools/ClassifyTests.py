@@ -54,7 +54,7 @@ CLASS_ORDER = ["A", "B", "C", "D", "E"]
 CLASS_LABELS = {
     "A": "纯逻辑（不需要 UWorld）",
     "B": "需要 UWorld，不联网",
-    "C": "PIE 且联网",
+    "C": "联网（PIE 会话或跨进程 peer）",
     "D": "需要真实视口 / RHI",
     "E": "截图 / 连拍",
     "?": "未分类（没找到注册宏）",
@@ -74,6 +74,9 @@ MARKERS = [
     # (MapName, bForceReload=false, NumClients=1, PlayNetMode=PIE_Standalone), so three or
     # more arguments at a call site is what distinguishes B from C.
     ("C", re.compile(r"FOpenMapLatentCommand\s*\([^)]*,[^)]*,[^)]+[,)]", re.DOTALL)),
+    # C also covers the cross-process topologies: a test that declares an FNetSession
+    # launches real peers, which is a networked test whatever it does in its own process.
+    ("C", re.compile(r"\bFNetSession\b")),
     ("B", re.compile(r"\bFOpenMapLatentCommand\b")),
     # Tests that build a world themselves rather than opening a map.
     ("B", re.compile(r"\bEWorldType::(Game|PIE)\b")),
@@ -84,8 +87,10 @@ MARKERS = [
 RE_DEFINE_SPEC = re.compile(
     r"BEGIN_DEFINE_SPEC\s*\(\s*\w+\s*,\s*\"([^\"]+)\"", re.MULTILINE
 )
+# \w* covers the variants (BEGIN_TESTSUITE_ANY_CONTEXT): same macro, extra flag, and a
+# test whose name is not extracted here is a test the carrier/tier logic cannot see.
 RE_TESTSUITE = re.compile(
-    r"BEGIN_TESTSUITE\s*\(\s*\w+\s*,\s*TEXT\s*\(\s*\"((?:[^\"\\]|\\.)*)\"", re.MULTILINE
+    r"BEGIN_TESTSUITE\w*\s*\(\s*\w+\s*,\s*TEXT\s*\(\s*\"((?:[^\"\\]|\\.)*)\"", re.MULTILINE
 )
 RE_VIEWPORT_SUITE = re.compile(
     r"BEGIN_VIEWPORT_TESTSUITE\s*\(\s*\w+\s*,\s*TEXT\s*\(\s*\"((?:[^\"\\]|\\.)*)\"", re.MULTILINE

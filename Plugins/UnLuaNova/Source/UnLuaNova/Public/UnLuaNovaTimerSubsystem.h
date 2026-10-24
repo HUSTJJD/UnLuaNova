@@ -15,7 +15,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Subsystems/TickableWorldSubsystem.h"
+#include "Subsystems/WorldSubsystem.h" // UTickableWorldSubsystem lives here (moved out of its own header)
 #include "UnLuaNovaTimerSubsystem.generated.h"
 
 struct lua_State;

@@ -137,6 +137,9 @@ namespace UnLuaNova
          * Off by default and decimated to ~1 kHz, because a full stack walk per safe point
          * is not free. Toggle with `lua.profiler trace on|off|dump [path]`.
          */
+        /** Hard ceiling on recorded samples: a runaway trace must not be what exhausts memory. */
+        static constexpr int32 MaxTraceSamples = 200000;
+
         void SetTraceEnabled(bool bInEnabled);
         bool IsTraceEnabled() const { return bTrace.load(std::memory_order_relaxed); }
         int32 NumTraceSamples() const { return TraceSamples.Num(); }
@@ -226,9 +229,6 @@ namespace UnLuaNova
         TArray<FTraceSample> TraceSamples;
         std::atomic<bool> bTrace{false};
         uint64 LastTraceCycles = 0;
-
-        /** Hard ceiling: a runaway trace must not be what exhausts memory. */
-        static constexpr int32 MaxTraceSamples = 200000;
 
         // Sampled self time (Luau) needs one interval of history: what was running at the
         // previous safe point, and when that was. Memory attribution is sampled the same

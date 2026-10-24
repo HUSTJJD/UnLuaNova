@@ -106,6 +106,83 @@ void FUnLuaNovaOverridesSpec::Define()
             TEST_TRUE(Functions.Contains(FName(TEXT("Overridable"))));
             TEST_FALSE(Functions.Contains(FName(TEXT("NotOverridable"))));
         });
+
+        It(TEXT("判定规则是两条分支，FUNC_Net 被第二条排除"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // IsOverridable is `FUNC_BlueprintEvent || (flags & (Native|Event|Net)) == (Native|Event)`.
+            // The fixture only reaches the first branch, so the second one - the one that
+            // made Lua-declared RPCs impossible until they got their own path - had no
+            // coverage at all. Built by hand here: no UHT, no fixture change.
+            const auto MakeFunction = [](uint32 Flags) -> UFunction*
+            {
+                auto* Function = NewObject<UFunction>(GetTransientPackage(), TEXT("SpecFlagProbe"), RF_Transient);
+                Function->FunctionFlags = static_cast<EFunctionFlags>(Flags);
+                Function->StaticLink(true);
+                return Function;
+            };
+
+            const uint32 NativeEvent = FUNC_Public | FUNC_Native | FUNC_Event;
+            UFunction* A = MakeFunction(NativeEvent);
+            UFunction* B = MakeFunction(NativeEvent | FUNC_Net);
+            UFunction* C = MakeFunction(FUNC_Public | FUNC_BlueprintEvent | FUNC_Net);
+
+            TEST_TRUE(ULuaFunction::IsOverridable(A));
+            // Same flags plus FUNC_Net: rejected. This is why a script could only re-implement
+            // an RPC the engine had already declared, never declare one of its own.
+            TEST_FALSE(ULuaFunction::IsOverridable(B));
+            // The first branch does not look at FUNC_Net at all, so it still wins.
+            TEST_TRUE(ULuaFunction::IsOverridable(C));
+        });
+    });
+
+    Describe(TEXT("新增函数的路径（bAddNew）"), [this]()
+    {
+        It(TEXT("outer 不是目标类时函数被挂到目标类上"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // FLuaOverrides::Override takes the bAddNew branch when the source function's
+            // outer is not the class - which is the whole mechanism behind Lua-declared
+            // RPCs: build a UFunction, then hand it to the same override path. Nothing in
+            // this suite drove that branch; every case above overrides a function the class
+            // already owns.
+            auto* Function = NewObject<UFunction>(GetTransientPackage(), TEXT("SpecAddedFunction"), RF_Transient);
+            Function->FunctionFlags = FUNC_Public | FUNC_BlueprintEvent;
+            Function->StaticLink(true);
+            TEST_TRUE(Function->GetOuter() != UUnLuaNovaTestStubForOverrides::StaticClass());
+
+            TEST_TRUE(ULuaFunction::Override(Function, UUnLuaNovaTestStubForOverrides::StaticClass(), FName(TEXT("SpecAddedFunction"))));
+
+            UFunction* Added = UUnLuaNovaTestStubForOverrides::StaticClass()->FindFunctionByName(TEXT("SpecAddedFunction"));
+            TEST_TRUE(Added != nullptr);
+            TEST_TRUE(ULuaFunction::Get(Added) != nullptr);
+
+            // ...and it comes back off: RestoreOverrides is what makes PIE exit - and this
+            // spec's AfterEach - leave no trace on the UClass.
+            ULuaFunction::RestoreOverrides(UUnLuaNovaTestStubForOverrides::StaticClass());
+            TEST_TRUE(UUnLuaNovaTestStubForOverrides::StaticClass()->FindFunctionByName(TEXT("SpecAddedFunction")) == nullptr);
+        });
+
+        It(TEXT("同一个类的第二个对象不会二次覆写"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            const auto First = NewObject<UUnLuaNovaTestStubForOverrides>();
+            First->AddToRoot();
+            TEST_TRUE(Env->TryBind(First));
+
+            UFunction* Func = First->GetClass()->FindFunctionByName(TEXT("Overridable"));
+            ULuaFunction* After = ULuaFunction::Get(Func);
+            TEST_TRUE(After != nullptr);
+
+            const auto Second = NewObject<UUnLuaNovaTestStubForOverrides>();
+            Second->AddToRoot();
+            TEST_TRUE(Env->TryBind(Second));
+
+            // The override is on the UClass, so binding a second object must find the
+            // existing ULuaFunction and re-initialise it, not add another one. Two entries
+            // would mean whichever was installed last wins and the other leaks.
+            TEST_EQUAL(ULuaFunction::Get(Func), After);
+
+            First->RemoveFromRoot();
+            Second->RemoveFromRoot();
+        });
     });
 
     Describe(TEXT("覆写与还原"), [this]()

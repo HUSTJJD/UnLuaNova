@@ -87,6 +87,7 @@ nav:
           - 测试报告 Luau: test-luau-report.md
       - 参考:
           - Showcase 示例: CN/Showcase.md
+          - 版本说明: CN/ReleaseNotes.md
           - 许可与商业授权: CN/License.md
           - 常见问题 FAQ: CN/FAQ.md
   - English Docs:
@@ -95,14 +96,20 @@ nav:
           - Quickstart for UE Newcomers: EN/Quickstart_For_UE_Newbie.md
           - Features: EN/Features.md
           - Why UnLuaNova: EN/WhyUnLuaNova.md
+          - Comparison with slua-unreal: EN/Comparison_sluaunreal.md
+          - Benchmark Review: EN/Benchmark_Review.md
+          - Performance Parity with slua: EN/Performance_Parity_slua.md
       - Programming:
           - Programming Guide: EN/UnLuaNova_Programming_Guide.md
           - Luau Backend: EN/Luau.md
           - API Reference: EN/API.md
           - C++ API Reference: EN/CxxApi.md
+          - Lua-driven Objects: EN/LuaDrivenObjects.md
+          - Lua-declared Networking: EN/LuaNetworking.md
           - Architecture: EN/Architecture.md
           - How To Implement Overriding: EN/How_To_Implement_Overriding.md
           - Static Export and Binding: EN/StaticExportBinding.md
+      - Standard Library: EN/StdLib.md
       - Configuration and Tools:
           - Settings: EN/Settings.md
           - Console Commands: EN/ConsoleCommand.md

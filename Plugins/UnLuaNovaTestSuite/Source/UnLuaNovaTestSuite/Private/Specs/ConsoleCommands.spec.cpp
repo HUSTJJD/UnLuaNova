@@ -31,6 +31,11 @@
 #include "UnLuaNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 
+#include "LuaBackend.h"
+#include "LuaDebugService.h"
+#include "LuaMemoryStats.h"
+#include "LuaProfiler.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 // Runs a registered console command, and fails loudly if the name is gone: a missing
@@ -58,6 +63,21 @@ void FConsoleCommandsSpec::Define()
     {
         UnLuaNova::Startup();
         L = UnLuaNova::GetState();
+    });
+
+    AfterEach([this]
+    {
+        // The cases below deliberately leave the profiler, the memory tracker and the debug
+        // service in the state the command put them, because that state *is* the assertion.
+        // All three are process-wide: a profiler hook or an attached debugger left behind
+        // here would quietly change what the next spec measures.
+        UnLuaNova::FLuaDebugService::Get().Detach();
+        // SetEnabled(false) rather than Detach(): FLuaEnv attaches the profiler to its own
+        // main state at construction, and Detach() is a no-op unless the pointer matches
+        // exactly - which would leave the hook installed for the next spec.
+        UnLuaNova::FLuaProfiler::Get().SetEnabled(false);
+        UnLuaNova::FLuaMemoryStats::Get().bEnabled = false;
+        L = nullptr;
     });
 
     Describe(TEXT("lua.do"), [this]()
@@ -132,6 +152,97 @@ void FConsoleCommandsSpec::Define()
             TEST_TRUE(SpecExecCommand(this, TEXT("lua.dbg")));
             TEST_TRUE(SpecExecCommand(this, TEXT("lua.dbg")));
             TEST_TRUE(UnLuaNova::RunChunk(L, "return 1"));
+        });
+    });
+
+    // Everything above proves "the command ran". These prove "the command did something":
+    // each one reads the state the command is supposed to change. Without them a command
+    // that parsed its arguments, logged a line and returned would pass forever.
+    Describe(TEXT("命令的可观测效果"), [this]()
+    {
+        It(TEXT("lua.profiler on/off 真的开关分析器"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Profiler = UnLuaNova::FLuaProfiler::Get();
+            Profiler.SetEnabled(false);
+
+            TEST_TRUE(SpecExecCommand(this, TEXT("lua.profiler"), {TEXT("on")}));
+            TEST_TRUE(Profiler.IsEnabled());
+
+            TEST_TRUE(SpecExecCommand(this, TEXT("lua.profiler"), {TEXT("off")}));
+            TEST_FALSE(Profiler.IsEnabled());
+        });
+
+        It(TEXT("lua.memstats on 之后开始记账，off 之后停"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Stats = UnLuaNova::FLuaMemoryStats::Get();
+            Stats.bEnabled = false;
+            Stats.Reset();
+
+            TEST_TRUE(SpecExecCommand(this, TEXT("lua.memstats"), {TEXT("on")}));
+            TEST_TRUE(Stats.bEnabled.load(std::memory_order_relaxed));
+            TEST_TRUE(UnLuaNova::RunChunk(L, "local T = {} for i = 1, 1000 do T[i] = tostring(i) end return #T"));
+            TEST_TRUE(Stats.GetAllocCount() > 0);
+
+            const int64 Counted = (int64)Stats.GetAllocCount();
+            TEST_TRUE(SpecExecCommand(this, TEXT("lua.memstats"), {TEXT("off")}));
+            TEST_FALSE(Stats.bEnabled.load(std::memory_order_relaxed));
+            TEST_TRUE(UnLuaNova::RunChunk(L, "local T = {} for i = 1, 1000 do T[i] = tostring(i) end return #T"));
+
+            // "off" has to mean off: the allocator callback costs a couple of atomics per
+            // allocation, which is the only reason it is opt-in.
+            TEST_EQUAL((int64)Stats.GetAllocCount(), Counted);
+        });
+
+        It(TEXT("lua.gc 真的回收了垃圾"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            TEST_TRUE(L != nullptr);
+
+            UnLuaNova::RunChunk(L, "local T = {} for i = 1, 20000 do T[i] = i end _G.SpecConsoleGarbage = T return true");
+            lua_pop(L, 1);
+            const int64 PeakBytes = UNLUANOVA_GC_HEAP_BYTES(L);
+
+            // Drop the only reference and force a full collect through the command.
+            lua_pushnil(L);
+            lua_setglobal(L, "SpecConsoleGarbage");
+
+            TEST_TRUE(SpecExecCommand(this, TEXT("lua.gc")));
+            const int64 AfterBytes = UNLUANOVA_GC_HEAP_BYTES(L);
+
+            // Bytes rather than the KB LUA_GCCOUNT reports, and 20000 entries rather than
+            // a handful: a full collect that frees nothing is the failure being looked for,
+            // and it has to be one a rounding error cannot hide.
+            TEST_TRUE(AfterBytes < PeakBytes);
+        });
+
+        It(TEXT("lua.dbg 真的挂上调试器，断点登记后可查"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Debug = UnLuaNova::FLuaDebugService::Get();
+            Debug.Detach();
+            Debug.ClearBreakpoints();
+
+            // No arguments is the status sub-command, and it is also the one that installs
+            // the debug hook - the service only costs anything once armed.
+            TEST_TRUE(SpecExecCommand(this, TEXT("lua.dbg")));
+            TEST_TRUE(Debug.IsAttached());
+
+            TEST_TRUE(SpecExecCommand(this, TEXT("lua.dbg"), {TEXT("bp"), TEXT("Tests.Specs.ConsoleCommands"), TEXT("1")}));
+            TEST_EQUAL(Debug.GetBreakpoints().Num(), 1);
+
+            TEST_TRUE(SpecExecCommand(this, TEXT("lua.dbg"), {TEXT("clear")}));
+            TEST_EQUAL(Debug.GetBreakpoints().Num(), 0);
+
+            TEST_TRUE(SpecExecCommand(this, TEXT("lua.dbg"), {TEXT("detach")}));
+            TEST_FALSE(Debug.IsAttached());
+        });
+
+        It(TEXT("lua.coroutines 可查且不影响脚本执行"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // The census is worth having only if it can be run against a live env without
+            // disturbing it - it forces a collect to tell live coroutines from garbage.
+            TEST_TRUE(SpecExecCommand(this, TEXT("lua.coroutines")));
+            TEST_TRUE(UnLuaNova::RunChunk(L, "return 1"));
+            TEST_EQUAL((int32)lua_tointeger(L, -1), 1);
+            lua_pop(L, 1);
         });
     });
 

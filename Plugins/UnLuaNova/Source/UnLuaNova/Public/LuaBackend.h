@@ -20,6 +20,12 @@
 
 #pragma once
 
+// UNLUANOVA_API below expands to DLLEXPORT / DLLIMPORT, which UBT injects and which only
+// the platform header defines. The vendored extension modules (LuaProtobuf and friends)
+// reach this header through lua.hpp with no Unreal header in front of it, so the platform
+// header has to come from here rather than be assumed to be already included.
+#include "HAL/Platform.h"
+
 #include <cstdarg> // va_list, for the luaL_error shim below
 #include <cmath>   // floor, for UnLuaNovaIsIntegralNumber below
 #include <cstdint> // int64_t - this header is also included by the vendored extension
@@ -813,6 +819,17 @@ namespace UnLuaNova
 
     /** Chunks handed to the native compiler so far, for `lua.codegen` to report. */
     UNLUANOVA_API int32 GetNativeCodeGenChunkCount();
+
+    /**
+     * Whether class tables are frozen as they are registered (`lua.sandbox.freezeclasstables`).
+     *
+     * Read per registration rather than once per process, because registration is lazy: a
+     * class is only built the first time something looks at it, so a switch read at startup
+     * would almost always be read before there was anything to freeze.
+     *
+     * No-op on plain Lua, which has no read-only tables at all.
+     */
+    UNLUANOVA_API bool IsClassTableFreezeEnabled();
 }
 
 // --- thread callbacks ---------------------------------------------------------

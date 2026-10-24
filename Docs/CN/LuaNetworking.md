@@ -217,8 +217,10 @@ MARK_PROPERTY_DIRTY(this, Floats);   // 只脏这一个桶
 
 1. **跨进程 `RPCId` 一致：已有测试覆盖。** `UnLuaNova.API.Net.DedicatedServer`
    （`Plugins/UnLuaNovaTestSuite/.../Private/Tests/LuaNetDedicatedServerTest.cpp`）
-   起**两个独立进程**（服务端带 `-server`），各自声明同一套 Lua 网络，把本端看到的
-   `名字:RPCId` 写进 `Saved/UnLuaNovaNet/<Role>.json`，主进程读两份比对。
+   起**两个独立的 `-game` 进程**（服务端带 `-server`，即 `NM_DedicatedServer`），各自
+   声明同一套 Lua 网络，把本端看到的 `名字:RPCId` 写进
+   `Saved/UnLuaNovaNet/DedicatedServer/<Role>.json`，主进程读两份比对。拓扑本身由
+   `FNetSession`（`Public/NetSession.h`）声明：peer、角色、地图、谁连谁。
 
    为什么必须两个进程：RPC 在线上走 id 而不是名字，而 C/S PIE 里两端共用同一个 UClass
    —— id 天然同一个，那种测试证明不了任何事。`EnsureRpcId()` 的分配规则是"引擎若已
@@ -256,12 +258,16 @@ MARK_PROPERTY_DIRTY(this, Floats);   // 只脏这一个桶
   Multicast 两端都执行、参数原样过线、Lua 声明的复制字段到达客户端。
   会话里还带一个**引擎自己复制的 `int32` 作对照**：它没到就说明会话本身是坏的，
   后面关于 Lua 的断言都不用看了
-* `UnLuaNova.API.Net.DedicatedServer` —— 两个独立进程各自声明，比对 `RPCId` 与复制字段。
-  子用例 `...DedicatedServer.Report` 是跑在 peer 进程里的那一半，靠 `-UnLuaNovaNetRole`
-  区分角色，单独跑它没有意义
+* `UnLuaNova.API.Net.DedicatedServer` —— 两个独立的 `-game` 进程各自声明，比对 `RPCId`
+  与复制字段。子用例 `...DedicatedServer.Report` 是跑在 peer 进程里的那一半，靠
+  `-UnLuaNovaNetRole` 区分角色，单独跑它没有意义
+* `UnLuaNova.Slow.Net.Multicast` —— 1 个 `-game -server` 加 2 个连上它的 `-game` 客户端：
+  服务器等齐客户端后调一次 Lua 声明的 `ToAll`，每个客户端把"本端 Lua 里有没有跑到"写进
+  自己的报告。**这是唯一验证"multicast 真的到达每个客户端进程各自的 Lua"的用例。**
+  因为要开端口、等三个进程，它在慢层（`UnLuaNova.Slow.*`），`-Tier Fast` 会跳过
 * 仍未覆盖：`COND_OwnerOnly` 字段在非拥有客户端保持默认值（需要一个能区分拥有端的测试
-  场景）；多客户端（>1）下的 Multicast；push model 与 Iris 的对照（见下节）。
-  跨进程 `RPCId` 一致**已由 `...DedicatedServer` 覆盖**
+  场景）；push model 与 Iris 的对照（见下节）。跨进程 `RPCId` 一致**已由
+  `...DedicatedServer` 覆盖**，多客户端 Multicast **已由 `...Slow.Net.Multicast` 覆盖**
 
 ### push model 与 Iris 待验证项
 

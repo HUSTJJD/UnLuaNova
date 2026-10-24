@@ -33,6 +33,9 @@ VSCode 侧用 **attach** 方式连 `127.0.0.1:5699`（`request: "attach"`）。�
   编辑器 UI 会跟着卡住，属预期
 * **暂停中改断点要等 `Continue()` 之后才生效**：游戏线程阻塞着，排不进去
 * 只支持 attach，不支持 launch：调试目标是编辑器 / PIE 进程，不是独立进程
+* **多环境时用 `arguments.env` 指定挂到第几个**（下标从 0，缺省 0）：
+  `{"arguments": {"env": 1}}`。PIE 下监听服务器 + 两个客户端是三个环境，
+  挂错了的表现是断点永远不命中，而没有任何报错
 
 ### 暂停与求值
 
@@ -50,7 +53,11 @@ VSCode 侧用 **attach** 方式连 `127.0.0.1:5699`（`request: "attach"`）。�
   ```
 
   再用该帧的局部变量值作参数调用，所以 `self.HP`、`i + 1` 写起来就是看上去的意思。
-  **upvalue 不参与**：取 upvalue 需要先把函数对象压栈，两个后端写法不同，暂时没人需要。
+  **upvalue 也参与**：局部变量之后会接着把该帧函数的 upvalue 收进来一起当参数 ——
+  Lua 项目的逻辑常常就活在 upvalue 里（用了 `HotReload.lua` 的更是如此），少了它们，
+  一个明明在作用域里的变量会回答"attempt to index a nil value"，看起来像"它没了"，
+  把人引向错误的方向。`_ENV` 是唯一被排除的：它是每个函数的第一个 upvalue，
+  当参数绑进来会把全局表整个遮住。同名局部变量优先 —— 它是更近的绑定。
   没暂停或没带 `frameId` 时只对全局求值，供 watch / repl 使用。
 
 ## 使用内置调试服务（lua.dbg）
@@ -59,7 +66,9 @@ Luau 后端提供 VM 原生的断点原语（`lua_breakpoint` / `lua_singlestep`
 不带界面的调试服务：不用装插件、不用 `luasocket`，直接在控制台驱动。
 
 ```
-lua.dbg                        -- 状态：是否挂载 / 暂停 / 命中次数 / 断点数
+lua.dbg                        -- 状态：挂在第几个环境 / 是否挂载 / 暂停 / 命中次数 / 断点数
+lua.dbg env                    -- 列出当前所有 Lua 环境，标出正在调试的那个
+lua.dbg env 1                  -- 切到第 1 个环境（下标从 0）
 lua.dbg bp MyActor 42          -- 在 MyActor 的第 42 行下断点（再执行一次即移除）
 lua.dbg stack                  -- 打印上一次捕获的调用栈
 lua.dbg locals                 -- 打印上一次捕获的局部变量
@@ -72,7 +81,14 @@ lua.dbg detach                 -- 卸载调试 Hook，恢复零开销
 特点：
 
 * 不敲命令时不安装任何 Hook，**常态零开销**
-* 断点与单步是 Luau 专属能力；Lua 5.5 后端退化为按行号匹配
+* **两个后端现在都是按行匹配**。Luau 的 `lua_breakpoint()` 要的是一个已在栈上的函数
+  （它只补那一个 Proto），而 `(source, line)` 这种写法在"有东西正在执行它"之前定位不到
+  Proto，所以当前实现是：有断点时借 `lua_singlestep` 让 hook 按行走，再自己匹配
+  source:line，与 Lua 5.5 后端同一套机制。代价是断点挂着的那段时间每行一次 hook；
+  不挂断点时仍然是零开销
+* **多环境要选**。`ULuaEnvLocator_ByGameInstance` 下每个 GameInstance 一个环境
+  （监听服务器 + 两个客户端就是三个），调试服务一次只挂一个。默认跟着模块那个环境走，
+  要换就用 `lua.dbg env <n>`；DAP 侧是 launch.json 里的 `arguments.env`
 * 它本身不带界面，能力是暴露给外部工具驱动的 —— IDE 那层是 [`lua.dap`](#使用-dap-服务在-ide-里调试luadap)
 
 详见[Luau 后端](Luau.md#原生断点调试)。

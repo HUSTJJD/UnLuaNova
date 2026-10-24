@@ -57,6 +57,16 @@ namespace UnLuaNova
 
         static TMap<lua_State*, FLuaEnv*>& GetAll();
 
+        // GetAll() keyed by main state is the wrong shape for anything that has to be
+        // addressed from outside the process: TMap iteration order follows the key hash,
+        // so "the second env" means nothing from one call to the next. The default
+        // ULuaEnvLocator_ByGameInstance already makes more than one env the normal case
+        // (a listen server plus two clients is three), which makes "the env" an
+        // assumption worth removing. This returns them in a stable order - by main state
+        // address, which never changes while an env lives - so `lua.dbg env 1` and a DAP
+        // attach with {"env":1} both mean the same env for as long as it exists.
+        static TArray<FLuaEnv*> GetAllEnvs();
+
         static FLuaEnv* FindEnv(const lua_State* L);
 
         static FLuaEnv& FindEnvChecked(const lua_State* L);

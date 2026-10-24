@@ -33,12 +33,12 @@ namespace UnLuaNova
           ),
           ProfilerCommand(
               TEXT("lua.profiler"),
-              *LOCTEXT("CommandText_Profiler", "Lua CPU profiling into Unreal Insights. Args: on | off | agg on|off | reset | top [n] | dump [file], or none for status.").ToString(),
+              *LOCTEXT("CommandText_Profiler", "Lua CPU profiling into Unreal Insights. Args: on | off | agg on|off | reset | top [n] | mem [n] | dump [file], or none for status.").ToString(),
               FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::Profiler)
           ),
           DebugCommand(
               TEXT("lua.dbg"),
-              *LOCTEXT("CommandText_Debug", "Headless lua debugger. Args: bp <src> <line> | step | continue | stack | locals | clear | detach, or none for status.").ToString(),
+              *LOCTEXT("CommandText_Debug", "Headless lua debugger. Args: env [n] | bp <src> <line> | step | continue | stack | locals | clear | detach, or none for status.").ToString(),
               FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::Debug)
           ),
           CoroutinesCommand(
@@ -76,21 +76,63 @@ namespace UnLuaNova
 
     void FUnLuaNovaConsoleCommands::Debug(const TArray<FString>& Args) const
     {
-        auto Env = Module->GetEnv();
-        if (!Env)
+        // Which env the debugger talks to. One env is the normal case, but
+        // ULuaEnvLocator_ByGameInstance makes one per game instance - a listen server with
+        // two clients has three - and the debugger used to attach to whichever
+        // Module->GetEnv() happened to answer with, which is the one bound to nothing in
+        // particular. Breakpoints then silently did nothing in the env you cared about.
+        const TArray<FLuaEnv*> Envs = FLuaEnv::GetAllEnvs();
+        if (Envs.Num() == 0)
         {
             UE_LOG(LogUnLuaNova, Warning, TEXT("no available lua env found to debug."));
             return;
         }
 
+        if (Args.Num() >= 2 && Args[0].Equals(TEXT("env"), ESearchCase::IgnoreCase))
+        {
+            const int32 Wanted = FCString::Atoi(*Args[1]);
+            if (!Envs.IsValidIndex(Wanted))
+            {
+                UE_LOG(LogUnLuaNova, Warning, TEXT("lua.dbg: no env at index %d - %d env(s) exist. Run 'lua.dbg env' to list them."), Wanted, Envs.Num());
+                return;
+            }
+
+            DebugEnvIndex = Wanted;
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.dbg: now debugging env %d (main state 0x%p)"), DebugEnvIndex, Envs[DebugEnvIndex]->GetMainState());
+            return;
+        }
+
+        if (Args.Num() >= 1 && Args[0].Equals(TEXT("env"), ESearchCase::IgnoreCase))
+        {
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.dbg: %d env(s), debugging env %d:"), Envs.Num(), DebugEnvIndex);
+            for (int32 Index = 0; Index < Envs.Num(); ++Index)
+            {
+                UE_LOG(LogUnLuaNova, Log, TEXT("  %s%d: %s (main state 0x%p)"),
+                    Index == DebugEnvIndex ? TEXT("> ") : TEXT("  "), Index,
+                    *Envs[Index]->GetName(), Envs[Index]->GetMainState());
+            }
+            return;
+        }
+
+        if (!Envs.IsValidIndex(DebugEnvIndex))
+        {
+            // Nothing picked yet, or the picked env died with its world. Prefer the
+            // module's env so a single-env session keeps its old behaviour, and only fall
+            // back to the first one when that env is not among them.
+            DebugEnvIndex = Envs.IndexOfByKey(Module->GetEnv());
+            if (DebugEnvIndex == INDEX_NONE)
+                DebugEnvIndex = 0;
+        }
+
         // Attaching is idempotent, so every invocation makes sure the hook is installed
         // before doing anything else - the service only costs anything once armed.
         auto& DebugService = FLuaDebugService::Get();
-        DebugService.Attach(Env->GetMainState());
+        DebugService.Attach(Envs[DebugEnvIndex]->GetMainState());
 
         if (Args.Num() == 0)
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.dbg: attached=%d paused=%d hits=%d breakpoints=%d"),
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.dbg: env=%d/%d attached=%d paused=%d hits=%d breakpoints=%d"),
+                DebugEnvIndex, Envs.Num(),
                 DebugService.IsAttached() ? 1 : 0,
                 DebugService.IsPaused() ? 1 : 0,
                 DebugService.GetHitCount(),
@@ -151,7 +193,7 @@ namespace UnLuaNova
             return;
         }
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.dbg [bp <src> <line> | step | continue | stack | locals | clear | detach]"));
+        UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.dbg [env [n] | bp <src> <line> | step | continue | stack | locals | clear | detach]"));
     }
 
     void FUnLuaNovaConsoleCommands::DoFile(const TArray<FString>& Args) const
@@ -345,10 +387,55 @@ namespace UnLuaNova
                 return;
             }
 
+            // Sampling trace in Luau's own profile.out format. Enabling it turns profiling
+            // on too - there is no other way to get the interrupts it samples from.
+            if (Arg.Equals(TEXT("trace"), ESearchCase::IgnoreCase))
+            {
+                const FString& Sub = Args.Num() >= 2 ? Args[1] : FString();
+
+                if (Sub.Equals(TEXT("off"), ESearchCase::IgnoreCase))
+                {
+                    Profiler.SetTraceEnabled(false);
+                    UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiler trace off."));
+                    return;
+                }
+
+                if (Sub.Equals(TEXT("reset"), ESearchCase::IgnoreCase))
+                {
+                    Profiler.ResetTrace();
+                    UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiler trace cleared."));
+                    return;
+                }
+
+                if (Sub.Equals(TEXT("dump"), ESearchCase::IgnoreCase))
+                {
+                    const FString Path = Args.Num() >= 3
+                        ? Args[2]
+                        : FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Profiling"), TEXT("profile.out"));
+                    Profiler.DumpTraceToFile(Path);
+                    return;
+                }
+
+                Profiler.SetEnabled(true);
+                Profiler.SetTraceEnabled(true);
+                UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiler trace on (~1kHz, %d sample ceiling). 'lua.profiler trace dump [path]' to write it."),
+                    FLuaProfiler::MaxTraceSamples);
+                return;
+            }
+
             if (Arg.Equals(TEXT("top"), ESearchCase::IgnoreCase))
             {
                 const int32 Rows = Args.Num() >= 2 ? FCString::Atoi(*Args[1]) : 20;
                 UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Profiler.BuildReport(Rows));
+                return;
+            }
+
+            // Where the heap grew, not just how big it is. lua.memstats says the heap went
+            // from 4 MB to 40 MB; this says which function it happened in. Needs 'agg on'.
+            if (Arg.Equals(TEXT("mem"), ESearchCase::IgnoreCase))
+            {
+                const int32 Rows = Args.Num() >= 2 ? FCString::Atoi(*Args[1]) : 20;
+                UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Profiler.BuildAllocReport(Rows));
                 return;
             }
 
@@ -360,7 +447,7 @@ namespace UnLuaNova
                 return;
             }
 
-            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.profiler [on|off|agg on|off|reset|top [n]|dump [file]]"));
+            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.profiler [on|off|agg on|off|reset|top [n]|mem [n]|dump [file]]"));
             return;
         }
 

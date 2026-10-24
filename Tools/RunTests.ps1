@@ -167,6 +167,14 @@ param(
     # 否则回编辑器。见上面的 .PARAMETER Carrier。
     [ValidateSet("Auto", "Editor", "Game")]
     [string] $Carrier = "Auto",
+    # 分层。Fast = 跑掉慢用例之外的所有用例（见 -SlowPrefix），给"改完想马上知道有没有
+    # 弄坏"用；All（默认）= 全跑，给 nightly 与发版前用。
+    [ValidateSet("All", "Fast")]
+    [string] $Tier = "All",
+    # Fast 层要跳过的用例名前缀。慢用例必须自己站到一个独立段里（默认
+    # UnLuaNova.Slow.*）：UE 的自动化只有 filter，没有 exclude，所以"除了慢的之外全跑"
+    # 只能表示成"跑这些段"。
+    [string[]] $SlowPrefix = @("UnLuaNova.Slow."),
     [switch] $NoScreenshots,
     [switch] $NoVideo,
     # 只关掉"整场录屏"，保留 showcase 剪辑：剪辑是用例自己录的，卡死/崩溃/启动那几十秒都不在里面。
@@ -343,7 +351,15 @@ function Get-TestClassification {
 
     $Classifier = Join-Path $ToolsDir "ClassifyTests.py"
     if (-not (Test-Path $Classifier)) { return $null }
-    & python $Classifier --out $ClassificationPath 2>&1 | Out-Null
+    # python 不在 PATH 上时不该把整轮跑崩：分类只是"挑载体 / 挑层"的依据，拿不到就走保守
+    # 路径（编辑器 + 全跑），脚本别的地方要用 python 会自己报错。
+    if (-not (Get-Command python -ErrorAction SilentlyContinue)) { return $null }
+
+    try {
+        & python $Classifier --out $ClassificationPath 2>&1 | Out-Null
+    } catch {
+        return $null
+    }
     if (-not (Test-Path $ClassificationPath)) { return $null }
 
     try {
@@ -373,9 +389,15 @@ function Resolve-Carrier {
 
     # 只有 D/E 真的必须在编辑器里：D 要 NonNullRHI 的视口，E 要截像素。
     # C（PIE 联网）现在也留在编辑器里 —— 它要 PIE 的 server+client，见 P2。
+    # 判断用的是这一轮真正会跑的用例（$RunFilters，Fast 层已经把慢段剔掉了）。
     $Heavy = @()
     foreach ($Key in $Map.Keys) {
-        if ($Key -notlike "$Filter*") { continue }
+        $Selected = $false
+        foreach ($F in $RunFilters) {
+            if ($Key -like "$F*") { $Selected = $true; break }
+        }
+        if (-not $Selected) { continue }
+
         $Cls = $Map[$Key]
         if ($Cls -eq "D" -or $Cls -eq "E" -or $Cls -eq "C") { $Heavy += "$Key($Cls)" }
     }
@@ -385,6 +407,47 @@ function Resolve-Carrier {
     return @{ Carrier = "Game"; Reason = "filter 里没有 D/E/C 类用例 —— 可以离开编辑器进程" }
 }
 
+function Resolve-RunFilters {
+    # 一次 run 可以排多个 filter（每条 -ExecCmds 一个 "Automation RunTests"），这就是本脚本
+    # 的"分层"：UE 的自动化没有 exclude，所以 Fast 层不跑的用例，只能靠不把它们所在的
+    # 段排进去来表达。
+    #
+    # 段是从静态分类里算出来的（Tools/ClassifyTests.py 扫出来的用例名），所以分类里没有
+    # 的用例也不会被 Fast 层跑到 —— 报告顶部的"未分类"计数必须是 0，这不是排印错误。
+    if ($Tier -ne "Fast") { return @($Filter) }
+
+    $Map = Get-TestClassification
+    if (-not $Map -or $Map.Count -eq 0) {
+        Write-Host "Tier      : 拿不到静态分类，Fast 层退化为全跑。" -ForegroundColor Yellow
+        return @($Filter)
+    }
+
+    $Segments = @{}
+    foreach ($Key in $Map.Keys) {
+        if ($Key -notlike "$Filter*") { continue }
+
+        $Slow = $false
+        foreach ($Prefix in $SlowPrefix) {
+            if ($Key -like "$Prefix*") { $Slow = $true; break }
+        }
+        if ($Slow) { continue }
+
+        # 取前两段（UnLuaNova.API）：再细就变成"每个用例一条命令"，排一次几百条。
+        $Parts = $Key -split '\.'
+        $Segment = if ($Parts.Count -ge 2) { $Parts[0] + '.' + $Parts[1] } else { $Key }
+        $Segments[$Segment] = $true
+    }
+
+    if ($Segments.Count -eq 0) {
+        Write-Host "Tier      : Fast 层没有剩下任何段，全跑。" -ForegroundColor Yellow
+        return @($Filter)
+    }
+
+    return @($Segments.Keys | Sort-Object)
+}
+
+# 先算这一轮跑哪些，再决定用什么载体：Fast 层剔掉的用例不该把载体拖回编辑器。
+$RunFilters = Resolve-RunFilters
 $CarrierChoice = Resolve-Carrier -Requested $Carrier
 $IsGameCarrier = ($CarrierChoice.Carrier -eq "Game")
 
@@ -891,6 +954,72 @@ function Stop-OneRecording {
     }
 }
 
+# --- 联网 peer 的窗口：从拓扑里来，不从命令行里来 ---------------------------------
+# 一个联网用例的 peer 是用例自己起的（FNetSession::LaunchNext），脚本根本不知道它们
+# 什么时候出现、叫什么。所以 FNetSession 每起一个 peer 就把 topology.json 写到
+# Saved/UnLuaNovaNet/<session>/ 下，脚本在跑的过程中轮询它 —— 于是"客户端 1 的窗口"
+# 这种东西不用再手打 -RecordWindow 也能录到，标签还是用例自己取的（Client1）。
+function Get-NetRecordingTargets {
+    param(
+        [Parameter(Mandatory)] [string] $RunDir,
+        [string[]] $Done = @()
+    )
+
+    $Root = Join-Path $RepoRoot "Saved/UnLuaNovaNet"
+    if (-not (Test-Path $Root)) { return @() }
+
+    $Targets = @()
+    foreach ($Topology in @(Get-ChildItem -Path $Root -Filter "topology.json" -Recurse -File -ErrorAction SilentlyContinue)) {
+        try {
+            $Json = Get-Content $Topology.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+        } catch {
+            continue
+        }
+
+        foreach ($Peer in @($Json.peers)) {
+            # 独立服务器是 -NullRHI 的，没有窗口可录；它的东西在日志里（见 Copy-NetArtifacts）。
+            if ($Peer.headless) { continue }
+            if ($Done -contains $Peer.label) { continue }
+
+            $Exe = [string]$Json.exe
+            if (-not $Exe) { continue }
+
+            $Slug = ($Peer.label -replace '[^A-Za-z0-9_-]', '_')
+            $Targets += @{
+                Label       = [string]$Peer.label
+                ProcessName = [System.IO.Path]::GetFileNameWithoutExtension($Exe)
+                OutFile     = (Join-Path $RunDir "videos/session-$Slug.mp4")
+            }
+        }
+    }
+    return $Targets
+}
+
+function Start-PeerRecording {
+    # 与 Start-SessionRecording 的区别只有一个：不退回整屏。主窗口没等到才退回整屏是
+    # 合理的（那一场总得留下点东西），而一个 peer 没窗口通常意味着它是 headless 的，
+    # 整屏只会把主窗口那块画面再录一遍、换个名字。
+    param(
+        [Parameter(Mandatory)] [hashtable] $Target,
+        [int] $Fps = 15,
+        [int[]] $ExcludeId = @()
+    )
+
+    $Ffmpeg = Resolve-FfmpegExe
+    if (-not $Ffmpeg) { return $null }
+
+    $Window = Wait-EditorWindow -ProcessName $Target.ProcessName -TimeoutSeconds 20 -ExcludeId $ExcludeId
+    $Region = if ($Window -and (Restore-EditorWindow -Process $Window)) { Get-WindowCaptureRegion -Process $Window } else { $null }
+    if (-not $Region) { return $null }
+
+    $Recording = Start-GdigrabRecording -Ffmpeg $Ffmpeg -OutFile $Target.OutFile -Fps $Fps -Region $Region
+    if (-not $Recording) { return $null }
+
+    $Recording | Add-Member -NotePropertyName Label -NotePropertyValue $Target.Label -Force
+    $Recording | Add-Member -NotePropertyName WindowId -NotePropertyValue $Window.Id -Force
+    return $Recording
+}
+
 function Format-DataSize {
     param([long] $Bytes)
     if ($Bytes -ge 1MB) { return "{0:N1} MB" -f ($Bytes / 1MB) }
@@ -1052,6 +1181,34 @@ function Copy-Screenshots {
     return $Files.Count
 }
 
+function Copy-NetArtifacts {
+    # 联网用例的产物：每个 peer 一份报告 JSON、一份 -abslog 日志，加一份 topology.json。
+    # headless 的独立服务器没有窗口也没录屏，它唯一的痕迹就是这份日志 —— 不归档的话，
+    # "Server peer 没写出报告"只能靠猜。
+    param([Parameter(Mandatory)] [string] $RunDir)
+
+    $Root = Join-Path $RepoRoot "Saved/UnLuaNovaNet"
+    if (-not (Test-Path $Root)) { return 0 }
+
+    $Files = @(Get-ChildItem -Path $Root -Recurse -File -ErrorAction SilentlyContinue)
+    if ($Files.Count -eq 0) { return 0 }
+
+    $Dest = Join-Path $RunDir "net"
+    foreach ($F in $Files) {
+        $Relative = $F.FullName.Substring($Root.Length).TrimStart('\', '/')
+        $Target = Join-Path $Dest $Relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $Target) -Force | Out-Null
+        Copy-Item $F.FullName -Destination $Target -Force -ErrorAction SilentlyContinue
+    }
+
+    $Logs = @(Get-ChildItem -Path $Dest -Filter "*.log" -Recurse -File -ErrorAction SilentlyContinue)
+    Write-Host ("Net       : {0} 个 peer 日志 + {1} 份报告 -> {2}" -f
+        $Logs.Count,
+        @(Get-ChildItem -Path $Dest -Filter "*.json" -Recurse -File -ErrorAction SilentlyContinue).Count,
+        $Dest)
+    return $Files.Count
+}
+
 # --- the Lua backend is a build-time setting ------------------------------------------
 # Both backends export the same lua_* symbols, so exactly one of them is in a build and it
 # is picked by UnLuaNova.Build.cs reading LuaBackend out of this ini. Running both backends
@@ -1160,7 +1317,9 @@ function Get-TestArgs {
 
     # ExtraCommands run after the suite, which is where screenshots belong - they need the
     # world the tests left behind, not the one at startup.
-    $Cmds = @("Automation RunTests $Filter")
+    # One RunTests per filter: -Tier Fast 是"跑了 N 个段"而不是"跑了一个段再排除"。
+    $Cmds = @()
+    foreach ($F in $RunFilters) { $Cmds += "Automation RunTests $F" }
     if ($ExtraCommands) { $Cmds += $ExtraCommands }
     $Cmds += "Quit"
 
@@ -1195,7 +1354,8 @@ function Get-TestArgs {
 Write-Host "Engine       : $EnginePath"
 Write-Host "Project      : $ProjectPath"
 Write-Host "Carrier      : $($CarrierChoice.Carrier) - $($CarrierChoice.Reason)"
-Write-Host "Filter       : $Filter"
+Write-Host "Tier         : $Tier$(if ($Tier -eq 'Fast') { " (跳过 $($SlowPrefix -join ', '))" })"
+Write-Host "Filter       : $($RunFilters -join ' | ')"
 Write-Host "Backend(s)   : $($Backends -join ', ')"
 Write-Host "Output       : $OutputDir"
 Write-Host "Media        : $(if ($NoScreenshots) { 'off' } else { 'screenshots' })$(if ($NoVideo -or $NoScreenshots) { '' } else { ' + clips (encoded by the report generator)' })"
@@ -1352,6 +1512,13 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         $EditorPsi.UseShellExecute = $false
         $EditorProc = [System.Diagnostics.Process]::Start($EditorPsi)
         try {
+            # 联网 peer 的录制要边跑边发现（见下面的轮询），所以这两个列表在启动之前就建好：
+            # $RecordedLabels 是"已经录过 / 已经试过"的 peer，$UsedWindowIds 是"已经被某个
+            # 录制占住"的窗口。后者先用主进程的 id 垫上 —— peer 用编辑器 exe 起的时候
+            # （FNetSession::ResolvePeerExe 的兜底路径），进程名和主窗口是一样的。
+            $RecordedLabels = @()
+            $UsedWindowIds = @($EditorProc.Id)
+
             if ($WantSessionVideo) {
                 # The editor is always one target; -RecordWindow adds the peers a net run
                 # puts on screen beside it (each client that joined the server). Their
@@ -1376,11 +1543,31 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
                 }
 
                 $Recording = Start-SessionRecording -Targets $RecordTargets -Fps $SessionFps
+                # 手工登记的窗口也算"已经录过"，免得下面再给它开一路。
+                $RecordedLabels = @($RecordTargets | ForEach-Object { $_.Label })
             } elseif ($NullRHI -and -not $NoVideo -and -not $NoSessionVideo) {
                 Write-Host "Record    : skipped - -NullRHI 没有画面可录。" -ForegroundColor Yellow
             }
 
-            $EditorProc.WaitForExit()
+            # 联网 peer 不是脚本启动的，是用例启动的（FNetSession），所以它们的窗口只能
+            # 在跑的过程中被发现：每 3 秒看一眼 topology.json，新出现的 peer 补一个录制。
+            while (-not $EditorProc.WaitForExit(3000)) {
+                if (-not $WantSessionVideo) { continue }
+                $New = Get-NetRecordingTargets -RunDir $RunDir -Done $RecordedLabels
+                foreach ($T in $New) {
+                    # 试一次就登记：窗口没等到的 peer（headless 的、启动失败的）不该每 3
+                    # 秒重试一次直到这轮结束。
+                    $RecordedLabels += $T.Label
+                    $Started = Start-PeerRecording -Target $T -Fps $SessionFps -ExcludeId $UsedWindowIds
+                    if ($Started) {
+                        $Recording += $Started
+                        $UsedWindowIds += $Started.WindowId
+                        Write-Host ("Record    : 联网 peer {0} 开始录制 -> {1}" -f $T.Label, $T.OutFile)
+                    } else {
+                        Write-Host ("Record    : 联网 peer {0} 没等到窗口（headless 或启动失败），不录。" -f $T.Label) -ForegroundColor Yellow
+                    }
+                }
+            }
         } finally {
             # Always stop it: a hung editor is exactly the run that has to end up on disk, and
             # it is stopped from here - not by the editor, which is the thing that hung.
@@ -1415,6 +1602,10 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         # clue is a half-megabyte log. Show-CrashSummary says nothing unless the log really
         # contains a crash, so calling it on a merely failed run is harmless.
         Show-CrashSummary -LogPath $RunLog
+
+        # 联网 peer 的报告与日志（headless 的服务器只有日志）—— 归到这一轮的目录里，
+        # 于是"某个 peer 没写报告"这句话后面能直接跟上一个可打开的文件。
+        Copy-NetArtifacts -RunDir $RunDir | Out-Null
 
         # Static type checking is not an automation test, so it never shows up in the JSON the
         # engine exports - run it here and leave its summary next to the JSON, which is the

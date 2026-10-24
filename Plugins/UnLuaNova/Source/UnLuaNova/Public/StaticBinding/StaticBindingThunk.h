@@ -37,7 +37,23 @@ struct lua_State;
 
 namespace UnLuaNova
 {
-	/** Kinds whose C++ representation is known well enough to marshal without FProperty. */
+	/**
+	 * Kinds whose C++ representation is known well enough to marshal without FProperty.
+	 *
+	 * Enum and Text joined the list because their storage is fully determined by the kind:
+	 * an enum is its underlying numeric property, and FText is constructed from one string.
+	 * Both used to fall back to the reflective path, which is what made "thunk coverage
+	 * 73.6%, and the hottest paths are outside it" true.
+	 *
+	 * Struct / Array / Set / Map are still absent on purpose, not by omission. Their Lua
+	 * representation (a struct copy or an FLuaArray / FLuaSet / FLuaMap userdata) is built
+	 * by FPropertyDesc, which lives in Private/ and is therefore unreachable from here -
+	 * this header is included by the project's generated file, on the far side of the
+	 * module boundary from UnLuaNova's private headers. Making them thunkable needs a
+	 * public marshalling entry point (a single `Push(L, Property, ValuePtr)` /
+	 * `Read(L, Property, ValuePtr)` pair) and a generator re-run; that is a design change,
+	 * not an extra `||` here.
+	 */
 	constexpr bool IsThunkableParamKind(const EStaticPropKind Kind)
 	{
 		return Kind == EStaticPropKind::Bool
@@ -50,6 +66,8 @@ namespace UnLuaNova
 			|| Kind == EStaticPropKind::Double
 			|| Kind == EStaticPropKind::Name
 			|| Kind == EStaticPropKind::String
+			|| Kind == EStaticPropKind::Text
+			|| Kind == EStaticPropKind::Enum
 			|| Kind == EStaticPropKind::Object
 			|| Kind == EStaticPropKind::Class;
 	}
@@ -57,7 +75,9 @@ namespace UnLuaNova
 	/** Kinds that need a real constructor/destructor rather than zeroed bytes. */
 	constexpr bool IsThunkHeapishKind(const EStaticPropKind Kind)
 	{
-		return Kind == EStaticPropKind::Name || Kind == EStaticPropKind::String;
+		return Kind == EStaticPropKind::Name
+			|| Kind == EStaticPropKind::String
+			|| Kind == EStaticPropKind::Text;
 	}
 
 	// ---------------------------------------------------------------- write ----
@@ -120,6 +140,19 @@ namespace UnLuaNova
 			const char* const Raw = bSupplied ? lua_tostring(L, StackIndex) : nullptr;
 			new (Dest) FString(Raw ? UTF8_TO_TCHAR(Raw) : TEXT(""));
 		}
+		else if constexpr (Kind == EStaticPropKind::Text)
+		{
+			const char* const Raw = bSupplied ? lua_tostring(L, StackIndex) : nullptr;
+			new (Dest) FText(Raw ? FText::FromString(FString(UTF8_TO_TCHAR(Raw))) : FText::GetEmpty());
+		}
+		else if constexpr (Kind == EStaticPropKind::Enum)
+		{
+			// An enum has no storage of its own: FEnumProperty keeps the value in an
+			// underlying numeric property (byte or int, depending on the declaration), so
+			// the write goes through that instead of assuming a width.
+			const int64 Raw = bSupplied ? (int64)lua_tointeger(L, StackIndex) : 0;
+			static_cast<FEnumProperty*>(Param.Property)->GetUnderlyingProperty()->SetIntPropertyValue(Dest, Raw);
+		}
 		else if constexpr (Kind == EStaticPropKind::Object || Kind == EStaticPropKind::Class)
 		{
 			static_cast<FObjectPropertyBase*>(Param.Property)->SetObjectPropertyValue(
@@ -143,6 +176,10 @@ namespace UnLuaNova
 		else if constexpr (Kind == EStaticPropKind::Name)
 		{
 			reinterpret_cast<FName*>(Params + Param.Offset)->~FName();
+		}
+		else if constexpr (Kind == EStaticPropKind::Text)
+		{
+			reinterpret_cast<FText*>(Params + Param.Offset)->~FText();
 		}
 	}
 
@@ -202,6 +239,16 @@ namespace UnLuaNova
 		else if constexpr (Kind == EStaticPropKind::String)
 		{
 			lua_pushstring(L, TCHAR_TO_UTF8(**reinterpret_cast<const FString*>(Source)));
+			return 1;
+		}
+		else if constexpr (Kind == EStaticPropKind::Text)
+		{
+			lua_pushstring(L, TCHAR_TO_UTF8(*reinterpret_cast<const FText*>(Source)->ToString()));
+			return 1;
+		}
+		else if constexpr (Kind == EStaticPropKind::Enum)
+		{
+			UNLUANOVA_PUSHINT64(L, static_cast<FEnumProperty*>(Property)->GetUnderlyingProperty()->GetSignedIntPropertyValue(Source));
 			return 1;
 		}
 		else if constexpr (Kind == EStaticPropKind::Object || Kind == EStaticPropKind::Class)

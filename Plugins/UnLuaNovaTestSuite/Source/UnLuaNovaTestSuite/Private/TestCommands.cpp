@@ -30,6 +30,10 @@
 #if WITH_EDITOR
 #include "FileHelpers.h"
 #include "LevelEditor.h"
+// EPlayNetMode / ULevelEditorPlaySettings: the editor-only counterpart of
+// EUnLuaNovaPlayNetMode (see TestCommands.h), pulled in here because this is the file that
+// actually calls into the editor.
+#include "Settings/LevelEditorPlaySettings.h"
 #if ENGINE_MAJOR_VERSION >= 5
 #include "Tests/AutomationEditorCommon.h"
 #endif
@@ -54,7 +58,7 @@ namespace UnLuaNovaTestSuite
         return false;
     }
 
-    FOpenMapLatentCommand::FOpenMapLatentCommand(FString MapName, bool bForceReload, int32 InNumClients, EPlayNetMode InPlayNetMode)
+    FOpenMapLatentCommand::FOpenMapLatentCommand(FString MapName, bool bForceReload, int32 InNumClients, EUnLuaNovaPlayNetMode InPlayNetMode)
         : MapName(MapName), bForceReload(bForceReload)
         , NumClients(InNumClients), PlayNetMode(InPlayNetMode)
     {
@@ -166,7 +170,7 @@ namespace UnLuaNovaTestSuite
         // versions, and what a networked test actually needs is "a server and a client".
         if (WaitForMapToLoad->Update())
         {
-            if (PlayNetMode == EPlayNetMode::PIE_Standalone)
+            if (PlayNetMode == EUnLuaNovaPlayNetMode::Standalone)
                 return true;
 
             const FPieNetWorlds Peers = GetPieNetWorlds();
@@ -259,7 +263,10 @@ namespace UnLuaNovaTestSuite
         // Separate servers run in another process, and a test can only reach peers that
         // share its process - which is the whole point of a listen server here.
         EditorPlaySettings->bLaunchSeparateServer = false;
-        EditorPlaySettings->SetPlayNetMode(PlayNetMode);
+        EditorPlaySettings->SetPlayNetMode(
+            PlayNetMode == EUnLuaNovaPlayNetMode::ListenServer ? EPlayNetMode::PIE_ListenServer
+            : PlayNetMode == EUnLuaNovaPlayNetMode::Client ? EPlayNetMode::PIE_Client
+            : EPlayNetMode::PIE_Standalone);
         RequestParams.EditorPlaySettings = EditorPlaySettings;
         RequestParams.DestinationSlateViewport = ActiveLevelViewport;
 

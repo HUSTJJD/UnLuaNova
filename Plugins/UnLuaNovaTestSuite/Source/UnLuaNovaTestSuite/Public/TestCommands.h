@@ -16,14 +16,25 @@
 
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationCommon.h"
-// EPlayNetMode (PIE_Standalone / PIE_ListenServer / PIE_Client) lives here. Editor-only
-// like the rest of this file's PIE machinery - see UnLuaNovaTestSuite.Build.cs.
-#include "Settings/LevelEditorPlaySettings.h"
+// EPlayNetMode (PIE_Standalone / PIE_ListenServer / PIE_Client) lives in
+// Settings/LevelEditorPlaySettings.h - an *editor* header, in a module that
+// UnLuaNovaTestSuite.Build.cs only depends on when Target.bBuildEditor. Including it here
+// used to be harmless right up until the suite also had to compile for the -game carrier:
+// every one of the ~20 files that include this header then failed on an include that is not
+// on the include path at all. So the enum is mirrored below and mapped back in
+// TestCommands.cpp, which is where the editor-only call actually is.
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 namespace UnLuaNovaTestSuite
 {
+    /** Mirror of EPlayNetMode; see the note above the includes. */
+    enum class EUnLuaNovaPlayNetMode : uint8
+    {
+        Standalone,
+        ListenServer,
+        Client,
+    };
     // Opens a map in PIE and waits until that map - not whatever was running before - is
     // actually playing.
     //
@@ -45,13 +56,13 @@ namespace UnLuaNovaTestSuite
         /**
          * @param NumClients  How many client windows. 1 = standalone (the default, what
          *                    every existing test wants). >1 only makes sense with a net mode.
-         * @param PlayNetMode PIE_Standalone (default) or PIE_ListenServer for a C/S session.
+         * @param PlayNetMode Standalone (default) or ListenServer for a C/S session.
          *                    The server runs in-process - bLaunchSeparateServer is left off - so
          *                    one editor process holds every peer, which is what lets a single
          *                    test reach into all of them.
          */
         explicit FOpenMapLatentCommand(FString MapName, bool bForceReload = false,
-            int32 NumClients = 1, EPlayNetMode PlayNetMode = EPlayNetMode::PIE_Standalone);
+            int32 NumClients = 1, EUnLuaNovaPlayNetMode PlayNetMode = EUnLuaNovaPlayNetMode::Standalone);
 
         virtual bool Update() override;
 
@@ -69,7 +80,9 @@ namespace UnLuaNovaTestSuite
         EPlayNetMode PlayNetMode = EPlayNetMode::PIE_Standalone;
         bool bEndingPreviousSession = false;
         double WaitDeadline = 0.0;
+#if WITH_EDITOR
         TUniquePtr<FWaitForSpecifiedMapToLoadCommand> WaitForMapToLoad;
+#endif
     };
 
     // Ends a PIE session and waits until it is really gone.

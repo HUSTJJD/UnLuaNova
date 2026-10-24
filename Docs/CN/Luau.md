@@ -344,14 +344,133 @@ end
 
 ---
 
-## 六、仍未完成的部分
+## 六、官方特性接入（性能 / 沙盒 / 剖析）
+
+Luau 不是"另一个 Lua 发行版"，它砍掉了东西，也加了 Lua 没有的东西。这一节是**沿着
+luau.org 的 performance / sandbox / profile 三份文档把能接的接上**的记录，以及按我们自己
+的需要补回去的库。全部走控制台变量，全部默认关闭或保持原值——它们都会改变语义或成本，
+不该由插件替项目决定。
+
+| CVar | 默认 | 作用 | 影响什么 |
+|---|---|---|---|
+| `luau.optimize` | 1 | 编译优化级别，2 = 内联 + 循环展开 | 之后编译的 chunk |
+| `luau.debuglevel` | 1 | 0/1/2，行号与名字 | 之后编译的 chunk |
+| `luau.coverage` | 0 | 覆盖率级别 | 之后编译的 chunk |
+| `lua.codegen` | 0 | 把加载的 chunk 交给原生编译器 | 之后加载的 chunk |
+| `lua.codegen.modules` | 空 | 只编译名字命中的模块，空 = 全部 | 同上 |
+| `lua.gcgoal` / `lua.gcstepmul` | 200 / 200 | Luau 增量 GC 的两个旋钮 | 创建环境时 |
+| `lua.gcstepsize` | 1 (KB) | 多久打断一次做一步 GC | 创建环境时 |
+| `lua.sandbox` | 0 | 硬化全局表 | 创建环境时 |
+| `lua.sandboxthread` | 0 | 每个协程拿到自己的全局表 | 创建环境时 |
+| `lua.sandbox.freezeclasstables` | 0 | 类表注册即只读 | 每个类注册时 |
+| `lua.io` | 0 | 装一个 rooted 的 io 库 | 创建环境时 |
+| `lua.ioroot` | 空 = 项目目录 | io 能碰到的目录 | 每次路径解析 |
+
+### 编译：`-O2` 与原生编译
+
+`luau.optimize 2` 打开函数内联与循环展开。代价写在文档里也写在这里：**内联后的调用和
+展开后的循环不再可观测**，`debug.traceback` 少帧、`lua_getlocal` 看不到被展开的迭代。
+挂着断点调试时用 1，打包时用 2。
+
+`lua.codegen 1` 是另一回事——Luau 的原生编译器。它不是追踪式 JIT：不采样、不猜测，只在
+宿主明确要求时把指定函数（及其嵌套的一切）编译成机器码，唯一吃的提示是源码里的类型注解。
+所以"编译这个模块"是项目能做的决定，而"猜哪个函数热了"是 VM 不会替你做的。配合
+`lua.codegen.modules Hot,Foo` 可以只编译点名的模块，避免为所有脚本付编译时间。
+
+`lua.codegen` 不带参数打印现状：能不能用（需要 x64/arm64 的后端）、开着没、编译了几个。
+
+### GC：两个旋钮是一对的
+
+Luau 没有分代模式，只有一个增量收集器，靠 G（目标）和 S（步进倍率）两个百分比调。它们
+不是独立的：S 得追得上 G 放开的堆增长。lua.h 给的区间是
+`S ∈ [100/(G-100), 100+100/(G-100))` 且不小于 150%，即 G=200 时 S 落在 `[150,200]`。
+
+**这里原来写的是 100/100，那不是一个更严格的设置，是一个坏掉的设置**：G=100 时堆目标塌缩
+成"堆 == 存活量"，而一轮 full GC 之后的阈值算下来是 `totalbytes * (G*S/100 - 100)/S`，
+G=S=100 时等于 0（VM 会夹到 totalbytes，于是收集器刚结束一轮就立刻开下一轮）。现在默认
+回到 Luau 自己的 200/200，并且配对越界时打一条警告——越界不是"多收集点"，而是收集器根本
+追不到你设的目标。
+
+### 沙盒：全局表与协程
+
+`lua.sandbox` 硬化全局表；`lua.sandboxthread` 更进一步，**每个协程创建时**拿到自己的全局
+表（读穿透到真全局，写留在自己这里）。挂点是 Luau 的 `userthread` 回调——插件自己从不调
+`lua_newthread`，脚本里的协程全部来自 `coroutine.create`，所以宿主侧包一层根本拦不住。
+
+它同时也是性能开关：Luau 的 imports / fastcall 优化只在"环境是纯的"这个前提下成立，
+`lua_setsafeenv` 就是那个标记。跳过它的线程，VM 只能假定它的环境随时会变。
+
+默认关，因为隔离是**可观测的**：协程里写的全局，外面读不到。
+
+再往下一层是 `lua.sandbox.freezeclasstables`。`luaL_sandbox` 只硬化全局表，所以即使开了沙盒，
+`UE.MyClass.Member = ...` 仍然随便写 —— 引擎绑定是可以被脚本改掉的。真正的只读是类表自己
+只读。这件事以前做不了：类表是懒缓存的，首次访问一个属性会 `rawset` 进类表，冻结之后那次
+写入直接抛错。现在改成**写不进去就跳过**（`GetFieldInternal` 里的 `CacheFieldIfWritable`）：
+读路径不在乎有没有缓存，只是下次多解析一次。也是可选，因为 monkey-patch 类的脚本会因此失效。
+
+### 补回的库：io 与 package
+
+Luau 删掉 io 是有理由的（luau.org/sandbox：它能读文件、能起进程）。但那个理由针对的是
+**不可信**代码；游戏自己的脚本是可信的，而一个读不了自己发布的数据文件的脚本层缺工具。
+
+所以这不是"把 io 原样装回来"，而是把不安全的那部分换成项目自己做的决定：
+
+* 可选（`lua.io`，默认 0）
+* 有根（所有路径解析到 `lua.ioroot`，默认项目目录；绝对路径和 `..` 逃逸直接拒绝）
+* 没有进程（没有 `io.popen`、没有 `os.execute`）
+* 没有 stdin（`io.read` 直接报错）
+
+文件对象是 Lua 表而不是 userdata：Luau **没有 `__gc`**，持有 `FString`/`TArray` 的 userdata
+在脚本丢掉句柄时会泄漏。字符串和整数放进表里，跟着表一起回收。
+
+`package` 补了 `preload`（并且真的生效——preload 查找器挂在 `package.searchers[1]`，和
+Lua 一样优先于任何文件查找）、`config`、`path`、`cpath`。注意 `path`/`cpath` 只是**发布**
+出来给脚本读的，UnLuaNova 自己的加载器不读它们；想要按路径解析，注册一个读它们的
+searcher 就行——`package.searchers` 在两个后端都是真的。
+
+### 剖析：Luau 自己的 profile.out
+
+`lua.profiler trace on` 记采样，`lua.profiler trace dump [path]` 写成：
+
+```
+<微秒>  <source>,<name>,<linedefined>;<source>,<name>,<linedefined>;
+```
+
+这就是 `tools/perfgraph.py` 吃的格式——Luau 官方那个脚本已经随插件放在
+`Tools/LuauPerfgraph/perfgraph.py`，所以编辑器里抓的 profile 可以直接用上游工具开火焰图，
+不需要转换：
+
+```powershell
+python Tools\LuauPerfgraph\perfgraph.py --width 1200 Saved\Profiling\profile.out > profile.svg
+```
+
+默认约 1kHz 采样、20 万条封顶（越界自动停并告警）——每个安全点走一遍完整栈不是免费的。
+GC 时间会带一个合成的 `GC,GC,0;` 帧，跟官方一致。
+
+另外，协程是采样剖析器天生会搞错的东西：被中途丢掉的协程永远不返回，它的帧会一直压在共享
+栈上，直到某个不相干的 return 把它弹掉。现在 `userthread` 回调会在线程销毁时清掉属于它的帧。
+
+---
+
+## 七、仍未完成的部分
 
 | 项 | 现状 | 备注 |
 |---|---|---|
-| `buffer` ↔ `TArray<uint8>` 的零拷贝 | 目前是显式逐字节转换 | 真正的零拷贝要让容器绑定直接读写 buffer 内存 |
-| 沙盒下冻结**类表** | 只冻结了全局表 + 拦截脚本写入 `UE` | 类表是懒缓存的（首次访问会 `rawset`），冻结会打断缓存 |
-| `luau-lsp` 进 CI | 本地脚本已有，CI 没有可执行文件 | 有自托管 runner 就可以直接挂上去 |
-| DAP 适配器 | `lua.dbg` 是 headless 的 | 能力已暴露，缺一个把它接到 IDE 的适配层 |
+| `buffer` ↔ `TArray<uint8>` 的零拷贝 | 目前是显式逐字节转换 | 真正的零拷贝要让容器绑定直接读写 buffer 内存，而不是先拷一份 |
+| 容器 / FText / File 的 userdata 永不 `__gc` | Luau 明确不提供终结器（`LuaBackend.h:748`） | 只能靠显式 `Release`/重置；要么给容器加显式生命周期 API，要么别让它们持有需要析构的东西 |
+
+已落地（原先在这个表里，现在不是了）：
+
+| 项 | 变成什么 |
+|---|---|
+| 沙盒下冻结**类表** | `lua.sandbox.freezeclasstables`。阻塞点是"类表懒缓存首次访问会 `rawset`"——现在是写不进去就跳过（`CacheFieldIfWritable`），读照旧，只是下次多解析一次 |
+| DAP 适配器 | `lua.dap start [port]`（默认 5699），见 [调试](Debugging.md) |
+
+**不做的**（有意为之，不是没做）：
+
+| 项 | 为什么不进 |
+|---|---|
+| `luau-lsp` 进 CI | 一次 cmake 构建几分钟，而 CI 拿不到引擎、也拿不到编辑器导出的声明文件，`UE.xxx` 全是 `Unknown global`，跑出来的东西要人工二次判读。它是本地工具：`Tools/Build-LuauLsp.ps1` 构建，`Tools/CheckLuauTypes.ps1` 跑 |
 
 ---
 

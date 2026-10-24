@@ -325,7 +325,10 @@ namespace UnLuaNova
 
 		TArray<ANSICHAR> Buffer;
 		Buffer.SetNumUninitialized(HeadSize + 1);
-		const int64 Read = Reader->Serialize(Buffer.GetData(), HeadSize);
+		// FArchive::Serialize returns void - how much was read comes from the archive's
+		// own size, clamped to the head (a file shorter than the head is fine).
+		const int64 Read = FMath::Max<int64>(0, FMath::Min<int64>(Reader->TotalSize(), HeadSize));
+		Reader->Serialize(Buffer.GetData(), Read);
 		Reader->Close();
 
 		if (Read <= 0)

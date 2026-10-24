@@ -327,8 +327,8 @@ bool UUnLuaNovaManager::BindClass(UClass* Class, const FString& InModuleName, FS
     // 用原模块表（不是复制出来的那份）读取声明：复制发生在上面，且复制表只给实例用，
     // 声明属于类，读原表才不会因为实例表被改写而变。
     {
-        const auto Type = UnLuaNova::LowLevel::GetLoadedModule(L, TCHAR_TO_UTF8(*InModuleName));
-        if (Type == LUA_TTABLE)
+        const auto DeclType = UnLuaNova::LowLevel::GetLoadedModule(L, TCHAR_TO_UTF8(*InModuleName));
+        if (DeclType == LUA_TTABLE)
         {
             UnLuaNova::FUnLuaNovaNet::DeclareRPCs(L, -1, Class);
             UnLuaNova::FUnLuaNovaNet::DeclareReplicatedProps(L, -1, Class);

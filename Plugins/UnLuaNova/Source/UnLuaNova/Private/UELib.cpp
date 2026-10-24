@@ -206,6 +206,18 @@ void UnLuaNova::UELib::SetTableForClass(lua_State* L, const char* Name)
     lua_pushstring(L, Name);
     lua_pushvalue(L, -3);
     lua_rawset(L, -3);
+
+    // Freeze the class table itself, not just the namespace holding it. luaL_sandbox only
+    // hardens the globals, so `UE.MyClass.Member = ...` used to be fair game even with the
+    // sandbox on. Read-only is what actually closes that - and it only became survivable
+    // once the lazy field cache in GetFieldInternal learned to skip a write it cannot make.
+    if (UnLuaNova::IsClassTableFreezeEnabled())
+    {
+        // -2 is the class table: [class table, namespace], the rawset above consumed the
+        // key and the copy.
+        UNLUANOVA_SET_READONLY(L, -2, true);
+    }
+
     lua_pop(L, 1);
 }
 

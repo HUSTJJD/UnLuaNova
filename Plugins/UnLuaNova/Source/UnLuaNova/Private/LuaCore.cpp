@@ -1004,6 +1004,26 @@ static bool TryPushStaticBindingField(lua_State* L, FClassDesc* ClassDesc, const
     return false;
 }
 
+/**
+ * Cache a resolved field into the class metatable, unless it is read-only.
+ *
+ * This is what makes freezing a class table survivable. The cache is a write on first
+ * access, so a frozen metatable used to raise the moment anything touched a property -
+ * which is why "sandbox the class tables" stayed on the not-done list. Skipping the write
+ * instead is the right answer: the read path does not care whether the field was cached,
+ * it only costs one more resolution the next time.
+ */
+static void CacheFieldIfWritable(lua_State* L, int TableIdx)
+{
+    if (UNLUANOVA_GET_READONLY(L, TableIdx))
+    {
+        lua_pop(L, 2); // key and value
+        return;
+    }
+
+    lua_rawset(L, TableIdx);
+}
+
 static void GetFieldInternal(lua_State* L) 
 {
     lua_pop(L, 1);
@@ -1035,7 +1055,7 @@ static void GetFieldInternal(lua_State* L)
     {
         lua_pushvalue(L, 2);                // key
         lua_pushvalue(L, -2);               // Property / closure
-        lua_rawset(L, -4);
+        CacheFieldIfWritable(L, -4);
         return;
     }
 
@@ -1080,14 +1100,14 @@ static void GetFieldInternal(lua_State* L)
             PushField(L, Field);                // Property / closure
             lua_pushvalue(L, 2);                // key
             lua_pushvalue(L, -2);               // Property / closure
-            lua_rawset(L, -4);
+            CacheFieldIfWritable(L, -4);
         }
         if (bInherited)
         {
             lua_remove(L, -2);
             lua_pushvalue(L, 2);                // key
             lua_pushvalue(L, -2);               // Property / closure
-            lua_rawset(L, -4);
+            CacheFieldIfWritable(L, -4);
         }
     }
     else

@@ -295,6 +295,61 @@ void FLuaEnvSpec::Define()
         });
     });
 
+    Describe(TEXT("package 的兼容形状"), [this]()
+    {
+        // Luau has no package library at all, so UnLuaNova publishes one. Publishing it is
+        // only half the job - scripts (HotReload.lua among them) walk package.searchers and
+        // hosts hand modules over through package.preload, so both have to behave the way
+        // a Lua program expects, on either backend.
+
+        It(TEXT("package 上有 searchers / preload / config / path / cpath"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            Env->DoString(TEXT(" \
+                return type(package) == 'table' \
+                    and type(package.loaded) == 'table' \
+                    and type(package.searchers) == 'table' \
+                    and type(package.preload) == 'table' \
+                    and type(package.config) == 'string' \
+                    and type(package.path) == 'string' \
+                    and type(package.cpath) == 'string' \
+            "));
+            TEST_EQUAL(lua_toboolean(L, -1), 1);
+            lua_pop(L, 1);
+        });
+
+        It(TEXT("package.preload 里的模块被 require 到，并且优先于文件系统"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // The point of preload is that there is no file: a host (or a test) supplies
+            // the module. It has to win, which is why the preload searcher sits at index 1
+            // - the same slot plain Lua keeps for it.
+            Env->DoString(TEXT(" \
+                package.preload['Spec.Preloaded'] = function(name) \
+                    return { Name = name, FromPreload = true } \
+                end \
+                local M = require('Spec.Preloaded') \
+                return M.FromPreload == true and M.Name == 'Spec.Preloaded' \
+            "));
+            TEST_EQUAL(lua_toboolean(L, -1), 1);
+            lua_pop(L, 1);
+        });
+
+        It(TEXT("package.loaded 是 require 的缓存，第二次不重跑"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            Env->DoString(TEXT(" \
+                local Calls = 0 \
+                package.preload['Spec.Counted'] = function() \
+                    Calls = Calls + 1 \
+                    return { N = Calls } \
+                end \
+                local A = require('Spec.Counted') \
+                local B = require('Spec.Counted') \
+                return A == B and Calls \
+            "));
+            TEST_EQUAL((int64)lua_tonumber(L, -1), 1ll);
+            lua_pop(L, 1);
+        });
+    });
+
     AfterEach([this]
     {
         Env.Reset();

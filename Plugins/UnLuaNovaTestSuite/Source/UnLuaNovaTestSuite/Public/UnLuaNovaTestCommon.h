@@ -222,6 +222,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, PrettyName, (EAutomationTestFlags::C
 namespace UnLuaNovaTestSuite { \
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, PrettyName, (EAutomationTestFlags::ClientContext | EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::NonNullRHI))
 
+// Same as BEGIN_TESTSUITE plus ServerContext.
+//
+// A test that runs *inside a net peer* has to be reachable from whatever that peer is: a
+// client is ClientContext, but a dedicated server is ServerContext, and the framework drops
+// a test whose flags do not contain the context it is running in - silently, with no
+// "test not found" worth the name. A peer test registered with the plain macro therefore
+// never runs on the -server side, which shows up as "the peer produced no report" three
+// minutes later.
+#define BEGIN_TESTSUITE_ANY_CONTEXT(TestClass, PrettyName) \
+namespace UnLuaNovaTestSuite { \
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(TestClass, PrettyName, (EAutomationTestFlags::ClientContext | EAutomationTestFlags::ServerContext | EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter))
+
 #define END_TESTSUITE(TestClass) \
 }
 

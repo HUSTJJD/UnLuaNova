@@ -194,10 +194,12 @@ void FNetSpec::Define()
             TEST_EQUAL(Chat->NumParms, 2);
 
             // Params = { "Int", "Str" } -> FIntProperty then FStrProperty, in order.
-            FProperty* First = Chat->ChildProperties;
+            // ChildProperties (and Next) are FField*, which is the base of FProperty -
+            // CastField, not a static_cast, so a non-property field cannot slip through.
+            FProperty* First = CastField<FProperty>(Chat->ChildProperties);
             TEST_TRUE(First != nullptr);
             TEST_TRUE(First && First->IsA<FIntProperty>());
-            FProperty* Second = First ? First->Next : nullptr;
+            FProperty* Second = First ? CastField<FProperty>(First->Next) : nullptr;
             TEST_TRUE(Second != nullptr);
             TEST_TRUE(Second && Second->IsA<FStrProperty>());
         });

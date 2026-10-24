@@ -56,6 +56,12 @@ namespace UnLuaNova
         void CodeGen(const TArray<FString>& Args) const;
 
     private:
+        // Which of FLuaEnv::GetAllEnvs() the `lua.dbg` sub-commands act on. INDEX_NONE
+        // means "nothing picked yet", in which case the module's env is used when it is
+        // one of them and index 0 otherwise - that keeps a single-env session behaving
+        // exactly as it always did. mutable because every handler is const.
+        mutable int32 DebugEnvIndex = INDEX_NONE;
+
         IUnLuaNovaModule* Module;
     };
 }
