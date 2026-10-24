@@ -26,6 +26,7 @@ The default `Release` profile orchestrates the current **Win64** matrix. Operato
 | Connected peers | Launch the current backend's cooked game, retaining topology, reports and logs; verify multicast reaches two clients |
 | Types | Back up old generated declarations, export fresh declarations, require successful backend type checks |
 | Cooked automation | Run all tests registered for the Development game's actual UE context |
+| Memory | Require `UnLuaNova.Memory` evidence in both backend/carrier combinations: VM allocation balance, resource release and warmed heap growth |
 | Shipping | Build/cook/package and verify the archived executable; this is not Shipping runtime certification |
 | Cleanup | Restore original config bytes and changed environment variables, clean up owned processes, write an aggregate verdict |
 
@@ -44,6 +45,17 @@ Backend outputs include `editor/<backend>/`, `game/`, packaged Development/Shipp
 All four Showcase PNGs and encoded clips are required. Connected network evidence must contain Server/Client1/Client2 logs, backend/role identity, matching RPCIds and actual multicast reception. A peer-report helper's no-op does not prove transmission.
 
 Performance requires reviewed `Tools/baseline/perf-lua.json` and `perf-luau.json`, matching backend, engine, machine, case inventory and iteration counts, with a 25% regression limit. These baselines are currently absent. The first run retains `metadata/perf.json` and fails this gate; it does not automatically approve its own measurements. Baseline maintenance does not require operators to run extra test commands. External performance claims still require [controlled acceptance](Performance_Parity_slua.md).
+
+## Memory Leak Gate
+
+No extra command or manual `lua.memstats` toggle is required. Nine reports under `metadata/memory/` cover environment cycles, warmed heap stability, actual module hot reload, a deliberately retained graph, native smart-pointer payloads, delegates, UMG image/texture ownership, and both World/environment teardown orders. Reports must match the manifest's run ID, backend and carrier. Missing reports, unregistered cases, insufficient work or failed assertions fail release validation.
+
+- Audited environments install a pointer ledger before VM creation and retain it through `lua_close`. Every closed VM must have zero live bytes, live blocks and accounting errors. Ordinary environments do not maintain this map.
+- Lifecycle cases run 24 cycles; each World teardown order runs 12. Weak pointers verify native payload and UObject release; Timer cases check callbacks and captured owners.
+- Heap stability and hot reload warm up for 8 rounds, then sample 32 full-GC rounds. Growth is limited to 8 KiB and 16 live blocks. Limits are fixed in code and the validator, not provided by reports.
+- A control retains a graph across full GC, requires growth above 64 KiB, then releases it and verifies recovery. The validator checks measurements independently of `passed=true`.
+
+This is scenario-based leak regression, not proof of process-wide memory safety. Native ownership checks do not cover every C++ allocation; GPU/RHI resources, Luau CodeGen executable pages, third-party libraries and long production sessions still need dedicated coverage. Process working-set retention alone is not evidence of a leak. New C++ cases and budgets await actual runs on both backends.
 
 ## Development
 

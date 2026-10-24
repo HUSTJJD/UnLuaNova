@@ -8,6 +8,7 @@
 |---|---|---|---|
 | 仓库检查 | Python / PowerShell parser | 矩阵、链接、工具逻辑、脚本语法 | 不检查 C++ 编译或运行行为 |
 | VM / 绑定 | UE Spec + Lua Spec | 后端、编组、容器、异常、库契约 | 空跑必须失败；feature-off、错误输入和强制 GC 仍需扩充 |
+| 内存 | 双后端 Editor / cooked Spec + Python 门禁 | VM 逐块归零、原生载荷/UObject/回调释放、预热后增长、保留引用对照 | 不覆盖全部原生分配、GPU/CodeGen 内存或长时间线上负载 |
 | World | 游戏或编辑器 | Timer、对象销毁、Latent、多环境 | 两种销毁顺序、多 PIE 和重入 |
 | Network | PIE + 真正连接的进程 | RPC、属性、owner、多客户端 | 条件、int64、晚加入、Iris/legacy/push model、打包 |
 | UI / 示例 | Editor + 真实 RHI | UMG、输入、截图、示例操作 | NullRHI 不覆盖本层；存在截图不代表行为断言齐全 |

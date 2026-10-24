@@ -54,8 +54,8 @@ used to overwrite each other, but they now go through a shared hook dispatcher.*
 
 Lua heap statistics.
 
-* `on` / `off`: enable or disable
-* `reset`: zero every counter
+* `on` / `off`: enable or disable call counts and categorized allocation volume; live bytes remain tracked
+* `reset`: clear interval counts and categorized volume, reset peak to current usage, preserve live bytes
 * no argument: print the report
 
 The report has two parts:

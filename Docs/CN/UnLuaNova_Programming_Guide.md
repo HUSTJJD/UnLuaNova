@@ -321,7 +321,7 @@ FLuaRetValues CallTableFunc(lua_State *L, const char *TableName, const char *Fun
 
 # 五、垃圾回收
 
-从UnLuaNova 2.2 版本开始，Lua环境不会再对`UObject`加引用，因此也不用再担心对象在Lua侧被引用着，导致一直无法释放的内存泄漏问题了。
+Lua 侧的普通 `UObject` 包装不会自动阻止 UE GC。显式 `Ref`、委托、Timer 及业务容器仍可能延长对象寿命，需要在生命周期结束时解除引用；这项引用规则不代表整个系统不存在内存泄漏。发布时的检查范围见[测试与自动化](Testing.md#内存泄漏门禁)。
 
 如果在Lua侧访问了某个被UEGC回收的对象，会提示类似 `attempt to read property on released object` 的错误。
 

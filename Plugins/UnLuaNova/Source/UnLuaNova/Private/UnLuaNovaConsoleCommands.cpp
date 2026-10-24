@@ -328,7 +328,7 @@ namespace UnLuaNova
             if (Arg.Equals(TEXT("reset"), ESearchCase::IgnoreCase))
             {
                 Stats.Reset();
-                UE_LOG(LogUnLuaNova, Log, TEXT("Lua memory counters reset."));
+                UE_LOG(LogUnLuaNova, Log, TEXT("Lua memory interval counters reset; live allocations preserved."));
                 return;
             }
 
@@ -338,7 +338,7 @@ namespace UnLuaNova
 
         if (!Stats.bEnabled.load(std::memory_order_relaxed))
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("tracking is off - run 'lua.memstats on' first, the numbers below are all zero."));
+            UE_LOG(LogUnLuaNova, Log, TEXT("Detailed tracking is off; live bytes remain available. Use 'lua.memstats on' for call counts and categories."));
         }
 
         UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Stats.BuildReport());

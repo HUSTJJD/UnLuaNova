@@ -17,26 +17,3 @@
 	# longer what checks this project: upstream deleted its --defs, so the Luau backend runs
 	# luau-lsp instead - Tools/luau-lsp, built by Tools/Build-LuauLsp.ps1. Build the vendored
 	# luau-analyze by hand (cmake --target Luau.Analyze.CLI) if you ever want it back.
-[submodule "Tools/lua-language-server"]
-	path = Tools/lua-language-server
-	url = https://github.com/LuaLS/lua-language-server.git
-	branch = master
-	# The Lua backend's static checker (Tools/CheckLuaTypes.ps1). Same arrangement as the
-	# two submodules above: the superproject records one commit, and `git submodule update
-	# --remote` is what moves it to the tip of master.
-	# A tool, not a library to link - it lives under Tools/ so UBT never sees it.
-	# Build: Tools/Build-LuaLS.ps1 (needs Ninja + MSVC). It also has 21 nested submodules
-	# (3rd/* for the build, meta/3rd/* for other frameworks' API metadata); the build
-	# script pulls them. bin/, build/, log/ and meta/ are build output.
-	ignore = untracked
-[submodule "Tools/luau-lsp"]
-	path = Tools/luau-lsp
-	url = https://github.com/JohnnyMorganz/luau-lsp.git
-	branch = main
-	# The Luau backend's static checker (Tools/CheckLuauTypes.ps1), and the counterpart of
-	# Tools/lua-language-server above: a tool, not a library to link, so UBT never sees it.
-	# luau-analyze (Luau's own CLI) dropped --defs, which leaves the editor's UnLuaNova.d.lua
-	# with no way in; `luau-lsp analyze --definitions` reads the very same file. It carries one
-	# nested submodule of its own (luau/), which the build script pulls.
-	# Build: Tools/Build-LuauLsp.ps1 (needs cmake + MSVC). build/ is build output.
-	ignore = untracked

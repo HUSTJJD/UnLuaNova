@@ -35,6 +35,7 @@ namespace
         TArray<TSharedPtr<FJsonValue>> JsonNames;
         for (const auto& Name : Names) JsonNames.Add(MakeShared<FJsonValueString>(Name));
         auto Root = MakeShared<FJsonObject>();
+        Root->SetStringField(TEXT("run_id"), FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_RELEASE_TOKEN")));
         Root->SetStringField(TEXT("backend"), UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU ? TEXT("Luau") : TEXT("Lua"));
         Root->SetBoolField(TEXT("editor"), GIsEditor);
         Root->SetBoolField(TEXT("cooked"), FPlatformProperties::RequiresCookedData());

@@ -119,20 +119,20 @@ void FObservabilitySpec::Define()
 
             Env->DoString(TEXT("local T = {} for i = 1, 1000 do T[i] = tostring(i) end return #T"));
 
-            // The allocator hook costs a couple of atomics per allocation, which is why it
-            // is opt-in - and why "off" has to mean off.
+            // Detailed call counts are opt-in; live bytes remain accurate while off.
             TEST_EQUAL((int64)Stats.GetAllocCount(), (int64)0);
         });
 
-        It(TEXT("Reset 清零"), EAsyncExecution::TaskGraphMainThread, [this]()
+        It(TEXT("Reset preserves live allocations and clears interval counts"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             auto& Stats = UnLuaNova::FLuaMemoryStats::Get();
             Stats.bEnabled = true;
             Env->DoString(TEXT("return {}"));
             Stats.bEnabled = false;
 
+            const uint64 Live = Stats.GetCurrentBytes();
             Stats.Reset();
-            TEST_EQUAL((int64)Stats.GetCurrentBytes(), (int64)0);
+            TEST_EQUAL(Stats.GetCurrentBytes(), Live);
             TEST_EQUAL((int64)Stats.GetAllocCount(), (int64)0);
             TEST_EQUAL((int64)Stats.GetFreeCount(), (int64)0);
         });

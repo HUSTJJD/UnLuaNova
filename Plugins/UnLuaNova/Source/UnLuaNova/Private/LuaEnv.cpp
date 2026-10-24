@@ -145,6 +145,11 @@ namespace UnLuaNova
 #endif
 
     FLuaEnv::FLuaEnv()
+        : FLuaEnv(nullptr, nullptr)
+    {
+    }
+
+    FLuaEnv::FLuaEnv(lua_Alloc Allocator, void* AllocatorUserdata)
         : bStarted(false)
     {
         const auto Settings = GetDefault<UUnLuaNovaSettings>();
@@ -158,10 +163,10 @@ namespace UnLuaNova
         // https://github.com/Tencent/UnLuaNova/issues/534
         const auto Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("Binaries/Win64"));
         FPlatformProcess::PushDllDirectory(*Dir);
-        L = UNLUANOVA_NEWSTATE(GetLuaAllocator(), nullptr);
+        L = UNLUANOVA_NEWSTATE(Allocator ? Allocator : GetLuaAllocator(), AllocatorUserdata);
         FPlatformProcess::PopDllDirectory(*Dir);
 #else
-        L = UNLUANOVA_NEWSTATE(GetLuaAllocator(), nullptr);
+        L = UNLUANOVA_NEWSTATE(Allocator ? Allocator : GetLuaAllocator(), AllocatorUserdata);
 #endif
 
         AllEnvs.Add(L, this);
@@ -399,6 +404,7 @@ namespace UnLuaNova
     {
         bClosing = true;
         FLuaProfiler::Get().Detach(L);
+        FLuaMemoryStats::Get().Detach(L);
 
         OnDestroyed.Broadcast(*this);
         lua_close(L);
@@ -1293,7 +1299,7 @@ namespace UnLuaNova
 
         if (nsize == 0)
         {
-            Stats.TrackFree(osize);
+            if (ptr) Stats.TrackFree(osize);
             UNLUANOVA_STAT_MEMORY_FREE(ptr, Lua);
             FMemory::Free(ptr);
             return nullptr;
@@ -1311,9 +1317,9 @@ namespace UnLuaNova
             Buffer = FMemory::Realloc(ptr, nsize);
         }
 
-        // osize is 0 for a fresh allocation, non-zero for a reallocation - TrackAlloc
-        // uses that to split the two counters.
-        Stats.TrackAlloc(osize, nsize);
+        // Lua passes a type tag in osize for some fresh allocations. A failed realloc
+        // leaves the old block live and must not change accounting.
+        if (Buffer) Stats.TrackAlloc(ptr ? osize : 0, nsize);
         return Buffer;
     }
 }

@@ -22,12 +22,10 @@ namespace UnLuaNova
      * Fed from FLuaEnv::DefaultLuaAllocator, which every supported backend routes through
      * (see FLuaEnv::GetLuaAllocator), so this behaves identically on Lua 5.5 and Luau.
      *
-     * It is a process-wide singleton rather than per-env on purpose: the allocator is a
-     * free function with no env pointer, and the question this answers is usually "how
-     * much Lua memory is the process using" - not "which env".
-     *
-     * Off by default (see bEnabled) because the hooks cost a couple of atomics on every
-     * single allocation. Enable it with 'lua.memstats on'.
+     * Live bytes are always accounted, including while detailed tracking is disabled.
+     * This makes enabling or resetting statistics safe with existing environments.
+     * Call counts and categorized allocation volume are opt-in via 'lua.memstats on'.
+     * Custom allocators must forward to DefaultLuaAllocator to participate.
      */
     class UNLUANOVA_API FLuaMemoryStats
     {
@@ -48,6 +46,7 @@ namespace UnLuaNova
         uint64 GetReallocCount() const { return ReallocCount.load(std::memory_order_relaxed); }
         uint64 GetFreeCount() const { return FreeCount.load(std::memory_order_relaxed); }
 
+        /** Reset interval counters and peak, preserving currently live allocations. */
         void Reset();
 
         /**
@@ -55,7 +54,7 @@ namespace UnLuaNova
          * plain Lua, which has no equivalent - there the allocator hook is all there is.
          */
         void Attach(lua_State* L);
-        void Detach();
+        void Detach(lua_State* L = nullptr);
 
         /** Hot path, Luau only. Driven from onallocate; the VM supplies the classification. */
         void TrackCategorizedAlloc(uint8 MemCat, int32 Type, int32 Tag, size_t NewSize);

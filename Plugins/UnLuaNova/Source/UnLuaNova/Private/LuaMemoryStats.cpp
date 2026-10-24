@@ -19,16 +19,16 @@ namespace UnLuaNova
 
     void FLuaMemoryStats::TrackAlloc(size_t OldSize, size_t NewSize)
     {
-        if (!bEnabled.load(std::memory_order_relaxed))
-            return;
-
         const int64 Delta = static_cast<int64>(NewSize) - static_cast<int64>(OldSize);
         const int64 Now = CurrentBytes.fetch_add(Delta, std::memory_order_relaxed) + Delta;
 
-        if (OldSize == 0)
-            AllocCount.fetch_add(1, std::memory_order_relaxed);
-        else
-            ReallocCount.fetch_add(1, std::memory_order_relaxed);
+        if (bEnabled.load(std::memory_order_relaxed))
+        {
+            if (OldSize == 0)
+                AllocCount.fetch_add(1, std::memory_order_relaxed);
+            else
+                ReallocCount.fetch_add(1, std::memory_order_relaxed);
+        }
 
         // Peak feeds reporting only, so a relaxed CAS loop is sufficient - no lock needed
         // on what is otherwise a very hot path.
@@ -40,17 +40,14 @@ namespace UnLuaNova
 
     void FLuaMemoryStats::TrackFree(size_t Size)
     {
-        if (!bEnabled.load(std::memory_order_relaxed))
-            return;
-
         CurrentBytes.fetch_sub(static_cast<int64>(Size), std::memory_order_relaxed);
-        FreeCount.fetch_add(1, std::memory_order_relaxed);
+        if (bEnabled.load(std::memory_order_relaxed))
+            FreeCount.fetch_add(1, std::memory_order_relaxed);
     }
 
     void FLuaMemoryStats::Reset()
     {
-        CurrentBytes.store(0, std::memory_order_relaxed);
-        PeakBytes.store(0, std::memory_order_relaxed);
+        PeakBytes.store(CurrentBytes.load(std::memory_order_relaxed), std::memory_order_relaxed);
         AllocCount.store(0, std::memory_order_relaxed);
         ReallocCount.store(0, std::memory_order_relaxed);
         FreeCount.store(0, std::memory_order_relaxed);
@@ -99,10 +96,10 @@ namespace UnLuaNova
 #endif
     }
 
-    void FLuaMemoryStats::Detach()
+    void FLuaMemoryStats::Detach(lua_State* L)
     {
 #if UNLUANOVA_HAS_ALLOC_CALLBACKS
-        if (!AttachedState)
+        if (!AttachedState || (L && L != AttachedState))
             return;
 
         UNLUANOVA_SET_ALLOC_CALLBACKS(AttachedState, nullptr, nullptr);

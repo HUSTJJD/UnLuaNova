@@ -19,7 +19,7 @@ Release / Win64 / Lua + Luau (no operations performed):
   7. Fresh declaration export and mandatory backend type checking.
   8. Full applicable cooked Development automation with runtime manifest verification.
   9. Build/cook/archive Shipping game (packaging gate, not Shipping runtime certification).
- 10. Validate manifests, source suite registration, peer evidence, media and performance baseline.
+ 10. Validate manifests, memory leak evidence, peer evidence, media and performance baseline.
  11. Restore original config/environment; write release-summary.json and release-summary.md.
 Missing/skipped evidence, timeouts, failed/blocked stages and absent performance baselines fail.
 '@

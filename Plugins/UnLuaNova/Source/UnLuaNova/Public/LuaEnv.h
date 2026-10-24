@@ -53,6 +53,9 @@ namespace UnLuaNova
 
         FLuaEnv();
 
+        /** Allocator userdata must outlive the environment, including lua_close. */
+        FLuaEnv(lua_Alloc Allocator, void* AllocatorUserdata);
+
         virtual ~FLuaEnv() override;
 
         static TMap<lua_State*, FLuaEnv*>& GetAll();

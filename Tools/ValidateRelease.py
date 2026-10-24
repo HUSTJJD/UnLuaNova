@@ -8,6 +8,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# Minimum work is fixed here, not supplied by a potentially incomplete report.
+MEMORY_CASES = {
+    "vm_cycles": (24, 24, 0),
+    "steady_heap": (1, 32, 0),
+    "hot_reload": (1, 32, 0),
+    "retained_reference": (1, 3, 0),
+    "native_payloads": (24, 24, 60),
+    "delegates": (24, 24, 72),
+    "umg_resources": (24, 24, 48),
+    "world_env_first": (12, 12, 36),
+    "world_world_first": (12, 12, 36),
+}
+
 
 def read_json(path):
     return json.loads(path.read_text(encoding="utf-8-sig"))
@@ -73,6 +86,66 @@ def validate_typecheck(data):
         errors.append("Static type errors remain")
     if not data.get("defs") or not data.get("analyzer"):
         errors.append("Missing analyzer or declaration provenance")
+    return errors
+
+
+def validate_memory_case(data, name, backend, carrier, run_id):
+    errors = []
+    if data.get("schema_version") != 1 or data.get("case") != name:
+        errors.append("Memory schema/case mismatch")
+    if data.get("backend") != backend or data.get("editor") is not (carrier == "editor") or data.get("cooked") is not (carrier == "game"):
+        errors.append("Memory backend/carrier mismatch")
+    if not run_id or data.get("run_id") != run_id:
+        errors.append("Memory evidence belongs to another run")
+    if data.get("passed") is not True:
+        errors.append("Memory runtime assertions failed")
+    fields = ("closed_envs", "allocation_events", "remaining_bytes", "remaining_blocks", "accounting_errors",
+              "checked_resources", "retained_resources", "initial_envs", "final_envs", "warmup")
+    if any(type(data.get(k)) is not int or data[k] < 0 for k in fields):
+        return errors + ["Invalid or missing memory counters"]
+    envs, sample_count, resources = MEMORY_CASES[name]
+    if data["closed_envs"] < envs or data["allocation_events"] <= 0 or data["checked_resources"] < resources:
+        errors.append("Memory workload incomplete")
+    if any(data[k] != 0 for k in ("remaining_bytes", "remaining_blocks", "accounting_errors", "retained_resources")):
+        errors.append("Unreleased memory/resources or allocator accounting errors")
+    if data["initial_envs"] != data["final_envs"]:
+        errors.append("Environment registry did not recover")
+    samples = data.get("samples")
+    if not isinstance(samples, list) or len(samples) != sample_count or any(
+        not isinstance(s, dict) or any(type(s.get(k)) is not int or s[k] < 0 for k in ("bytes", "blocks"))
+        for s in samples
+    ):
+        return errors + ["Invalid or incomplete memory samples"]
+    if name in ("steady_heap", "hot_reload"):
+        if data["warmup"] < 8 or samples[0]["bytes"] == 0 or samples[0]["blocks"] == 0:
+            errors.append("Missing warmed live-heap evidence")
+        # Bound both high-water growth and late growth after the first sampled window.
+        for key, limit in (("bytes", 8192), ("blocks", 16)):
+            values = [s[key] for s in samples]
+            if max(values) > min(values[:8]) + limit or sum(values[-8:]) > sum(values[:8]) + 8 * limit:
+                errors.append(f"Post-GC {key} growth exceeds the warmed budget")
+    elif name == "retained_reference":
+        if (data.get("positive_control_detected") is not True
+                or samples[1]["bytes"] <= samples[0]["bytes"] + 65536
+                or samples[1]["blocks"] <= samples[0]["blocks"]
+                or samples[2]["bytes"] > samples[0]["bytes"] + 8192):
+            errors.append("Retained-reference control did not detect and release its graph")
+    elif any(s["bytes"] or s["blocks"] for s in samples):
+        errors.append("A create/destroy cycle left live VM allocations")
+    return errors
+
+
+def validate_memory(run, backend, carrier):
+    manifest = read_json(run / "metadata/manifest.json")
+    errors = []
+    for name in MEMORY_CASES:
+        try:
+            data = read_json(run / f"metadata/memory/{name}.json")
+            errors.extend(f"{name}: {e}" for e in validate_memory_case(data, name, backend, carrier, manifest.get("run_id")))
+            if f"UnLuaNova.Memory.{name}" not in manifest.get("tests", []):
+                errors.append(f"{name}: memory case absent from runtime manifest")
+        except (OSError, ValueError, TypeError, AttributeError, KeyError) as exc:
+            errors.append(f"{name}: missing or invalid memory evidence: {exc}")
     return errors
 
 
@@ -160,6 +233,7 @@ def validate_run(run, backend, carrier, root=ROOT):
         "automation": lambda: validate_automation(read_json(run / "metadata/manifest.json"),
             read_json(run / "index.json"), backend, carrier, ClassifyTests.scan()["tests"]),
         "network": lambda: validate_network(run, backend),
+        "memory": lambda: validate_memory(run, backend, carrier),
     }
     if carrier == "editor":
         checks["typecheck"] = lambda: validate_typecheck(read_json(run / f"{backend.lower()}-analyze.json"))

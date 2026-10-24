@@ -88,8 +88,76 @@ class ReleaseValidationTests(unittest.TestCase):
     def test_missing_all_evidence_fails_each_gate(self):
         with tempfile.TemporaryDirectory() as directory:
             errors = gate.validate_run(Path(directory), "Lua", "editor")
-        for name in ("automation", "network", "performance", "typecheck", "media"):
+        for name in ("automation", "network", "performance", "typecheck", "media", "memory"):
             self.assertTrue(any(e.startswith(name + ":") for e in errors))
+
+    def memory_case(self, name, backend="Lua", carrier="editor"):
+        envs, count, resources = gate.MEMORY_CASES[name]
+        samples = [dict(bytes=0, blocks=0) for _ in range(count)]
+        if name in ("steady_heap", "hot_reload"):
+            samples = [dict(bytes=200000, blocks=500) for _ in range(count)]
+        if name == "retained_reference":
+            samples = [dict(bytes=200000, blocks=500), dict(bytes=1200000, blocks=10000), dict(bytes=200000, blocks=500)]
+        return dict(schema_version=1, case=name, backend=backend, editor=carrier == "editor", cooked=carrier == "game",
+                    run_id="current-run", passed=True, closed_envs=envs, allocation_events=10000,
+                    remaining_bytes=0, remaining_blocks=0, accounting_errors=0, checked_resources=resources,
+                    retained_resources=0, initial_envs=1, final_envs=1, warmup=8,
+                    positive_control_detected=True, samples=samples)
+
+    def test_memory_complete_matrix_for_both_backends_and_carriers(self):
+        for backend in ("Lua", "Luau"):
+            for carrier in ("editor", "game"):
+                for name in gate.MEMORY_CASES:
+                    with self.subTest(backend=backend, carrier=carrier, name=name):
+                        self.assertEqual(gate.validate_memory_case(self.memory_case(name, backend, carrier),
+                            name, backend, carrier, "current-run"), [])
+
+    def test_memory_cannot_pass_with_retained_resources_or_bad_accounting(self):
+        for key, value in (("remaining_bytes", 1), ("remaining_blocks", 1), ("accounting_errors", 1),
+                           ("retained_resources", 1), ("closed_envs", 0), ("checked_resources", 0),
+                           ("allocation_events", 0), ("final_envs", 2), ("remaining_bytes", -1),
+                           ("remaining_bytes", float("nan")), ("remaining_bytes", False),
+                           ("passed", False), ("backend", "Luau"), ("cooked", True), ("run_id", "stale")):
+            with self.subTest(key=key, value=value):
+                data = self.memory_case("native_payloads")
+                data[key] = value
+                self.assertTrue(gate.validate_memory_case(data, "native_payloads", "Lua", "editor", "current-run"))
+
+    def test_memory_detects_growth_instead_of_trusting_passed_flag(self):
+        for key, growth in (("bytes", 9000), ("blocks", 17)):
+            data = self.memory_case("steady_heap")
+            data["samples"][-1][key] += growth
+            self.assertTrue(gate.validate_memory_case(data, "steady_heap", "Lua", "editor", "current-run"))
+        data = self.memory_case("vm_cycles")
+        data["samples"][5]["bytes"] = 64
+        self.assertTrue(gate.validate_memory_case(data, "vm_cycles", "Lua", "editor", "current-run"))
+
+    def test_memory_requires_measured_positive_control_and_cleanup(self):
+        for change in ("undetected", "not_released", "empty", "missing_counter"):
+            data = self.memory_case("retained_reference")
+            if change == "undetected":
+                data["samples"][1] = dict(data["samples"][0])
+            elif change == "not_released":
+                data["samples"][2] = dict(data["samples"][1])
+            elif change == "empty":
+                data["samples"] = []
+            else:
+                del data["remaining_bytes"]
+            self.assertTrue(gate.validate_memory_case(data, "retained_reference", "Lua", "editor", "current-run"))
+
+    def test_memory_requires_every_fresh_registered_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            memory = run / "metadata/memory"
+            memory.mkdir(parents=True)
+            manifest = dict(run_id="current-run", tests=[f"UnLuaNova.Memory.{name}" for name in gate.MEMORY_CASES])
+            (run / "metadata/manifest.json").write_text(json.dumps(manifest))
+            self.assertEqual(len(gate.validate_memory(run, "Lua", "editor")), len(gate.MEMORY_CASES))
+            for name in gate.MEMORY_CASES:
+                (memory / f"{name}.json").write_text(json.dumps(self.memory_case(name)))
+            self.assertEqual(gate.validate_memory(run, "Lua", "editor"), [])
+            (memory / "vm_cycles.json").unlink()
+            self.assertTrue(gate.validate_memory(run, "Lua", "editor"))
 
     def test_network_requires_connected_matching_peers(self):
         with tempfile.TemporaryDirectory() as directory:
