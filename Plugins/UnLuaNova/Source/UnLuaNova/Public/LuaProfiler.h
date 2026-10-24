@@ -83,8 +83,8 @@ namespace UnLuaNova
      * overwrite each other, which is exactly what the dispatcher exists to prevent.
      */
     // Exported (as is everything the console commands and the automation specs drive):
-    // these live in UnLuaNova's Private folder, and a modular build will not let another
-    // module link them otherwise.
+    // another module reaches this across the module boundary, and a modular build will
+    // not let it link an unexported symbol.
     class UNLUANOVA_API FLuaProfiler
     {
     public:

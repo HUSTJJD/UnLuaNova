@@ -19,6 +19,7 @@
 #include "UnLuaNovaTimerSubsystem.generated.h"
 
 struct lua_State;
+namespace UnLuaNova { class FLuaEnv; }
 
 /**
  * 脚本计时器：把"多久之后回调一次"这件事交给引擎时间，而不是 Lua 自己数。
@@ -46,6 +47,9 @@ public:
     virtual void Tick(float DeltaTime) override;
     virtual bool IsTickable() const override { return !IsTemplate() && Timers.Num() > 0; }
     virtual TStatId GetStatId() const override;
+    virtual void Deinitialize() override;
+    virtual void BeginDestroy() override;
+    virtual bool IsTickableWhenPaused() const override { return true; }
 
     /**
      * 注册一个回调。回调是 Lua 函数，调用方已经 `luaL_ref` 进注册表，所有权随之转给本子系统
@@ -60,6 +64,11 @@ public:
 
     bool SetPaused(int32 Handle, bool bPaused);
     bool IsValid(int32 Handle) const;
+
+    /** Resolve an opaque handle only for the environment that created it. */
+    static UUnLuaNovaTimerSubsystem* Find(lua_State* State, int32 Handle);
+    void RemoveForState(lua_State* State);
+    int32 NumForState(lua_State* State) const;
 
     /** 清掉全部定时器（地图切换 / 环境销毁时用）。 */
     void RemoveAll();
@@ -79,23 +88,19 @@ private:
         double Interval = 0.0;
         /** 到期时间，存的是世界时间（不是累加出来的）。 */
         double Next = 0.0;
+        double Remaining = 0.0;
         bool bLoop = false;
         bool bUnscaled = false;
         bool bPaused = false;
     };
 
-    /** 回调执行期间可能增删定时器，所以先把到期项抄一份再执行。 */
-    struct FDueEntry
-    {
-        int32 Handle = INDEX_NONE;
-        int32 CallbackRef = INDEX_NONE;
-        lua_State* State = nullptr;
-        bool bLoop = false;
-    };
-
     int32 IndexOf(int32 Handle) const;
     void Release(const FEntry& Entry) const;
+    void OnEnvDestroyed(UnLuaNova::FLuaEnv& Env);
+    void Shutdown();
 
     TArray<FEntry> Timers;
-    int32 NextHandle = 1;
+    FDelegateHandle EnvDestroyedHandle;
+    bool bTicking = false;
+    bool bShuttingDown = false;
 };

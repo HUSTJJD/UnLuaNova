@@ -38,10 +38,12 @@ public class UnLuaNova : ModuleRules
             }
         );
 
+        // No Private/ folder to add: every header of this module lives in Public/, so a
+        // consumer (UnLuaNovaEditor, UnLuaNovaTestSuite) includes it the ordinary way
+        // instead of reaching for a private path it has no business knowing about.
         PrivateIncludePaths.AddRange(
-            new[]
+            new string[]
             {
-                "UnLuaNova/Private",
             }
         );
 
@@ -57,8 +59,6 @@ public class UnLuaNova : ModuleRules
                 "Projects"
             }
         );
-
-        PublicIncludePaths.Add(Path.Combine(ModuleDirectory, "Private"));
 
         if (Target.bBuildEditor)
         {

@@ -37,8 +37,9 @@ public class UnLuaNovaEditor : ModuleRules
         PrivateIncludePaths.AddRange(
             new[]
             {
-                "UnLuaNovaEditor/Private",
-                "UnLuaNova/Private",
+                // The two engine folders below are the only Private/ paths here on purpose:
+                // they hold engine headers this module needs. This plugin's own headers are
+                // all in Public/ now, so neither module has to be reached into.
                 Path.Combine(EngineDir, "Source/Editor/AnimationBlueprintEditor/Private"),
                 Path.Combine(EngineDir, "Source/Runtime/Slate/Private"),
             }

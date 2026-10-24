@@ -15,11 +15,68 @@
 #include "UnLuaNovaTimerSubsystem.h"
 
 #include "LuaBackend.h"
+#include "LuaEnv.h"
 #include "UnLuaNovaBase.h"
 
 #include "Engine/World.h"
 
 DECLARE_CYCLE_STAT(TEXT("UnLuaNova Timer"), STAT_UnLuaNovaTimer, STATGROUP_Tickables);
+
+namespace
+{
+    TMap<int32, TWeakObjectPtr<UUnLuaNovaTimerSubsystem>> TimerOwners;
+    int64 NextTimerHandle = 1;
+}
+
+void UUnLuaNovaTimerSubsystem::Shutdown()
+{
+    bShuttingDown = true;
+    RemoveAll();
+    UnLuaNova::FLuaEnv::OnDestroyed.Remove(EnvDestroyedHandle);
+    EnvDestroyedHandle.Reset();
+}
+
+void UUnLuaNovaTimerSubsystem::Deinitialize()
+{
+    Shutdown();
+    Super::Deinitialize();
+}
+
+void UUnLuaNovaTimerSubsystem::BeginDestroy()
+{
+    Shutdown();
+    Super::BeginDestroy();
+}
+
+void UUnLuaNovaTimerSubsystem::OnEnvDestroyed(UnLuaNova::FLuaEnv& Env)
+{
+    RemoveForState(Env.GetMainState());
+}
+
+UUnLuaNovaTimerSubsystem* UUnLuaNovaTimerSubsystem::Find(lua_State* State, int32 Handle)
+{
+    auto* Env = UnLuaNova::FLuaEnv::FindEnv(State);
+    const auto* Owner = TimerOwners.Find(Handle);
+    auto* Subsystem = Owner ? Owner->Get() : nullptr;
+    const int32 Index = Subsystem ? Subsystem->IndexOf(Handle) : INDEX_NONE;
+    return Env && Index != INDEX_NONE && Subsystem->Timers[Index].State == Env->GetMainState()
+        ? Subsystem : nullptr;
+}
+
+void UUnLuaNovaTimerSubsystem::RemoveForState(lua_State* State)
+{
+    for (int32 Index = Timers.Num() - 1; Index >= 0; --Index)
+        if (Timers[Index].State == State)
+            Remove(Timers[Index].Handle);
+}
+
+int32 UUnLuaNovaTimerSubsystem::NumForState(lua_State* State) const
+{
+    int32 Count = 0;
+    for (const auto& Entry : Timers)
+        Count += Entry.State == State ? 1 : 0;
+    return Count;
+}
 
 TStatId UUnLuaNovaTimerSubsystem::GetStatId() const
 {
@@ -55,25 +112,33 @@ bool UUnLuaNovaTimerSubsystem::IsValid(int32 Handle) const
 int32 UUnLuaNovaTimerSubsystem::Add(lua_State* InState, int32 CallbackRef, float Interval, bool bLoop, float Delay, bool bUnscaled)
 {
     UWorld* World = GetWorld();
-    if (!World || !InState || CallbackRef < 0)
+    auto* Env = UnLuaNova::FLuaEnv::FindEnv(InState);
+    if (!World || !Env || bShuttingDown || CallbackRef < 0 || NextTimerHandle > MAX_int32
+        || !FMath::IsFinite(Interval) || !FMath::IsFinite(Delay) || Interval < 0 || Delay < 0)
         return INDEX_NONE;
 
+    if (!EnvDestroyedHandle.IsValid())
+        EnvDestroyedHandle = UnLuaNova::FLuaEnv::OnDestroyed.AddUObject(this, &UUnLuaNovaTimerSubsystem::OnEnvDestroyed);
+
     FEntry Entry;
-    Entry.Handle = NextHandle++;
+    Entry.Handle = static_cast<int32>(NextTimerHandle++);
     Entry.CallbackRef = CallbackRef;
-    Entry.State = InState;
+    // Registry refs are shared by coroutines. Callbacks run on the owning VM's main
+    // state, so collecting the caller coroutine cannot leave a dangling state here.
+    Entry.State = Env->GetMainState();
     Entry.Interval = FMath::Max(0.0, static_cast<double>(Interval));
     Entry.bLoop = bLoop;
     Entry.bUnscaled = bUnscaled;
     Entry.Next = Now(bUnscaled) + FMath::Max(0.0, static_cast<double>(Delay));
 
     Timers.Add(Entry);
+    TimerOwners.Add(Entry.Handle, this);
     return Entry.Handle;
 }
 
 void UUnLuaNovaTimerSubsystem::Release(const FEntry& Entry) const
 {
-    if (Entry.State && Entry.CallbackRef >= 0)
+    if (UnLuaNova::FLuaEnv::GetAll().Contains(Entry.State) && Entry.CallbackRef >= 0)
         luaL_unref(Entry.State, LUA_REGISTRYINDEX, Entry.CallbackRef);
 }
 
@@ -84,6 +149,7 @@ bool UUnLuaNovaTimerSubsystem::Remove(int32 Handle)
         return false;
 
     Release(Timers[Index]);
+    TimerOwners.Remove(Handle);
     Timers.RemoveAtSwap(Index);
     return true;
 }
@@ -95,12 +161,15 @@ bool UUnLuaNovaTimerSubsystem::SetPaused(int32 Handle, bool bPaused)
         return false;
 
     FEntry& Entry = Timers[Index];
-    const bool bChanged = Entry.bPaused != bPaused;
-    Entry.bPaused = bPaused;
-
-    // 恢复时把到期时间往後推同样的量，否则"暂停了 10 秒"会在恢复瞬间补一次
-    if (bChanged && !bPaused)
-        Entry.Next = Now(Entry.bUnscaled) + Entry.Interval;
+    if (Entry.bPaused != bPaused)
+    {
+        const double Current = Now(Entry.bUnscaled);
+        if (bPaused)
+            Entry.Remaining = FMath::Max(0.0, Entry.Next - Current);
+        else
+            Entry.Next = Current + Entry.Remaining;
+        Entry.bPaused = bPaused;
+    }
 
     return true;
 }
@@ -108,24 +177,29 @@ bool UUnLuaNovaTimerSubsystem::SetPaused(int32 Handle, bool bPaused)
 void UUnLuaNovaTimerSubsystem::RemoveAll()
 {
     for (const FEntry& Entry : Timers)
+    {
         Release(Entry);
+        TimerOwners.Remove(Entry.Handle);
+    }
     Timers.Empty();
 }
 
 void UUnLuaNovaTimerSubsystem::Tick(float DeltaTime)
 {
-    if (Timers.Num() == 0)
+    if (Timers.Num() == 0 || bTicking || bShuttingDown)
         return;
 
     UWorld* World = GetWorld();
     if (!World)
         return;
 
+    TGuardValue<bool> TickGuard(bTicking, true);
+
     const double Scaled = World->GetTimeSeconds();
     const double Unscaled = World->GetRealTimeSeconds();
 
     // ① 先抄一份到期项：回调里 Add / Remove 会动 Timers，边遍历边改会错位
-    TArray<FDueEntry> Due;
+    TArray<int32> Due;
     for (FEntry& Entry : Timers)
     {
         if (Entry.bPaused)
@@ -151,19 +225,25 @@ void UUnLuaNovaTimerSubsystem::Tick(float DeltaTime)
             }
         }
 
-        Due.Add({Entry.Handle, Entry.CallbackRef, Entry.State, Entry.bLoop});
+        Due.Add(Entry.Handle);
     }
 
     // ③ 执行。一次性定时器在这里摘掉（引用也一起释放）
-    for (const FDueEntry& Item : Due)
+    for (const int32 Handle : Due)
     {
-        // 回调期间可能已经被别的回调移除了
-        if (!IsValid(Item.Handle))
+        const int32 Index = IndexOf(Handle);
+        if (Index == INDEX_NONE || Timers[Index].bPaused)
             continue;
+
+        const FEntry Item = Timers[Index];
 
         if (Item.State && Item.CallbackRef >= 0)
         {
             lua_rawgeti(Item.State, LUA_REGISTRYINDEX, Item.CallbackRef);
+            // The stack keeps the function alive after unref. One-shots are absent
+            // before invoking Lua, including when callbacks reenter the subsystem.
+            if (!Item.bLoop)
+                Remove(Item.Handle);
             // 不用 LUA_OK：两个后端对它的定义不完全一致，只认"0 是成功"
             if (lua_pcall(Item.State, 0, 0, 0) != 0)
             {
@@ -174,7 +254,5 @@ void UUnLuaNovaTimerSubsystem::Tick(float DeltaTime)
             }
         }
 
-        if (!Item.bLoop)
-            Remove(Item.Handle);
     }
 }

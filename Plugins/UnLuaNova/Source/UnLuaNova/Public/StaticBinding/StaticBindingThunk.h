@@ -47,9 +47,9 @@ namespace UnLuaNova
 	 *
 	 * Struct / Array / Set / Map are still absent on purpose, not by omission. Their Lua
 	 * representation (a struct copy or an FLuaArray / FLuaSet / FLuaMap userdata) is built
-	 * by FPropertyDesc, which lives in Private/ and is therefore unreachable from here -
-	 * this header is included by the project's generated file, on the far side of the
-	 * module boundary from UnLuaNova's private headers. Making them thunkable needs a
+	 * by FPropertyDesc, which is internal to UnLuaNova and deliberately not part of what
+	 * this header promises - this header is included by the project's generated file, on
+	 * the far side of the module boundary. Making them thunkable needs a
 	 * public marshalling entry point (a single `Push(L, Property, ValuePtr)` /
 	 * `Read(L, Property, ValuePtr)` pair) and a generator re-run; that is a design change,
 	 * not an extra `||` here.
