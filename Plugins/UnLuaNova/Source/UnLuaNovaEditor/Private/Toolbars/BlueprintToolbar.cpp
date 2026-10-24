@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaBase.h"
-#include "BlueprintToolbar.h"
+#include "Toolbars/BlueprintToolbar.h"
 #include "BlueprintEditorModule.h"
 
 void FBlueprintToolbar::Initialize()

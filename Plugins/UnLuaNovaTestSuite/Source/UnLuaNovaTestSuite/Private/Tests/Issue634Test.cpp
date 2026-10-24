@@ -12,7 +12,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "Issue634Test.h"
+#include "Tests/Issue634Test.h"
 #include "TestCommands.h"
 #include "UnLuaNovaTestCommon.h"
 #include "Misc/AutomationTest.h"

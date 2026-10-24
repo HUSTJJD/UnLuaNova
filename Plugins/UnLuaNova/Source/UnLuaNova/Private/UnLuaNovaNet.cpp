@@ -78,6 +78,25 @@ namespace UnLuaNova
 
     namespace
     {
+        int32 DenseArrayCount(lua_State* L, int32 TableIdx)
+        {
+            const int32 Abs = lua_absindex(L, TableIdx);
+            const auto Length = lua_objlen(L, Abs);
+            if (Length > MAX_int32)
+                return INDEX_NONE;
+            int32 Seen = 0;
+            bool bValid = true;
+            lua_pushnil(L);
+            while (lua_next(L, Abs) != 0)
+            {
+                int64 Key;
+                bValid &= UnLuaNovaTryToInt64(L, -2, Key) && Key >= 1 && Key <= Length;
+                ++Seen;
+                lua_pop(L, 1);
+            }
+            return bValid && Seen == Length ? Seen : INDEX_NONE;
+        }
+
         /** Read a string field off the table at TableIdx, or the empty string. */
         FString GetStringField(lua_State* L, int32 TableIdx, const char* Field)
         {
@@ -95,16 +114,23 @@ namespace UnLuaNova
          * Parameters: an array of type names ("Int"), or of tables
          * ({ Name = "HP", Type = "Float" }). Unnamed ones become Arg0, Arg1, ...
          */
-        void ParseParams(lua_State* L, int32 TableIdx, FLuaRpcDecl& Decl)
+        bool ParseParams(lua_State* L, int32 TableIdx, FLuaRpcDecl& Decl)
         {
-            if (lua_getfield(L, TableIdx, "Params") != LUA_TTABLE)
+            const int32 Type = lua_getfield(L, TableIdx, "Params");
+            if (Type != LUA_TTABLE)
             {
                 lua_pop(L, 1);
-                return;
+                return Type == LUA_TNIL;
             }
 
             const int32 ParamsIdx = lua_absindex(L, -1);
-            const int32 Count = int32(lua_objlen(L, ParamsIdx));
+            const int32 Count = DenseArrayCount(L, ParamsIdx);
+            if (Count == INDEX_NONE)
+            {
+                lua_pop(L, 1);
+                return false;
+            }
+            TSet<FName> Names;
 
             for (int32 Index = 1; Index <= Count; ++Index)
             {
@@ -113,7 +139,7 @@ namespace UnLuaNova
                 FLuaRpcParam Param;
                 bool bOk = false;
 
-                if (lua_isstring(L, -1))
+                if (lua_type(L, -1) == LUA_TSTRING)
                 {
                     bOk = ParseLuaNetParamType(UTF8_TO_TCHAR(lua_tostring(L, -1)), Param.Type);
                 }
@@ -134,34 +160,36 @@ namespace UnLuaNova
                 {
                     if (Param.Name.IsNone())
                         Param.Name = FName(*FString::Printf(TEXT("Arg%d"), Decl.Params.Num()));
-                    Decl.Params.Add(Param);
+                    bOk = !Names.Contains(Param.Name);
                 }
-                else
+                if (!bOk)
                 {
-                    UE_LOG(LogUnLuaNova, Warning, TEXT("Ignoring unrecognised parameter #%d of RPC '%s'."),
-                        Index, *Decl.Name.ToString());
+                    lua_pop(L, 2);
+                    return false;
                 }
+                Names.Add(Param.Name);
+                Decl.Params.Add(Param);
 
                 lua_pop(L, 1); // the entry
             }
 
             lua_pop(L, 1); // the Params table
+            return true;
         }
 
-        void ParseRpcDecl(lua_State* L, int32 ValueIdx, FLuaRpcDecl& Decl)
+        bool ParseRpcDecl(lua_State* L, int32 ValueIdx, FLuaRpcDecl& Decl)
         {
             const int32 Abs = lua_absindex(L, ValueIdx);
 
             // `Foo = true` declares it with default flags - i.e. unreliable, matching
             // UFUNCTION(Server) in C++. Reliability is opt-in through the table form.
             if (!lua_istable(L, Abs))
-                return;
+                return lua_type(L, Abs) == LUA_TBOOLEAN && lua_toboolean(L, Abs);
 
-            if (lua_getfield(L, Abs, "Reliable") != LUA_TNIL)
-                Decl.bReliable = lua_toboolean(L, -1) != 0;
+            const int32 Type = lua_getfield(L, Abs, "Reliable");
+            Decl.bReliable = lua_toboolean(L, -1) != 0;
             lua_pop(L, 1);
-
-            ParseParams(L, Abs, Decl);
+            return (Type == LUA_TNIL || Type == LUA_TBOOLEAN) && ParseParams(L, Abs, Decl);
         }
 
         /**
@@ -260,9 +288,9 @@ namespace UnLuaNova
                 FProperty* Property = CreateParam(Function, Param);
                 if (!Property)
                 {
-                    UE_LOG(LogUnLuaNova, Warning, TEXT("Could not build parameter '%s' of RPC '%s'; skipping it."),
+                    UE_LOG(LogUnLuaNova, Error, TEXT("Could not build parameter '%s' of RPC '%s'; rejecting RPC."),
                         *Param.Name.ToString(), *Decl.Name.ToString());
-                    continue;
+                    return nullptr;
                 }
 
                 Property->SetPropertyFlags(CPF_Parm);
@@ -322,7 +350,12 @@ namespace UnLuaNova
                     FLuaRpcDecl Decl;
                     Decl.Name = FName(*Name);
                     Decl.Kind = Entry.Kind;
-                    ParseRpcDecl(L, -1, Decl);
+                    if (Decl.Name.IsNone() || !ParseRpcDecl(L, -1, Decl))
+                    {
+                        UE_LOG(LogUnLuaNova, Error, TEXT("Invalid RPC declaration '%s'; rejecting RPC without changing its signature."), *Name);
+                        lua_pop(L, 1);
+                        continue;
+                    }
 
                     if (Class->FindFunctionByName(Decl.Name, EIncludeSuperFlag::ExcludeSuper))
                     {
@@ -336,6 +369,11 @@ namespace UnLuaNova
                     else
                     {
                         UFunction* Template = BuildRpcTemplate(Decl);
+                        if (!Template)
+                        {
+                            lua_pop(L, 1);
+                            continue;
+                        }
                         ULuaFunction::Override(Template, Class, Decl.Name);
 
                         if (auto* Added = Cast<ULuaFunction>(Class->FindFunctionByName(Decl.Name, EIncludeSuperFlag::ExcludeSuper)))
@@ -355,73 +393,75 @@ namespace UnLuaNova
 
     // ------------------------------------------------------------------ replication
 
-    void FUnLuaNovaNet::DeclareReplicatedProps(lua_State* L, int32 ModuleTableIdx, UClass* Class)
+    bool FUnLuaNovaNet::DeclareReplicatedProps(lua_State* L, int32 ModuleTableIdx, UClass* Class)
     {
         if (!L || !Class)
-            return;
+            return false;
 
+        const int32 Top = lua_gettop(L);
         const int32 ModuleIdx = lua_absindex(L, ModuleTableIdx);
+        auto Reject = [&](const TCHAR* Reason)
+        {
+            lua_settop(L, Top);
+            UE_LOG(LogUnLuaNova, Error, TEXT("Rejected replication declaration on '%s': %s"), *Class->GetName(), Reason);
+            return false;
+        };
 
-        // Either a function returning the list, or the list itself. The function form is
-        // what slua spells, so it is what a migrating script already has.
-        bool bHaveList = false;
-        if (lua_getfield(L, ModuleIdx, "GetLifetimeReplicatedProps") == LUA_TFUNCTION)
+        const int32 GetterType = lua_getfield(L, ModuleIdx, "GetLifetimeReplicatedProps");
+        if (GetterType == LUA_TFUNCTION)
         {
             lua_pushvalue(L, ModuleIdx); // self
-            if (lua_pcall(L, 1, 1, 0) == LUA_OK && lua_istable(L, -1))
-                bHaveList = true;
-            else
-                lua_pop(L, 1);
+            if (lua_pcall(L, 1, 1, 0) != LUA_OK || !lua_istable(L, -1))
+                return Reject(TEXT("GetLifetimeReplicatedProps must return an array without raising an error."));
         }
-        else
+        else if (GetterType == LUA_TNIL)
         {
             lua_pop(L, 1);
-
-            if (lua_getfield(L, ModuleIdx, "ReplicatedProps") == LUA_TTABLE)
-                bHaveList = true;
-            else
+            const int32 ListType = lua_getfield(L, ModuleIdx, "ReplicatedProps");
+            if (ListType == LUA_TNIL)
+            {
                 lua_pop(L, 1);
+                lua_newtable(L);
+            }
+            else if (ListType != LUA_TTABLE)
+                return Reject(TEXT("ReplicatedProps must be an array."));
         }
-
-        if (!bHaveList)
-            return;
+        else
+            return Reject(TEXT("GetLifetimeReplicatedProps must be a function."));
 
         const int32 ListIdx = lua_absindex(L, -1);
-
         TArray<FLuaRepDecl> Decls;
-        const int32 Count = int32(lua_objlen(L, ListIdx));
+        TSet<FName> Names;
+        const int32 Count = DenseArrayCount(L, ListIdx);
+        if (Count == INDEX_NONE)
+            return Reject(TEXT("Property list must be a dense array starting at 1."));
         for (int32 Index = 1; Index <= Count; ++Index)
         {
             lua_rawgeti(L, ListIdx, Index);
             if (!lua_istable(L, -1))
-            {
-                lua_pop(L, 1);
-                continue;
-            }
+                return Reject(TEXT("Every property must be a table."));
 
             const int32 EntryIdx = lua_absindex(L, -1);
             const FString Name = GetStringField(L, EntryIdx, "Name");
             const FString TypeName = GetStringField(L, EntryIdx, "Type");
             const FString ConditionText = GetStringField(L, EntryIdx, "Condition");
+            const int32 ConditionType = lua_getfield(L, EntryIdx, "Condition");
+            lua_pop(L, 1);
 
             FLuaRepDecl Decl;
             if (Name.IsEmpty() || !ParseLuaNetParamType(TypeName, Decl.Type))
-            {
-                UE_LOG(LogUnLuaNova, Warning,
-                    TEXT("Replicated property #%d on '%s' needs both Name and a known Type; skipping."),
-                    Index, *Class->GetName());
-                lua_pop(L, 1);
-                continue;
-            }
+                return Reject(TEXT("Every property requires a nonempty Name and known Type."));
 
             Decl.Name = FName(*Name);
+            if (Decl.Name.IsNone() || Names.Contains(Decl.Name))
+                return Reject(TEXT("Property names must be unique, non-None FNames."));
+            Names.Add(Decl.Name);
             Decl.Condition = COND_None;
-            if (!ConditionText.IsEmpty() && !ParseLifetimeCondition(ConditionText, Decl.Condition))
-            {
-                UE_LOG(LogUnLuaNova, Warning, TEXT("Unknown replication condition '%s' for '%s'; using COND_None."),
-                    *ConditionText, *Name);
-                Decl.Condition = COND_None;
-            }
+            if (ConditionType != LUA_TNIL && (ConditionType != LUA_TSTRING
+                || !ParseLifetimeCondition(ConditionText, Decl.Condition)))
+                return Reject(TEXT("Unknown or malformed replication condition."));
+            if (Decl.Condition != COND_None)
+                return Reject(TEXT("Conditional fields require a stable class layout; only None is currently supported."));
 
             Decls.Add(Decl);
             lua_pop(L, 1); // the entry
@@ -429,8 +469,19 @@ namespace UnLuaNova
 
         lua_pop(L, 1); // the list
 
-        if (Decls.Num() > 0)
+        // Existing components already use this layout. Rebinding cannot mutate it.
+        if (const auto* Existing = RepProps.Find(Class))
+        {
+            if (Existing->Num() != Decls.Num())
+                return Reject(TEXT("Class schema is immutable until network teardown."));
+            for (int32 Index = 0; Index < Decls.Num(); ++Index)
+                if ((*Existing)[Index].Name != Decls[Index].Name || (*Existing)[Index].Type != Decls[Index].Type
+                    || (*Existing)[Index].Condition != Decls[Index].Condition)
+                    return Reject(TEXT("Class schema is immutable until network teardown."));
+        }
+        else
             RepProps.Add(Class, MoveTemp(Decls));
+        return true;
     }
 
     const TArray<FLuaRepDecl>& FUnLuaNovaNet::GetReplicatedProps(const UClass* Class)

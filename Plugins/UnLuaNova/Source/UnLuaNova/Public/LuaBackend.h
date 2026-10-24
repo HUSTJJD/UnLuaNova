@@ -442,7 +442,7 @@ inline int64_t UnLuaNovaToInt64(lua_State* L, int Idx)
         return 0;
 
     const double AsDouble = lua_tonumber(L, Idx);
-    if (AsDouble != AsDouble) // NaN
+    if (!std::isfinite(AsDouble) || AsDouble < -9223372036854775808.0 || AsDouble >= 9223372036854775808.0)
         return 0;
 
     const int64_t Truncated = (int64_t)AsDouble;
@@ -457,6 +457,33 @@ inline int64_t UnLuaNovaToInt64(lua_State* L, int Idx)
 #define UNLUANOVA_PUSHINT(L, V) lua_pushinteger(L, (lua_Integer)(V))
 #define UNLUANOVA_TOINT64(L, Idx) ((int64)lua_tointeger(L, Idx))
 #endif
+
+// Strict conversion for protocols and other inputs where failure must differ from zero.
+// Numeric strings and fractional/out-of-range doubles are rejected on both backends.
+inline bool UnLuaNovaTryToInt64(lua_State* L, int Idx, int64& Out)
+{
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+    if (lua_isinteger64(L, Idx))
+    {
+        Out = static_cast<int64>(lua_tointeger64(L, Idx, nullptr));
+        return true;
+    }
+#else
+    if (lua_isinteger(L, Idx))
+    {
+        Out = static_cast<int64>(lua_tointeger(L, Idx));
+        return true;
+    }
+#endif
+    if (lua_type(L, Idx) != LUA_TNUMBER)
+        return false;
+    const double Value = lua_tonumber(L, Idx);
+    if (!std::isfinite(Value) || Value < -9223372036854775808.0 || Value >= 9223372036854775808.0
+        || std::floor(Value) != Value)
+        return false;
+    Out = static_cast<int64>(Value);
+    return true;
+}
 
 // --- can this value be read as an integer? -----------------------------------
 // Plain Lua has one numeric type and lua_isinteger() separates 1 from 1.5. Luau has a

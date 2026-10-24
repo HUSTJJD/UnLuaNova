@@ -478,11 +478,7 @@ namespace UnLuaNova
     {
         // Construct() placement-news the smart pointer into the payload, so the destructor
         // has to run on the payload too - lua_touserdata() is the descriptor.
-        SmartPtrType *Instance = (SmartPtrType*)UnLuaNova::GetSmartPointer(L, 1);
-        if (Instance)
-        {
-            Instance->~SmartPtrType();
-        }
+        UnLuaNova::DestroyUserdataPayload<SmartPtrType>(L, lua_touserdata(L, 1));
         return 0;
     }
 
@@ -493,7 +489,8 @@ namespace UnLuaNova
         memset(MetatableName, 0, sizeof(MetatableName));
         FCStringAnsi::Snprintf(MetatableName, sizeof(MetatableName), "%hs%hs", TType<SmartPtrType>::GetName(), TType<ClassType>::GetName());
         SmartPtrType SharedPtr = SmartPtrType(new ClassType(Args.template Get<N>()...));
-        void *Userdata = UnLuaNova::NewSmartPointer(L, sizeof(SmartPtrType), MetatableName);
+        void *Userdata = UnLuaNova::NewSmartPointer(L, sizeof(SmartPtrType), MetatableName,
+            UnLuaNova::DestroyUserdataPayload<SmartPtrType>);
         if (Userdata)
         {
             new(Userdata) SmartPtrType(SharedPtr);

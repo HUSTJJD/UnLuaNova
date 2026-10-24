@@ -14,7 +14,7 @@
 
 #include "UnLuaNovaCompatibility.h"
 #include "UnLuaNovaEx.h"
-#include "LuaLib_Math.h"
+#include "MathLib/LuaLib_Math.h"
 
 static int32 FVector2D_New(lua_State* L)
 {

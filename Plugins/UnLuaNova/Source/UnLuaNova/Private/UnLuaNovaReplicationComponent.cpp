@@ -122,9 +122,10 @@ namespace
     bool TryRead(lua_State* L, int32 TableIdx, const char* Key, int32& Out)
     {
         lua_getfield(L, TableIdx, Key);
-        const bool bOk = lua_type(L, -1) == LUA_TNUMBER;
+        int64 Value;
+        const bool bOk = UnLuaNovaTryToInt64(L, -1, Value) && Value >= MIN_int32 && Value <= MAX_int32;
         if (bOk)
-            Out = int32(lua_tointeger(L, -1));
+            Out = static_cast<int32>(Value);
         lua_pop(L, 1);
         return bOk;
     }
@@ -132,9 +133,7 @@ namespace
     bool TryRead(lua_State* L, int32 TableIdx, const char* Key, int64& Out)
     {
         lua_getfield(L, TableIdx, Key);
-        const bool bOk = lua_type(L, -1) == LUA_TNUMBER;
-        if (bOk)
-            Out = int64(lua_tointeger(L, -1));
+        const bool bOk = UnLuaNovaTryToInt64(L, -1, Out);
         lua_pop(L, 1);
         return bOk;
     }
@@ -251,7 +250,7 @@ namespace
 
     void WriteField(lua_State* L, int32 TableIdx, const char* Key, int64 V)
     {
-        lua_pushinteger(L, lua_Integer(V));
+        UNLUANOVA_PUSHINT64(L, V);
         lua_setfield(L, TableIdx, Key);
     }
 
@@ -352,37 +351,28 @@ void UUnLuaNovaReplicationComponent::GetLifetimeReplicatedProps(TArray<FLifetime
     Params.bIsPushBased = true;
 #endif
 
-    Params.Condition = BucketCondition(UnLuaNova::ELuaNetBucket::Bool);
+    // UE caches this layout by component class. It must never depend on an instance owner.
+    Params.Condition = COND_None;
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Bools, Params);
 
-    Params.Condition = BucketCondition(UnLuaNova::ELuaNetBucket::Int);
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Ints, Params);
 
-    Params.Condition = BucketCondition(UnLuaNova::ELuaNetBucket::Int64);
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Int64s, Params);
 
-    Params.Condition = BucketCondition(UnLuaNova::ELuaNetBucket::Float);
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Floats, Params);
 
-    Params.Condition = BucketCondition(UnLuaNova::ELuaNetBucket::Double);
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Doubles, Params);
 
-    Params.Condition = BucketCondition(UnLuaNova::ELuaNetBucket::String);
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Strings, Params);
 
-    Params.Condition = BucketCondition(UnLuaNova::ELuaNetBucket::Name);
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Names, Params);
 
-    Params.Condition = BucketCondition(UnLuaNova::ELuaNetBucket::Vector);
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Vectors, Params);
 
-    Params.Condition = BucketCondition(UnLuaNova::ELuaNetBucket::Rotator);
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Rotators, Params);
 
-    Params.Condition = BucketCondition(UnLuaNova::ELuaNetBucket::Transform);
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Transforms, Params);
 
-    Params.Condition = BucketCondition(UnLuaNova::ELuaNetBucket::Object);
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Objects, Params);
 
     // The fingerprint is not push-based: it changes at most once per hot reload, and it has
@@ -398,6 +388,15 @@ void UUnLuaNovaReplicationComponent::BeginPlay()
     AActor* Owner = GetOwner();
     if (!Owner)
         return;
+
+    if (Condition != COND_None)
+    {
+        UE_LOG(LogUnLuaNova, Error, TEXT("Lua replication on '%s' is disabled: instance conditions are unsupported."),
+            *GetNameSafe(Owner));
+        SetComponentTickEnabled(false);
+        SetIsReplicated(false);
+        return;
+    }
 
     const TArray<UnLuaNova::FLuaRepDecl>& Decls = UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Owner->GetClass());
     if (Decls.Num() == 0)
@@ -565,38 +564,6 @@ void UUnLuaNovaReplicationComponent::MarkBucketDirty(UnLuaNova::ELuaNetBucket Bu
     default: break;
     }
 #endif
-}
-
-ELifetimeCondition UUnLuaNovaReplicationComponent::BucketCondition(UnLuaNova::ELuaNetBucket Bucket) const
-{
-    ELifetimeCondition Result = Condition.GetValue();
-
-    const AActor* Owner = GetOwner();
-    if (!Owner)
-        return Result;
-
-    const TArray<UnLuaNova::FLuaRepDecl>& Decls = UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Owner->GetClass());
-
-    uint8 First = COND_None;
-    for (const UnLuaNova::FLuaRepDecl& Decl : Decls)
-    {
-        if (UnLuaNova::BucketForType(Decl.Type) != Bucket || Decl.Condition == COND_None)
-            continue;
-
-        if (First == COND_None)
-        {
-            First = Decl.Condition;
-        }
-        else if (First != Decl.Condition)
-        {
-            UE_LOG(LogUnLuaNova, Warning,
-                TEXT("'%s' declares conflicting conditions for the fields of one type; '%s' will use the first one. "
-                     "Per-field conditions need one UPROPERTY per condition and cannot be added at runtime."),
-                *Owner->GetClass()->GetName(), *Decl.Name.ToString());
-        }
-    }
-
-    return First != COND_None ? ELifetimeCondition(First) : Result;
 }
 
 bool UUnLuaNovaReplicationComponent::SyncSlot(lua_State* L, int32 TableIdx, const UnLuaNova::FLuaNetSlot& Slot)

@@ -66,6 +66,14 @@ public class UnLuaNova : ModuleRules
             PrivateDependencyModuleNames.Add("UnrealEd");
         }
 
+        // UUnLuaNovaReplicationComponent marks its buckets dirty through
+        // MARK_PROPERTY_DIRTY_FROM_NAME (Net/Core/PushModel/PushModel.h), which expands to
+        // UEPushModelPrivate::MarkPropertyDirty. That function is defined in NetCore, so
+        // including the header is not enough - the module has to be linked as well, and
+        // without it the replication component's object file is left with an unresolved
+        // external at link time.
+        PrivateDependencyModuleNames.Add("NetCore");
+
         var projectDir = Target.ProjectFile.Directory;
 
         // 全插件只有一个配置文件：Config/DefaultUnLuaNova.ini，两个 section 同处其中。

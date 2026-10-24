@@ -12,7 +12,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "ObjectRegistry.h"
+#include "Registries/ObjectRegistry.h"
 #include "LowLevel.h"
 #include "LuaEnv.h"
 #include "UnLuaNovaDelegates.h"
@@ -43,20 +43,29 @@ namespace UnLuaNova
 
     static int ReleaseManualRef(lua_State* L)
     {
-        auto& Env = FLuaEnv::FindEnvChecked(L);
         const auto Proxy = (FManualRefProxy*)lua_touserdata(L, 1);
-        if (!Proxy)
-            return 0;
-
-        const auto Object = Proxy->Object.Get();
-        if (!Object)
-            return 0;
-
-        lua_getfield(L, LUA_REGISTRYINDEX, MANUAL_REF_PROXY_MAP);
-        lua_pushlightuserdata(L, Object);
-        if (lua_rawget(L, -2) == LUA_TNIL)
-            Env.RemoveManualObjectReference(Object);
+        if (Proxy)
+            Proxy->Release();
         return 0;
+    }
+
+    void FManualRefProxy::Release()
+    {
+        if (Registry)
+            Registry->ReleaseManualRefProxy(this);
+    }
+
+    void FObjectRegistry::ReleaseManualRefProxy(FManualRefProxy* Proxy)
+    {
+        // A weak-table entry may disappear before its finalizer runs. Only the current
+        // proxy owns the reference; collecting an older proxy must not release its successor.
+        if (ManualRefProxies.FindRef(Proxy->Object) == Proxy)
+        {
+            ManualRefProxies.Remove(Proxy->Object);
+            if (UObject* Object = Proxy->Object.Get())
+                Env->RemoveManualObjectReference(Object);
+        }
+        Proxy->Registry = nullptr;
     }
 
     FObjectRegistry::FObjectRegistry(FLuaEnv* Env)
@@ -241,10 +250,13 @@ namespace UnLuaNova
         if (lua_rawget(L, -2) == LUA_TNIL)
         {
             lua_pop(L, 1);
-            Env->AddManualObjectReference(Object);
-            auto Ptr = lua_newuserdata(L, sizeof(FManualRefProxy));
+            auto Ptr = UNLUANOVA_NEWDATA_DTOR(L, sizeof(FManualRefProxy),
+                [](lua_State*, void* Block) { static_cast<FManualRefProxy*>(Block)->~FManualRefProxy(); });
             auto Proxy = new(Ptr)FManualRefProxy;
             Proxy->Object = Object;
+            Proxy->Registry = this;
+            ManualRefProxies.Add(Proxy->Object, Proxy);
+            Env->AddManualObjectReference(Object);
             luaL_getmetatable(L, "UnLuaNovaManualRefProxy");
             lua_setmetatable(L, -2);
             lua_pushlightuserdata(L, Object);
@@ -256,6 +268,9 @@ namespace UnLuaNova
 
     void FObjectRegistry::RemoveManualRef(UObject* Object)
     {
+        FManualRefProxy* Proxy = nullptr;
+        if (ManualRefProxies.RemoveAndCopyValue(TWeakObjectPtr<UObject>(Object), Proxy))
+            Proxy->Registry = nullptr;
         const auto L = Env->GetMainState();
         lua_getfield(L, LUA_REGISTRYINDEX, MANUAL_REF_PROXY_MAP);
         lua_pushlightuserdata(L, Object);

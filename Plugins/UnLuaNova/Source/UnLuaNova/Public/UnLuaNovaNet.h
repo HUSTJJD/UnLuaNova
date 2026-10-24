@@ -60,14 +60,15 @@ namespace UnLuaNova
          * Read the replicated-field declarations off a bound module table.
          *
          *     function M:GetLifetimeReplicatedProps()
-         *         return { { Name = "HP", Type = "Float", Condition = "OwnerOnly" } }
+         *         return { { Name = "HP", Type = "Float" } }
          *     end
          *
          * A plain table field `M.ReplicatedProps` with the same shape is accepted too,
          * which is what you want when the list is static and there is no reason to pay
          * for a function call at bind time.
          */
-        static void DeclareReplicatedProps(lua_State* L, int32 ModuleTableIdx, UClass* Class);
+        // Returns false on invalid/unsupported input or a changed class schema. No partial commit.
+        static bool DeclareReplicatedProps(lua_State* L, int32 ModuleTableIdx, UClass* Class);
 
         /** Declarations registered for a class, empty when it declared none. */
         static const TArray<FLuaRepDecl>& GetReplicatedProps(const UClass* Class);

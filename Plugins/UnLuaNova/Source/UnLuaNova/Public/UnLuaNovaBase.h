@@ -259,7 +259,7 @@ namespace UnLuaNova
      * @param MetatableName - name of the meta table
      * @return - the address of new created user data
      */
-    UNLUANOVA_API void* NewSmartPointer(lua_State *L, int32 Size, const char *MetatableName);
+    UNLUANOVA_API void* NewSmartPointer(lua_State *L, int32 Size, const char *MetatableName, FUnLuaNovaUserdataDtor Dtor = nullptr);
 
     /**
      * Get the address of smart pointer at the given stack index
@@ -300,12 +300,14 @@ namespace UnLuaNova
      * reaching into the private tree; both declarations are the same function.
      */
     UNLUANOVA_API void* GetUserdataPayloadFromBlock(void* Block);
+    /** Mark the payload released and return it once; usable inside native GC callbacks. */
+    UNLUANOVA_API void* ReleaseUserdataPayloadFromBlock(void* Block);
 
     /** Finalizer for a payload of type T - hand it to NewUserdataDtor. */
     template <typename T>
     void DestroyUserdataPayload(lua_State*, void* Block)
     {
-        if (void* Payload = GetUserdataPayloadFromBlock(Block))
+        if (void* Payload = ReleaseUserdataPayloadFromBlock(Block))
         {
             static_cast<T*>(Payload)->~T();
         }

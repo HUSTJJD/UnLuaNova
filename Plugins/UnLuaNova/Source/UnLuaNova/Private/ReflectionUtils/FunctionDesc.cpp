@@ -12,8 +12,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
-#include "FunctionDesc.h"
-#include "PropertyDesc.h"
+#include "ReflectionUtils/FunctionDesc.h"
+#include "ReflectionUtils/PropertyDesc.h"
 #include "LuaCore.h"
 #include "DefaultParamCollection.h"
 #include "LowLevel.h"

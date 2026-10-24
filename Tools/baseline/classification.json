@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-24 19:49:44",
+  "generated": "2026-10-24 20:07:04",
   "classes": {
     "A": "纯逻辑（不需要 UWorld）",
     "B": "需要 UWorld，不联网",
@@ -10,7 +10,7 @@
   },
   "counts": {
     "A": 54,
-    "B": 62,
+    "B": 63,
     "C": 3,
     "D": 1,
     "E": 1,
@@ -68,6 +68,7 @@
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/StaticBinding.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/StaticBindingGenerator.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/StringEx.spec.cpp": "A",
+    "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Timer.spec.cpp": "B",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/UELib.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/UnLuaNovaBase.spec.cpp": "A",
     "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/UnLuaNovaEnum.spec.cpp": "A",
@@ -191,6 +192,7 @@
     "UnLuaNova.API.StaticBinding": "A",
     "UnLuaNova.Editor.StaticBindingGenerator": "A",
     "UnLuaNova.API.StringEx": "A",
+    "UnLuaNova.API.Timer": "B",
     "UnLuaNova.API.UE": "A",
     "UnLuaNova.API.Base": "A",
     "UnLuaNova.API.Enum": "A",

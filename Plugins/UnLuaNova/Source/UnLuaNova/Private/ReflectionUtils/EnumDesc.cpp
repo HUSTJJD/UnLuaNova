@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaCompatibility.h"
-#include "EnumDesc.h"
+#include "ReflectionUtils/EnumDesc.h"
 #include "LowLevel.h"
 
 FEnumDesc::FEnumDesc(UEnum* InEnum)

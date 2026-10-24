@@ -10,10 +10,10 @@ slua-unreal: `7970ab72fd59118e1b3f86aac2d016828b54b748`; FUnLua: `7c5f6b5b452126
 
 | ID / Priority | Current issue | Required acceptance |
 |---|---|---|
-| NET-01 / P0 | Replication conditions depend on an instance owner although UE layouts are class-cached. Typed buckets cannot express independent field conditions | Stable class schema; multiple actors, owner/nonowner, mixed conditions, late join, dormancy; legacy/Iris/push model separately |
-| NET-02 / P0 | int64 passes through Luau int32 API; unknown conditions fall back to COND_None | Exact numeric contract, reject invalid declarations; boundary and schema mismatch cases |
-| LIFE-01 / P0 | Timer stores a raw coroutine state without keepalive or Env teardown; selects first game world | Explicit Env/World ownership; coroutine GC, both teardown orders, multi-PIE, cancellation/reentrancy |
-| LIFE-02 / P0 | Container/FText/exported constructors use VM destructors, but AddManualRef still relies on __gc | Audit all allocations and borrowed/manual/smart references; force Lua and UE GC; no Lua stack work in VM destructors |
+| NET-01 / P0 | Fixed None layout now rejects conditional declarations; old non-None component settings disable replication. Full conditions and multi-Env ownership of global schema cleanup remain incomplete | Stable conditional layout; multiple actors, owner/nonowner, mixed conditions, late join, dormancy; legacy/Iris/push model separately |
+| NET-02 / P0, execution pending | Strict int32/int64 bucket conversion, atomic property validation, immutable cached schemas and whole-RPC parameter rejection implemented | Added real bucket round-trip/bad-input tests; run both backends and connected-peer/schema mismatch cases |
+| LIFE-01 / P0, execution pending | Main-state callbacks, Env/World close cleanup, explicit World, isolated handles, remaining-delay pause and reentry protection implemented | Added coroutine GC, teardown-order, multi-World and cross-Env tests; world pause/time dilation, multi-PIE and packaged execution pending |
+| LIFE-02 / P0, execution pending | Manual proxies and known smart-pointer paths now use native destructors; obsolete proxies cannot release replacements; unconstructed/released payloads skip destruction | Added forced-GC/Env-close tests; finish allocation audit and run both collectors/backends; no Lua stack work in native destructors |
 | COMPAT-01 / P1 | Upvalue identity, registry/uservalue and load mode are approximate or placeholders | Explicit supported subset; shared scalar closure aliases, reload rollback, source/bytecode modes |
 | BIND-01 / P1 | UClass-keyed binding is not independent per-instance module binding | Same-class A/B modules, inheritance, unbind and hot reload isolation |
 | EVENT-01 / P1 | Tokens hold owners strongly; weak-key indexing does not release them automatically | Explicit unsubscribe contract; recursive Once fixed this round, teardown and closure ownership still need execution |
@@ -27,6 +27,8 @@ The [Chinese audit](../CN/Benchmark_Review.md) contains the expanded implementat
 
 ## Order and Innovation
 
-First fix network/lifetime correctness; then complete feature acceptance, examples and traceable reports; finally run controlled benchmarks, packaged/platform validation and license review. Proposed innovations are generation-aware Env/World callback handles, shared binding/type metadata, deterministic network schema negotiation and a capability manifest. These remain proposals.
+First fix network/lifetime correctness; then complete feature acceptance, examples and traceable reports; finally run controlled benchmarks, packaged/platform validation and license review. Timer now uses nonreused Env-scoped handles and a close barrier; registration-site diagnostics remain missing. Shared binding/type metadata and complete network schema negotiation remain proposals.
 
-This round changes CodeGen VM ownership, io validation/CRLF handling, RPC ordering/schema fingerprints and Event.Once reentrancy, and adds regression source/examples. These runtime changes are **unbuilt and unexecuted**. No claim of all-feature completion follows from this audit.
+Timer ownership, manual/smart reference finalization, exact networking integers and strict declarations are implemented with regression sources and updated examples/docs. CodeGen VM ownership, io validation/CRLF, RPC ordering/schema fingerprints and Event.Once reentrancy also have fixes. Runtime changes are **unbuilt and unexecuted**.
+
+Maintainer validation: build Lua and Luau separately, enable bTimer, and run UnLuaNova.API.Timer, UnLuaNova.API.Lifetime, UnLuaNova.API.Net and UnLuaNova.API.RuntimeModules plus existing container/static-export regressions. Connected-peer acceptance remains separate from bucket-conversion tests.

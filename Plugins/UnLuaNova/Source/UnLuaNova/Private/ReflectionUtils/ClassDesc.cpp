@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaCompatibility.h"
-#include "ClassDesc.h"
-#include "FieldDesc.h"
-#include "PropertyDesc.h"
-#include "FunctionDesc.h"
+#include "ReflectionUtils/ClassDesc.h"
+#include "ReflectionUtils/FieldDesc.h"
+#include "ReflectionUtils/PropertyDesc.h"
+#include "ReflectionUtils/FunctionDesc.h"
 #include "LuaCore.h"
 #include "DefaultParamCollection.h"
 #include "LowLevel.h"

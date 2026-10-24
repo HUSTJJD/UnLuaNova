@@ -22,7 +22,7 @@
 | 能力 | 当前处理与缺口 |
 |---|---|
 | Lua 5.3+ 整数、位运算语法、goto、5.4/5.5 close 语义 | 不承诺同语言兼容；bit32 不等于整数/操作符语义；资源需显式 Close/Destroy |
-| int64 | 普通绑定有专用转换；网络路径仍有 int32 截断风险，不能声称全链路精确 |
+| int64 | 复制桶已接严格 int64 读写，边界用例待运行；超出 ±2^53 的精确值使用原生 integer64，不能恢复 number 已丢失的精度 |
 | userdata 终结 | `UNLUANOVA_HAS_GC_METAMETHOD=0`，`UNLUANOVA_HAS_USERDATA_FINALIZER=1`；容器、FText、非平凡导出构造走 VM dtor，手工对象代理仍需修复 |
 | debug/upvalue | getregistry、get/setuservalue 等存在占位，upvalueid 近似；热重载共享标量 upvalue 需专门验证 |
 | load/字节码 | 宿主提供源代码编译；load mode 与后端字节码兼容未完整保证；只加载可信且匹配版本的字节码 |

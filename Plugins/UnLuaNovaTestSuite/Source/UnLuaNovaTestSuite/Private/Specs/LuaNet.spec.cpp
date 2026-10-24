@@ -84,7 +84,7 @@ namespace
             lua_setfield(Inner, -2, "Name");
             lua_pushstring(Inner, "String");
             lua_setfield(Inner, -2, "Type");
-            lua_pushstring(Inner, "OwnerOnly");
+            lua_pushstring(Inner, "None");
             lua_setfield(Inner, -2, "Condition");
             lua_rawseti(Inner, -2, 2);
             return 1;
@@ -158,6 +158,26 @@ void FNetSpec::Define()
 
     Describe(TEXT("RPC 声明"), [this]()
     {
+        It(TEXT("invalid RPC parameters reject the whole function"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            for (const char* Script : {
+                "return {ServerRPC={Invalid={Params={'Int','Missing','String'}}}}",
+                "return {ServerRPC={Invalid={Params={[2]='Int'}}}}",
+                "return {ServerRPC={Invalid={Params={{Name='Same',Type='Int'},{Name='same',Type='Float'}}}}}",
+                "return {ServerRPC={Invalid={Params='Int'}}}",
+                "return {ServerRPC={Invalid={Reliable='true'}}}",
+                "return {ServerRPC={Invalid=false}}" })
+            {
+                TEST_TRUE(UnLuaNova::RunChunk(L, Script));
+                const int32 Top = lua_gettop(L);
+                AddExpectedError(TEXT("Invalid RPC declaration"), EAutomationExpectedErrorFlags::Contains, 1);
+                UnLuaNova::FUnLuaNovaNet::DeclareRPCs(L, -1, Bound->GetClass());
+                TEST_EQUAL(lua_gettop(L), Top);
+                TEST_TRUE(FindOwn(Bound->GetClass(), TEXT("Invalid")) == nullptr);
+                lua_pop(L, 1);
+            }
+        });
+
         It(TEXT("RPC registration is independent of table insertion order"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             UClass* Class = Bound->GetClass();
@@ -316,7 +336,42 @@ void FNetSpec::Define()
 
             TEST_TRUE(Decls[1].Name == FName(TEXT("Name")));
             TEST_TRUE(Decls[1].Type == UnLuaNova::ELuaNetParamType::String);
-            TEST_EQUAL((int32)Decls[1].Condition, (int32)COND_OwnerOnly);
+            TEST_EQUAL((int32)Decls[1].Condition, (int32)COND_None);
+        });
+
+        It(TEXT("invalid schemas are rejected atomically"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Class = Bound->GetClass();
+            const uint32 Before = UnLuaNova::ComputeSchemaVersion(UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class));
+            for (const char* Script : {
+                "return {ReplicatedProps={{Name='Private',Type='String',Condition='OwnerOnly'}}}",
+                "return {ReplicatedProps={{Name='HP',Type='Float',Condition='Typo'}}}",
+                "return {ReplicatedProps={{Name='HP',Type='Float',Condition=7}}}",
+                "return {ReplicatedProps={{Name='HP',Type='Float'},{Name='hp',Type='Int'}}}",
+                "return {ReplicatedProps={{Name='HP',Type='Float'},false}}",
+                "return {ReplicatedProps={[2]={Name='HP',Type='Float'}}}",
+                "return {ReplicatedProps={{Name='HP',Type='Unknown'}}}",
+                "return {GetLifetimeReplicatedProps=function() error('bad schema') end}",
+                "return {ReplicatedProps={}}" })
+            {
+                TEST_TRUE(UnLuaNova::RunChunk(L, Script));
+                const int32 Top = lua_gettop(L);
+                AddExpectedError(TEXT("Rejected replication declaration"), EAutomationExpectedErrorFlags::Contains, 1);
+                TEST_FALSE(UnLuaNova::FUnLuaNovaNet::DeclareReplicatedProps(L, -1, Class));
+                TEST_EQUAL(lua_gettop(L), Top);
+                TEST_EQUAL(UnLuaNova::ComputeSchemaVersion(UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class)), Before);
+                lua_pop(L, 1);
+            }
+        });
+
+        It(TEXT("empty first schema is valid and repeated declarations are idempotent"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::FUnLuaNovaNet::Cleanup();
+            TEST_TRUE(UnLuaNova::RunChunk(L, "return {ReplicatedProps={}}"));
+            TEST_TRUE(UnLuaNova::FUnLuaNovaNet::DeclareReplicatedProps(L, -1, Bound->GetClass()));
+            TEST_TRUE(UnLuaNova::FUnLuaNovaNet::DeclareReplicatedProps(L, -1, Bound->GetClass()));
+            TEST_EQUAL(UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Bound->GetClass()).Num(), 0);
+            lua_pop(L, 1);
         });
 
         It(TEXT("没有声明时返回空表而不是崩溃"), EAsyncExecution::TaskGraphMainThread, [this]()
@@ -324,6 +379,59 @@ void FNetSpec::Define()
             const TArray<UnLuaNova::FLuaRepDecl>& Decls =
                 UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(UObject::StaticClass());
             TEST_EQUAL(Decls.Num(), 0);
+        });
+    });
+
+    Describe(TEXT("Integer payloads"), [this]()
+    {
+        It(TEXT("int64 fields round-trip across 32-bit, double and signed limits"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Component = NewObject<UUnLuaNovaReplicationComponent>();
+            Component->Int64s.SetNum(1);
+            UnLuaNova::FLuaNetSlot Slot;
+            Slot.Name = TEXT("Value");
+            Slot.Bucket = UnLuaNova::ELuaNetBucket::Int64;
+            Slot.Type = UnLuaNova::ELuaNetParamType::Int64;
+            lua_newtable(L);
+            const int32 Table = lua_absindex(L, -1);
+            for (const int64 Value : { MIN_int64, -(int64(1) << 53) - 1, -(int64(1) << 31) - 1,
+                int64(0), (int64(1) << 31), (int64(1) << 53), (int64(1) << 53) + 1, MAX_int64 })
+            {
+                Component->Int64s[0] = Value == 0 ? 1 : 0;
+                UNLUANOVA_PUSHINT64(L, Value);
+                lua_setfield(L, Table, "Value");
+                TEST_TRUE(Component->SyncSlot(L, Table, Slot));
+                TEST_EQUAL(Component->Int64s[0], Value);
+                lua_pushnil(L);
+                lua_setfield(L, Table, "Value");
+                TEST_TRUE(Component->ApplySlot(L, Table, Slot));
+                lua_getfield(L, Table, "Value");
+                int64 RoundTrip = 0;
+                TEST_TRUE(UnLuaNovaTryToInt64(L, -1, RoundTrip));
+                TEST_EQUAL(RoundTrip, Value);
+                lua_pop(L, 1);
+                TEST_FALSE(Component->SyncSlot(L, Table, Slot));
+            }
+            lua_pop(L, 1);
+        });
+
+        It(TEXT("invalid integers preserve the previous wire value"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Component = NewObject<UUnLuaNovaReplicationComponent>();
+            Component->Int64s.Add(42);
+            UnLuaNova::FLuaNetSlot Slot;
+            Slot.Name = TEXT("Value");
+            Slot.Bucket = UnLuaNova::ELuaNetBucket::Int64;
+            Slot.Type = UnLuaNova::ELuaNetParamType::Int64;
+            for (const char* Script : { "return {Value=1.5}", "return {Value=math.huge}",
+                "return {Value=-math.huge}", "return {Value=0/0}", "return {Value=2^63}",
+                "return {Value=-(2^64)}", "return {Value='42'}", "return {Value=false}" })
+            {
+                TEST_TRUE(UnLuaNova::RunChunk(L, Script));
+                TEST_FALSE(Component->SyncSlot(L, lua_absindex(L, -1), Slot));
+                TEST_EQUAL(Component->Int64s[0], int64(42));
+                lua_pop(L, 1);
+            }
         });
     });
 

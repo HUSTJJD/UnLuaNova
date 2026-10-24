@@ -104,18 +104,18 @@ native 模块（Timer）的硬要求：
 
 ## Timer（C++ 驱动）
 
-当前 Timer 的 Env/协程保活、销毁顺序与多 World 选择存在未解决风险，见 [LIFE-01](Benchmark_Review.md)。以下是现有 API，尚不能作为生命周期安全保证。
+Timer 已接入 Env/World 销毁清理，回调统一在所属 Env 的主状态执行。新增回归源码尚未编译、运行，验收状态见 [LIFE-01](Benchmark_Review.md)。
 
 ```lua
 local Timer = require('UnLuaNova.Timer')
 
-local Handle = Timer.Set(Callback, Interval, bLoop, Delay, bUnscaled)
+local Handle = Timer.Set(Callback, Interval, bLoop, Delay, bUnscaled, WorldContext)
 Timer.Clear(Handle)
 Timer.Pause(Handle, true)
 Timer.IsValid(Handle)
-Timer.ClearAll()
-local Seconds = Timer.Time(bUnscaled)
-local N = Timer.Count()
+Timer.ClearAll(WorldContext)
+local Seconds = Timer.Time(bUnscaled, WorldContext)
+local N = Timer.Count(WorldContext)
 ```
 
 | 参数 | 说明 |
@@ -125,34 +125,20 @@ local N = Timer.Count()
 | `bLoop` | 循环（默认 false，即一次性） |
 | `Delay` | 首次触发前再等几秒（默认 0） |
 | `bUnscaled` | 用真实时间：**不受暂停与时间膨胀影响**（默认 false） |
+| `WorldContext` | Game/PIE 的 UObject 或 UWorld；省略时仅允许唯一 Game/PIE 世界，多世界报错 |
 
-`Set` 返回句柄，用 `Clear(Handle)` 取消。**回调不需要你自己保活**，句柄摘掉时引用一起释放。
+`Interval` / `Delay` 必须是有限、非负、可表示为 float 的数值，默认 0。数字字符串也会被拒绝。`Set` 返回不重复使用的进程内句柄，用 `Clear(Handle)` 取消；句柄不能跨 Env 使用或持久化。
 
-### 为什么是 C++
+### 生命周期与调度
 
-脚本侧手写计时器几乎必然踩这四件事，而它们都不在 Lua 语法层面，在
-"Lua 时间与引擎时间的关系"层面：
+- registry 持有回调闭包，调用方协程可以被 GC；回调不能 yield，不能作为 latent 调用的协程恢复入口。
+- Env 关闭前或 World 子系统停止时取消任务并释放引用。关闭期间拒绝新注册。
+- `Clear` / `Pause` / `IsValid` 按句柄找到原 World；`Count` / `ClearAll` 仅操作当前 Env 在所选 World 的任务。
+- 一次性任务先移除再调用；回调中取消或暂停其他到期任务立即生效，递归 Tick 不会重复进入。
+- 暂停保存剩余等待时间，恢复继续等待；循环任务每帧至多调用一次，不补发错过的周期。
+- scaled 任务在世界暂停时不运行；unscaled 使用真实世界时间。回调异常记录日志，其他任务继续。
 
-| 手写版本常见写法 | 问题 |
-|---|---|
-| `os.time()` 取时间 | 秒级精度，无视暂停与时间膨胀 |
-| 累加 `DeltaTime` | 暂停、时间膨胀、PIE 重启全错 |
-| `==` 判间隔 | 中间跳一帧就永远错过 |
-| 遍历中增删定时器 | 索引错位，漏触发 |
-
-本实现的处理：到期时间存在**世界时间**上（`GetTimeSeconds()` 受暂停与时间膨胀影响，
-`GetRealTimeSeconds()` 不受），只比较不累加；到期项先快照再回调，回调里增删都不乱；
-掉帧时用 `+= Interval` 追平并夹紧，不会越落越多。
-
-与 latent 的 `Delay` 共用同一份世界时间源 —— 不要再开一个时间源，否则就是把
-"世界暂停后回调不工作"那类 bug（Issue276）换个地方再犯一次。
-
-### 已知限制
-
-- **多世界 / 多 PIE**：脚本侧不传 World，由插件替你挑（优先 PIE / Game，再退回任意有效世界）。
-  同时跑多个 PIE 时取的是第一个。真需要按世界区分时请提需求加 World 参数
-- 回调里抛错只记日志，不会中断其余定时器
-- `Pause(Handle, false)` 恢复时会把到期时间顺延一个周期，不会在恢复瞬间补发
+可执行示例：[TimerLifecycle.lua](../../Content/Script/Examples/TimerLifecycle.lua)。回归入口：`UnLuaNova.API.Timer`；多 PIE、世界暂停/时间膨胀和打包行为仍需维护者实际验收。
 
 ## Event（纯 Lua）
 

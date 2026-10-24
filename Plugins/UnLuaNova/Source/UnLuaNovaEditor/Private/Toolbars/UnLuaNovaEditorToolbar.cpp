@@ -1,7 +1,7 @@
 #include "Misc/EngineVersionComparison.h"
 #include "UnLuaNovaPrivate.h"
 #include "UnLuaNovaEditorCore.h"
-#include "UnLuaNovaEditorToolbar.h"
+#include "Toolbars/UnLuaNovaEditorToolbar.h"
 #include "UnLuaNovaEditorCommands.h"
 #include "UnLuaNovaInterface.h"
 #include "Animation/AnimInstance.h"

@@ -121,6 +121,7 @@ namespace UnLuaNova
         virtual void HotReload();
 
         FORCEINLINE lua_State* GetMainState() const { return L; }
+        bool IsClosing() const { return bClosing; }
 
         void AddThread(lua_State* Thread, int32 ThreadRef);
 
@@ -236,5 +237,6 @@ namespace UnLuaNova
         FString Name = TEXT("Env_0");
         bool bObjectArrayListenerRegistered;
         bool bStarted;
+        bool bClosing = false;
     };
 }

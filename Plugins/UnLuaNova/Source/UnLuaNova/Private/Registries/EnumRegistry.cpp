@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "CollisionHelper.h"
-#include "EnumRegistry.h"
+#include "Registries/EnumRegistry.h"
 #include "LowLevel.h"
 #include "LuaCore.h"
 #include "LuaEnv.h"

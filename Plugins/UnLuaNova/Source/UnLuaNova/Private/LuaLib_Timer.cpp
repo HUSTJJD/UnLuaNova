@@ -15,6 +15,7 @@
 #include "LuaLib_Timer.h"
 
 #include "LuaBackend.h"
+#include "LuaEnv.h"
 #include "UnLuaNovaBase.h"
 #include "UnLuaNovaTimerSubsystem.h"
 
@@ -25,36 +26,31 @@ namespace UnLuaNova
 {
     namespace LuaTimerLib
     {
-        /**
-         * 取计时器所在的子系统。
-         *
-         * 脚本侧写 `UnLuaNova.Timer.Set(fn, 1)` 时不该被要求传 World，所以这里替它挑：
-         * 先 PIE / Game，再退回任意有效世界。多 PIE 同时跑时取的是第一个 —— 这是当前
-         * 唯一的已知限制，需要按世界区分时把 World 作为参数传进来（TODO，等有真实需求再加）。
-         */
-        static UUnLuaNovaTimerSubsystem* GetSubsystem()
+        static UUnLuaNovaTimerSubsystem* GetSubsystem(lua_State* L, int32 ContextIndex)
         {
-            if (!GEngine)
-                return nullptr;
-
             UWorld* World = nullptr;
-            for (const FWorldContext& Context : GEngine->GetWorldContexts())
+            if (!lua_isnoneornil(L, ContextIndex))
             {
-                if (Context.WorldType == EWorldType::PIE || Context.WorldType == EWorldType::Game)
+                UObject* Context = GetUObject(L, ContextIndex);
+                World = Context ? Context->GetWorld() : nullptr;
+                if (!World || (World->WorldType != EWorldType::Game && World->WorldType != EWorldType::PIE))
                 {
-                    World = Context.World();
-                    break;
+                    luaL_error(L, "UnLuaNova.Timer: expected a live Game/PIE world context");
+                    return nullptr;
                 }
             }
-
-            if (!World)
+            else if (GEngine)
             {
                 for (const FWorldContext& Context : GEngine->GetWorldContexts())
                 {
-                    if (Context.World())
+                    if ((Context.WorldType == EWorldType::Game || Context.WorldType == EWorldType::PIE) && Context.World())
                     {
+                        if (World && World != Context.World())
+                        {
+                            luaL_error(L, "UnLuaNova.Timer: multiple worlds; pass an explicit world context");
+                            return nullptr;
+                        }
                         World = Context.World();
-                        break;
                     }
                 }
             }
@@ -62,17 +58,33 @@ namespace UnLuaNova
             return World ? World->GetSubsystem<UUnLuaNovaTimerSubsystem>() : nullptr;
         }
 
+        static int32 GetHandle(lua_State* L)
+        {
+            if (lua_type(L, 1) != LUA_TNUMBER)
+                return INDEX_NONE;
+            const double Value = lua_tonumber(L, 1);
+            return FMath::IsFinite(Value) && Value > 0 && Value <= MAX_int32 && FMath::FloorToDouble(Value) == Value
+                ? static_cast<int32>(Value) : INDEX_NONE;
+        }
+
         static int Set(lua_State* L)
         {
             if (lua_type(L, 1) != LUA_TFUNCTION)
                 return luaL_error(L, "UnLuaNova.Timer.Set: 第 1 个参数必须是函数");
 
-            const double Interval = lua_isnumber(L, 2) ? lua_tonumber(L, 2) : 0.0;
+            if ((!lua_isnoneornil(L, 2) && lua_type(L, 2) != LUA_TNUMBER)
+                || (!lua_isnoneornil(L, 4) && lua_type(L, 4) != LUA_TNUMBER))
+                return luaL_error(L, "UnLuaNova.Timer.Set: interval and delay must be numbers");
+            const double Interval = lua_isnoneornil(L, 2) ? 0.0 : lua_tonumber(L, 2);
             const bool bLoop = lua_toboolean(L, 3) != 0;
-            const double Delay = lua_isnumber(L, 4) ? lua_tonumber(L, 4) : 0.0;
+            const double Delay = lua_isnoneornil(L, 4) ? 0.0 : lua_tonumber(L, 4);
             const bool bUnscaled = lua_toboolean(L, 5) != 0;
 
-            auto* Subsystem = GetSubsystem();
+            if (!FMath::IsFinite(Interval) || !FMath::IsFinite(Delay)
+                || Interval < 0 || Delay < 0 || Interval > MAX_flt || Delay > MAX_flt)
+                return luaL_error(L, "UnLuaNova.Timer.Set: interval and delay must be finite nonnegative floats");
+
+            auto* Subsystem = GetSubsystem(L, 6);
             if (!Subsystem)
                 return luaL_error(L, "UnLuaNova.Timer.Set: 拿不到世界（引擎还没起来？）");
 
@@ -95,8 +107,8 @@ namespace UnLuaNova
 
         static int Clear(lua_State* L)
         {
-            const int32 Handle = static_cast<int32>(UNLUANOVA_TOINT64(L, 1));
-            auto* Subsystem = GetSubsystem();
+            const int32 Handle = GetHandle(L);
+            auto* Subsystem = UUnLuaNovaTimerSubsystem::Find(L, Handle);
             const bool bRemoved = Subsystem && Subsystem->Remove(Handle);
             lua_pushboolean(L, bRemoved ? 1 : 0);
             return 1;
@@ -104,9 +116,9 @@ namespace UnLuaNova
 
         static int Pause(lua_State* L)
         {
-            const int32 Handle = static_cast<int32>(UNLUANOVA_TOINT64(L, 1));
+            const int32 Handle = GetHandle(L);
             const bool bPaused = lua_toboolean(L, 2) != 0;
-            auto* Subsystem = GetSubsystem();
+            auto* Subsystem = UUnLuaNovaTimerSubsystem::Find(L, Handle);
             const bool bOk = Subsystem && Subsystem->SetPaused(Handle, bPaused);
             lua_pushboolean(L, bOk ? 1 : 0);
             return 1;
@@ -114,16 +126,16 @@ namespace UnLuaNova
 
         static int IsValid(lua_State* L)
         {
-            const int32 Handle = static_cast<int32>(UNLUANOVA_TOINT64(L, 1));
-            auto* Subsystem = GetSubsystem();
+            const int32 Handle = GetHandle(L);
+            auto* Subsystem = UUnLuaNovaTimerSubsystem::Find(L, Handle);
             lua_pushboolean(L, (Subsystem && Subsystem->IsValid(Handle)) ? 1 : 0);
             return 1;
         }
 
         static int ClearAll(lua_State* L)
         {
-            if (auto* Subsystem = GetSubsystem())
-                Subsystem->RemoveAll();
+            if (auto* Subsystem = GetSubsystem(L, 1))
+                Subsystem->RemoveForState(FLuaEnv::FindEnvChecked(L).GetMainState());
             return 0;
         }
 
@@ -131,15 +143,15 @@ namespace UnLuaNova
         static int Time(lua_State* L)
         {
             const bool bUnscaled = lua_toboolean(L, 1) != 0;
-            auto* Subsystem = GetSubsystem();
+            auto* Subsystem = GetSubsystem(L, 2);
             lua_pushnumber(L, Subsystem ? Subsystem->Now(bUnscaled) : 0.0);
             return 1;
         }
 
         static int Count(lua_State* L)
         {
-            auto* Subsystem = GetSubsystem();
-            UNLUANOVA_PUSHINT(L, Subsystem ? Subsystem->Num() : 0);
+            auto* Subsystem = GetSubsystem(L, 1);
+            UNLUANOVA_PUSHINT(L, Subsystem ? Subsystem->NumForState(FLuaEnv::FindEnvChecked(L).GetMainState()) : 0);
             return 1;
         }
 

@@ -33,7 +33,7 @@ namespace UnLuaNova { class FLuaEnv; }
  *
  * 这里的实现：到期时间存在**世界时间**上（`GetTimeSeconds()` 受暂停与时间膨胀影响，
  * `GetRealTimeSeconds()` 不受），每帧只比较不累加；到期项先快照再回调，避免 ④；
- * 掉帧时用 `+= Interval` 追平并夹紧，不会越落越多。
+ * 循环回调每帧至多执行一次，不补发错过的周期。回调在所属 Env 主状态执行，不允许 yield。
  *
  * 平铺定时任务的性能收益是顺带的：到期判断在 C++，Lua 侧不用每帧扫表。
  */
@@ -53,7 +53,7 @@ public:
 
     /**
      * 注册一个回调。回调是 Lua 函数，调用方已经 `luaL_ref` 进注册表，所有权随之转给本子系统
-     * （移除时由本类 `luaL_unref`，调用方不要再 unref）。
+     * （仅成功时转移所有权；失败时调用方仍需 unref）。
      *
      * @return 句柄；INDEX_NONE 表示失败（无世界 / 无 VM）
      */

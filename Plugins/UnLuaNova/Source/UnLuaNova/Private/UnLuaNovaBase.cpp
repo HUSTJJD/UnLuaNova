@@ -322,9 +322,9 @@ namespace UnLuaNova
     /**
      * Allocate user data for smart pointer
      */
-    void* NewSmartPointer(lua_State *L, int32 Size, const char *MetatableName)
+    void* NewSmartPointer(lua_State *L, int32 Size, const char *MetatableName, FUnLuaNovaUserdataDtor Dtor)
     {
-        void *Userdata = ::NewUserdataWithPadding(L, Size, MetatableName);
+        void *Userdata = ::NewUserdataWithPaddingDtor(L, Size, MetatableName, 0, Dtor);
         if (Userdata)
         {
             MarkUserdataTwoLvPtrTag(L, -1);          // mark the new userdata as a two level pointer

@@ -29,6 +29,7 @@
 #include "LowLevel.h"
 #include "Misc/AutomationTest.h"
 #include "UnLuaNovaTestHelpers.h"
+#include "Registries/ObjectRegistry.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -112,6 +113,57 @@ void FLifetimeSpec::Define()
 
     Describe(TEXT("手动引用"), [this]()
     {
+        It(TEXT("Ref proxy retains until Lua GC releases it"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Stub = NewObject<UUnLuaNovaTestStub>();
+            const TWeakObjectPtr<UObject> Weak = Stub;
+            UnLuaNova::PushUObject(L, Stub);
+            lua_setglobal(L, "Obj");
+            TEST_TRUE(Env->DoString(TEXT("Proxy = UnLuaNova.Ref(Obj); Obj = nil")));
+            lua_gc(L, LUA_GCCOLLECT, 0);
+            CollectGarbage(RF_Standalone, true);
+            TEST_TRUE(Weak.IsValid());
+            TEST_TRUE(Env->DoString(TEXT("Proxy = nil")));
+            lua_gc(L, LUA_GCCOLLECT, 0);
+            CollectGarbage(RF_Standalone, true);
+            TEST_FALSE(Weak.IsValid());
+        });
+
+        It(TEXT("collecting an old proxy cannot release a replacement"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Stub = NewObject<UUnLuaNovaTestStub>();
+            const TWeakObjectPtr<UObject> Weak = Stub;
+            UnLuaNova::PushUObject(L, Stub);
+            lua_setglobal(L, "Obj");
+            TEST_TRUE(Env->DoString(TEXT(R"(
+                Old = UnLuaNova.Ref(Obj)
+                UnLuaNova.Unref(Obj)
+                UnLuaNova.Unref(Obj)
+                New = UnLuaNova.Ref(Obj)
+                Old = nil
+            )")));
+            lua_gc(L, LUA_GCCOLLECT, 0);
+            CollectGarbage(RF_Standalone, true);
+            TEST_TRUE(Weak.IsValid());
+            TEST_TRUE(Env->DoString(TEXT("New = nil; Obj = nil")));
+            lua_gc(L, LUA_GCCOLLECT, 0);
+            CollectGarbage(RF_Standalone, true);
+            TEST_FALSE(Weak.IsValid());
+        });
+
+        It(TEXT("live manual proxy is released when Env closes"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Stub = NewObject<UUnLuaNovaTestStub>();
+            const TWeakObjectPtr<UObject> Weak = Stub;
+            UnLuaNova::PushUObject(L, Stub);
+            lua_setglobal(L, "Obj");
+            TEST_TRUE(Env->DoString(TEXT("Proxy = UnLuaNova.Ref(Obj)")));
+            Env.Reset();
+            L = nullptr;
+            CollectGarbage(RF_Standalone, true);
+            TEST_FALSE(Weak.IsValid());
+        });
+
         It(TEXT("AddManualObjectReference 让对象不被 GC"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             // The escape hatch for "hold this for me without a UPROPERTY": the reference
@@ -140,6 +192,52 @@ void FLifetimeSpec::Define()
             CollectGarbage(RF_Standalone, true);
 
             TEST_FALSE(Weak.IsValid());
+        });
+    });
+
+    Describe(TEXT("Smart pointer finalization"), [this]()
+    {
+        It(TEXT("registry shared pointer releases its owner at GC"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            TSharedPtr<int32> Ptr = MakeShared<int32>(42);
+            const TWeakPtr<int32> Weak = Ptr;
+            Env->GetObjectRegistry()->Push(L, Ptr);
+            Ptr.Reset();
+            TEST_TRUE(Weak.IsValid());
+            lua_pop(L, 1);
+            lua_gc(L, LUA_GCCOLLECT, 0);
+            TEST_FALSE(Weak.IsValid());
+        });
+
+        It(TEXT("padded smart pointer releases on Env close"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            TSharedPtr<int32> Ptr = MakeShared<int32>(42);
+            const TWeakPtr<int32> Weak = Ptr;
+            void* Payload = UnLuaNova::NewSmartPointer(L, sizeof(TSharedPtr<int32>), "TSharedPtr",
+                UnLuaNova::DestroyUserdataPayload<TSharedPtr<int32>>);
+            TEST_TRUE(Payload != nullptr);
+            new(Payload) TSharedPtr<int32>(Ptr);
+            Ptr.Reset();
+            Env.Reset();
+            L = nullptr;
+            TEST_FALSE(Weak.IsValid());
+        });
+
+        It(TEXT("released payload cannot be destroyed twice"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            TSharedPtr<int32> Ptr = MakeShared<int32>(42);
+            const TWeakPtr<int32> Weak = Ptr;
+            void* Payload = UnLuaNova::NewSmartPointer(L, sizeof(TSharedPtr<int32>), "TSharedPtr",
+                UnLuaNova::DestroyUserdataPayload<TSharedPtr<int32>>);
+            TEST_TRUE(Payload != nullptr);
+            new(Payload) TSharedPtr<int32>(Ptr);
+            Ptr.Reset();
+            UnLuaNova::DestroyUserdataPayload<TSharedPtr<int32>>(L, lua_touserdata(L, -1));
+            TEST_FALSE(Weak.IsValid());
+            TEST_TRUE(UnLuaNova::GetSmartPointer(L, -1) == nullptr);
+            UnLuaNova::DestroyUserdataPayload<TSharedPtr<int32>>(L, lua_touserdata(L, -1));
+            lua_pop(L, 1);
+            lua_gc(L, LUA_GCCOLLECT, 0);
         });
     });
 

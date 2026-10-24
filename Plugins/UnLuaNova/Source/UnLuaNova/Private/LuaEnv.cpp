@@ -397,6 +397,7 @@ namespace UnLuaNova
 
     FLuaEnv::~FLuaEnv()
     {
+        bClosing = true;
         FLuaProfiler::Get().Detach(L);
 
         OnDestroyed.Broadcast(*this);

@@ -51,3 +51,14 @@ end
 -- UnLuaNovaLib.cpp), so either spelling reaches this same table.
 declare Lua: LuaLib
 declare UnLuaNova: LuaLib
+
+-- Type annotation for require('UnLuaNova.Timer'); callbacks cannot yield.
+declare extern type LuaTimerLib with
+    Set: (() -> (), number?, boolean?, number?, boolean?, Object?) -> number
+    Clear: (number) -> boolean
+    Pause: (number, boolean) -> boolean
+    IsValid: (number) -> boolean
+    ClearAll: (Object?) -> ()
+    Count: (Object?) -> number
+    Time: (boolean?, Object?) -> number
+end

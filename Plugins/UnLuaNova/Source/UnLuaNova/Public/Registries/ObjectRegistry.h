@@ -21,10 +21,14 @@
 namespace UnLuaNova
 {
     class FLuaEnv;
+    class FObjectRegistry;
 
     struct FManualRefProxy
     {
         TWeakObjectPtr<UObject> Object;
+        FObjectRegistry* Registry = nullptr;
+        void Release();
+        ~FManualRefProxy() { Release(); }
     };
 
     class FObjectRegistry
@@ -77,19 +81,23 @@ namespace UnLuaNova
         void RemoveManualRef(UObject* Object);
 
     private:
+        friend struct FManualRefProxy;
+        void ReleaseManualRefProxy(FManualRefProxy* Proxy);
         void RemoveFromObjectMapAndPushToStack(UObject* Object);
 
         FLuaEnv* Env;
         TMap<UObject*, int32> ObjectRefs;
+        TMap<TWeakObjectPtr<UObject>, FManualRefProxy*> ManualRefProxies;
     };
 
     template <typename T>
     void FObjectRegistry::Push(lua_State* L, TSharedPtr<T> Ptr)
     {
-        const auto Userdata = lua_newuserdata(L, sizeof(TSharedPtr<T>));
+        const auto Userdata = UNLUANOVA_NEWDATA_DTOR(L, sizeof(TSharedPtr<T>),
+            [](lua_State*, void* Block) { static_cast<TSharedPtr<T>*>(Block)->~TSharedPtr<T>(); });
+        new(Userdata) TSharedPtr<T>(Ptr);
         luaL_getmetatable(L, "TSharedPtr");
         lua_setmetatable(L, -2);
-        new(Userdata) TSharedPtr<T>(Ptr);
     }
 
     template <typename T>

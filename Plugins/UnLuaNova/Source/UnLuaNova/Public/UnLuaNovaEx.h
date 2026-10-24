@@ -202,7 +202,8 @@ namespace UnLuaNova
         {
             // make sure the meta table is on the top of the stack
             lua_pushstring(L, TCHAR_TO_UTF8(*Name));
-            const auto Userdata = NewSmartPointer(L, sizeof(TSharedPtr<FExportedProperty>), "TSharedPtr");
+            const auto Userdata = NewSmartPointer(L, sizeof(TSharedPtr<FExportedProperty>), "TSharedPtr",
+                DestroyUserdataPayload<TSharedPtr<FExportedProperty>>);
             if (!Userdata)
             {
                 // NewSmartPointer() answers null when the "TSharedPtr" metatable is missing

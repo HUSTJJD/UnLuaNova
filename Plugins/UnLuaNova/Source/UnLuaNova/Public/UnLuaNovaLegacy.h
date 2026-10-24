@@ -1113,8 +1113,10 @@ namespace UnLuaNova
             char MetatableName[256];
             memset(MetatableName, 0, sizeof(MetatableName));
             FCStringAnsi::Snprintf(MetatableName, sizeof(MetatableName), "%s%s", TType<SmartPtrType<T, Mode>>::GetName(), TType<T>::GetName());
-            void* Userdata = UnLuaNova::NewSmartPointer(L, sizeof(SmartPtrType<T, Mode>), MetatableName);
-            new(Userdata) SmartPtrType<T, Mode>(V);
+            void* Userdata = UnLuaNova::NewSmartPointer(L, sizeof(SmartPtrType<T, Mode>), MetatableName,
+                UnLuaNova::DestroyUserdataPayload<SmartPtrType<T, Mode>>);
+            if (Userdata)
+                new(Userdata) SmartPtrType<T, Mode>(V);
         }
         else
         {

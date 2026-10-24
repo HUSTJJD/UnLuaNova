@@ -72,10 +72,8 @@ enum class ELuaNetUpdateMode : uint8
  *   so changing a Float does not make the replication system look at the actor's Strings.
  *   A change that nobody marks dirty is simply not sent - which is why UpdateMode =
  *   Explicit is the mode that actually pays off.
- * - **Iris**: there is no custom serialiser anywhere in here - no NetDeltaSerialize, no
- *   FFastArraySerializer, no custom NetSerializer. These are ordinary typed UPROPERTYs, so
- *   they replicate under the legacy system and under Iris alike, and under Iris they get
- *   per-element delta and per-type quantisation without another line of code.
+ * - **Conditions**: only None is accepted until a stable per-condition layout is provided.
+ *   Legacy, Iris and push-model delivery still require connected-peer acceptance tests.
  */
 UCLASS(ClassGroup = (UnLuaNova), meta = (BlueprintSpawnableComponent))
 class UNLUANOVA_API UUnLuaNovaReplicationComponent : public UActorComponent
@@ -116,14 +114,8 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UnLuaNova|Net")
     float PollInterval = 0.1f;
 
-    /**
-     * Condition used for a bucket whose declarations ask for nothing in particular.
-     *
-     * Per-field conditions are still out of reach - that needs one UPROPERTY per condition
-     * and cannot be added at runtime - but the granularity is now per type rather than one
-     * for the whole payload: a Float can be COND_None while a String is COND_OwnerOnly.
-     */
-    UPROPERTY(EditAnywhere, Category = "UnLuaNova|Net")
+    /** Retained to detect old assets: any non-None value disables replication at BeginPlay. */
+    UPROPERTY(VisibleAnywhere, Category = "UnLuaNova|Net")
     TEnumAsByte<ELifetimeCondition> Condition;
 
 protected:
@@ -141,6 +133,9 @@ protected:
     UFUNCTION() void OnRep_SchemaVersion();
 
 private:
+#if WITH_DEV_AUTOMATION_TESTS
+    friend class FNetSpec;
+#endif
     /** True when the owner's Lua module actually declared any replicated fields. */
     bool bDeclared = false;
 
@@ -204,9 +199,6 @@ private:
 
     /** Mark one bucket dirty for push model. No-op when push model is not compiled in. */
     void MarkBucketDirty(UnLuaNova::ELuaNetBucket Bucket);
-
-    /** Condition for a bucket, taken from its declarations; falls back to Condition. */
-    ELifetimeCondition BucketCondition(UnLuaNova::ELuaNetBucket Bucket) const;
 
     /** Read one declared field out of the Lua table; true when the wire value changed. */
     bool SyncSlot(lua_State* L, int32 TableIdx, const UnLuaNova::FLuaNetSlot& Slot);

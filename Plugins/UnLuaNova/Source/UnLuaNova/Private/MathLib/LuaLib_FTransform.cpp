@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaEx.h"
-#include "LuaLib_Math.h"
+#include "MathLib/LuaLib_Math.h"
 
 // FQuat, FRotator and FVector all reach FTransform_New as userdata, and
 // GetCppInstanceFast() answers raw memory without asking which struct it belongs to, so a

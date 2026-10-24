@@ -1,4 +1,4 @@
-#include "FunctionRegistry.h"
+#include "Registries/FunctionRegistry.h"
 #include "LuaBackend.h"
 #include "LuaEnv.h"
 

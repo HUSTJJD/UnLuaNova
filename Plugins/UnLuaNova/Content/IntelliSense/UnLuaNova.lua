@@ -325,3 +325,13 @@ end
 ---@return boolean
 function MulticastDelegate:IsBound()
 end
+
+---Native module returned by require('UnLuaNova.Timer'). Callbacks cannot yield.
+---@class UnLuaNovaTimer
+---@field Set fun(Callback:fun(), Interval?:number, bLoop?:boolean, Delay?:number, bUnscaled?:boolean, WorldContext?:UObject):integer
+---@field Clear fun(Handle:integer):boolean
+---@field Pause fun(Handle:integer, bPaused:boolean):boolean
+---@field IsValid fun(Handle:integer):boolean
+---@field ClearAll fun(WorldContext?:UObject)
+---@field Count fun(WorldContext?:UObject):integer
+---@field Time fun(bUnscaled?:boolean, WorldContext?:UObject):number

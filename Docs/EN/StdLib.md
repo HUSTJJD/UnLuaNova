@@ -125,18 +125,18 @@ Hard requirements for native modules (Timer):
 
 ## Timer (C++ driven)
 
-Timer still has unresolved Env/coroutine lifetime, teardown-order and multi-World selection risks; see [LIFE-01](Benchmark_Review.md). The API below is not a lifecycle-safety guarantee.
+Timer now cleans up with its Env/World and invokes callbacks on the owning Env's main state. Regression sources are added but unbuilt and unexecuted; see [LIFE-01](Benchmark_Review.md).
 
 ```lua
 local Timer = require('UnLuaNova.Timer')
 
-local Handle = Timer.Set(Callback, Interval, bLoop, Delay, bUnscaled)
+local Handle = Timer.Set(Callback, Interval, bLoop, Delay, bUnscaled, WorldContext)
 Timer.Clear(Handle)
 Timer.Pause(Handle, true)
 Timer.IsValid(Handle)
-Timer.ClearAll()
-local Seconds = Timer.Time(bUnscaled)
-local N = Timer.Count()
+Timer.ClearAll(WorldContext)
+local Seconds = Timer.Time(bUnscaled, WorldContext)
+local N = Timer.Count(WorldContext)
 ```
 
 | Parameter | Meaning |
@@ -146,40 +146,20 @@ local N = Timer.Count()
 | `bLoop` | Repeating (default false, i.e. one-shot) |
 | `Delay` | Extra seconds to wait before the first fire (default 0) |
 | `bUnscaled` | Use real time: **ignores pause and time dilation** (default false) |
+| `WorldContext` | UObject/UWorld in a Game/PIE world; omission requires exactly one Game/PIE world |
 
-`Set` returns a handle; cancel with `Clear(Handle)`. **You do not have to keep the
-callback alive yourself** - clearing the handle releases the reference with it.
+Interval and delay must be finite nonnegative numbers representable as floats; both default to zero. Numeric strings are rejected. Handles are process-local, never reused, and cannot be used by another Env or persisted.
 
-### Why this one is C++
+### Lifetime and Scheduling
 
-A hand-written script timer almost always gets these four things wrong, and none of them
-are at the Lua syntax level - they are about *how Lua time relates to engine time*:
+- Registry references retain callback closures; the registering coroutine can be collected. Callbacks cannot yield or resume latent operations through that coroutine.
+- Env close and World subsystem shutdown cancel tasks and release references. Closing environments reject new registrations.
+- Clear/Pause/IsValid resolve the original World from the handle. Count/ClearAll affect only the caller's Env in the selected World.
+- One-shots are removed before invocation. Cancelling/pausing another due callback takes effect immediately; nested ticks cannot reenter.
+- Pause preserves remaining delay. Repeating timers run at most once per frame, without replaying missed periods.
+- Scaled timers stop while the World is paused; unscaled timers use real world time. Callback errors are logged and other tasks continue.
 
-| Common hand-written approach | Problem |
-|---|---|
-| `os.time()` | Second resolution, ignores pause and time dilation |
-| Accumulating `DeltaTime` | Wrong across pause, time dilation and PIE restart |
-| `==` to detect the interval | One dropped frame and it is missed forever |
-| Adding/removing timers while iterating | Index shifts, firings get skipped |
-
-This implementation stores the due time in **world time** (`GetTimeSeconds()` respects
-pause and time dilation, `GetRealTimeSeconds()` does not) and compares instead of
-accumulating; due entries are snapshotted before being invoked, so a callback may add or
-remove freely; on a frame drop it catches up with `+= Interval` and clamps, so it never
-falls further behind.
-
-It shares one world time source with the latent `Delay` - do not open a second one, or
-you are simply re-introducing "callbacks stop working after the world is paused" in a new
-place (Issue 276).
-
-### Known limitations
-
-- **Multiple worlds / multiple PIE**: scripts do not pass a World; the plugin picks one
-  for you (PIE / Game first, then any valid world). With several PIE sessions running it
-  takes the first one. If you genuinely need per-world timers, ask for a World parameter
-- An error thrown inside a callback is logged only; it does not stop the other timers
-- `Pause(Handle, false)` pushes the due time forward by one period on resume instead of
-  firing a catch-up burst
+Example: [TimerLifecycle.lua](../../Content/Script/Examples/TimerLifecycle.lua). Regression entry: `UnLuaNova.API.Timer`. Multi-PIE, world pause/time dilation and packaged behavior still require execution.
 
 ## Event (pure Lua)
 

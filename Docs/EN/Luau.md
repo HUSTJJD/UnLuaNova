@@ -21,7 +21,7 @@ See upstream [compatibility](https://luau.org/compatibility/) and [sandbox](http
 
 Full Lua 5.x language equivalence is not promised: integer/operator syntax, goto and close semantics differ. Use explicit resource cleanup. The binding layer has dedicated int64 conversion, but networking still has an int32 truncation path.
 
-Luau has no userdata __gc. `UNLUANOVA_HAS_GC_METAMETHOD=0` and `UNLUANOVA_HAS_USERDATA_FINALIZER=1`; container/FText/nontrivial exported constructors use VM destructors, while manual object reference proxies still need correction. Destructors must not touch the Lua stack. LONGJMP paths need a C++ cleanup audit.
+Luau has no userdata __gc. `UNLUANOVA_HAS_GC_METAMETHOD=0` and `UNLUANOVA_HAS_USERDATA_FINALIZER=1`; containers, FText, nontrivial exported constructors, manual proxies and known smart-pointer allocations use native destructors. New forced-GC/teardown tests await execution. Destructors must not touch the Lua stack; the allocation and LONGJMP cleanup audits remain incomplete.
 
 Debug registry/uservalue functions include placeholders, upvalue identity is approximate, and load mode handling is incomplete. Shared closure aliases and reload rollback require tests. Host io is optional and buffered, not full Lua io; path validation is not protection against filesystem links. package.path/cpath do not define the host loader policy. Yield boundaries and iteration metamethods differ. Budgeted incremental GC is neither generational nor multithreaded GC.
 

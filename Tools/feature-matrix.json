@@ -225,7 +225,7 @@
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Lifetime.spec.cpp"
       ],
       "examples": [],
-      "gap": "AddManualRef proxy relies on __gc on Luau; full allocation audit incomplete.",
+      "gap": "Manual proxies and known shared/smart pointer allocations now have native finalizers; dual-GC/teardown tests added but not run; full allocation audit incomplete.",
       "acceptance": "Force both collectors; prove release counts and safety under both teardown orders.",
       "upstream": [
         "Luau",
@@ -248,7 +248,7 @@
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Locators.spec.cpp"
       ],
       "examples": [],
-      "gap": "Core multi-env exists; Timer and cache/diagnostic attribution need isolation checks.",
+      "gap": "Timer handles enforce Env ownership with close cleanup; global network cache and diagnostic attribution still need isolation work.",
       "acceptance": "Create/destroy/recreate Env and World, reuse addresses, forbid cross-environment handles.",
       "upstream": [
         "slua",
@@ -290,10 +290,13 @@
         "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaLib_Timer.cpp"
       ],
       "tests": [
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Timer.spec.cpp"
       ],
-      "examples": [],
-      "gap": "Raw coroutine state, no Env close cleanup, first-world lookup; existing tests mostly API shape.",
+      "examples": [
+        "Content/Script/Examples/TimerLifecycle.lua"
+      ],
+      "gap": "Main-state callbacks, teardown cleanup, explicit World, Env-scoped handles and reentry tests implemented; pause/time dilation, multi-PIE and packaged execution still pending.",
       "acceptance": "Test due/pause/unscaled/reentry plus coroutine GC, Env-first/World-first destruction and multi-PIE.",
       "upstream": [
         "slua"
@@ -383,7 +386,7 @@
       "examples": [
         "Content/Script/Tests/Net/NetActor.lua"
       ],
-      "gap": "Sorting added; inheritance, class/net caches, security and cooked acceptance incomplete.",
+      "gap": "Sorted registration and whole-RPC parameter validation implemented; inheritance, class/net caches, security and cooked acceptance incomplete.",
       "acceptance": "Connected DS + 2 clients, ownership rejection, reliable/unreliable, reconnect and schema mismatch.",
       "upstream": [
         "slua"
@@ -407,7 +410,7 @@
       "examples": [
         "Content/Script/Tests/Net/NetActor.lua"
       ],
-      "gap": "Instance-derived class-cached conditions; type bucket conflicts; unknown conditions fall back.",
+      "gap": "Fixed None layout; non-None/malformed declarations rejected atomically and cached schemas immutable. Full conditional layouts and multi-Env cache cleanup remain incomplete.",
       "acceptance": "Fix layout design; test mixed conditions/types across actors, owner/nonowner, late join and dormancy.",
       "upstream": [
         "slua"
@@ -428,7 +431,7 @@
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp"
       ],
       "examples": [],
-      "gap": "Fixed primitive/math/object types; no arbitrary struct/container support; Luau int64 truncation.",
+      "gap": "Strict int32/int64 conversion and real bucket round-trip regression sources added, unexecuted. No arbitrary struct/container support or Iris/push acceptance evidence.",
       "acceptance": "Exact integer boundaries, object resolution, legacy/Iris/push combinations and packaged peers.",
       "upstream": [
         "slua"

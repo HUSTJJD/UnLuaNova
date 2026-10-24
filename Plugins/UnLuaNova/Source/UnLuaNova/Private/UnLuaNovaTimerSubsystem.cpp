@@ -113,7 +113,7 @@ int32 UUnLuaNovaTimerSubsystem::Add(lua_State* InState, int32 CallbackRef, float
 {
     UWorld* World = GetWorld();
     auto* Env = UnLuaNova::FLuaEnv::FindEnv(InState);
-    if (!World || !Env || bShuttingDown || CallbackRef < 0 || NextTimerHandle > MAX_int32
+    if (!World || !Env || Env->IsClosing() || bShuttingDown || CallbackRef < 0 || NextTimerHandle > MAX_int32
         || !FMath::IsFinite(Interval) || !FMath::IsFinite(Delay) || Interval < 0 || Delay < 0)
         return INDEX_NONE;
 
@@ -198,44 +198,39 @@ void UUnLuaNovaTimerSubsystem::Tick(float DeltaTime)
     const double Scaled = World->GetTimeSeconds();
     const double Unscaled = World->GetRealTimeSeconds();
 
-    // ① 先抄一份到期项：回调里 Add / Remove 会动 Timers，边遍历边改会错位
+    // Snapshot handles: callbacks may remove, pause or reschedule other due timers.
     TArray<int32> Due;
     for (FEntry& Entry : Timers)
     {
-        if (Entry.bPaused)
+        if (Entry.bPaused || (!Entry.bUnscaled && World->IsPaused()))
             continue;
 
         const double Current = Entry.bUnscaled ? Unscaled : Scaled;
         if (Current < Entry.Next)
             continue;
 
-        // ② 循环定时器按 Interval 追平，掉帧时不会越落越多；
-        //    追平后若仍落后于当下（一帧掉了很多个周期），直接夹到下一个周期，不补发历史
-        if (Entry.bLoop)
-        {
-            if (Entry.Interval > 0.0)
-            {
-                Entry.Next += Entry.Interval;
-                if (Entry.Next <= Current)
-                    Entry.Next = Current + Entry.Interval;
-            }
-            else
-            {
-                Entry.Next = Current;
-            }
-        }
-
         Due.Add(Entry.Handle);
     }
 
-    // ③ 执行。一次性定时器在这里摘掉（引用也一起释放）
     for (const int32 Handle : Due)
     {
         const int32 Index = IndexOf(Handle);
         if (Index == INDEX_NONE || Timers[Index].bPaused)
             continue;
 
-        const FEntry Item = Timers[Index];
+        FEntry& Entry = Timers[Index];
+        const double Current = Now(Entry.bUnscaled);
+        if (Current < Entry.Next || (!Entry.bUnscaled && World->IsPaused()))
+            continue;
+        if (Entry.bLoop)
+            Entry.Next = Current + Entry.Interval;
+        const FEntry Item = Entry;
+        const auto* Env = UnLuaNova::FLuaEnv::GetAll().FindRef(Item.State);
+        if (!Env || Env->IsClosing())
+        {
+            Remove(Item.Handle);
+            continue;
+        }
 
         if (Item.State && Item.CallbackRef >= 0)
         {
