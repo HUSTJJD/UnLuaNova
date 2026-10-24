@@ -140,9 +140,13 @@ public:
  *
  * bReplicates in the constructor rather than in a blueprint: the C/S spec spawns this in a
  * bare PIE world, with no level and no blueprint to set the flag on.
+ *
+ * It implements IUnLuaNovaInterface because nothing else would bind it: ULuaModuleLocator
+ * returns an empty module name for a class that does not, and an unbound actor has no Lua
+ * side for an RPC to arrive in.
  */
 UCLASS()
-class UNLUANOVATESTSUITE_API AUnLuaNovaTestNetActor : public AActor
+class UNLUANOVATESTSUITE_API AUnLuaNovaTestNetActor : public AActor, public IUnLuaNovaInterface
 {
     GENERATED_BODY()
 
@@ -151,10 +155,30 @@ public:
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+    virtual FString GetModuleName_Implementation() const override
+    {
+        return TEXT("Tests.Net.NetActor");
+    }
+
     /** Replicated by the engine, not by Lua - the control in a C/S test. If this does not
      *  arrive on the client, the session is broken and nothing Lua does can be judged. */
     UPROPERTY(Replicated)
     int32 EngineReplicatedInt = 0;
+
+    /**
+     * "<RpcName>:<Arg>|" per handler invocation, appended by the Lua side.
+     *
+     * A log rather than a "last call" field because a multicast runs on both peers and a
+     * server RPC does not: one slot would be overwritten by whichever arrived last and
+     * "did the client RPC run on the server?" (it must not) would be unanswerable.
+     * A UPROPERTY rather than a Lua table so the test can read it straight off each peer's
+     * actor, which is what makes "ran on the server and not on the client" measurable.
+     */
+    UPROPERTY()
+    FString CallLog;
+
+    UPROPERTY()
+    int32 CallCount = 0;
 
     UPROPERTY()
     TObjectPtr<UUnLuaNovaReplicationComponent> Replication;

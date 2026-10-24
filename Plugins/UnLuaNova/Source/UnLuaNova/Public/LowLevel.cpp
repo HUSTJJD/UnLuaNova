@@ -165,8 +165,28 @@ namespace UnLuaNova
             if (!OwnerClass)
                 return true;
 
-            if (Object->IsA(OwnerClass))
+            // UObject::IsA() walks the super chain, and this runs on every property read
+            // and write. The answer is a pure function of (object class, property), and a
+            // script touching the same field on the same class - a loop, a Tick, a
+            // per-frame update - asks the identical question every time. Keeping the last
+            // one turns that walk into two comparisons.
+            //
+            // thread_local, not static: several environments can run the check, and a
+            // torn read across them would let a wrong entry answer "true" for a pair that
+            // was never checked.
+            static thread_local UClass* LastObjectClass = nullptr;
+            static thread_local FProperty* LastProperty = nullptr;
+
+            UClass* ObjectClass = Object->GetClass();
+            if (LastObjectClass == ObjectClass && LastProperty == Property)
                 return true;
+
+            if (Object->IsA(OwnerClass))
+            {
+                LastObjectClass = ObjectClass;
+                LastProperty = Property;
+                return true;
+            }
 
             luaL_error(L, TCHAR_TO_UTF8(*FString::Printf(TEXT("Access property from invalid owner. %s should be a %s."), *Object->GetName(), *OwnerClass->GetName())));
             return false;

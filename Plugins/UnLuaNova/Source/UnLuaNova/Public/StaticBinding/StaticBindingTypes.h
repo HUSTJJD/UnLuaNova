@@ -17,6 +17,13 @@ class FProperty;
 class UFunction;
 class UClass;
 
+struct lua_State;
+
+// Declared here rather than pulling LuaBackend.h into every generated binding file: the
+// generator emits these tables into the project's own module, and this header is the only
+// thing it has to include. Identical to lua.h's own typedef, so including both is fine.
+typedef int (*lua_CFunction)(lua_State* L);
+
 /** Coarse property category. Mirrors what FPropertyDesc dispatches on at runtime. */
 enum class EStaticPropKind : uint8
 {
@@ -120,6 +127,24 @@ struct FStaticFuncBinding
 
 	/** Resolved on first registration. */
 	UFunction* Function = nullptr;
+
+	/** Category of the return value, or Unknown when the function returns nothing. */
+	EStaticPropKind ReturnKind = EStaticPropKind::Unknown;
+
+	/** Resolved on first registration. Null for a void function. */
+	FProperty* ReturnProperty = nullptr;
+
+	/**
+	 * Generated compile-time marshaller, or null when the signature is not eligible.
+	 *
+	 * Non-null means the metatable gets this C function directly: no FFunctionDesc is
+	 * built, no FPropertyDesc is consulted, and the whole reflective call path is
+	 * skipped. The generator only fills this in for signatures it can marshal without
+	 * reflection, so a null here costs nothing and simply keeps the existing path.
+	 *
+	 * @see UnLuaNova::StaticFuncThunk in StaticBinding/StaticBindingThunk.h
+	 */
+	lua_CFunction Thunk = nullptr;
 };
 
 /** A pre-resolved UCLASS / UScriptStruct. `TypeName` matches UnLuaNova's metatable name. */

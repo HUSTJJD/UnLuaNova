@@ -19,6 +19,7 @@
 #include "Editor.h"
 #include "BlueprintEditorModule.h"
 #include "UnLuaNovaIntelliSenseGenerator.h"
+#include "Commandlets/UnLuaNovaStaticBindingGenerator.h"
 #include "UnLuaNova.h"
 #include "UnLuaNovaBase.h"   // LogUnLuaNova
 #include "UnLuaNovaSettings.h"   // 特性开关（bDebugAdapter / DebugAdapterPort）
@@ -114,6 +115,7 @@ private:
         AnimationBlueprintToolbar->Initialize();
         FUnLuaNovaIntelliSenseGenerator::Get()->Initialize();
         MaybeAutoGenerateIntelliSense();
+        MaybeAutoGenerateStaticBinding();
 
         IMainFrameModule& MainFrameModule = FModuleManager::LoadModuleChecked<IMainFrameModule>(TEXT("MainFrame"));
         MainFrameModule.OnMainFrameCreationFinished().AddRaw(this, &FUnLuaNovaEditorModule::OnMainFrameCreationFinished);
@@ -191,6 +193,75 @@ private:
 
         UE_LOG(LogUnLuaNova, Display, TEXT("IntelliSense: first-time generation into %s"), *OutputDir);
         Generator->UpdateAll();
+    }
+
+    /**
+     * 静态绑定产物的自动维护。
+     *
+     * 和 IntelliSense 那套同一个形状（ini 开关 + 启动检查），判据换成了**指纹**：
+     * 产物里存了一份类型集合的 CRC，启动时重算一遍。不同就说明有类型增删，重新生成。
+     *
+     * 这里必须说清一件事，否则日志会被误读成"开了没生效"：
+     * 产物是 .cpp，写完盘之后还要 UBT 编一次才进二进制。所以自动生成之后，
+     * thunk **本次启动还不会生效** —— 要下次编译之后。属性/函数的描述表部分在产物
+     * 编进去之前也用不上。这一点在日志里直接写出来，不让人猜。
+     *
+     * 另外签名变化（不是类型增删）指纹抓不到，那是故意的：逐类型逐成员哈希等于每次
+     * 启动都把整个反射遍历一遍。签名变了由 FStaticBindingRegistry::Resolve() 兜底 ——
+     * 它注册时会用真实 FProperty 复算 kind，不符就停用 thunk，退化而不是出错。
+     */
+    void MaybeAutoGenerateStaticBinding() const
+    {
+        const auto* Settings = GetDefault<UUnLuaNovaEditorSettings>();
+        if (!Settings || !Settings->bStaticBinding || !Settings->bAutoGenerateStaticBinding)
+            return;
+
+        FStaticBindingGenerateOptions Options;
+        Options.OutputDir = Settings->StaticBindingOutputDir;
+        Options.Modules = Settings->StaticBindingModules;
+
+        switch (Settings->StaticBindingSelection)
+        {
+        case EUnLuaNovaStaticBindingSelection::Modules: Options.Selection = EStaticBindingSelection::Modules; break;
+        case EUnLuaNovaStaticBindingSelection::All:     Options.Selection = EStaticBindingSelection::All; break;
+        default:                                        Options.Selection = EStaticBindingSelection::ExportedReflected; break;
+        }
+
+        const FString File = FPaths::Combine(
+            Options.OutputDir.IsEmpty() ? UnLuaNova::GetDefaultStaticBindingOutputDir() : Options.OutputDir,
+            TEXT("UnLuaNovaStaticBinding_Generated.cpp"));
+
+        const bool bExists = IFileManager::Get().FileExists(*File);
+
+        if (bExists)
+        {
+            const FString Stored = UnLuaNova::ReadStaticBindingFingerprint(File);
+            const FString Current = UnLuaNova::ComputeStaticBindingFingerprint(Options);
+
+            // An unreadable or marker-less file counts as up to date: regenerating on every
+            // start because a header could not be parsed would be worse than a stale file.
+            if (Stored.IsEmpty() || Stored == Current)
+                return;
+
+            UE_LOG(LogUnLuaNova, Display,
+                TEXT("StaticBinding: type set changed (%s -> %s), regenerating."), *Stored, *Current);
+        }
+        else
+        {
+            UE_LOG(LogUnLuaNova, Display, TEXT("StaticBinding: no generated file yet, generating into %s"), *File);
+        }
+
+        const FStaticBindingGenerateResult Result = UnLuaNova::GenerateStaticBindings(Options);
+        if (Result.NumTypes == 0)
+        {
+            UE_LOG(LogUnLuaNova, Warning, TEXT("StaticBinding: generation produced nothing (%s)"), *Result.Message);
+            return;
+        }
+
+        UE_LOG(LogUnLuaNova, Display,
+            TEXT("StaticBinding: wrote %s (%d types, thunk coverage %d/%d). "
+                 "It is C++ - rebuild once for it to take effect; until then the reflective path stays in use."),
+            *Result.OutputFile, Result.NumTypes, Result.NumThunks, Result.NumFuncs);
     }
 
     void OnMainFrameCreationFinished(TSharedPtr<SWindow> InRootWindow, bool bIsNewProjectWindow)

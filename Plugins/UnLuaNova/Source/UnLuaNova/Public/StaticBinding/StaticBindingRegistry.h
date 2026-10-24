@@ -40,6 +40,16 @@ public:
 
 	int32 NumRegisteredTypes() const { return Types.Num(); }
 
+	/**
+	 * How much of the registered surface actually got a generated thunk.
+	 *
+	 * A thunk is what removes the reflective call entirely, so this - not the number of
+	 * registered types - is the figure that says whether running the generator bought
+	 * anything. Reported by the benchmark spec so it lands next to the timings instead of
+	 * only in the generator's log.
+	 */
+	void GetThunkCoverage(int32& OutTypes, int32& OutFuncs, int32& OutThunks) const;
+
 	/** Called by FUnLuaNovaModule on shutdown. */
 	void Clear();
 

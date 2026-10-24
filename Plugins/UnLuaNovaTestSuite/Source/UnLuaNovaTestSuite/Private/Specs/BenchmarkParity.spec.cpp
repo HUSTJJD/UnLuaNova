@@ -37,6 +37,7 @@
 #include "Misc/FileHelper.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformTime.h"
+#include "StaticBinding/StaticBindingRegistry.h"
 #include "Perfs/UnLuaNovaBenchmarkProxy.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -156,6 +157,22 @@ void FBenchmarkParitySpec::Define()
         MeasureChunk(TEXT("TestGetVectorVar"), ParityIterations,
             TEXT("local v for i = 1, 100000 do v = SpecProxy.COM end SpecResult[7] = v"));
 
+        // ---- index only -----------------------------------------------------
+        // slua publishes this group separately (TestIndexEmptyCall, ...) and it is where
+        // it beats UnLua by ~4x. It measures the resolve half of a call - name to
+        // callable - with no call afterwards, so it isolates the metatable cache from
+        // everything the call itself costs. Indexing the same field 100k times is the
+        // steady state after the first access has populated the cache, which is what a
+        // real script does; a miss here would show up as a much larger number.
+        MeasureChunk(TEXT("TestIndexEmptyCall"), ParityIterations,
+            TEXT("local f for i = 1, 100000 do f = SpecProxy.NOP end SpecResult[9] = f"));
+
+        MeasureChunk(TEXT("TestIndexGetIntCall"), ParityIterations,
+            TEXT("local f for i = 1, 100000 do f = SpecProxy.GetMeshID end SpecResult[10] = f"));
+
+        MeasureChunk(TEXT("TestIndexGetBoolCall"), ParityIterations,
+            TEXT("local f for i = 1, 100000 do f = SpecProxy.Raycast end SpecResult[11] = f"));
+
         // ---- containers ------------------------------------------------------
         MeasureChunk(TEXT("TestAddArrayElement"), ParityContainerIterations,
             TEXT("for i = 1, 20000 do local t = SpecProxy.Indices t:Add(i) end"));
@@ -198,6 +215,16 @@ void FBenchmarkParitySpec::Define()
 
         TArray<FString> Lines;
         Lines.Add(TEXT("Case,Iterations,TotalMs,PerOpUs"));
+
+        // Not timings, but they belong in the same file: a row that got faster because a
+        // thunk replaced the reflective call is only interpretable next to the number
+        // that says how many functions have one.
+        int32 CoverageTypes = 0, CoverageFuncs = 0, CoverageThunks = 0;
+        FStaticBindingRegistry::Get().GetThunkCoverage(CoverageTypes, CoverageFuncs, CoverageThunks);
+        Lines.Add(FString::Printf(TEXT("Meta.StaticBindingTypes,0,0,%d"), CoverageTypes));
+        Lines.Add(FString::Printf(TEXT("Meta.StaticBindingFuncs,0,0,%d"), CoverageFuncs));
+        Lines.Add(FString::Printf(TEXT("Meta.StaticBindingThunks,0,0,%d"), CoverageThunks));
+
         for (const FRow& Row : Rows)
         {
             const double PerOpUs = Row.Iterations > 0 ? (Row.TotalMs * 1000.0) / Row.Iterations : 0.0;
@@ -209,8 +236,8 @@ void FBenchmarkParitySpec::Define()
             FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
         TEST_TRUE(bWritten);
 
-        // 15 slua 同名行（13 调用 / 属性 + 2 容器）加 2 行 ProcessEvent 裸开销参照。
-        TEST_EQUAL(Rows.Num(), 17);
+        // 18 slua 同名行（13 调用 / 属性 + 3 索引 + 2 容器）加 2 行 ProcessEvent 裸开销参照。
+        TEST_EQUAL(Rows.Num(), 20);
         for (const FRow& Row : Rows)
         {
             TestTrue(*FString::Printf(TEXT("%s 跑了 %d 次"), *Row.Case, Row.Iterations), Row.Iterations > 0);

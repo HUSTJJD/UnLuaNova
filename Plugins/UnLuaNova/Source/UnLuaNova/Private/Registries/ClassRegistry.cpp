@@ -118,7 +118,23 @@ namespace UnLuaNova
         int Type = luaL_getmetatable(L, MetatableName);
         if (Type == LUA_TTABLE)
         {
-            FClassDesc* Ret = Find(MetatableName);
+            // Read the descriptor straight off the metatable rather than re-deriving it
+            // from the name. Find(const char*) constructs an FName on every call - a
+            // UTF-8 -> TCHAR conversion plus a hash lookup - and this is reached on every
+            // UObject push. PushMetatable() stores the pointer when it builds a
+            // metatable, so the common case needs no string work at all.
+            FClassDesc* Ret = nullptr;
+            lua_pushstring(L, "ClassDesc");
+            if (lua_rawget(L, -2) == LUA_TLIGHTUSERDATA)
+                Ret = (FClassDesc*)lua_touserdata(L, -1);
+            lua_pop(L, 1);
+
+            // Metatables this registry did not build (FObjectRegistry registers plain
+            // ones for types with no UClass behind them) have no descriptor, so the name
+            // lookup stays as the fallback.
+            if (!Ret)
+                Ret = Find(MetatableName);
+
             if (Ret && Ret->IsClass() && !Ret->IsStructValid())
             {
                 // unregister invalid metatable

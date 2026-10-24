@@ -27,6 +27,7 @@
 #include "LuaFunction.h"
 #include "UnLuaNovaManager.h"
 #include "UnLuaNovaNet.h"
+#include "UnLuaNovaNetPayload.h"
 #include "UnLuaNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 #include "UObject/UnrealType.h"
@@ -293,6 +294,61 @@ void FNetSpec::Define()
             const TArray<UnLuaNova::FLuaRepDecl>& Decls =
                 UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(UObject::StaticClass());
             TEST_EQUAL(Decls.Num(), 0);
+        });
+    });
+
+    Describe(TEXT("分桶布局"), [this]()
+    {
+        // The layout is what both peers derive locally to turn an array element back into a
+        // Lua field, so it is the one part of the new payload a single process can settle
+        // completely: same declarations in, same (bucket, index) addresses out.
+
+        It(TEXT("字段按类型落进桶，同类型按声明顺序拿下标"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            TArray<UnLuaNova::FLuaRepDecl> Decls;
+            Decls.Add({ FName(TEXT("HP")),   UnLuaNova::ELuaNetParamType::Float,  COND_None });
+            Decls.Add({ FName(TEXT("Gold")), UnLuaNova::ELuaNetParamType::Int,    COND_None });
+            Decls.Add({ FName(TEXT("Mana")), UnLuaNova::ELuaNetParamType::Float,  COND_None });
+
+            TArray<UnLuaNova::FLuaNetSlot> Slots;
+            UnLuaNova::BuildSlots(Decls, Slots);
+
+            TEST_EQUAL(Slots.Num(), 3);
+            if (Slots.Num() != 3)
+                return;
+
+            TEST_TRUE(Slots[0].Bucket == UnLuaNova::ELuaNetBucket::Float);
+            TEST_EQUAL(Slots[0].Index, 0);
+            TEST_TRUE(Slots[1].Bucket == UnLuaNova::ELuaNetBucket::Int);
+            TEST_EQUAL(Slots[1].Index, 0);
+            // Second Float, so index 1 inside the Float bucket - not 2.
+            TEST_TRUE(Slots[2].Bucket == UnLuaNova::ELuaNetBucket::Float);
+            TEST_EQUAL(Slots[2].Index, 1);
+
+            int32 Counts[int32(UnLuaNova::ELuaNetBucket::Max)];
+            UnLuaNova::CountSlots(Slots, Counts);
+            TEST_EQUAL(Counts[int32(UnLuaNova::ELuaNetBucket::Float)], 2);
+            TEST_EQUAL(Counts[int32(UnLuaNova::ELuaNetBucket::Int)], 1);
+            TEST_EQUAL(Counts[int32(UnLuaNova::ELuaNetBucket::String)], 0);
+        });
+
+        It(TEXT("SchemaVersion 一致当且仅当布局一致"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto Make = [](const TCHAR* First, const TCHAR* Second)
+            {
+                TArray<UnLuaNova::FLuaRepDecl> Decls;
+                Decls.Add({ FName(First),  UnLuaNova::ELuaNetParamType::Float, COND_None });
+                Decls.Add({ FName(Second), UnLuaNova::ELuaNetParamType::Int,   COND_None });
+                return UnLuaNova::ComputeSchemaVersion(Decls);
+            };
+
+            // Same declarations, same fingerprint - this is what two peers running the same
+            // module have to agree on before any value is interpreted.
+            TEST_EQUAL(Make(TEXT("HP"), TEXT("Gold")), Make(TEXT("HP"), TEXT("Gold")));
+
+            // A reordering is a different layout: the index inside a bucket is the position
+            // in the declaration list, so swapping two fields would swap their values.
+            TEST_TRUE(Make(TEXT("HP"), TEXT("Gold")) != Make(TEXT("Gold"), TEXT("HP")));
         });
     });
 }

@@ -58,8 +58,6 @@ namespace UnLuaNovaTestSuite
         void LoadMap();
 
     private:
-        /** How many PIE worlds to wait for. Server + clients, or just the one. */
-        int32 ExpectedWorlds = 1;
         // How long a session is allowed to take before this gives up on it. Generous on
         // purpose: starting PIE compiles blueprints and can take a second or two, and a
         // false alarm here turns into a failed test rather than a slow one.
@@ -72,6 +70,27 @@ namespace UnLuaNovaTestSuite
         bool bEndingPreviousSession = false;
         double WaitDeadline = 0.0;
         TUniquePtr<FWaitForSpecifiedMapToLoadCommand> WaitForMapToLoad;
+    };
+
+    // Ends a PIE session and waits until it is really gone.
+    //
+    // FEndPlayMapCommand is a no-op on UE5 - it exists for the UE4 code path - so a test
+    // that wants PIE to be over when it finishes has nothing to call. Ending here rather
+    // than leaving it to the next test matters for anything that cleans up per-session
+    // state: the Lua overrides are torn down when the session ends, so a test that restores
+    // them wants the session gone first, not merely requested to stop.
+    class FEndPieSessionCommand : public IAutomationLatentCommand
+    {
+    public:
+        virtual bool Update() override;
+
+    private:
+        bool bRequested = false;
+        double WaitDeadline = 0.0;
+        // Same order of magnitude as FOpenMapLatentCommand's: tearing a session down is
+        // normally a frame or two, and the bound is only here so a stuck teardown cannot
+        // wedge the whole suite.
+        static constexpr double WaitTimeoutSeconds = 60.0;
     };
 
     class FEndPlayMapCommand : public IAutomationLatentCommand

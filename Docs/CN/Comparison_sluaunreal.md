@@ -27,6 +27,11 @@ description: "逐项对照 Tencent/sluaunreal 的能力与实现路径，判断�
 * **slua 有三处做法不该抄** —— 运行时给 UClass 动态加 UFunction、自研 Profiler 前端、
   libclang 前向分析。我们在这三处各有更好的底座。
 
+> 本文问的是"对手有什么、我们缺什么"。**第二轮对标换了方向**，问的是
+> "我们已经宣称拥有的东西成色如何" —— 结论是短板已经不在功能丰富度，而在
+> 默认配置下的成色与工程化（Luau 上 userdata 永不回收、性能数字无产物、
+> CI 不跑测试）。见[对标复盘：现状体检与改进方向](Benchmark_Review.md)。
+
 ---
 
 ## 一、slua-unreal 的形态
@@ -387,8 +392,8 @@ slua 的 `LuaExtensionMethod.cpp` 能把非蓝图函数挂到 UClass 上（READM
 | **P0** | 显式 `GC()` 可分片 + `lua.gc slice/budget/mult/limit/stats` | 小 | 无 | 分片后单帧耗时显著低于整轮 | ✅ `UnLuaNova.API.GcScheduler`（默认仍是 `Automatic`） |
 | **P1** | ~~G1 一等 UObject：`ALua*` 平行基类~~ | — | — | — | ❌ **不做**：前提证伪，见 G1 |
 | **P1** | C++ 类型化调用 Lua：`CallLuaFunction<RET>` | 中 | 无 | 按对象调用并取回类型化返回值 | ✅ `UnLuaNova.API.Overrider` |
-| **P2** | G2a Lua 声明 RPC | 大 | 无 | C/S PIE 下三类 RPC 行为正确 | ✅ 代码已落地（`UnLuaNova.API.Net`）；**跨端行为待 C/S PIE 验证** |
-| **P2** | G2b/c 复制属性 + 条件复制 | 大 | G2a | `COND_OwnerOnly` 等条件生效 | ⚠️ 已落地但为**整体发送、条件单一**，见 [Lua 声明式网络](LuaNetworking.md) |
+| **P2** | G2a Lua 声明 RPC | 大 | 无 | C/S PIE 下三类 RPC 行为正确 | ✅ 已落地并有自动 C/S 测试 `UnLuaNova.API.Net.ClientServer`（监听服务器 + 1 客户端 PIE，断言三种 RPC 各自在正确的端上执行）。**仍未覆盖：跨进程 `RPCId` 一致** —— 单进程里两端共用同一个 UClass，证明不了 |
+| **P2** | G2b/c 复制属性 + 条件复制 | 大 | G2a | `COND_OwnerOnly` 等条件生效 | ⚠️ 已落地；payload 已从"字符串整体发送"改成**按类型分桶 + push model**，条件粒度是**按类型**而非逐字段。见 [Lua 声明式网络](LuaNetworking.md) |
 | **P2** | G5 静态绑定生成 thunk | 中 | P0 benchmark | thunk 命中率 + 调用耗时收敛 | ⬜ 待做（先复测再决定） |
 | **P3** | G4 Profiler 聚合导出与落盘 | 小 | 无 | `lua.profiler dump` 出 CSV | ✅ |
 | **P3** | G6 扩展方法 ／ `import()` 语法糖 | 小 | 无 | 各一条用例 | ⬜ 待做 |

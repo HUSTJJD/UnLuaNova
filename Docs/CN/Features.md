@@ -94,8 +94,10 @@ description: "UnLuaNova 的能力总览，以及相对 UnLua v2.3.6 的增量"
 * 实现复用 `FLuaOverrides::Override` 已有的"新增函数"分支（`bAddNew`），
   PIE 退出由 `RestoreOverrides` 自动还原
 * 参数类型与复制条件一律用**字符串**声明，因此声明层不需要 UHT 参与
-* 已知边界：RPC 的跨端行为待 C/S PIE 验证（`RPCId`）；复制属性整体发送、条件单一。
-  详见[Lua 声明式网络](LuaNetworking.md)
+* 自动化 C/S 测试（`UnLuaNova.API.Net.ClientServer`）：自动开一个监听服务器 + 1 客户端的
+  PIE 会话，断言三种 RPC 各自在正确的端上执行、参数原样过线、Lua 声明的复制字段到达客户端
+* 已知边界：跨进程 `RPCId` 一致仍未验证（单进程 C/S PIE 里两端共用同一个 UClass，
+  id 天然相同，证明不了两个进程各自建一份的情况）。详见[Lua 声明式网络](LuaNetworking.md)
 
 ### 从 C++ 调用 Lua 成员函数
 

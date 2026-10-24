@@ -23,6 +23,9 @@
 #include "Containers/LuaMap.h"
 #include "ReflectionUtils/FieldDesc.h"
 #include "ReflectionUtils/PropertyDesc.h"
+#include "ReflectionUtils/StaticPropDesc.h"
+#include "StaticBinding/StaticBindingRegistry.h"
+#include "StaticBinding/StaticBindingThunk.h"
 
 #ifdef __cplusplus
 #if !LUA_COMPILE_AS_CPP
@@ -551,7 +554,22 @@ static void PushFTextElement(lua_State *L, FTextProperty *Property, void *Value)
 static void PushObjectElement(lua_State *L, FObjectPropertyBase *Property, void *Value)
 {
     UObject *Object = Property->GetObjectPropertyValue(Value);
-    PushObjectCore(L, Object);
+
+    // Through the object registry, not PushObjectCore(): the registry keeps one userdata
+    // per UObject in a weak table, so reading the same object property twice yields the
+    // same Lua value (they compare equal, and a table used as a key stays one key).
+    // PushObjectCore() builds a fresh userdata every time, and it also rebuilt the
+    // metatable name - an FString::Printf or a GetPathName() - on every single read.
+    if (UNLIKELY(!UnLuaNova::IsUObjectValid(Object)))
+    {
+        // A released object used to be handed out as a fresh userdata wrapping the dead
+        // pointer. Keep doing that: only live objects go through the registry, which
+        // raises instead, and changing an error path is not what this change is for.
+        PushObjectCore(L, Object);
+        return;
+    }
+
+    UnLuaNova::PushUObject(L, Object, false);
 }
 
 /**
@@ -561,7 +579,14 @@ static void PushInterfaceElement(lua_State *L, FInterfaceProperty *Property, voi
 {
     const FScriptInterface &Interface = Property->GetPropertyValue(Value);
     UObject *Object = Interface.GetObject();
-    PushObjectCore(L, Object);
+
+    if (UNLIKELY(!UnLuaNova::IsUObjectValid(Object)))
+    {
+        PushObjectCore(L, Object);
+        return;
+    }
+
+    UnLuaNova::PushUObject(L, Object, false);
 }
 
 /**
@@ -900,6 +925,63 @@ static void PushField(lua_State *L, TSharedPtr<FFieldDesc> Field)
     }
 }
 
+/**
+ * Try to serve a field from the build-time static binding instead of reflection.
+ *
+ * Returns false and leaves the stack untouched when there is nothing pre-resolved, so
+ * the caller falls through to FClassDesc::RegisterField() exactly as before. On success
+ * one value is pushed:
+ *
+ *   - an eligible function  -> the generated thunk as a closure over its FStaticFuncBinding.
+ *                              No FFunctionDesc is created and no FPropertyDesc is touched;
+ *                              the marshalling is compiled per signature.
+ *   - a property            -> a FStaticPropDesc, which reads by offset and pushes by type.
+ *
+ * This runs on the miss path only (GetField() consults the metatable first and the result
+ * is cached into it), so the cost of consulting the registry is paid once per class per
+ * field - the same deal as the reflective path, but what gets cached is cheaper to run.
+ */
+static bool TryPushStaticBindingField(lua_State* L, FClassDesc* ClassDesc, const char* FieldName)
+{
+    if (!ClassDesc || !FieldName)
+        return false;
+
+    const UStruct* Struct = ClassDesc->AsStruct();
+    if (!Struct)
+        return false;
+
+    const FStaticTypeBinding* TypeBinding = FStaticBindingRegistry::Get().Find(Struct);
+    if (!TypeBinding)
+        return false;
+
+    const FName Key(FieldName);
+
+    if (const FStaticFuncBinding* Func = FStaticBindingRegistry::Get().FindFunc(TypeBinding, Key))
+    {
+        // No thunk -> let FFunctionDesc handle it; it still picks up the pre-resolved
+        // descriptor and takes CallUEFast, which is the best reflective path we have.
+        if (!Func->Thunk)
+            return false;
+
+        lua_pushlightuserdata(L, (void*)Func);
+        lua_pushcclosure(L, Func->Thunk, 1);
+        return true;
+    }
+
+    if (const FStaticPropBinding* Prop = FStaticBindingRegistry::Get().FindProp(TypeBinding, Key))
+    {
+        if (!Prop->Property)
+            return false;
+
+        const auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);
+        TSharedPtr<UnLuaNova::ITypeOps> Desc = MakeShared<FStaticPropDesc>(Prop->Property, Prop);
+        Env.GetObjectRegistry()->Push(L, Desc);
+        return true;
+    }
+
+    return false;
+}
+
 static void GetFieldInternal(lua_State* L) 
 {
     lua_pop(L, 1);
@@ -923,6 +1005,18 @@ static void GetFieldInternal(lua_State* L)
         luaL_error(L, "class %s is not registered", ClassName);
         return;
     }
+
+    // Pre-resolved descriptor wins over reflection. Whatever it pushes is cached into
+    // the metatable exactly like the reflective result, so GetField()'s rawget serves it
+    // from here on.
+    if (TryPushStaticBindingField(L, ClassDesc, FieldName))
+    {
+        lua_pushvalue(L, 2);                // key
+        lua_pushvalue(L, -2);               // Property / closure
+        lua_rawset(L, -4);
+        return;
+    }
+
     TSharedPtr<FFieldDesc> Field = ClassDesc->RegisterField(FieldName, ClassDesc);
     if (Field && Field->IsValid())
     {

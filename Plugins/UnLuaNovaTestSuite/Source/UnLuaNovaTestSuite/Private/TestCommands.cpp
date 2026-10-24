@@ -58,8 +58,7 @@ namespace UnLuaNovaTestSuite
         : MapName(MapName), bForceReload(bForceReload)
         , NumClients(InNumClients), PlayNetMode(InPlayNetMode)
     {
-        // Server world + one per client. Standalone is just the one.
-        ExpectedWorlds = (PlayNetMode == EPlayNetMode::PIE_Standalone) ? 1 : (InNumClients + 1);
+        NumClients = FMath::Max(NumClients, 1);
     }
 
     FPieNetWorlds GetPieNetWorlds()
@@ -87,21 +86,6 @@ namespace UnLuaNovaTestSuite
         }
 
         return Result;
-    }
-
-    static int32 CountPieWorlds()
-    {
-        int32 Count = 0;
-        if (!GEngine)
-            return Count;
-
-        for (const FWorldContext& Context : GEngine->GetWorldContexts())
-        {
-            if (Context.WorldType == EWorldType::PIE && Context.World())
-                ++Count;
-        }
-
-        return Count;
     }
 
     bool FOpenMapLatentCommand::Update()
@@ -138,12 +122,20 @@ namespace UnLuaNovaTestSuite
         // world", so a session that is still shutting down cannot stand in for it.
         //
         // For a C/S session this is necessary but not sufficient: every peer loads the same
-        // map, so the first one to finish satisfies the name wait while the clients are still
+        // map, so the first one to finish satisfies the name wait while the others are still
         // coming up. Assertions made against a client that has not joined yet fail for a
         // reason that has nothing to do with what is being tested, so wait for them too.
+        //
+        // Classified by role rather than counted: the count depends on how the editor reads
+        // "number of players" for a listen server, which is not the same number across
+        // versions, and what a networked test actually needs is "a server and a client".
         if (WaitForMapToLoad->Update())
         {
-            if (CountPieWorlds() >= ExpectedWorlds)
+            if (PlayNetMode == EPlayNetMode::PIE_Standalone)
+                return true;
+
+            const FPieNetWorlds Peers = GetPieNetWorlds();
+            if (Peers.Server && Peers.Clients.Num() > 0)
                 return true;
         }
 
@@ -255,6 +247,34 @@ namespace UnLuaNovaTestSuite
         // session that is still ending would otherwise be accepted as "the map is loaded".
         WaitForMapToLoad = MakeUnique<FWaitForSpecifiedMapToLoadCommand>(MapName);
         WaitDeadline = FPlatformTime::Seconds() + WaitTimeoutSeconds;
+#endif
+    }
+
+    bool FEndPieSessionCommand::Update()
+    {
+#if !WITH_EDITOR
+        return true;
+#else
+        if (!bRequested)
+        {
+            bRequested = true;
+            WaitDeadline = FPlatformTime::Seconds() + WaitTimeoutSeconds;
+            if (IsPIERunning() && GEditor)
+                GEditor->EndPlayMap();
+            return false;
+        }
+
+        if (!IsPIERunning())
+            return true;
+
+        if (FPlatformTime::Seconds() > WaitDeadline)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("PIE did not finish ending after %.0fs; the test moves on, but per-session cleanup may have run against a live session."),
+                WaitTimeoutSeconds);
+            return true;
+        }
+
+        return false;
 #endif
     }
 

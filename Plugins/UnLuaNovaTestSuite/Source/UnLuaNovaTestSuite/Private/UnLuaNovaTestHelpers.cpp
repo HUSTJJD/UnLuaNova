@@ -20,6 +20,11 @@ AUnLuaNovaTestNetActor::AUnLuaNovaTestNetActor()
 {
     bReplicates = true;
 
+    // Spawned at run time into an empty map, so there is no guarantee the client's view
+    // point is anywhere near it. Without this the relevance check can leave the actor - and
+    // everything the test wants to assert on - on the server only.
+    bAlwaysRelevant = true;
+
     // Created unconditionally rather than only when the Lua module declares fields: the
     // component decides for itself at BeginPlay whether there is anything to do, and a
     // component added on demand would have to be added from inside a bind that may never

@@ -172,6 +172,32 @@ bDataDrivenBinding=true
 
 *注：重启编译后生效*
 
+### 静态绑定
+
+**默认开启。** 构建期为指定的 UE 类型生成绑定表：属性按 `Offset + Kind` 直读直写
+（跳过 `FPropertyDesc` 的虚编组与 `TWeakFieldPtr` 校验），函数走编译期定型的 thunk
+（类型作为模板实参，编组退化成几条 store）。
+
+生成是**自动**的：编辑器启动会比对产物里的类型集合指纹，缺失或类型有增删就重新生成，
+不需要手动跑 Commandlet。
+
+相关键（都在 `[/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]`）：
+
+| 键 | 默认 | 作用 |
+|:---|:---|:---|
+| `bStaticBinding` | `True` | 总开关 |
+| `bAutoGenerateStaticBinding` | `True` | 产物缺失或过期时自动重新生成 |
+| `StaticBindingSelection` | `ExportedReflected` | 生成范围：`ExportedReflected` / `Modules` / `All` |
+| `StaticBindingModules` | 空 | `Selection=Modules` 时的包名单 |
+| `StaticBindingOutputDir` | 空 | 产物目录，默认 `Source/<工程模块>/Generated` |
+
+默认范围 `ExportedReflected` 只覆盖插件本来就静态导出的那十来个类型（`UObject`、
+`UClass`、`UWorld` 与数学结构），清单从运行时导出注册表读取，不硬编码。
+
+*注：产物是 C++，生成之后要**重新编译一次**才生效。默认范围下这次重编译很轻；把范围
+切到 `All` 之后类型增删会频繁触发大重编译，那种情况下更适合关掉自动、由 CI 生成。
+详见[静态导出绑定](StaticExportBinding.md)。*
+
 ### 启用FText支持
 
 默认关闭，默认 `FText` 类型是以 `lua string` 的方式传递的，会丢失一些多语言信息。开启这个选项后 `FText` 会以C++对象的方式传递，以得到更好的多语言支持。

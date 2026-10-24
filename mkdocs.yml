@@ -59,6 +59,8 @@ nav:
           - 功能清单: CN/Features.md
           - 相对 UnLua：原理与优势: CN/WhyUnLuaNova.md
           - 对标 slua-unreal：差距与吸收: CN/Comparison_sluaunreal.md
+          - 对标复盘：现状体检与改进方向: CN/Benchmark_Review.md
+          - 性能对标 slua：它为什么快: CN/Performance_Parity_slua.md
       - 编程:
           - 编程指南: CN/UnLuaNova_Programming_Guide.md
           - Luau 后端: CN/Luau.md

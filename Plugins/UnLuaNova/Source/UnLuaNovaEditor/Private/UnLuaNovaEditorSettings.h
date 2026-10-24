@@ -36,6 +36,21 @@ enum class EHotReloadMode : uint8
     Never
 };
 
+/** 静态绑定生成覆盖哪些类型。 */
+UENUM()
+enum class EUnLuaNovaStaticBindingSelection : uint8
+{
+    /** 插件默认静态导出的那批（UObject / UClass / UWorld + 数学结构）。
+     *  清单从运行时注册表读，不是硬编码。默认就是这个。 */
+    ExportedReflected UMETA(DisplayName = "默认静态导出的类型"),
+
+    /** StaticBindingModules 列出的包里的全部类型。 */
+    Modules UMETA(DisplayName = "指定模块"),
+
+    /** 全部类型，只排除 meta=(UnLuaNovaNoExport)。量大，编译会明显变慢。 */
+    All UMETA(DisplayName = "全部（opt-out）"),
+};
+
 // config=UnLuaNova：和运行时设置类指向**同一份** Config/DefaultUnLuaNova.ini（见上同款注释）。
 // 两个 section 同处一个文件：运行时与编辑器分属两个模块，但配置只该有一个入口。
 UCLASS(config=UnLuaNova, defaultconfig, meta=(DisplayName="UnLuaNovaEditor"))
@@ -84,6 +99,49 @@ public:
     /** Enable 'Overridden' support at lua runtime. (Requires restart to take effect) */
     UPROPERTY(config, EditAnywhere, Category = "Build")
     bool bEnableCallOverriddenFunction = true;
+
+    // ---- 静态绑定 ----------------------------------------------------------
+    //
+    // 构建期生成的静态绑定表（属性按 Offset+Kind 直读直写、函数走编译期定型的 thunk）。
+    // 生成是**自动**的：开着 bStaticBinding，编辑器启动时会比对产物指纹，缺了或过期
+    // 就重新生成，不需要人去跑 Commandlet。Commandlet 保留给 CI / 构建机。
+    //
+    // 默认开启：这是插件的核心性能特性，不该依赖用户想起来才生效。默认范围只有十来个
+    // 类型（见 StaticBindingSelection），所以"生成 -> 重编译一次"这条链路的代价很轻。
+    // 真正需要关掉的情况只有一个：把范围切到 All 之后，类型增删会频繁触发大重编译，
+    // 那时改由 CI 生成更合适。
+
+    /**
+     * 静态绑定总开关。开启后编辑器启动会自动检查并生成产物。
+     *
+     * 注意"生效"分两步：先自动生成（本次启动就写盘），再重编译一次（thunk 才进
+     * 二进制）。日志会明确说当前处在哪一步。
+     */
+    UPROPERTY(config, EditAnywhere, Category = "Build")
+    bool bStaticBinding = true;
+
+    /** 产物缺失或类型集合变化时自动重新生成。关掉就只在有产物时用，永不生成。 */
+    UPROPERTY(config, EditAnywhere, Category = "Build")
+    bool bAutoGenerateStaticBinding = true;
+
+    /**
+     * 生成覆盖哪些类型。默认 ExportedReflected —— 只生成插件本来就静态导出的那批
+     * （UObject / UClass / UWorld + FVector 等数学结构），十来个类型。
+     *
+     * /Script/Engine 一个包就是几千个类型，全量生成的产物会让编译明显变慢，而真正被
+     * 脚本在循环里反复摸的就是这十来个 —— 所以默认范围就停在它们身上。要更大的覆盖面
+     * 再切成 Modules 或 All。
+     */
+    UPROPERTY(config, EditAnywhere, Category = "Build")
+    EUnLuaNovaStaticBindingSelection StaticBindingSelection = EUnLuaNovaStaticBindingSelection::ExportedReflected;
+
+    /** StaticBindingSelection=Modules 时生效：只生成这些包里的类型。 */
+    UPROPERTY(config, EditAnywhere, Category = "Build")
+    TArray<FString> StaticBindingModules;
+
+    /** 产物目录。留空 = Source/<工程模块>/Generated —— 只有落在模块目录里才会被 UBT 编译。 */
+    UPROPERTY(config, EditAnywhere, Category = "Build")
+    FString StaticBindingOutputDir;
 
     /** Enable FText support at lua runtime which will no longer be treated as a string. (Requires restart to take effect) */
     UPROPERTY(config, EditAnywhere, Category = "Build")

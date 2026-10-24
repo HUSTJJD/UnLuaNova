@@ -22,6 +22,45 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
   - 参数类型与条件一律用**字符串**声明，声明层因此不需要 UHT 参与
   - 文档 [Lua 声明式网络](Docs/CN/LuaNetworking.md)；其中"已知边界"记了两点：
     RPC 的跨端行为待 C/S PIE 验证（`RPCId` 两端是否一致），复制属性为整体发送且条件单一
+  - **自动 C/S 测试** `UnLuaNova.API.Net.ClientServer`
+    （`Plugins/UnLuaNovaTestSuite/.../Private/Tests/LuaNetClientServerTest.cpp`）：
+    用 `FOpenMapLatentCommand(..., NumClients, EPlayNetMode::PIE_ListenServer)` 拉起一个
+    监听服务器 + 客户端的 PIE 会话（同进程，因此测试能同时拿到两端的世界），断言 Server
+    RPC 只在服务端执行、Client RPC 只在客户端执行、Multicast 两端都执行、参数原样过线、
+    Lua 声明的复制字段到达客户端的 Lua 表；另带一个引擎自己复制的 `int32` 作对照
+  - `FOpenMapLatentCommand` 支持多客户端与 `PIE_ListenServer`，并新增
+    `FEndPieSessionCommand`（真正结束 PIE 并等到它结束 —— `FEndPlayMapCommand` 在 UE5 是空的）
+- **第二轮对标复盘文档** [对标复盘：现状体检与改进方向](Docs/CN/Benchmark_Review.md)
+  - 从功能丰富度、性能、易用性、多后端与后端特性、测试与工程化五个维度体检，
+    逐条给 `文件:行` 证据；结论是短板已经不在功能丰富度，而在**默认配置下的成色**
+  - P0 三条：Luau 上容器 / FText / File 的 userdata **永不 `__gc`**（`LuaBackend.h:748`）；
+    性能数字全部只存在于文档、产物被 `.gitignore` 忽略因而无法复核；
+    benchmark 用例只断言 `elapsed > 0`，性能退化永远不会让测试变红
+  - P1 三条：Profiler 在 Luau 上 self time 恒为 0；沙盒默认关、跨后端 `ToVector` 行为不一致；
+    两个后端的版本没有记录因而不可复现；CI 只做 lint 与 mkdocs，**不跑 C++ 自动化**
+
+### Changed
+- **复制属性改为按类型分桶 + push model + Iris 兼容**（`UnLuaNovaReplicationComponent` /
+  `UnLuaNovaNetPayload`）
+  - 载荷从"每字段 `FName + int32 + FString` 整包发送"改为**每种类型一条复制数组**，
+    字段按声明顺序落进桶里，地址是 `(桶, 下标)`；一个 float 现在是 4 字节而不是
+    名字 + 类型标签 + 字符串。布局两端各自从同一份声明算出，线上另带一个 32 位
+    `SchemaVersion` 指纹，对不上就报错而不是把 `HP` 写进 `Mana`
+  - **push model**：每个桶 `bIsPushBased` 注册、单独 `MARK_PROPERTY_DIRTY`；改路径里不再
+    `MarkNetDirty()`。`WITH_PUSH_MODEL=0` 或运行时关掉时自动退回轮询，功能不变
+  - **去掉每帧轮询**：新增 `UpdateMode`（`Polled` 默认 0.1s / `Explicit` 每帧零成本）
+    与 `MarkFieldDirty` / `MarkAllFieldsDirty` / `FlushNetUpdate`；休眠 actor 不扫描，
+    标脏时先 `FlushNetDormancy()`
+  - **Iris 兼容是结构性的**：全程不写 `NetDeltaSerialize` / `FFastArraySerializer` /
+    自定义 `NetSerializer`，只用普通带类型 UPROPERTY，因此 legacy 与 Iris 都认；
+    Iris 下另外白拿逐元素增量与按类型量化
+  - **逐字段 RepNotify**：客户端写回前与 Lua 表旧值比对，只对真变了的字段调
+    `OnRep_<字段名>`，另有 `OnReplicatedProps(Names)` 兜底；变更集在本地算，不占带宽
+  - 条件粒度从"整个 payload 共用一个"细到**每类型一个**；逐字段仍需代码生成或 Iris
+    condition group
+  - 新增单测 `UnLuaNova.API.Net` 分桶布局（桶映射、同类型下标、SchemaVersion 对顺序敏感）
+
+### Added
 - **从 C++ 类型化调用 Lua 成员函数**（`Public/UnLuaNovaOverrider.h`）
   - `UnLuaNova::CallLuaFunction<Ret>(Object, Name, Args...)`，另有
     `CallLuaFunctionVoid` / `CallLuaFunctionIfExist`。此前引擎侧只能调**全局**函数
