@@ -24,9 +24,8 @@
 
 namespace
 {
-    // luau_codegen_create is per-VM and must not be repeated, and the VM gives no way to
-    // ask whether it already happened.
-    TSet<lua_State*> GCodeGenCreated;
+    // The registry is shared by coroutines and dies with the VM.
+    char GCodeGenCreatedKey;
     int32 GCompiledChunks = 0;
     bool bLoggedUnsupported = false;
 }
@@ -164,10 +163,16 @@ namespace UnLuaNova
                 return;
         }
 
-        if (!GCodeGenCreated.Contains(L))
+        lua_pushlightuserdata(L, &GCodeGenCreatedKey);
+        lua_rawget(L, LUA_REGISTRYINDEX);
+        const bool bCreated = lua_toboolean(L, -1) != 0;
+        lua_pop(L, 1);
+        if (!bCreated)
         {
-            UNLUANOVA_CODEGEN_CREATE(L);
-            GCodeGenCreated.Add(L);
+            UNLUANOVA_CODEGEN_CREATE(UnLuaNovaGetMainState(L));
+            lua_pushlightuserdata(L, &GCodeGenCreatedKey);
+            lua_pushboolean(L, 1);
+            lua_rawset(L, LUA_REGISTRYINDEX);
         }
 
         UNLUANOVA_CODEGEN_COMPILE(L, -1);

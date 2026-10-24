@@ -481,7 +481,9 @@ void UUnLuaNovaReplicationComponent::TickComponent(float DeltaTime, ELevelTick T
     // A fully dormant actor is not looked at by the network at all, so scanning its Lua
     // table is pure waste. (Partially dormant actors are still polled: the engine decides
     // per connection, and we cannot know better.)
-    if (Owner->GetNetDormancy() == DORM_DormantAll)
+    // NetDormancy is the configured dormancy level; GetNetDormancy() is the per-connection
+    // relevance query (DORM_DormantPartial) and takes a viewer, so it is not what this wants.
+    if (Owner->NetDormancy == DORM_DormantAll)
         return;
 
     PullAllSlots();
@@ -517,7 +519,7 @@ void UUnLuaNovaReplicationComponent::MarkFieldDirty(FName FieldName)
     // anything, so the change would sit here until something else woke it up.
     if (AActor* Owner = GetOwner())
     {
-        if (Owner->GetNetDormancy() != DORM_Awake)
+        if (Owner->NetDormancy != DORM_Awake)
             Owner->FlushNetDormancy();
     }
 
@@ -546,17 +548,20 @@ void UUnLuaNovaReplicationComponent::MarkBucketDirty(UnLuaNova::ELuaNetBucket Bu
 #if UNLUANOVA_PUSH_MODEL
     switch (Bucket)
     {
-    case UnLuaNova::ELuaNetBucket::Bool:      MARK_PROPERTY_DIRTY(this, Bools);      break;
-    case UnLuaNova::ELuaNetBucket::Int:       MARK_PROPERTY_DIRTY(this, Ints);       break;
-    case UnLuaNova::ELuaNetBucket::Int64:     MARK_PROPERTY_DIRTY(this, Int64s);     break;
-    case UnLuaNova::ELuaNetBucket::Float:     MARK_PROPERTY_DIRTY(this, Floats);     break;
-    case UnLuaNova::ELuaNetBucket::Double:    MARK_PROPERTY_DIRTY(this, Doubles);    break;
-    case UnLuaNova::ELuaNetBucket::String:    MARK_PROPERTY_DIRTY(this, Strings);    break;
-    case UnLuaNova::ELuaNetBucket::Name:      MARK_PROPERTY_DIRTY(this, Names);      break;
-    case UnLuaNova::ELuaNetBucket::Vector:    MARK_PROPERTY_DIRTY(this, Vectors);    break;
-    case UnLuaNova::ELuaNetBucket::Rotator:   MARK_PROPERTY_DIRTY(this, Rotators);   break;
-    case UnLuaNova::ELuaNetBucket::Transform: MARK_PROPERTY_DIRTY(this, Transforms); break;
-    case UnLuaNova::ELuaNetBucket::Object:    MARK_PROPERTY_DIRTY(this, Objects);    break;
+    // MARK_PROPERTY_DIRTY takes an FProperty*, so it cannot be handed a member directly;
+    // the _FROM_NAME form resolves the RepIndex at compile time and rejects a name that
+    // is not a replicated property of this class.
+    case UnLuaNova::ELuaNetBucket::Bool:      MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Bools, this);      break;
+    case UnLuaNova::ELuaNetBucket::Int:       MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Ints, this);       break;
+    case UnLuaNova::ELuaNetBucket::Int64:     MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Int64s, this);     break;
+    case UnLuaNova::ELuaNetBucket::Float:     MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Floats, this);     break;
+    case UnLuaNova::ELuaNetBucket::Double:    MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Doubles, this);    break;
+    case UnLuaNova::ELuaNetBucket::String:    MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Strings, this);    break;
+    case UnLuaNova::ELuaNetBucket::Name:      MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Names, this);      break;
+    case UnLuaNova::ELuaNetBucket::Vector:    MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Vectors, this);    break;
+    case UnLuaNova::ELuaNetBucket::Rotator:   MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Rotators, this);   break;
+    case UnLuaNova::ELuaNetBucket::Transform: MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Transforms, this); break;
+    case UnLuaNova::ELuaNetBucket::Object:    MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Objects, this);    break;
     default: break;
     }
 #endif

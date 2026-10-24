@@ -76,7 +76,7 @@ namespace UnLuaNova
         Text.Reserve(Decls.Num() * 24);
 
         for (const FLuaRepDecl& Decl : Decls)
-            Text += FString::Printf(TEXT("%s:%d;"), *Decl.Name.ToString(), int32(Decl.Type));
+            Text += FString::Printf(TEXT("%s:%d:%d;"), *Decl.Name.ToString(), int32(Decl.Type), int32(Decl.Condition));
 
         const FTCHARToUTF8 Utf8(*Text);
         return FCrc::MemCrc32(Utf8.Get(), Utf8.Length());

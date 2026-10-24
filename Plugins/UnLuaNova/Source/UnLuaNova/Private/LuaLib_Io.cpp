@@ -38,11 +38,13 @@ namespace
     const char* const IoFileMeta = "UnLuaNovaIoFile";
 
     // Mode bits, kept in a plain integer field so the Lua side can inspect them too.
+    // Prefixed: the io.write / io.read C functions below share the file-global namespace,
+    // and an enumerator named IoWrite would make the function name a redefinition.
     enum EIoMode : uint8
     {
-        IoRead = 1 << 0,
-        IoWrite = 1 << 1,
-        IoAppend = 1 << 2,
+        IoModeRead = 1 << 0,
+        IoModeWrite = 1 << 1,
+        IoModeAppend = 1 << 2,
     };
 
     bool IoEnabled()
@@ -86,15 +88,24 @@ namespace
 
         FString Relative = InPath;
         FPaths::NormalizeFilename(Relative);
+        if (Relative.IsEmpty() || !FPaths::IsRelative(Relative) || Relative.Contains(TEXT(":")))
+        {
+            lua_pushliteral(L, "io: a relative path without a drive or stream name is required");
+            return false;
+        }
 
         // FPaths::CollapseRelativeDirectories removes "." and ".." without touching the
         // filesystem, so "a/../../b" is resolved - and then shown to leave the root -
         // before anything is opened.
         FString Combined = Root + Relative;
-        FPaths::CollapseRelativeDirectories(Combined);
+        if (!FPaths::CollapseRelativeDirectories(Combined))
+        {
+            lua_pushliteral(L, "io: invalid relative path");
+            return false;
+        }
         Combined = FPaths::ConvertRelativePathToFull(Combined);
 
-        if (!Combined.StartsWith(Root))
+        if (!Combined.StartsWith(Root, ESearchCase::CaseSensitive))
         {
             lua_pushfstring(L, "io: '%s' is outside lua.ioroot ('%s')", TCHAR_TO_UTF8(*InPath), TCHAR_TO_UTF8(*Root));
             return false;
@@ -122,6 +133,13 @@ namespace
 
         if (!bOpen)
             luaL_error(L, "io: attempt to use a closed file");
+
+        lua_getfield(L, Idx, IoPosField);
+        const bool bValidPosition = lua_type(L, -1) == LUA_TNUMBER
+            && lua_tonumber(L, -1) >= 0 && lua_tonumber(L, -1) <= MAX_int32;
+        lua_pop(L, 1);
+        if (!bValidPosition)
+            luaL_error(L, "io: invalid file position");
     }
 
     int FileRead(lua_State* L);
@@ -134,6 +152,7 @@ namespace
 
     int LinesIterator(lua_State* L)
     {
+        CheckOpen(L, 1);
         lua_getfield(L, 1, IoDataField);
         size_t Len = 0;
         const char* Data = lua_tolstring(L, -1, &Len);
@@ -156,7 +175,7 @@ namespace
 
         lua_pushlstring(L, Start, LineLen);
 
-        const int64 Next = Pos + int64(LineLen) + (Newline ? 1 : 0);
+        const int64 Next = Newline ? int64(Newline - Data) + 1 : int64(Len);
         lua_pushinteger(L, lua_Integer(Next));
         lua_setfield(L, 1, IoPosField);
 
@@ -179,7 +198,7 @@ namespace
 
         OutStart = Start;
         OutLen = LineLen;
-        Pos += int64(LineLen) + (Newline ? 1 : 0);
+        Pos = Newline ? int64(Newline - Data) + 1 : int64(Len);
         return true;
     }
 
@@ -219,7 +238,9 @@ namespace
         {
             if (lua_type(L, i) == LUA_TNUMBER)
             {
-                const int64 Count = int64(lua_tointeger(L, i));
+                const int64 Count = int64(luaL_checkinteger(L, i));
+                if (Count < 0)
+                    return luaL_error(L, "io: read count must be non-negative");
                 if (Count == 0)
                 {
                     // Reading zero bytes is the documented end-of-file test: an empty
@@ -254,7 +275,11 @@ namespace
 
             const char* Format = lua_tostring(L, i);
             if (!Format)
-                continue;
+                return luaL_error(L, "io: invalid read format");
+            if (Format[0] == '*')
+                ++Format;
+            if (Format[0] == '\0' || Format[1] != '\0')
+                return luaL_error(L, "io: invalid read format");
 
             if (Format[0] == 'a')
             {
@@ -287,9 +312,7 @@ namespace
                     ++LineLen;
 
                 lua_pushlstring(L, Start, LineLen);
-                Pos += int64(LineLen);
-                if (Format[0] == 'l' && Newline)
-                    ++Pos;
+                Pos = Newline ? int64(Newline - Data) + 1 : int64(Len);
                 ++Results;
                 continue;
             }
@@ -322,6 +345,8 @@ namespace
                 ++Results;
                 continue;
             }
+
+            return luaL_error(L, "io: invalid read format");
         }
         }
 
@@ -336,7 +361,7 @@ namespace
     {
         CheckOpen(L, 1);
 
-        if ((GetModeField(L, 1) & IoWrite) == 0)
+        if ((GetModeField(L, 1) & IoModeWrite) == 0)
             return luaL_error(L, "io: file was not opened for writing");
 
         const int NumArgs = lua_gettop(L);
@@ -404,7 +429,7 @@ namespace
     {
         CheckOpen(L, 1);
 
-        if ((GetModeField(L, 1) & IoWrite) == 0)
+        if ((GetModeField(L, 1) & IoModeWrite) == 0)
         {
             lua_pushboolean(L, 1);
             return 1;
@@ -416,8 +441,12 @@ namespace
         lua_pop(L, 1);
 
         lua_getfield(L, 1, IoPathField);
-        const FString Path = UTF8_TO_TCHAR(lua_tostring(L, -1));
+        const FString RelativePath = UTF8_TO_TCHAR(luaL_checkstring(L, -1));
         lua_pop(L, 1);
+        FString Path;
+        // File objects are tables: validate again because scripts can edit their fields.
+        if (!ResolvePath(L, RelativePath, Path))
+            return luaL_error(L, "%s", lua_tostring(L, -1));
 
         TArray<uint8> Bytes;
         Bytes.SetNumUninitialized(int32(Len));
@@ -444,7 +473,7 @@ namespace
             return 1;
         }
 
-        if ((GetModeField(L, 1) & IoWrite) != 0)
+        if ((GetModeField(L, 1) & IoModeWrite) != 0)
         {
             // Reuse flush rather than duplicating the write path.
             lua_pushcfunction(L, &FileFlush);
@@ -503,17 +532,17 @@ namespace
         for (const char* C = ModeArg; *C; ++C)
         {
             if (*C == 'r')
-                Mode |= IoRead;
+                Mode |= IoModeRead;
             else if (*C == 'w')
-                Mode |= IoWrite;
+                Mode |= IoModeWrite;
             else if (*C == 'a')
-                Mode |= IoWrite | IoAppend;
+                Mode |= IoModeWrite | IoModeAppend;
             else if (*C == '+')
-                Mode |= IoRead | IoWrite;
+                Mode |= IoModeRead | IoModeWrite;
         }
 
         if (Mode == 0)
-            Mode = IoRead;
+            Mode = IoModeRead;
 
         FString Full;
         if (!ResolvePath(L, UTF8_TO_TCHAR(PathArg), Full))
@@ -522,7 +551,7 @@ namespace
         lua_newtable(L);
         const int File = lua_gettop(L);
 
-        lua_pushstring(L, TCHAR_TO_UTF8(*Full));
+        lua_pushstring(L, PathArg);
         lua_setfield(L, File, IoPathField);
         lua_pushinteger(L, Mode);
         lua_setfield(L, File, IoModeField);
@@ -531,14 +560,14 @@ namespace
 
         bool bExists = false;
         TArray<uint8> Existing;
-        if ((Mode & IoRead) != 0 || (Mode & IoAppend) != 0)
+        if ((Mode & IoModeRead) != 0 || (Mode & IoModeAppend) != 0)
             bExists = FFileHelper::LoadFileToArray(Existing, *Full);
 
-        if (bExists && (Mode & IoAppend) != 0)
+        if (bExists && (Mode & IoModeAppend) != 0)
         {
             lua_pushlstring(L, reinterpret_cast<const char*>(Existing.GetData()), Existing.Num());
         }
-        else if ((Mode & IoWrite) != 0 && (Mode & IoRead) == 0)
+        else if ((Mode & IoModeWrite) != 0 && (Mode & IoModeRead) == 0)
         {
             lua_pushliteral(L, "");
         }
@@ -555,7 +584,7 @@ namespace
 
         lua_setfield(L, File, IoDataField);
 
-        lua_pushinteger(L, (Mode & IoAppend) != 0 ? lua_Integer(Existing.Num()) : 0);
+        lua_pushinteger(L, (Mode & IoModeAppend) != 0 ? lua_Integer(Existing.Num()) : 0);
         lua_setfield(L, File, IoPosField);
 
         luaL_getmetatable(L, IoFileMeta);

@@ -169,7 +169,7 @@ FDoRepLifetimeParams Params;
 Params.bIsPushBased = true;                                   // WITH_PUSH_MODEL 下
 DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Floats, Params);
 ...
-MARK_PROPERTY_DIRTY(this, Floats);   // 只脏这一个桶
+MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Floats, this);   // 只脏这一个桶
 ```
 
 于是复制系统不再轮询这些属性：改 `HP` 只让引擎看 `Floats`，`Strings` 一眼都不看。

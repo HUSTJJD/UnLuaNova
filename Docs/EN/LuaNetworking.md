@@ -185,7 +185,7 @@ FDoRepLifetimeParams Params;
 Params.bIsPushBased = true;                                   // under WITH_PUSH_MODEL
 DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Floats, Params);
 ...
-MARK_PROPERTY_DIRTY(this, Floats);   // only this bucket becomes dirty
+MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Floats, this);   // only this bucket becomes dirty
 ```
 
 The replication system then stops polling these properties: changing `HP` makes the engine

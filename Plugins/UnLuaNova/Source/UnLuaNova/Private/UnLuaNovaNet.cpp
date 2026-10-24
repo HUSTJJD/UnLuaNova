@@ -215,9 +215,8 @@ namespace UnLuaNova
          * Blueprint RPCs get theirs when the blueprint class is linked. A function we add
          * at runtime may or may not, depending on whether AddFunctionToFunctionMap assigns
          * it, so: if it is still 0, take the next free one above everything already on the
-         * class. Both peers run the same module and therefore add the same functions in the
-         * same order, so both land on the same ids - which is the only property that
-         * actually matters here.
+         * class. DeclareRPCs sorts names before registration; Lua table traversal order
+         * is not a network protocol. Class binding order still requires peer validation.
          *
          * If the engine did assign it, this is a no-op and the engine's value wins.
          */
@@ -301,14 +300,21 @@ namespace UnLuaNova
             }
 
             const int32 KindIdx = lua_absindex(L, -1);
-
+            TArray<FString> Names;
             lua_pushnil(L);
             while (lua_next(L, KindIdx) != 0)
             {
-                if (lua_isstring(L, -2))
+                if (lua_type(L, -2) == LUA_TSTRING)
+                    Names.Add(UTF8_TO_TCHAR(lua_tostring(L, -2)));
+                lua_pop(L, 1);
+            }
+            Names.Sort();
+            for (const FString& Name : Names)
+            {
+                lua_getfield(L, KindIdx, TCHAR_TO_UTF8(*Name));
                 {
                     FLuaRpcDecl Decl;
-                    Decl.Name = FName(UTF8_TO_TCHAR(lua_tostring(L, -2)));
+                    Decl.Name = FName(*Name);
                     Decl.Kind = Entry.Kind;
                     ParseRpcDecl(L, -1, Decl);
 
@@ -334,7 +340,7 @@ namespace UnLuaNova
                     }
                 }
 
-                lua_pop(L, 1); // value; the key stays for lua_next
+                lua_pop(L, 1);
             }
 
             lua_pop(L, 1); // the kind table

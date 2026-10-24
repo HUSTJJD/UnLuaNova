@@ -158,6 +158,34 @@ void FNetSpec::Define()
 
     Describe(TEXT("RPC 声明"), [this]()
     {
+        It(TEXT("RPC registration is independent of table insertion order"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UClass* Class = Bound->GetClass();
+            TArray<int32> Expected;
+            for (const char* Script : {
+                "return {ServerRPC={Zulu=true, Alpha=true, Middle=true}}",
+                "local t={} t.Middle=true t.Alpha=true t.Zulu=true return {ServerRPC=t}" })
+            {
+                ULuaFunction::RestoreOverrides(Class);
+                TEST_TRUE(UnLuaNova::RunChunk(L, Script));
+                UnLuaNova::FUnLuaNovaNet::DeclareRPCs(L, -1, Class);
+                lua_pop(L, 1);
+                TArray<int32> Actual;
+                for (const TCHAR* Name : { TEXT("Alpha"), TEXT("Middle"), TEXT("Zulu") })
+                {
+                    const UFunction* Function = FindOwn(Class, Name);
+                    TEST_TRUE(Function != nullptr);
+                    if (Function)
+                        Actual.Add(Function->RPCId);
+                }
+                if (Expected.IsEmpty())
+                    Expected = Actual;
+                else
+                    TEST_TRUE(Expected == Actual);
+                TEST_TRUE(Actual.Num() == 3 && Actual[0] < Actual[1] && Actual[1] < Actual[2]);
+            }
+        });
+
         It(TEXT("三种 RPC 都注册上，并带上正确的 Net 标记"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             auto* Class = Bound->GetClass();
@@ -301,6 +329,15 @@ void FNetSpec::Define()
 
     Describe(TEXT("分桶布局"), [this]()
     {
+        It(TEXT("Schema fingerprint includes replication conditions"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            TArray<UnLuaNova::FLuaRepDecl> Decls;
+            Decls.Add({ FName(TEXT("Secret")), UnLuaNova::ELuaNetParamType::String, COND_None });
+            const uint32 PublicSchema = UnLuaNova::ComputeSchemaVersion(Decls);
+            Decls[0].Condition = COND_OwnerOnly;
+            TEST_TRUE(PublicSchema != UnLuaNova::ComputeSchemaVersion(Decls));
+        });
+
         // The layout is what both peers derive locally to turn an array element back into a
         // Lua field, so it is the one part of the new payload a single process can settle
         // completely: same declarations in, same (bucket, index) addresses out.

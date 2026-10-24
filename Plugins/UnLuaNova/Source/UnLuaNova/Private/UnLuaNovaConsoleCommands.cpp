@@ -562,7 +562,7 @@ namespace UnLuaNova
             UnLuaNova::IsNativeCodeGenAvailable() ? 1 : 0,
             EnableCVar ? EnableCVar->GetInt() : 0,
             UnLuaNova::GetNativeCodeGenChunkCount(),
-            ModulesCVar ? ModulesCVar->GetString() : TEXT(""));
+            ModulesCVar ? *ModulesCVar->GetString() : TEXT(""));
 
         if (!UnLuaNova::IsNativeCodeGenAvailable())
         {

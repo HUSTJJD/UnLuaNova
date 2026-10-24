@@ -259,7 +259,7 @@ namespace UnLuaNova
         CallStack.Add(FFrame{Key, NowCycles, 0, L, HeapBytes(L)});
     }
 
-    void FLuaProfiler::RecordLeave(lua_State* L, uint64 NowCycles)
+    void FLuaProfiler::RecordLeave(uint64 NowCycles)
     {
         if (!IsAggregateEnabled() || CallStack.Num() == 0)
             return;
@@ -276,7 +276,9 @@ namespace UnLuaNova
             // Heap growth over this call. Attributed to this frame, not netted against its
             // callees: "which function is the heap growing in" is the question, and a
             // callee's growth is that callee's answer to give.
-            Stat->NetBytes += HeapBytes(L) - Frame.StartBytes;
+            // The frame's own thread, not the one we were called with: a return on a
+            // coroutine closes that coroutine's frame, and the heap that grew belongs to it.
+            Stat->NetBytes += HeapBytes(Frame.Thread) - Frame.StartBytes;
         }
 
         // Charge the whole span to the caller, so its own self time excludes it.
@@ -476,7 +478,7 @@ namespace UnLuaNova
         else
         {
             FCpuProfilerTrace::OutputEndEvent();
-            Self.RecordLeave(L, FPlatformTime::Cycles64());
+            Self.RecordLeave(FPlatformTime::Cycles64());
         }
     }
 
