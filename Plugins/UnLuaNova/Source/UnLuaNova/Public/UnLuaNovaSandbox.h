@@ -35,4 +35,29 @@ namespace UnLuaNova
      * unconditionally - but it only ever matters when UNLUANOVA_HAS_SANDBOX is 1.
      */
     UNLUANOVA_API void RestoreTablesAfterSandbox(lua_State* L);
+
+    /**
+     * Sandbox every coroutine as it is created, by claiming Luau's userthread callback.
+     *
+     * luaL_sandbox hardens the *global* table, which is one table shared by the main
+     * thread and every coroutine in it. Luau's own guidance is stronger: a thread gets its
+     * own global table that proxies reads to the builtin one, so code running in one
+     * thread can neither see nor clobber another thread's globals. luaL_sandboxthread is
+     * how that is done, and the only place to apply it is the VM's userthread callback -
+     * the plugin never calls lua_newthread, every coroutine comes out of
+     * coroutine.create.
+     *
+     * It is also a performance switch, not only a security one: Luau's "imports" and
+     * fastcall optimizations are only valid for functions whose environment is known to be
+     * pure, and lua_setsafeenv is what marks it pure. A thread that skips this keeps an
+     * env the VM must assume can change underneath it.
+     *
+     * Opt-in (lua.sandboxthread), because the isolation is observable: a global written
+     * inside a sandboxed coroutine lands in that coroutine's own table and is invisible
+     * everywhere else. Reads still fall through to the real globals, so this only bites
+     * code that *writes* globals from a coroutine and expects to read them back outside.
+     *
+     * No-op where UNLUANOVA_HAS_SANDBOX or UNLUANOVA_HAS_THREAD_CALLBACK is 0.
+     */
+    UNLUANOVA_API void InstallSandboxThreadHardening(lua_State* L);
 }

@@ -2,6 +2,7 @@
 #include "LowLevel.h"
 #include "LuaBackend.h"
 #include "LuaEnv.h"
+#include "LuaProfiler.h"        // FLuaProfiler::IsSelfTimeSampled() - the 'profilerselftime' feature
 #include "UnLuaNovaBase.h"
 #include "UnLuaNovaSandbox.h"
 #include "UnLuaNovaSettings.h"   // 特性开关（bTimer / bEvent / bOOP / bDataDrivenBinding / bDebugAdapter）
@@ -156,6 +157,23 @@ namespace UnLuaNova
         static bool FeatureDataDrivenBinding() { return GetDefault<UUnLuaNovaSettings>()->bDataDrivenBinding; }
         static bool FeatureDebugAdapter() { return GetDefault<UUnLuaNovaSettings>()->bDebugAdapter; }
 
+        /**
+         * Profiler 的 self time 是"实测"还是"采样归因"。
+         *
+         * Lua 后端靠 call/return 配对量出真实区间；Luau 只有安全点，self time 是把两段安全点
+         * 之间的时间归给当时在跑的函数 —— 能排序，不能当精确数值用。这两者回答的是不同的
+         * 问题，而它能被问出来之前，看报告的人只能猜自己看的是哪一种。
+         */
+        static bool FeatureProfilerSelfTime() { return !UnLuaNova::FLuaProfiler::IsSelfTimeSampled(); }
+
+        /**
+         * userdata 会不会被终结（容器 / FText / 文件句柄这些带 C++ 析构的）。
+         *
+         * 两个后端现在都是 true —— 曾经 Luau 上是 false，那是泄漏不是缺特性。留着这条是因为
+         * "会不会被回收"是个脚本不该猜的事：猜错了就是内存一直涨而没有报错。
+         */
+        static bool FeatureUserdataFinalizer() { return UNLUANOVA_HAS_USERDATA_FINALIZER != 0; }
+
         static const FFeature Features[] = {
             // 后端能力
             {"sandbox", FeatureSandbox},
@@ -163,6 +181,8 @@ namespace UnLuaNova
             {"allocCallbacks", FeatureAllocCallbacks},
             {"vector", FeatureVector},
             {"buffer", FeatureBuffer},
+            {"profilerselftime", FeatureProfilerSelfTime},
+            {"userdatafinalizer", FeatureUserdataFinalizer},
             // 配置开关（UUnLuaNovaSettings 的 b<Name>）
             {"timer", FeatureTimer},
             {"event", FeatureEvent},

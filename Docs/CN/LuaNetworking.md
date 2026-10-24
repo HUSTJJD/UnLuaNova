@@ -215,14 +215,19 @@ MARK_PROPERTY_DIRTY(this, Floats);   // 只脏这一个桶
 
 ## 已知边界
 
-1. **跨进程的 `RPCId` 一致仍未验证。** `UnLuaNova.API.Net.ClientServer` 已经能在
-   C/S PIE 里断言：Server RPC 只在服务端执行、Client RPC 只在客户端执行、Multicast
-   两端都执行、参数原样过线、Lua 声明的复制字段能到客户端。它证明不了的是**两个进程**
-   的情况 —— RPC 在线上走的是 id 而不是名字，两端各建一份 UFunction 时必须落到同一个
-   id。`EnsureRpcId()` 的处理是：引擎若已分配就用引擎的；若还是 0，就取"类上现有最大值
-   + 1"。两端跑同一个模块、按同样顺序添加，因此会落到同样的 id —— 这是唯一剩下的
-   未知数，并且它**不可能**被单进程测试证明：C/S PIE 里两端共用同一个 UClass，id 自然
-   就是同一个。要证明它需要一次真正的双进程联机（独立服务器 / 打包客户端）。
+1. **跨进程 `RPCId` 一致：已有测试覆盖。** `UnLuaNova.API.Net.DedicatedServer`
+   （`Plugins/UnLuaNovaTestSuite/.../Private/Tests/LuaNetDedicatedServerTest.cpp`）
+   起**两个独立进程**（服务端带 `-server`），各自声明同一套 Lua 网络，把本端看到的
+   `名字:RPCId` 写进 `Saved/UnLuaNovaNet/<Role>.json`，主进程读两份比对。
+
+   为什么必须两个进程：RPC 在线上走 id 而不是名字，而 C/S PIE 里两端共用同一个 UClass
+   —— id 天然同一个，那种测试证明不了任何事。`EnsureRpcId()` 的分配规则是"引擎若已
+   分配就用引擎的；否则取类上现有最大值 + 1"，两端跑同一模块、按同样顺序添加才会落到
+   同一个 id，这正是要被验证的东西。
+
+   注意它**不需要两端真的连上**：id 只取决于模块与声明顺序，跟连通性无关。这样测避开了
+   端口 / 防火墙 / "服务器到底有没有 listen" 那一类让 CI 变脆的失败模式；`-server`
+   带来的额外价值是声明发生在 `NM_DedicatedServer` 下，这条路径 PIE 永远走不到。
 
 2. **复制条件是"每类型一个"，不是"每字段一个"。** 同类型的字段共用一个条件（冲突时取第一个
    非 None 的并打警告）。比之前"整个 payload 共用一个"细了一档，但逐字段仍然做不到：那需要
@@ -251,8 +256,12 @@ MARK_PROPERTY_DIRTY(this, Floats);   // 只脏这一个桶
   Multicast 两端都执行、参数原样过线、Lua 声明的复制字段到达客户端。
   会话里还带一个**引擎自己复制的 `int32` 作对照**：它没到就说明会话本身是坏的，
   后面关于 Lua 的断言都不用看了
-* 仍未覆盖：跨进程 `RPCId` 一致（见已知边界 1）；`COND_OwnerOnly` 字段在非拥有客户端
-  保持默认值（需要一个能区分拥有端的测试场景）
+* `UnLuaNova.API.Net.DedicatedServer` —— 两个独立进程各自声明，比对 `RPCId` 与复制字段。
+  子用例 `...DedicatedServer.Report` 是跑在 peer 进程里的那一半，靠 `-UnLuaNovaNetRole`
+  区分角色，单独跑它没有意义
+* 仍未覆盖：`COND_OwnerOnly` 字段在非拥有客户端保持默认值（需要一个能区分拥有端的测试
+  场景）；多客户端（>1）下的 Multicast；push model 与 Iris 的对照（见下节）。
+  跨进程 `RPCId` 一致**已由 `...DedicatedServer` 覆盖**
 
 ### push model 与 Iris 待验证项
 

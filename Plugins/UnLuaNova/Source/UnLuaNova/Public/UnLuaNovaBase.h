@@ -16,6 +16,7 @@
 
 #include "CoreUObject.h"
 #include "Runtime/Launch/Resources/Version.h"
+#include "LuaBackend.h"      // FUnLuaNovaUserdataDtor, for NewUserdataDtor()
 
 // --- 内置库开关（编译期） ---------------------------------------------------
 // UNLUANOVA_HAS_STDLIB_TIMER / _EVENT / _OOP 只有一个来源：UnLuaNova.Build.cs
@@ -277,6 +278,38 @@ namespace UnLuaNova
      * @return - the address of new created user data
      */
     UNLUANOVA_API void* NewUserdata(lua_State *L, int32 Size, const char *MetatableName, int32 Alignment);
+
+    /**
+     * Same, for a payload whose C++ destructor has to run when the VM collects it.
+     *
+     * Plain Lua reaches that destructor through the metatable's __gc; Luau has no __gc and
+     * needs the finalizer handed to the VM at allocation time. 'Dtor' is ignored on the
+     * former, so passing it unconditionally is correct on both - see UNLUANOVA_NEWDATA_DTOR
+     * in LuaBackend.h.
+     */
+    UNLUANOVA_API void* NewUserdataDtor(lua_State *L, int32 Size, const char *MetatableName, int32 Alignment, FUnLuaNovaUserdataDtor Dtor);
+
+    /**
+     * Payload address of a userdata block, or null if UnLuaNova did not create the block.
+     *
+     * 'Block' is what lua_touserdata() returns - and what a Lua finalizer receives. The
+     * payload sits behind [FUserdataDesc][padding], so handing the block straight to a C++
+     * destructor would run it over the descriptor bytes instead of the object.
+     *
+     * Declared here as well as in LuaCore.h so public headers can build finalizers without
+     * reaching into the private tree; both declarations are the same function.
+     */
+    UNLUANOVA_API void* GetUserdataPayloadFromBlock(void* Block);
+
+    /** Finalizer for a payload of type T - hand it to NewUserdataDtor. */
+    template <typename T>
+    void DestroyUserdataPayload(lua_State*, void* Block)
+    {
+        if (void* Payload = GetUserdataPayloadFromBlock(Block))
+        {
+            static_cast<T*>(Payload)->~T();
+        }
+    }
 
     /**
      * Push an untyped dynamic array (same memory layout with TArray)

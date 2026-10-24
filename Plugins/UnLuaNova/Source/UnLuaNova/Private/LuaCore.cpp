@@ -153,12 +153,18 @@ uint8 CalcUserdataPadding(int32 Alignment)
     return (uint8)(Aligned - Base);
 }
 
-static void* NewUserdataWithDesc(lua_State* L, int Size, uint8 Tag, uint8 Padding)
+static void* NewUserdataWithDesc(lua_State* L, int Size, uint8 Tag, uint8 Padding, FUnLuaNovaUserdataDtor Dtor = nullptr)
 {
     const uint32 DescSize = (uint32)sizeof(FUserdataDesc);
 
     // layout: [FUserdataDesc][Padding][payload]
-    uint8* Block = (uint8*)UNLUANOVA_NEWDATA(L, DescSize + Padding + Size);
+    //
+    // With a finalizer, Luau allocates through lua_newuserdatadtor() so it can run that
+    // finalizer during collection. Plain Lua expands the same macro to a normal userdata -
+    // it has no such hook and reaches the destructor through __gc instead.
+    uint8* Block = Dtor
+        ? (uint8*)UNLUANOVA_NEWDATA_DTOR(L, DescSize + Padding + Size, Dtor)
+        : (uint8*)UNLUANOVA_NEWDATA(L, DescSize + Padding + Size);
 
     FUserdataDesc* UserdataDesc = (FUserdataDesc*)Block;
     UserdataDesc->magic = USERDATA_MAGIC;
@@ -166,6 +172,12 @@ static void* NewUserdataWithDesc(lua_State* L, int Size, uint8 Tag, uint8 Paddin
     UserdataDesc->padding = Padding;
 
     return GetUserdataPayload(Block, UserdataDesc);
+}
+
+void* GetUserdataPayloadFromBlock(void* Block)
+{
+    FUserdataDesc* UserdataDesc = GetUserdataDesc(Block);
+    return UserdataDesc ? GetUserdataPayload(Block, UserdataDesc) : nullptr;
 }
 
 void* NewUserdataWithTwoLvPtrTag(lua_State* L, int Size, void* Object)
@@ -180,9 +192,14 @@ void* NewUserdataWithContainerTag(lua_State* L, int Size)
     return NewUserdataWithDesc(L, Size, (BIT_VARIANT_TAG | BIT_SCRIPT_CONTAINER), 0);
 }
 
-void* NewUserdataWithPaddingTag(lua_State* L, int Size, uint8 Padding)
+void* NewUserdataWithContainerTagDtor(lua_State* L, int Size, FUnLuaNovaUserdataDtor Dtor)
 {
-    return NewUserdataWithDesc(L, Size, BIT_VARIANT_TAG, Padding);
+    return NewUserdataWithDesc(L, Size, (BIT_VARIANT_TAG | BIT_SCRIPT_CONTAINER), 0, Dtor);
+}
+
+void* NewUserdataWithPaddingTag(lua_State* L, int Size, uint8 Padding, FUnLuaNovaUserdataDtor Dtor)
+{
+    return NewUserdataWithDesc(L, Size, BIT_VARIANT_TAG, Padding, Dtor);
 }
 
 void MarkUserdataTwoLvPtrTag(lua_State* L, int32 Index)
@@ -278,6 +295,11 @@ bool TryToSetMetatable(lua_State* L, const char* MetatableName, UObject* Object)
  */
 void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName, uint8 PaddingSize)
 {
+    return NewUserdataWithPaddingDtor(L, Size, MetatableName, PaddingSize, nullptr);
+}
+
+void* NewUserdataWithPaddingDtor(lua_State *L, int32 Size, const char *MetatableName, uint8 PaddingSize, FUnLuaNovaUserdataDtor Dtor)
+{
     if (Size < 1)
     {
         // userdata size must be greater than 0
@@ -298,7 +320,7 @@ void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName
     // padding past where anyone reads it, and that address is no longer the aligned one
     // the padding was computed for - a script struct then trips UE's
     // IsAligned(PropertyDest, GetAlignment()) check inside FProperty::InitializeValue().
-    void* Userdata = NewUserdataWithPaddingTag(L, Size, PaddingSize); // userdata size must add padding size
+    void* Userdata = NewUserdataWithPaddingTag(L, Size, PaddingSize, Dtor); // userdata size must add padding size
     if (MetatableName)
     {
         bool bSuccess = TryToSetMetatable(L, MetatableName);        // set metatable
@@ -355,7 +377,7 @@ void* NewScriptContainer(lua_State *L, const FScriptContainerDesc &Desc)
  *
  * @return - null if container is already cached, or the new created userdata otherwise
  */
-void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &Desc)
+void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &Desc, FUnLuaNovaUserdataDtor Dtor)
 {
     if (!Key)
     {
@@ -372,7 +394,7 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
     {
         lua_pop(L, 1);
 
-        Userdata = NewUserdataWithContainerTag(L, Desc.GetSize());      // create new userdata
+        Userdata = NewUserdataWithContainerTagDtor(L, Desc.GetSize(), Dtor);      // create new userdata
         luaL_setmetatable(L, Desc.GetName());               // set metatable
         lua_pushlightuserdata(L, Key);
         lua_pushvalue(L, -2);
@@ -391,7 +413,7 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
 }
 
 
-void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &Desc, const TFunctionRef<bool (void*)>& Validator)
+void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &Desc, const TFunctionRef<bool (void*)>& Validator, FUnLuaNovaUserdataDtor Dtor)
 {
     if (!Key)
     {
@@ -408,7 +430,7 @@ void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &
     {
         lua_pop(L, 1);
 
-        Userdata = NewUserdataWithContainerTag(L, Desc.GetSize());      // create new userdata
+        Userdata = NewUserdataWithContainerTagDtor(L, Desc.GetSize(), Dtor);      // create new userdata
         luaL_setmetatable(L, Desc.GetName());               // set metatable
         lua_pushlightuserdata(L, Key);
         lua_pushvalue(L, -2);

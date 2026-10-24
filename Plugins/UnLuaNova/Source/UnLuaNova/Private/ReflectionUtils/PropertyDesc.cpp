@@ -691,7 +691,7 @@ public:
         {
 #if UNLUANOVA_ENABLE_FTEXT
             const auto Text = TextProperty->GetPropertyValue(ValuePtr);
-            const auto Userdata = NewTypedUserdata(L, FText);
+            const auto Userdata = NewTypedUserdataDtor(L, FText, DestroyUserdataPayload<FText>);
             const auto NewTextPtr = new(Userdata) FText;
             *NewTextPtr = Text;
 #else

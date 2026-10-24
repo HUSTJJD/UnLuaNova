@@ -37,8 +37,6 @@ description: "UnLuaNova 的 C++ API、Lua API 与构建期宏定义速查"
 
 * `LoadFile` 从指定相对路径加载一个Lua文件，但不运行
 
-* `RunFile` 从指定相对路径运行一个Lua文件
-
 * `LoadChunk` 加载一个Lua Chunk，但不运行
 
 * `RunChunk` 运行指定的Lua Chunk
@@ -87,8 +85,6 @@ FUnLuaNovaDelegates
 
 * `FLuaRetValues` 对从Lua侧的返回值的封装
 
-* `FCheckStack` 用于辅助检测Lua堆栈平衡
-
 * `FAutoStack` 用于自动恢复Lua堆栈索引
 
 * `FExportedEnum` 提供向Lua侧注册导出枚举的接口
@@ -103,10 +99,9 @@ FUnLuaNovaDelegates
   为了能让类型继续惰性注册，命名空间在注册完成前是可写的，之后才装上 `__newindex`
 
 ### 全局函数
-* `RegisterEnum` 手动注册一个枚举到Lua
-
-* `RegisterClass` 手动注册一个类到Lua
-
+<!-- 类型（枚举与类）是惰性注册的：访问 `UE.XXX` 时才注册，由 `UE.__index` 驱动，
+     没有 `RegisterEnum` / `RegisterClass` 这样的全局函数。C++ 侧的注册入口见
+     FClassRegistry::Register / FEnumRegistry::Register 与静态导出宏。 -->
 * `GetUProperty` 获取某个 `UObject` 上的 `UProperty`
 
 * `SetUProperty` 设置某个 `UObject` 的 `UProperty` 为指定值

@@ -41,4 +41,9 @@
 #include "../Luau/VM/include/lua.h"
 #include "../Luau/VM/include/lualib.h"
 #include "../Luau/Compiler/include/luacode.h"
+// The optional JIT. luacodegen.h is tiny - three functions - and it is what lets a host
+// hand the hottest modules to the native compiler. luau_codegen_supported() answers 0
+// wherever there is no backend for the target (x64 and arm64 only), so including it is
+// not the same as having it.
+#include "../Luau/CodeGen/include/luacodegen.h"
 #undef TString

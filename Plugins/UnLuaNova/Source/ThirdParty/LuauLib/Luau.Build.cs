@@ -40,8 +40,8 @@ public class Luau : ModuleRules
 
 		// Keep UBT from compiling the submodule's own sources. It now sits inside this
 		// module's directory, and UBT collects .cpp recursively from there - so Analysis/
-		// (the type checker), CLI/, tests/, fuzz/, bench/ and CodeGen/ would be dragged in
-		// too, none of which are part of the VM/Ast/Compiler/Bytecode subset we build. A
+		// (the type checker), CLI/, tests/, fuzz/ and bench/ would be dragged in too, none
+		// of which are part of the VM/Ast/Compiler/Bytecode/CodeGen subset we build. A
 		// .ubtignore makes UBT skip a directory tree entirely.
 		//
 		// It has to live inside the checkout, which is luau-lang's repo and not ours to
@@ -53,6 +53,11 @@ public class Luau : ModuleRules
 		}
 
 		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "VM", "include"));
+		// CodeGen is built against VM internals - CodeGenX64.cpp includes lstate.h and
+		// company - which upstream gets from Luau.VM.Internals. Without this those
+		// translation units fail on C1083. It is harmless for the VM's own sources: their
+		// quoted includes already resolve relative to the file doing the including.
+		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "VM", "src"));
 		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "Compiler", "include"));
 		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "Ast", "include"));
 		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "Common", "include"));
@@ -60,6 +65,8 @@ public class Luau : ModuleRules
 		// to sit under Compiler/include/Luau. Without this, Luau/Compiler/src/Compiler.cpp
 		// fails on #include "Luau/BytecodeBuilder.h".
 		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "Bytecode", "include"));
+		// luacodegen.h, for the optional native compiler.
+		PublicSystemIncludePaths.Add(Path.Combine(LuauRoot, "CodeGen", "include"));
 
 		// Entry point for this backend. These headers live outside the submodule, so
 		// they are ours and carry unique names - see ./Public/UnLuaNovaBackend_Luau.h.
@@ -97,6 +104,9 @@ public class Luau : ModuleRules
 		{
 			PrivateDefinitions.Add("LUA_API=__declspec(dllexport)");
 			PrivateDefinitions.Add("LUACODE_API=__declspec(dllexport)");
+			// Same for the native compiler's three entry points, or luau_codegen_* in
+			// UnLuaNova fails with LNK2019 exactly like the lua_* ones did.
+			PrivateDefinitions.Add("LUACODEGEN_API=__declspec(dllexport)");
 		}
 
 		// Force-include our own warning header into every Luau translation unit.

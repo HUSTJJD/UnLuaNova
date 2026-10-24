@@ -388,7 +388,18 @@ namespace UnLuaNova
     template <typename ClassType, typename... ArgType>
     template <uint32... N> void TConstructor<ClassType, ArgType...>::Construct(lua_State *L, TTuple<typename TArgTypeTraits<ArgType>::Type...> &Args, TIndices<N...>)
     {
-        void *Userdata = UnLuaNova::NewUserdata(L, sizeof(ClassType), TCHAR_TO_UTF8(*ClassName), alignof(ClassType));
+        // A non-trivial destructor has to run when the VM collects the userdata, and on Luau
+        // that only happens if the finalizer is handed over here - Luau has no __gc to fall
+        // back on. The file wrapper is the case that matters: it owns an FArchive.
+        void *Userdata;
+        if constexpr (std::is_trivially_destructible_v<ClassType>)
+        {
+            Userdata = UnLuaNova::NewUserdata(L, sizeof(ClassType), TCHAR_TO_UTF8(*ClassName), alignof(ClassType));
+        }
+        else
+        {
+            Userdata = UnLuaNova::NewUserdataDtor(L, sizeof(ClassType), TCHAR_TO_UTF8(*ClassName), alignof(ClassType), UnLuaNova::DestroyUserdataPayload<ClassType>);
+        }
         if (Userdata)
         {
             new(Userdata) ClassType(Args.template Get<N>()...);

@@ -459,6 +459,22 @@ $env:UNLUANOVA_RECORD_FRAMES = "0"; .\Tools\RunTests.ps1 -Backend Luau
 整场录屏是另一回事：它由 ffmpeg 抓编辑器窗口，帧率看 `-SessionFps`（默认 15），
 `-NoSessionVideo` 单独关掉它、`-NoVideo` 两个一起关。
 
+#### 多窗口
+
+联网用例里画面不止一个：`-RecordWindow` 可以把 peer 的窗口一起录进来，每个窗口一个
+文件。
+
+```powershell
+.\Tools\RunTests.ps1 -RecordWindow "客户端1=UnrealEditor" -RecordWindow "客户端2=UnrealEditor"
+```
+
+产物是 `videos/session.mp4`（编辑器）+ `videos/session-客户端1.mp4` /
+`videos/session-客户端2.mp4`，报告里逐个列出。同名进程的多个窗口不会录重
+（已录过的窗口会被排除）。
+
+**没有窗口的进程不录**（独立服务器是 headless 的，没有 `MainWindowTitle`），日志里会
+说明哪一个被跳过了 —— 它要看的是日志，不是画面。只有所有窗口都没起来时才退回整屏录制。
+
 ### 编码器从哪来
 
 引擎不带视频编码器（见下），所以编码放在报告生成器里，按顺序找：

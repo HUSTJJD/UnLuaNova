@@ -82,6 +82,7 @@ nav:
           - 调试: CN/Debugging.md
           - 智能提示: CN/IntelliSense.md
           - 测试与自动化: CN/Testing.md
+          - 测试框架规划: CN/Testing_Architecture.md
           - 测试报告 Lua: test-lua-report.md
           - 测试报告 Luau: test-luau-report.md
       - 参考:

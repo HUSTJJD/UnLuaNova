@@ -60,6 +60,9 @@ bool TryToSetMetatable(lua_State *L, const char *MetatableName, UObject* Object 
  */
 void* NewUserdataWithTwoLvPtrTag(lua_State* L, int Size, void* Object);
 void* NewUserdataWithContainerTag(lua_State* L, int Size);
+// Same, for a container whose destructor has to run on both backends. On plain Lua this is
+// NewUserdataWithContainerTag and 'Dtor' is unused - __gc still does the work there.
+void* NewUserdataWithContainerTagDtor(lua_State* L, int Size, FUnLuaNovaUserdataDtor Dtor);
 void MarkUserdataTwoLvPtrTag(lua_State* L, int32 Index);
 void SetUserdataFlags(lua_State* L, int32 Index, uint8 Flags);
 UNLUANOVA_API uint8 CalcUserdataPadding(int32 Alignment);
@@ -67,7 +70,13 @@ template <typename T> uint8 CalcUserdataPadding() { return CalcUserdataPadding(a
 UNLUANOVA_API void* GetUserdata(lua_State *L, int32 Index, bool *OutTwoLvlPtr = nullptr, bool *OutClassMetatable = nullptr);
 UNLUANOVA_API void* GetUserdataFast(lua_State *L, int32 Index, bool *OutTwoLvlPtr = nullptr);
 UNLUANOVA_API void* NewUserdataWithPadding(lua_State *L, int32 Size, const char *MetatableName, uint8 PaddingSize = 0);
+// Dtor variant: on Luau the finalizer is the only chance to destroy the payload.
+UNLUANOVA_API void* NewUserdataWithPaddingDtor(lua_State *L, int32 Size, const char *MetatableName, uint8 PaddingSize, FUnLuaNovaUserdataDtor Dtor);
 #define NewTypedUserdata(L, Type) NewUserdataWithPadding(L, sizeof(Type), #Type, CalcUserdataPadding<Type>())
+#define NewTypedUserdataDtor(L, Type, Dtor) NewUserdataWithPaddingDtor(L, sizeof(Type), #Type, CalcUserdataPadding<Type>(), Dtor)
+// GetUserdataPayloadFromBlock() and DestroyUserdataPayload<T>() live in UnLuaNovaBase.h:
+// this header reaches them through UnLuaNovaPrivate.h, and a second definition here would
+// be one the compiler is entitled to reject.
 UNLUANOVA_API void* GetCppInstance(lua_State *L, int32 Index);
 UNLUANOVA_API void* GetCppInstanceFast(lua_State *L, int32 Index);
 
@@ -75,8 +84,8 @@ UNLUANOVA_API void* GetCppInstanceFast(lua_State *L, int32 Index);
  * Functions to handle script containers
  */
 void* NewScriptContainer(lua_State *L, const FScriptContainerDesc &Desc);
-void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &Desc);
-void* CacheScriptContainer(lua_State* L, void* Key, const FScriptContainerDesc& Desc, const TFunctionRef<bool (void*)>& Validator);
+void* CacheScriptContainer(lua_State *L, void *Key, const FScriptContainerDesc &Desc, FUnLuaNovaUserdataDtor Dtor = nullptr);
+void* CacheScriptContainer(lua_State* L, void* Key, const FScriptContainerDesc& Desc, const TFunctionRef<bool (void*)>& Validator, FUnLuaNovaUserdataDtor Dtor = nullptr);
 void* GetScriptContainer(lua_State *L, int32 Index);
 void RemoveCachedScriptContainer(lua_State *L, void *Key);
 

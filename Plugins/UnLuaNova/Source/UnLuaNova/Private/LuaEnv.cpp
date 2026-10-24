@@ -31,6 +31,7 @@
 #include "UnLuaNovaSettings.h"
 #include "UnLuaNovaBase.h"   // UNLUANOVA_HAS_STDLIB_*（由 Build.cs 定义）
 #include "LuaBackend.h"
+#include "LuaLib_Io.h"
 #include "LuaLib_Timer.h"
 #include "LuaMemoryStats.h"
 #include "LuaProfiler.h"
@@ -83,6 +84,65 @@ namespace UnLuaNova
     // The profiler hook used to live here. It now lives in LuaProfiler.cpp, which caches
     // one Insights spec id per function rather than formatting an FString on every single
     // call/return, and can be toggled at runtime instead of only at compile time.
+
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+    /**
+     * GC tunables from CVars, applied on top of UNLUANOVA_SETUP_GC.
+     *
+     * Luau's collector has no generational mode, so G (goal) and S (step multiplier) are
+     * the whole story, and they are not independent: S has to be able to keep up with the
+     * heap growth G permits. lua.h spells the pairing out - S belongs in
+     * [100/(G-100), 100+100/(G-100)) with a floor of 150%, so [150,200] at G=200 - and a
+     * pair outside it does not merely collect more or less, it collects *wrong*: too small
+     * an S lets the heap outrun the collector and the effective goal silently grows, and
+     * too large an S spends CPU on a cycle that keeps restarting.
+     *
+     * The check is a warning rather than a clamp because a project that deliberately
+     * overrides both should be allowed to; it just has to be told when the pair is one
+     * the VM cannot honour.
+     */
+    static void ApplyLuauGcTuning(lua_State* L)
+    {
+        static auto GoalCVar = IConsoleManager::Get().RegisterConsoleVariable(
+            TEXT("lua.gcgoal"),
+            200,
+            TEXT("Luau GC goal G, in percent of live heap size. 200 allows the heap to double. Luau backend only."),
+            ECVF_Default);
+
+        static auto StepMulCVar = IConsoleManager::Get().RegisterConsoleVariable(
+            TEXT("lua.gcstepmul"),
+            200,
+            TEXT("Luau GC step multiplier S, in percent: how much collector work is done per byte allocated. Keep it in the interval documented for lua.gcgoal. Luau backend only."),
+            ECVF_Default);
+
+        static auto StepSizeCVar = IConsoleManager::Get().RegisterConsoleVariable(
+            TEXT("lua.gcstepsize"),
+            1,
+            TEXT("Luau GC step size in KB: how often the collector interrupts to do a step. Luau backend only."),
+            ECVF_Default);
+
+        const int32 Goal = FMath::Max(101, GoalCVar->GetInt());
+        const int32 StepMul = FMath::Max(100, StepMulCVar->GetInt());
+        const int32 StepSizeKb = FMath::Max(1, StepSizeCVar->GetInt());
+
+        lua_gc(L, LUA_GCSETGOAL, Goal);
+        lua_gc(L, LUA_GCSETSTEPMUL, StepMul);
+        lua_gc(L, LUA_GCSETSTEPSIZE, StepSizeKb);
+
+        // 10000/(G-100) is the recommended interval expressed in percent.
+        const int32 Ratio = 10000 / (Goal - 100);
+        const int32 MinStepMul = FMath::Max(150, Ratio);
+        const int32 MaxStepMul = 100 + Ratio;
+
+        if (StepMul < MinStepMul || StepMul >= MaxStepMul)
+        {
+            UE_LOG(LogUnLuaNova, Warning,
+                TEXT("lua.gcstepmul=%d is outside the interval [%d, %d) that lua.gcgoal=%d needs; "
+                     "the collector will not reach the goal. See the GC note in LuaBackend.h."),
+                StepMul, MinStepMul, MaxStepMul, Goal);
+        }
+    }
+#endif
 
     FLuaEnv::FLuaEnv()
         : bStarted(false)
@@ -157,6 +217,26 @@ namespace UnLuaNova
             lua_newtable(L);                     // [package, searchers]
             lua_setfield(L, -2, "searchers");    // package.searchers = {}
 
+            // The rest of the shape a Lua program expects to find on package.
+            lua_newtable(L);                     // [package, preload]
+            lua_setfield(L, -2, "preload");      // package.preload = {}
+
+            // Directory separator, path separator, the substitution character in a path
+            // template, the executable-directory placeholder, and the ignore mark - the
+            // five lines plain Lua puts here.
+            lua_pushliteral(L, "/\n;\n?\n!\n-\n");
+            lua_setfield(L, -2, "config");
+
+            // path and cpath are published because scripts read them, but UnLuaNova's own
+            // loader does not: it resolves modules from the script root and from whatever
+            // a project adds to package.searchers. A project that wants path-based
+            // resolution can register a searcher that reads these - which works, because
+            // package.searchers is real on both backends.
+            lua_pushliteral(L, "./?.lua;./?/init.lua");
+            lua_setfield(L, -2, "path");
+            lua_pushliteral(L, "");
+            lua_setfield(L, -2, "cpath");
+
             // ...and the standard libraries, which plain Lua publishes as modules and
             // this backend otherwise does not publish at all.
             PublishStdLibModules(L);             // [package]
@@ -166,6 +246,7 @@ namespace UnLuaNova
 
         // Now that package.searchers exists on both backends, the loaders can go into it -
         // which is also what makes a searcher added later from script work.
+        AddSearcher(LoadFromPreload, 1);
         AddSearcher(LoadFromCustomLoader, 2);
         AddSearcher(LoadFromFileSystem, 3);
         AddSearcher(LoadFromBuiltinLibs, 4);
@@ -177,6 +258,10 @@ namespace UnLuaNova
         UNLUANOVA_SETUP_SCRIPT_COMPAT(L);
 
         UELib::Open(L);
+
+        // Same reasoning as UELib::Open: anything published as a global has to be in place
+        // before luaL_sandbox freezes the globals table. Off by default.
+        OpenIoLibrary(L);
 
         // Sandbox only after UnLua has published its own globals - otherwise we would be
         // locking the very table we are about to write to. Off by default: hardening the
@@ -211,6 +296,11 @@ namespace UnLuaNova
             // build - and keeps both backends compiling the same shape.
             (void)SandboxCVar->GetInt();
 #endif
+
+            // Independent of lua.sandbox: hardening the globals is one switch, giving each
+            // coroutine its own globals is another, and the second is the one that changes
+            // what scripts can see. See UnLuaNovaSandbox.h.
+            UnLuaNova::InstallSandboxThreadHardening(L);
         }
 
         ObjectRegistry = new FObjectRegistry(this);
@@ -245,6 +335,9 @@ namespace UnLuaNova
         else
         {
             UNLUANOVA_SETUP_GC(L);
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+            ApplyLuauGcTuning(L);
+#endif
         }
 
         // Created after the setup above so it starts in the mode the VM was actually
@@ -695,6 +788,10 @@ namespace UnLuaNova
             return false;
         }
 
+        // The chunk function is on top of the stack and not running yet, which is the one
+        // moment Luau's native compiler will accept it. No-op unless lua.codegen is on.
+        UnLuaNova::MaybeCompileNativeChunk(InL, InName);
+
         return true;
     }
 
@@ -849,6 +946,38 @@ namespace UnLuaNova
     void FLuaEnv::RemoveManualObjectReference(UObject* Object)
     {
         ManualObjectReference.Remove(Object);
+    }
+
+    int FLuaEnv::LoadFromPreload(lua_State* L)
+    {
+        // package.preload[name] - the standard way for a host (or a test) to supply a
+        // module without there being a file for it. Returning nothing means "not mine",
+        // and Require moves on to the next searcher.
+        lua_getglobal(L, "package");
+        if (!lua_istable(L, -1))
+        {
+            lua_pop(L, 1);
+            return 0;
+        }
+
+        lua_getfield(L, -1, "preload");
+        lua_remove(L, -2); // package
+        if (!lua_istable(L, -1))
+        {
+            lua_pop(L, 1);
+            return 0;
+        }
+
+        lua_pushvalue(L, 1); // the module name
+        lua_rawget(L, -2);   // preload[name]
+
+        if (lua_isnil(L, -1))
+        {
+            lua_pop(L, 2); // nil and preload
+            return 0;
+        }
+
+        return 1; // the loader function, on top of the stack where pcall wants it
     }
 
     int FLuaEnv::LoadFromBuiltinLibs(lua_State* L)

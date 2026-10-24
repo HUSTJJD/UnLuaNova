@@ -59,6 +59,12 @@ namespace UnLuaNovaTestSuite
         , NumClients(InNumClients), PlayNetMode(InPlayNetMode)
     {
         NumClients = FMath::Max(NumClients, 1);
+
+        // Set here and not only in LoadMap(): LoadMap() runs on the editor path alone, so
+        // on the -game carrier this would stay 0 and every wait would be judged expired
+        // on its first tick.
+        if (WaitDeadline == 0.0)
+            WaitDeadline = FPlatformTime::Seconds() + WaitTimeoutSeconds;
     }
 
     FPieNetWorlds GetPieNetWorlds()
@@ -91,7 +97,36 @@ namespace UnLuaNovaTestSuite
     bool FOpenMapLatentCommand::Update()
     {
 #if !WITH_EDITOR
-        return true;
+        // The -game carrier: there is no PIE and no editor to ask for a map. The engine is
+        // already running the map named on the command line, so "opening" it is not a thing
+        // this process can do - what it can do is wait until the world exists.
+        //
+        // This used to be a bare `return true`, which let every test that needs a world
+        // race ahead of it: SpawnActor got a null world and the failure read like the
+        // feature under test was broken. Waiting here is what makes the same test source
+        // usable on both carriers.
+        if (GEngine)
+        {
+            for (const FWorldContext& Context : GEngine->GetWorldContexts())
+            {
+                // PIE is listed too: a packaged or -game build still reports EWorldType::Game,
+                // and accepting both keeps this from depending on which one wins.
+                if ((Context.WorldType == EWorldType::Game || Context.WorldType == EWorldType::PIE)
+                    && Context.World())
+                {
+                    return true;
+                }
+            }
+        }
+
+        if (FPlatformTime::Seconds() > WaitDeadline)
+        {
+            UE_LOG(LogTemp, Error, TEXT("no game world came up after %.0fs - tests that need one will fail against a null world. Pass a map on the command line (and check -game / -server)."),
+                WaitTimeoutSeconds);
+            return true;
+        }
+
+        return false;
 #else
         // Phase 1: an earlier test left a session running (see FEndPlayMapCommand). End it
         // and wait until it is gone - starting the new one on top of a teardown is what

@@ -483,7 +483,7 @@ static const luaL_Reg UE4FileLib[] =
 {
 	{"Read", UE4File_ReadFile },
 	{"Write",UE4File_WriteFile},
-#if UNLUANOVA_HAS_USERDATA_GC
+#if UNLUANOVA_HAS_GC_METAMETHOD
 	{"__gc",UE4File_Delete},
 #endif
 	{ nullptr, nullptr }

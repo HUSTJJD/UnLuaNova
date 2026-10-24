@@ -41,6 +41,12 @@ namespace UnLuaNova
     public:
         using FListener = TFunction<void(lua_State* L, lua_Debug* Ar)>;
 
+        /**
+         * Called when a (co)routine is created or destroyed.
+         * Parent is nullptr on destruction. Luau only - see UNLUANOVA_HAS_THREAD_CALLBACK.
+         */
+        using FThreadListener = TFunction<void(lua_State* Parent, lua_State* Thread)>;
+
         static FLuaVmHooks& Get()
         {
             static FLuaVmHooks Instance;
@@ -73,8 +79,33 @@ namespace UnLuaNova
                 return;
 
             Slot->Listeners.Empty();
+            Slot->ThreadListeners.Empty();
             Refresh(L, *Slot);
+            RefreshThreads(L, *Slot);
         }
+
+#if UNLUANOVA_HAS_THREAD_CALLBACK
+        /** Register for thread creation/destruction. No-op on plain Lua. */
+        void AddThreadHook(lua_State* L, const void* Owner, FThreadListener Fn)
+        {
+            FSlot& Slot = Slots.FindOrAdd(L);
+            Slot.ThreadListeners.Add({Owner, MoveTemp(Fn)});
+            RefreshThreads(L, Slot);
+        }
+
+        void RemoveThreadOwner(lua_State* L, const void* Owner)
+        {
+            FSlot* Slot = Slots.Find(L);
+            if (!Slot)
+                return;
+
+            Slot->ThreadListeners.RemoveAll([Owner](const FThreadEntry& E) { return E.Owner == Owner; });
+            RefreshThreads(L, *Slot);
+        }
+#else
+        void AddThreadHook(lua_State* L, const void* Owner, FThreadListener Fn) {}
+        void RemoveThreadOwner(lua_State* L, const void* Owner) {}
+#endif
 
     private:
         struct FEntry
@@ -84,9 +115,16 @@ namespace UnLuaNova
             FListener Fn;
         };
 
+        struct FThreadEntry
+        {
+            const void* Owner;
+            FThreadListener Fn;
+        };
+
         struct FSlot
         {
             TArray<FEntry> Listeners;
+            TArray<FThreadEntry> ThreadListeners;
         };
 
         static void Dispatch(lua_State* L, lua_Debug* Ar)
@@ -132,6 +170,25 @@ namespace UnLuaNova
             (void)GC;
             Dispatch(L, nullptr);
         }
+#endif
+
+#if UNLUANOVA_HAS_THREAD_CALLBACK
+        void RefreshThreads(lua_State* L, FSlot& Slot)
+        {
+            UNLUANOVA_SET_THREAD_CALLBACK(L, Slot.ThreadListeners.Num() > 0 ? &OnUserThread : nullptr);
+        }
+
+        static void OnUserThread(lua_State* Parent, lua_State* Thread)
+        {
+            FSlot* Slot = Get().Slots.Find(Parent ? Parent : Thread);
+            if (!Slot)
+                return;
+
+            for (const FThreadEntry& E : Slot->ThreadListeners)
+                E.Fn(Parent, Thread);
+        }
+#else
+        void RefreshThreads(lua_State* L, FSlot& Slot) {}
 #endif
 
         TMap<lua_State*, FSlot> Slots;

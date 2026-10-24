@@ -350,6 +350,11 @@ namespace UnLuaNova
         return ::NewUserdataWithPadding(L, Size, MetatableName, CalcUserdataPadding(Alignment));
     }
 
+    void* NewUserdataDtor(lua_State *L, int32 Size, const char *MetatableName, int32 Alignment, FUnLuaNovaUserdataDtor Dtor)
+    {
+        return ::NewUserdataWithPaddingDtor(L, Size, MetatableName, CalcUserdataPadding(Alignment), Dtor);
+    }
+
     /**
      * Push an untyped dynamic array (same memory layout with TArray)
      */

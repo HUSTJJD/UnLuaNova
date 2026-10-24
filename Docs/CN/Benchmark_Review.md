@@ -250,15 +250,23 @@ slua 的 6.0x / 4.2x、thunk 覆盖 8123/11044）**在仓库里没有任何产�
 
 ## 五、测试：518 条的覆盖分布
 
-数量已经很好，**分布有洞**。具体缺口：
+数量已经很好，**分布有洞**。
+
+> 更正：本文初版写"Override 生命周期 / locator / 控制台命令零用例"是错的 ——
+> `Overrides.spec.cpp`、`Locators.spec.cpp`、`ConsoleCommands.spec.cpp` 都在，
+> 各有 6 条用例。真正的问题不是"没有"，而是**这些用例断言得不够**：
+> `Overrides` 没有直接测 `IsOverridable()` 的 flag 规则、没有测"同名二次 Override 不重复添加"、
+> 没有走 `bAddNew` 分支；`Locators` 完全没有覆盖默认的 `ULuaModuleLocator_ByBinding`；
+> `ConsoleCommands` 对 `lua.profiler` / `memstats` / `gc` / `sandbox` 只断言"没崩"，
+> 不断言可观测效果。（这是写这段时没核文件就下的结论，属本文自己的教训。）
 
 | 区域 | 现状 |
 |:---|:---|
-| `ULuaFunction` 的 Restore / Suspend / Resume / `IsOverridable` | 零用例 —— 覆写系统最核心的状态机没有直接覆盖 |
-| `UnLuaNovaDebugBase`（断点 / 栈 / 局部变量） | 零用例 |
+| `IsOverridable()` 的 flag 规则 / 同名不重复添加 / `bAddNew` 分支 | 只有间接覆盖 |
+| `ULuaModuleLocator_ByBinding`（默认 locator）的解析规则 | 零用例 |
+| `lua.profiler` / `memstats` / `gc` / `sandbox` | 只测"没崩"，不测可观测效果 |
+| `UnLuaNovaDebugBase`（断点 / 栈 / **局部变量**） | 无专有用例；`Observability.spec.cpp` 只覆盖注册与单步 |
 | DAP 适配器 | 零用例 |
-| `ULuaModuleLocator_ByPackage` / `ULuaEnvLocator` 解析规则 | 零用例 |
-| `lua.do` / `profiler` / `memstats` / `dbg` / `sandbox` | 只测"命令存在"，不测行为 |
 | `FLuaEnv::HotReload()` | 没被驱动（`HotReload` 只测"模块能加载"） |
 | `FDanglingCheck` 逻辑 | 没被驱动（只测开关可设） |
 | `Private/Perfs/*` | 注册 **0** 条自动化用例，只出 CSV |
@@ -270,6 +278,12 @@ slua 的 6.0x / 4.2x、thunk 覆盖 8123/11044）**在仓库里没有任何产�
 
 排序原则：**先修正确的，再坐实卖点，最后补缺口。** 每条都给了验收 ——
 验收不到就不算做完，这是上一轮就定的规矩。
+
+**落地进度**（与本文同一批改动）：P0 三条、P1 四条全部落地；P2 的 DAP upvalue 与
+文档校正（幽灵 API 部分）落地；P3 的 DAP upvalue 属于调试项，已落地。
+**仍未落地**：thunk 覆盖扩到容器/结构体（需要重跑代码生成器，不是只改代码）、
+热更补丁包/版本/回滚、Lua 内存按来源归因、协程泄漏检测、多 Env 调试、
+五个 EN 页面、覆盖洞里剩下的 DebugService 专用用例。原因见各条下方标注。
 
 ### P0 —— 正确性
 

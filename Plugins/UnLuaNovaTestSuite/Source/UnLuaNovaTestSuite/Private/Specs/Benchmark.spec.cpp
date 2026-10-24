@@ -41,7 +41,13 @@
 #include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
 #include "HAL/FileManager.h"
+#include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
+#include "Misc/App.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
+#include "Dom/JsonObject.h"
 #include "Perfs/UnLuaNovaBenchmarkProxy.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -73,6 +79,14 @@ static const TCHAR* BackendTag()
 #endif
 }
 
+// How far a run may drift from the committed baseline before it counts as a regression.
+//
+// 25%: wide enough that a loaded machine or a different CPU does not make the suite red,
+// narrow enough that "this change made calls ten times slower" is a failure here instead of
+// a warning in a report nobody reads. Deliberately not 1.0 - a gate that fires on noise is
+// a gate people learn to ignore, which is worse than no gate.
+static constexpr double PerfBaselineTolerance = 1.25;
+
 BEGIN_DEFINE_SPEC(FBenchmarkSpec, "UnLuaNova.Perf.Benchmark", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     TSharedPtr<UnLuaNova::FLuaEnv> Env;
     lua_State* L;
@@ -85,6 +99,14 @@ BEGIN_DEFINE_SPEC(FBenchmarkSpec, "UnLuaNova.Perf.Benchmark", EAutomationTestFla
     };
 
     TArray<FRow> Rows;
+
+    double PerOpUs(const FRow& Row) const
+    {
+        return Row.Iterations > 0 ? (Row.TotalMs * 1000.0) / Row.Iterations : 0.0;
+    }
+
+    bool WriteJson(const FString& Path) const;
+    void CheckAgainstBaseline();
 
     // Body does its own looping and Iterations only labels how many calls it made. That
     // matters for the Lua row: the loop has to live inside the chunk, or the timing
@@ -260,6 +282,17 @@ void FBenchmarkSpec::Define()
             FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
         TEST_TRUE(bWritten);
 
+        // ---- write the machine-readable run --------------------------------
+        // The CSV is what the report reads; this is what a *committed* baseline can be
+        // compared against. Written every run so `RunTests.ps1 -UpdateBaseline` has
+        // something to copy - until it is copied in, the numbers this case produces live
+        // only on this machine and no one else can check them.
+        const FString JsonPath = Dir / FString::Printf(TEXT("perf-%s.json"), BackendTag());
+        TEST_TRUE(WriteJson(JsonPath));
+
+        // ---- and hold it against the committed baseline ---------------------
+        CheckAgainstBaseline();
+
         // Sanity: work happened and was measured. Not an absolute duration - see the file
         // comment. Eight rows: three crossing into C++, four staying inside the VM, one
         // building a container and marshalling it across.
@@ -270,6 +303,92 @@ void FBenchmarkSpec::Define()
             TestTrue(*FString::Printf(TEXT("%s 耗时非零"), *Row.Case), Row.TotalMs > 0.0);
         }
     });
+}
+
+bool FBenchmarkSpec::WriteJson(const FString& Path) const
+{
+    const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+
+    // Recorded so a number can always be traced to where it came from. A baseline without
+    // these is exactly what made the documented figures unverifiable: a duration with no
+    // VM, no machine and no engine version behind it says nothing.
+    Root->SetStringField(TEXT("Backend"), BackendTag());
+    Root->SetStringField(TEXT("EngineVersion"), FApp::GetBuildVersion());
+    Root->SetStringField(TEXT("Machine"), FPlatformProcess::ComputerName());
+    Root->SetNumberField(TEXT("Tolerance"), PerfBaselineTolerance);
+
+    TArray<TSharedPtr<FJsonValue>> Cases;
+    for (const FRow& Row : Rows)
+    {
+        const TSharedRef<FJsonObject> Case = MakeShared<FJsonObject>();
+        Case->SetStringField(TEXT("Case"), Row.Case);
+        Case->SetNumberField(TEXT("Iterations"), Row.Iterations);
+        Case->SetNumberField(TEXT("PerOpUs"), PerOpUs(Row));
+        Cases.Add(MakeShared<FJsonValueObject>(Case));
+    }
+    Root->SetArrayField(TEXT("Cases"), Cases);
+
+    FString Output;
+    const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Output);
+    if (!FJsonSerializer::Serialize(Root, Writer))
+        return false;
+
+    return FFileHelper::SaveStringToFile(Output, *Path, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+}
+
+void FBenchmarkSpec::CheckAgainstBaseline()
+{
+    const FString Path = FPaths::ProjectPluginsDir() / TEXT("UnLuaNova") / TEXT("Tools") / TEXT("baseline")
+        / FString::Printf(TEXT("perf-%s.json"), BackendTag());
+
+    FString Text;
+    if (!FPaths::FileExists(*Path) || !FFileHelper::LoadFileToString(Text, *Path))
+    {
+        // Not a failure on purpose: a baseline cannot exist before someone records one, and
+        // failing outright would make the suite red on every clean checkout. It is a warning
+        // because what it means is "this case currently proves nothing about performance".
+        AddWarning(FString::Printf(
+            TEXT("没有提交的性能基线（%s），这条用例现在只验证「跑过」，验证不了「没变慢」。跑一次 RunTests.ps1 -UpdateBaseline 并把产物提交进来。"),
+            *Path));
+        return;
+    }
+
+    TSharedPtr<FJsonObject> Root;
+    const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Text);
+    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+    {
+        AddError(FString::Printf(TEXT("性能基线 %s 不是合法 JSON，无法比对。"), *Path));
+        return;
+    }
+
+    const TArray<TSharedPtr<FJsonValue>>* Cases = nullptr;
+    if (!Root->TryGetArrayField(TEXT("Cases"), Cases) || !Cases)
+    {
+        AddError(FString::Printf(TEXT("性能基线 %s 里没有 Cases 数组。"), *Path));
+        return;
+    }
+
+    for (const TSharedPtr<FJsonValue>& Value : *Cases)
+    {
+        const TSharedPtr<FJsonObject> Case = Value.IsValid() ? Value->AsObject() : nullptr;
+        if (!Case.IsValid())
+            continue;
+
+        FString Name;
+        double BaselineUs = 0.0;
+        if (!Case->TryGetStringField(TEXT("Case"), Name) || !Case->TryGetNumberField(TEXT("PerOpUs"), BaselineUs))
+            continue;
+
+        const FRow* Row = Rows.FindByPredicate([&Name](const FRow& R) { return R.Case == Name; });
+        if (!Row)
+            continue;   // a case this run did not measure is not this run's problem
+
+        const double ActualUs = PerOpUs(*Row);
+        const double Limit = BaselineUs * PerfBaselineTolerance;
+        TestTrue(*FString::Printf(TEXT("%s 每操作 %.4f µs，未超过基线 %.4f µs 的 %.0f%%"),
+            *Name, ActualUs, BaselineUs, (PerfBaselineTolerance - 1.0) * 100.0),
+            ActualUs <= Limit);
+    }
 }
 
 #endif

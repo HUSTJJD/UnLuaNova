@@ -72,6 +72,17 @@
     a run that is not driven by a test, e.g.
     -ExtraCommands "UnLuaNovaTest.Screenshot Showcase_Binding".
 
+.PARAMETER Carrier
+    Which process the tests run in:
+      Editor - UnrealEditor-Cmd.exe, as always. Everything works here, including the tests
+              that need a viewport.
+      Game   - the project's own <Project>.exe -game. No editor: no editor startup, no
+              editor tick in the background. Tests that need a viewport (screenshots,
+              NonNullRHI) or a PIE net session are not in this suite.
+      Auto   - (default) pick it from the static classification in
+              Tools/ClassifyTests.py: if the filter matches any test that needs a viewport
+              or captures pixels, Editor; otherwise Game.
+
 .PARAMETER NoScreenshots
     Do not collect the pictures the tests took. They are collected by default: the docs site
     shows them (Docs/CN/Showcase.md and the gallery in each report), and a run that leaves
@@ -152,12 +163,23 @@ param(
     [string] $Map = "",
     [string] $OutputDir = "",
     [string] $ExtraCommands = "",
+    # 测试载体。Auto：按静态分类挑 —— filter 里没有需要视口/截图的用例就跑 -game，
+    # 否则回编辑器。见上面的 .PARAMETER Carrier。
+    [ValidateSet("Auto", "Editor", "Game")]
+    [string] $Carrier = "Auto",
     [switch] $NoScreenshots,
     [switch] $NoVideo,
     # 只关掉"整场录屏"，保留 showcase 剪辑：剪辑是用例自己录的，卡死/崩溃/启动那几十秒都不在里面。
     [switch] $NoSessionVideo,
     # 录屏帧率。整场录屏动辄几分钟，15fps 足够看清"卡在哪一帧"，文件也只有一半大。
     [int] $SessionFps = 15,
+    # 除编辑器外还要录的窗口，格式 "标签=进程名"，可重复。
+    # 联网测试里服务器和一个或多个客户端各有各的画面，只录编辑器那一个窗口的话，
+    # "客户端没收到复制字段"这种事在录像里根本看不见。
+    #   -RecordWindow "客户端1=UnrealEditor" -RecordWindow "客户端2=UnrealEditor"
+    # 每个窗口单独出一个 videos/session-<标签>.mp4；没有窗口的进程（独立服务器是
+    # headless 的）不录，日志里会说明。
+    [string[]] $RecordWindow = @(),
     [switch] $NullRHI,
     [switch] $Sound,
     [switch] $Publish,
@@ -184,6 +206,30 @@ $ErrorActionPreference = "Stop"
 # particular machine.
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $ToolsDir = Join-Path $RepoRoot "Tools"
+
+function Publish-PerfBaseline {
+    # Benchmark.spec.cpp writes Saved/Benchmark/perf-<Backend>.json on every run; this is
+    # what turns one machine's numbers into a baseline everybody is measured against.
+    #
+    # Before this existed the performance figures in the docs were a number someone read off
+    # a screen once: no VM, no machine, no engine version attached, and nothing to diff
+    # against. The spec warns (does not fail) while the file is missing, so the first person
+    # to run -UpdateBaseline is what makes the gate real.
+    param([string] $Backend)
+
+    if (-not $ProjectPath) { return }
+    $ProjectDir = Split-Path -Parent $ProjectPath
+    $Source = Join-Path $ProjectDir "Saved/Benchmark/perf-$Backend.json"
+    if (-not (Test-Path $Source)) {
+        Write-Host "PerfBase  : 没找到 $Source —— 这次没有跑 Benchmark 用例，性能基线未更新。" -ForegroundColor Yellow
+        return
+    }
+
+    $Target = Join-Path $RepoRoot "Tools/baseline/perf-$($Backend.ToLower()).json"
+    Copy-Item $Source $Target -Force
+    Write-Host "PerfBase  : $Target" -ForegroundColor Green
+    Write-Host "            提交它之后，Perf.Benchmark 用例会把每次耗时与它比对（容差 25%）。" -ForegroundColor DarkGray
+}
 
 function Test-UnrealEngineRoot {
     param([string] $Path)
@@ -282,6 +328,79 @@ if (-not $SkipBuild -and -not (Test-Path $BuildBat)) {
     throw "Build.bat not found under '$EnginePath'. Pass -EnginePath <UE root> or add -SkipBuild."
 }
 
+# --- 载体：这一轮测试跑在哪个进程里 ---------------------------------------------
+# 从来都是"全部塞进一个 UnrealEditor-Cmd"，于是不管用例要不要，每轮都得付一次编辑器
+# 启动 + 编辑器 tick 的账，而这笔账是摊在每个用例头上的，看不出来。实际上只有两类
+# 用例真的离不开编辑器：要真实视口/截图的（D/E），和要 PIE 联网的（C）。
+# A（纯逻辑）和 B（只要一个 UWorld）在项目自己的 <Project>.exe -game 里一样跑。
+$ProjectName = [System.IO.Path]::GetFileNameWithoutExtension($ProjectPath)
+$ClassificationPath = Join-Path $RepoRoot "Tools/baseline/classification.json"
+$script:Classification = $null
+
+function Get-TestClassification {
+    # 纯静态分析（扫 Specs/ 与 Tests/ 的源码），跑一次几毫秒；失败就当没分类。
+    if ($script:Classification) { return $script:Classification }
+
+    $Classifier = Join-Path $ToolsDir "ClassifyTests.py"
+    if (-not (Test-Path $Classifier)) { return $null }
+    & python $Classifier --out $ClassificationPath 2>&1 | Out-Null
+    if (-not (Test-Path $ClassificationPath)) { return $null }
+
+    try {
+        $Json = Get-Content $ClassificationPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+    $Map = @{}
+    if ($Json.tests) {
+        foreach ($P in $Json.tests.PSObject.Properties) { $Map[$P.Name] = [string]$P.Value }
+    }
+    $script:Classification = $Map
+    return $Map
+}
+
+function Resolve-Carrier {
+    param([Parameter(Mandatory)] [string] $Requested)
+
+    if ($Requested -ne "Auto") {
+        return @{ Carrier = $Requested; Reason = "-Carrier $Requested（手动指定）" }
+    }
+
+    $Map = Get-TestClassification
+    if (-not $Map -or $Map.Count -eq 0) {
+        return @{ Carrier = "Editor"; Reason = "拿不到静态分类（Tools/ClassifyTests.py），保守起见用编辑器" }
+    }
+
+    # 只有 D/E 真的必须在编辑器里：D 要 NonNullRHI 的视口，E 要截像素。
+    # C（PIE 联网）现在也留在编辑器里 —— 它要 PIE 的 server+client，见 P2。
+    $Heavy = @()
+    foreach ($Key in $Map.Keys) {
+        if ($Key -notlike "$Filter*") { continue }
+        $Cls = $Map[$Key]
+        if ($Cls -eq "D" -or $Cls -eq "E" -or $Cls -eq "C") { $Heavy += "$Key($Cls)" }
+    }
+    if ($Heavy.Count -gt 0) {
+        return @{ Carrier = "Editor"; Reason = "filter 里有只能在编辑器里跑的用例：" + ($Heavy -join ', ') }
+    }
+    return @{ Carrier = "Game"; Reason = "filter 里没有 D/E/C 类用例 —— 可以离开编辑器进程" }
+}
+
+$CarrierChoice = Resolve-Carrier -Requested $Carrier
+$IsGameCarrier = ($CarrierChoice.Carrier -eq "Game")
+
+function Resolve-GameExe {
+    # -game 用项目自己编出来的 exe。源码版引擎把游戏目标的 exe 放在项目的
+    # Binaries/Win64 下，安装版/少数布局下在 Engine/Binaries/Win64，两个都找。
+    $Candidates = @(
+        (Join-Path (Split-Path -Parent $ProjectPath) "Binaries/Win64/$ProjectName.exe")
+        (Join-Path $EnginePath "Engine/Binaries/Win64/$ProjectName.exe")
+    )
+    foreach ($C in $Candidates) {
+        if (Test-Path $C) { return $C }
+    }
+    return $Candidates[0]
+}
+
 # --- one run at a time -------------------------------------------------------------
 # The backend is global state: an ini value plus whatever the last build linked. Two runs
 # overlap at their peril - the second Build.bat only waits on UBT's mutex and then uses
@@ -348,8 +467,15 @@ function Release-RunLock {
 $PluginRoot = Join-Path $RepoRoot "Plugins/UnLuaNova"
 
 function Get-BuiltBackend {
-    $Definitions = Join-Path $PluginRoot "Intermediate/Build/Win64/x64/UnrealEditor/Development/UnLuaNova/Definitions.UnLuaNova.h"
-    if (-not (Test-Path $Definitions)) { return $null }
+    # 中间目录按目标名分层：编辑器目标是 UnrealEditor，游戏目标是 <Project>。
+    # 两个都试，因为一次 -game 的跑动只编了其中一个，另一个可能是上一轮留下的。
+    $Folders = if ($IsGameCarrier) { @($ProjectName, "UnrealEditor") } else { @("UnrealEditor", $ProjectName) }
+    foreach ($Folder in $Folders) {
+        $Definitions = Join-Path $PluginRoot "Intermediate/Build/Win64/x64/$Folder/Development/UnLuaNova/Definitions.UnLuaNova.h"
+        if (Test-Path $Definitions) { break }
+        $Definitions = $null
+    }
+    if (-not $Definitions) { return $null }
 
     $Text = Get-Content $Definitions -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
     if (-not $Text) { return $null }
@@ -361,7 +487,10 @@ function Get-BuiltBackend {
 function Assert-BackendBuilt {
     param([string] $Value)
 
-    $Dll = Join-Path $PluginRoot ("Binaries/Win64/UnrealEditor-" + $Value + ".dll")
+    # 模块 DLL 的名字带着目标名：编辑器目标是 UnrealEditor-Lua.dll，游戏目标是
+    # <Project>-Lua.dll。跑 -game 时编的是后者，照着编辑器的名字找会永远找不到。
+    $DllPrefix = if ($IsGameCarrier) { $ProjectName } else { "UnrealEditor" }
+    $Dll = Join-Path $PluginRoot ("Binaries/Win64/$DllPrefix-" + $Value + ".dll")
     if (-not (Test-Path $Dll)) {
         throw "'$Dll' is missing - the $Value backend has never been built here. Drop -SkipBuild."
     }
@@ -455,8 +584,16 @@ function Show-NoTestsQueuedHint {
 #     comes from the pip package in Tools/requirements.txt. A burst that cannot be encoded
 #     fails the run rather than passing as a pile of stills.
 
+function Get-ScreenshotDir {
+    # 截图落在项目 Saved/Screenshots/<平台名> 下，而平台名带着载体：编辑器是
+    # WindowsEditor，游戏是 Windows。-game 的跑动若照旧去 WindowsEditor 找，一张
+    # 都找不到（还会把上一轮编辑器的图当成自己的）。
+    $Leaf = if ($IsGameCarrier) { "Windows" } else { "WindowsEditor" }
+    return (Join-Path $RepoRoot "Saved/Screenshots/$Leaf")
+}
+
 function Clear-StaleScreenshots {
-    $ShotDir = Join-Path $RepoRoot "Saved/Screenshots/WindowsEditor"
+    $ShotDir = Get-ScreenshotDir
     if (-not (Test-Path $ShotDir)) { return }
     Get-ChildItem -Path $ShotDir -Filter "*.png" -File -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
@@ -489,15 +626,19 @@ function Resolve-FfmpegExe {
 }
 
 function Wait-EditorWindow {
-    param([string] $ProcessName, [int] $TimeoutSeconds = 90)
+    param([string] $ProcessName, [int] $TimeoutSeconds = 90, [int[]] $ExcludeId = @())
 
+    # -ExcludeId matters once more than one window is being recorded: several peers of a
+    # net run share a process name (the editor and each client it launched), and without it
+    # every target would claim the same first window and record it repeatedly.
+    #
     # The window does not exist the moment the process does: the editor spends its first
     # seconds loading, and gdigrab cannot capture a title that is not there yet. Wait for it
     # rather than recording forty seconds of desktop.
     $Deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $Deadline) {
         $Proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
-            Where-Object { $_.MainWindowTitle } | Select-Object -First 1
+            Where-Object { $_.MainWindowTitle -and $ExcludeId -notcontains $_.Id } | Select-Object -First 1
         if ($Proc) { return $Proc }
 
         # Nothing left to wait for - the editor died on startup. Sitting out the rest of the
@@ -582,25 +723,84 @@ function Get-WindowCaptureRegion {
 }
 
 function Start-SessionRecording {
+    # One recording per target window.
+    #
+    # A net run has more than one picture worth keeping: the editor, and each client that
+    # joins it. Recording them separately is the only way to see "the client never got the
+    # replicated field" - a single capture of one window shows the server's side of it and
+    # nothing else.
+    #
+    # A target with no window (a dedicated server: no MainWindowTitle at all, it is
+    # headless) is skipped rather than falling back to the whole screen. Two targets both
+    # falling back would record the same desktop twice under different names, which is
+    # strictly worse than one honest gap. Only when *no* target produced a window does the
+    # whole-screen fallback run, which is what a single-window run has always done.
     param(
-        [Parameter(Mandatory)] [string] $OutFile,
-        [Parameter(Mandatory)] [string] $ProcessName,
+        # @(@{ Label = 'Editor'; ProcessName = 'UnrealEditor-Cmd'; OutFile = '...\session.mp4' })
+        [Parameter(Mandatory)] [array] $Targets,
         [int] $Fps = 15
     )
 
     $Ffmpeg = Resolve-FfmpegExe
     if (-not $Ffmpeg) {
         Write-Host "Record    : skipped - 没找到 ffmpeg（pip install -r Tools/requirements.txt，或放进 PATH）" -ForegroundColor Yellow
-        return $null
+        return @()
     }
+
+    $Recordings = @()
+    $UsedIds = @()
+
+    foreach ($Target in $Targets) {
+        # -ExcludeId so two targets on the same process name (editor + a second client
+        # launched from it) do not both grab the first window and record it twice.
+        $Window = Wait-EditorWindow -ProcessName $Target.ProcessName -ExcludeId $UsedIds
+        $Region = if ($Window -and (Restore-EditorWindow -Process $Window)) { Get-WindowCaptureRegion -Process $Window } else { $null }
+
+        if (-not $Region) {
+            Write-Host ("Record    : {0} 没有可录的窗口（headless / 窗口没起来 / 最小化后没还原），不录。" -f $Target.Label) -ForegroundColor Yellow
+            continue
+        }
+
+        $Recording = Start-GdigrabRecording -Ffmpeg $Ffmpeg -OutFile $Target.OutFile -Fps $Fps -Region $Region
+        if ($Recording) {
+            $Recording | Add-Member -NotePropertyName Label -NotePropertyValue $Target.Label -Force
+            $Recordings += $Recording
+            $UsedIds += $Window.Id
+        }
+    }
+
+    if ($Recordings.Count -eq 0) {
+        # Nothing had a window: a headless run, or one that died before paint. Record the
+        # desktop anyway - a run with no picture at all is worse than one with the desktop
+        # in it, and this is the single-window behaviour people already rely on.
+        Write-Host "Record    : 一个窗口都没等到，退回整屏录制。" -ForegroundColor Yellow
+        $Recording = Start-GdigrabRecording -Ffmpeg $Ffmpeg -OutFile $Targets[0].OutFile -Fps $Fps -Region $null
+        if ($Recording) {
+            $Recording | Add-Member -NotePropertyName Label -NotePropertyValue "整屏" -Force
+            $Recordings += $Recording
+        }
+    }
+
+    return $Recordings
+}
+
+function Start-GdigrabRecording {
+    param(
+        [Parameter(Mandatory)] [string] $Ffmpeg,
+        [Parameter(Mandatory)] [string] $OutFile,
+        [int] $Fps = 15,
+        $Region = $null
+    )
 
     $OutDir = Split-Path -Parent $OutFile
     if ($OutDir) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
 
-    # Recording starts when the window is up - the forty seconds of editor startup are not
-    # worth the megabytes, and the run is only interesting from the first test on.
-    $Proc = Wait-EditorWindow -ProcessName $ProcessName
-    $Region = if ($Proc -and (Restore-EditorWindow -Process $Proc)) { Get-WindowCaptureRegion -Process $Proc } else { $null }
+    # Always the desktop - see the note in the $Region branch for why never "title=<window>".
+    # Assigned outside the branch because the whole-screen fallback needs it too, and it did
+    # not used to have it: -i "" is what ffmpeg was handed whenever no window turned up,
+    # which is exactly the run whose recording everybody wants.
+    $Source = "desktop"
+
     if ($Region) {
         # NOT "-i title=<window>": gdigrab reads the window's own surface, and for a
         # D3D-composited window that surface is black. Measured on this machine, capturing a
@@ -612,16 +812,15 @@ function Start-SessionRecording {
         # So: capture the desktop and crop it to the window. Same pixels, minus the failure.
         # The trade-off is that another window dragged over the editor is now in the video -
         # unavoidable, since the desktop is what the compositor hands out.
-        $Source = "desktop"
         $Crop = " -offset_x $($Region.X) -offset_y $($Region.Y) -video_size $($Region.Width)x$($Region.Height)"
-        $What = "编辑器窗口区域 $($Region.Width)x$($Region.Height) @ $($Region.X),$($Region.Y)（整屏裁切）"
+        $What = "窗口区域 $($Region.Width)x$($Region.Height) @ $($Region.X),$($Region.Y)（整屏裁切）"
     } else {
         $Crop = ""
         # No window to crop to: a headless run, a window that never came up, or one that
         # stayed minimized. Record the whole screen instead - a run with no picture at all is
         # worse than one with the desktop in it. Mind the gap: nothing before this point is on
         # tape, which is why the wait is not longer.
-        $What = "整个屏幕（没等到可用的编辑器窗口：无头运行 / 窗口没起来 / 最小化后没还原）—— 开头的几十秒不在录像里"
+        $What = "整个屏幕（没等到可用窗口：无头运行 / 窗口没起来 / 最小化后没还原）—— 开头的几十秒不在录像里"
     }
 
     # Two things the scale filter buys: it caps the width, because the source is the whole
@@ -650,6 +849,17 @@ function Start-SessionRecording {
 }
 
 function Stop-SessionRecording {
+    # An array now: one entry per window that was being recorded. Looping here rather than
+    # at the call site keeps the "always stop, even when the editor hung" guarantee in one
+    # place - that finally block is the only reason a hung run still ends up on disk.
+    param($Recordings)
+
+    foreach ($Recording in @($Recordings)) {
+        if ($Recording) { Stop-OneRecording -Recording $Recording }
+    }
+}
+
+function Stop-OneRecording {
     param($Recording)
 
     if (-not $Recording) { return }
@@ -833,7 +1043,7 @@ function Invoke-TypeCheck {
 function Copy-Screenshots {
     param([string] $Dest)
 
-    $ShotDir = Join-Path $RepoRoot "Saved/Screenshots/WindowsEditor"
+    $ShotDir = Get-ScreenshotDir
     $Files = @(Get-ChildItem -Path $ShotDir -Filter "*.png" -File -ErrorAction SilentlyContinue)
     if ($Files.Count -eq 0) { return 0 }
 
@@ -919,7 +1129,9 @@ function Restore-IniBackend {
 }
 
 $Backends = if ($Backend -eq "Both") { @("Lua", "Luau") } else { @($Backend) }
-$TargetName = ([System.IO.Path]::GetFileNameWithoutExtension($ProjectPath)) + "Editor"
+# 编辑器载体编 <Project>Editor 目标，-game 编 <Project> 目标：后者不带 UnrealEd，
+# 也不带只在编辑器里才需要的模块（UnLuaNovaTestSuite.Build.cs 已经是条件依赖）。
+$TargetName = if ($IsGameCarrier) { $ProjectName } else { $ProjectName + "Editor" }
 
 function Format-EditorArg {
     param([string] $Arg)
@@ -937,12 +1149,14 @@ function Format-EditorArg {
     return $Arg
 }
 
-function Get-EditorArgs {
+function Get-TestArgs {
     param([string] $ReportDir)
 
     # Automation exports one JSON per test into -ReportExportPath; the log goes next to it
-    # so a failed run can be read without hunting through Saved/Logs.
-    $LogFile = Join-Path $ReportDir "Editor.log"
+    # so a failed run can be read without hunting through Saved/Logs. The name follows the
+    # carrier: a -game run writing Editor.log is how a wrong-carrier report goes unnoticed.
+    $LogName = if ($IsGameCarrier) { "Game.log" } else { "Editor.log" }
+    $LogFile = Join-Path $ReportDir $LogName
 
     # ExtraCommands run after the suite, which is where screenshots belong - they need the
     # world the tests left behind, not the one at startup.
@@ -952,6 +1166,9 @@ function Get-EditorArgs {
 
     $A = @($ProjectPath)
     if ($Map) { $A += $Map }
+    # -game: 用打包前的独立游戏进程跑，不起编辑器。少了编辑器启动与后台 tick，
+    # 少了一整套编辑器模块 —— 也是唯一能验证"这些用例其实不依赖编辑器"的办法。
+    if ($IsGameCarrier) { $A += "-game" }
     $A += @(
         "-unattended"
         "-NoSplash"
@@ -977,6 +1194,7 @@ function Get-EditorArgs {
 
 Write-Host "Engine       : $EnginePath"
 Write-Host "Project      : $ProjectPath"
+Write-Host "Carrier      : $($CarrierChoice.Carrier) - $($CarrierChoice.Reason)"
 Write-Host "Filter       : $Filter"
 Write-Host "Backend(s)   : $($Backends -join ', ')"
 Write-Host "Output       : $OutputDir"
@@ -994,8 +1212,8 @@ if ($DryRun)
         Write-Host ""
         Write-Host "--- $B -> $RunDir"
         Write-Host "Build  : $BuildBat $TargetName $Platform $Configuration -Project=`"$ProjectPath`""
-        $ArgLine = ((Get-EditorArgs -ReportDir $RunDir) | ForEach-Object { Format-EditorArg $_ }) -join ' '
-        Write-Host "Cmd    : $EditorCmd $ArgLine"
+        $ArgLine = ((Get-TestArgs -ReportDir $RunDir) | ForEach-Object { Format-EditorArg $_ }) -join ' '
+        Write-Host "Cmd    : $(if ($IsGameCarrier) { Resolve-GameExe } else { $EditorCmd }) $ArgLine"
     }
     Write-Host ""
     Write-Host "Dry run - nothing was executed."
@@ -1084,8 +1302,15 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         New-Item -ItemType Directory -Path $RunDir -Force | Out-Null
         [System.IO.File]::WriteAllText((Join-Path $RunDir "backend.txt"), $B,
             (New-Object System.Text.UTF8Encoding($false)))
-        $RunArgLine = ((Get-EditorArgs -ReportDir $RunDir) | ForEach-Object { Format-EditorArg $_ }) -join ' '
-        Write-Host "Cmd    : $EditorCmd $RunArgLine"
+        $RunArgLine = ((Get-TestArgs -ReportDir $RunDir) | ForEach-Object { Format-EditorArg $_ }) -join ' '
+        $RunExe = if ($IsGameCarrier) { Resolve-GameExe } else { $EditorCmd }
+        $RunLog = Join-Path $RunDir (if ($IsGameCarrier) { "Game.log" } else { "Editor.log" })
+        if (-not (Test-Path $RunExe)) {
+            # Only reachable for -game: the editor cmd is checked at startup. The usual
+            # cause is a project whose Game target has never been built here.
+            throw "'$RunExe' not found - build the '$ProjectName' target first (this run builds it unless -SkipBuild was passed)."
+        }
+        Write-Host "Cmd    : $RunExe $RunArgLine"
 
         # The editor does not empty Saved/Screenshots, so a run that takes no picture would
         # publish the previous run's PNGs as its own.
@@ -1108,7 +1333,7 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         # Launched with Start-Process and not with `&` on purpose: `&` blocks until the editor
         # exits, and by then there is nothing left to record. Handing the recorder the live
         # process is what makes "from the first second to the last" possible.
-        $EditorProcessName = [System.IO.Path]::GetFileNameWithoutExtension($EditorCmd)
+        $EditorProcessName = [System.IO.Path]::GetFileNameWithoutExtension($RunExe)
         $WantSessionVideo = -not $NoVideo -and -not $NoSessionVideo -and -not $NullRHI
         $Recording = $null
 
@@ -1122,14 +1347,35 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         #    234.0s" and a failing run could pass as success.
         # It is also what -NoNewWindow did: the child keeps this console.
         $EditorPsi = New-Object System.Diagnostics.ProcessStartInfo
-        $EditorPsi.FileName = $EditorCmd
+        $EditorPsi.FileName = $RunExe
         $EditorPsi.Arguments = $RunArgLine
         $EditorPsi.UseShellExecute = $false
         $EditorProc = [System.Diagnostics.Process]::Start($EditorPsi)
         try {
             if ($WantSessionVideo) {
-                $Recording = Start-SessionRecording -OutFile (Join-Path $RunDir "videos/session.mp4") `
-                    -ProcessName $EditorProcessName -Fps $SessionFps
+                # The editor is always one target; -RecordWindow adds the peers a net run
+                # puts on screen beside it (each client that joined the server). Their
+                # windows are the only place "the client never received the replicated
+                # field" is visible, so they get their own file - see Start-SessionRecording.
+                $MainLabel = if ($IsGameCarrier) { "游戏" } else { "编辑器" }
+                $RecordTargets = @(
+                    @{ Label = $MainLabel; ProcessName = $EditorProcessName; OutFile = (Join-Path $RunDir "videos/session.mp4") }
+                )
+                foreach ($W in $RecordWindow) {
+                    $Parts = $W -split '=', 2
+                    if ($Parts.Count -ne 2 -or -not $Parts[1]) {
+                        Write-Host "Record    : -RecordWindow '$W' 格式应为 标签=进程名，已忽略。" -ForegroundColor Yellow
+                        continue
+                    }
+                    $Slug = ($Parts[0] -replace '[^A-Za-z0-9_-]', '_')
+                    $RecordTargets += @{
+                        Label       = $Parts[0]
+                        ProcessName = $Parts[1]
+                        OutFile     = (Join-Path $RunDir "videos/session-$Slug.mp4")
+                    }
+                }
+
+                $Recording = Start-SessionRecording -Targets $RecordTargets -Fps $SessionFps
             } elseif ($NullRHI -and -not $NoVideo -and -not $NoSessionVideo) {
                 Write-Host "Record    : skipped - -NullRHI 没有画面可录。" -ForegroundColor Yellow
             }
@@ -1143,7 +1389,7 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         $EditorExit = $EditorProc.ExitCode
         $sw.Stop()
 
-        Write-Host "Editor exited with $EditorExit in $('{0:N1}' -f $sw.Elapsed.TotalSeconds)s"
+        Write-Host "$($CarrierChoice.Carrier) exited with $EditorExit in $('{0:N1}' -f $sw.Elapsed.TotalSeconds)s"
         if ($EditorExit -ne 0) { $ExitCode = $EditorExit }
 
         # Screenshots land in the project's Saved dir, not next to the JSON; pull them in so
@@ -1161,27 +1407,35 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
 
         $JsonCount = @(Get-ChildItem -Path $RunDir -Filter "*.json" -File -ErrorAction SilentlyContinue).Count
         if ($JsonCount -eq 0) {
-            Write-Host "No automation JSON in '$RunDir' - check '$(Join-Path $RunDir 'Editor.log')'." -ForegroundColor Yellow
-            Show-NoTestsQueuedHint -LogPath (Join-Path $RunDir "Editor.log")
+            Write-Host "No automation JSON in '$RunDir' - check '$RunLog'." -ForegroundColor Yellow
+            Show-NoTestsQueuedHint -LogPath $RunLog
         }
 
         # A crash exports nothing, so without this the run looks like "0 tests" and the only
         # clue is a half-megabyte log. Show-CrashSummary says nothing unless the log really
         # contains a crash, so calling it on a merely failed run is harmless.
-        Show-CrashSummary -LogPath (Join-Path $RunDir "Editor.log")
+        Show-CrashSummary -LogPath $RunLog
 
         # Static type checking is not an automation test, so it never shows up in the JSON the
         # engine exports - run it here and leave its summary next to the JSON, which is the
         # only place the report generator will find it.
         if (-not $NoReport) {
-            # Declarations first, and only once per run: the commandlet writes both dialects
-            # whatever the backend is, so the second backend would pay another editor launch
-            # for the same files.
-            if (-not $IntelliSenseExported) {
-                $IntelliSenseExported = Export-IntelliSense
-            }
+            # 声明导出走的是编辑器 commandlet。-game 这一轮只编了游戏目标，编辑器那份
+            # DLL 可能根本不存在（或者属于另一个后端）—— 与其拿一份来路不明的二进制去
+            # 导出声明，不如明说这一步没做。
+            $EditorBackendDll = Join-Path $PluginRoot ("Binaries/Win64/UnrealEditor-" + $B + ".dll")
+            if ($IsGameCarrier -and -not (Test-Path $EditorBackendDll)) {
+                Write-Host "TypeCheck : 跳过 —— 本次跑在 -game 上，没有 $B 的编辑器二进制（未编 <Project>Editor 目标）。" -ForegroundColor Yellow
+            } else {
+                # Declarations first, and only once per run: the commandlet writes both dialects
+                # whatever the backend is, so the second backend would pay another editor launch
+                # for the same files.
+                if (-not $IntelliSenseExported) {
+                    $IntelliSenseExported = Export-IntelliSense
+                }
 
-            Invoke-TypeCheck -RunDir $RunDir -Backend $B
+                Invoke-TypeCheck -RunDir $RunDir -Backend $B
+            }
         }
 
         if (-not $NoReport) {
@@ -1198,11 +1452,26 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
             if ($UpdateBaseline) { $GenArgs += "--update-baseline" }
             if ($FailOnDrift) { $GenArgs += "--fail-on-drift" }
 
+            # 每个用例"需要什么环境"的分类，报告里用它算出 A–E 各占多少秒。
+            # 没有这一节，"把某一类挪出编辑器进程能省多少"只能靠估 —— 而这是决定要不要
+            # 动测试框架的依据。分类是纯静态分析源码，跑一次几毫秒；失败也不该拖垮报告。
+            $Classifier = Join-Path $ToolsDir "ClassifyTests.py"
+            $ClassFile = Join-Path $RepoRoot "Tools/baseline/classification.json"
+            if (Test-Path $Classifier) {
+                & python $Classifier --out $ClassFile 2>&1 | Out-Null
+                if (Test-Path $ClassFile) { $GenArgs += @("--classification", $ClassFile) }
+            }
+
             & python @GenArgs
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "Report generation failed (exit $LASTEXITCODE)." -ForegroundColor Red
                 if ($ExitCode -eq 0) { $ExitCode = $LASTEXITCODE }
             }
+
+            # Same "confirm it by hand" moment as the test-name baseline, and for the same
+            # reason: a machine that happened to be busy would otherwise enshrine its slow
+            # run as the thing every later run is judged against.
+            if ($UpdateBaseline) { Publish-PerfBaseline -Backend $B }
 
             $Summary = Join-Path $RunDir "summary.json"
             if (Test-Path $Summary) {

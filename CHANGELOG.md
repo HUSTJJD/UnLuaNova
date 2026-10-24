@@ -30,6 +30,26 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
     Lua 声明的复制字段到达客户端的 Lua 表；另带一个引擎自己复制的 `int32` 作对照
   - `FOpenMapLatentCommand` 支持多客户端与 `PIE_ListenServer`，并新增
     `FEndPieSessionCommand`（真正结束 PIE 并等到它结束 —— `FEndPlayMapCommand` 在 UE5 是空的）
+- **整场录屏支持多窗口**（`Tools/RunTests.ps1` / `Tools/GenerateTestReport.py`）
+  - `-RecordWindow "标签=进程名"` 可重复，除编辑器外额外录 peer 的窗口，每个窗口单独
+    出 `videos/session-<标签>.mp4`，报告里逐个列出。联网用例出问题时要看的那一端通常
+    不是编辑器这一端，只录一个窗口看不见
+  - 同名进程的多个窗口不会录重（已录过的窗口 id 会被排除）；**没有窗口的进程不录**
+    （独立服务器是 headless 的），日志说明跳过原因 —— 它要看的是日志不是画面
+  - 顺带修掉一个既有 bug：`$Source` 只在等到窗口时赋值，整屏回退时 ffmpeg 拿到的是
+    `-i ""`，也就是"最该留下录像的那一轮反而录不出来"
+- **双进程网络测试** `UnLuaNova.API.Net.DedicatedServer`
+  （`Plugins/UnLuaNovaTestSuite/.../Private/Tests/LuaNetDedicatedServerTest.cpp`）
+  - 起两个独立进程（服务端带 `-server`），各自声明同一套 Lua 网络，把本端看到的
+    `名字:RPCId` 写进 `Saved/UnLuaNovaNet/<Role>.json`，主进程读两份比对
+  - 补上了 [LuaNetworking](Docs/CN/LuaNetworking.md) 「已知边界」第 1 条 —— 跨进程
+    `RPCId` 一致此前明写"未验证"。单进程 C/S PIE 两端共用一个 UClass，id 天然相同，
+    证明不了任何事
+  - 不需要两端真的连上：id 只取决于模块与声明顺序。这样避开端口 / 防火墙 /
+    "服务器有没有 listen" 这类让 CI 变脆的失败模式；`-server` 的额外价值是声明发生在
+    `NM_DedicatedServer` 下，这条路径 PIE 永远走不到
+  - 子用例 `...DedicatedServer.Report` 是跑在 peer 进程里的那一半，靠
+    `-UnLuaNovaNetRole` 区分角色
 - **第二轮对标复盘文档** [对标复盘：现状体检与改进方向](Docs/CN/Benchmark_Review.md)
   - 从功能丰富度、性能、易用性、多后端与后端特性、测试与工程化五个维度体检，
     逐条给 `文件:行` 证据；结论是短板已经不在功能丰富度，而在**默认配置下的成色**
@@ -40,6 +60,36 @@ UnLuaNova 的变更记录。格式参考 [Keep a Changelog](https://keepachangel
     两个后端的版本没有记录因而不可复现；CI 只做 lint 与 mkdocs，**不跑 C++ 自动化**
 
 ### Changed
+- **对标复盘 P0/P1 落地**
+  - **Luau 上 userdata 终于会被终结**（原先永不回收，是默认后端上的泄漏）
+    - 两个后端现在都终结容器 / `FText` / 导出类（文件句柄）的 userdata，机制不同：
+      Lua 走 `__gc`，Luau 走 `lua_newuserdatadtor()`（`UNLUANOVA_NEWDATA_DTOR`）
+    - 关键前提：`ScriptContainerMap` 是 **weak value** 表，userdata 一死条目自己就没了 ——
+      所以原来那个"在 GC 回调里回摸 `FLuaEnv` 和 Lua 栈"的 `ContainerRegistry::Remove()`
+      本来就不必要。去掉之后终结器只剩纯 C++，Luau 的析构器才跑得起来
+    - `UNLUANOVA_HAS_USERDATA_GC` 拆成两个：注册 `__gc` 用 `UNLUANOVA_HAS_GC_METAMETHOD`
+      （Lua 1 / Luau 0，Luau 里注册是死代码），"userdata 会不会被终结"用
+      `UNLUANOVA_HAS_USERDATA_FINALIZER`（两个后端都是 1）
+    - 脚本可问：`UnLuaNova.HasFeature('userdatafinalizer')`
+  - **性能数字可复现**：`Benchmark.spec.cpp` 每次运行额外写出
+    `Saved/Benchmark/perf-<Backend>.json`（带 VM / 引擎版本 / 机器名）；
+    `RunTests.ps1 -UpdateBaseline` 把它复制进 `Tools/baseline/`
+  - **性能退化会让测试变红**：有基线时按 25% 容差断言每操作耗时；没有基线时是**告警**
+    不是失败（干净检出上不该因为没跑过就红）
+  - **Profiler 在 Luau 上不再给出全 0 的 self time**：按"两段安全点之间归给当时在跑的
+    函数"归因，并在 CSV 头写出 `SelfMs=sampled/measured`；
+    `UnLuaNova.HasFeature('profilerselftime')` 可问是哪一种
+  - `FVector:ToVector()` 在 Lua 后端返回 nil 时**打一条警告**并说明用
+    `HasFeature('vector')` 判断 —— 静默 nil 会在三行之后以"index a nil value"炸掉
+  - 新增 `Source/ThirdParty/VERSIONS.md`（Lua 5.5.1 已记录；Luau 版本**仍是缺口**，
+    文件里写明了怎么补）；ini 里的 `LuaVersion` 不再是过期的 5.4.3
+  - 新增 `.github/workflows/nightly-tests.yml`：自托管 Windows runner 上跑自动化；
+    没有 runner 时**显式告警而不是静默跳过**
+- **DAP `evaluate` 现在含 upvalue**：原来只把局部变量编成包装函数的参数，
+  而 Lua 的状态大多在 upvalue 里（闭包 + 热重载后的模块级 local），
+  于是监视窗口对一个明明在作用域里的变量回"index a nil value"，比没有 evaluate 更糟
+- **文档校正**：删掉 `API.md` 里源码中 0 命中的 `RunFile` / `FCheckStack` /
+  `RegisterEnum` / `RegisterClass`（CN 与 EN）
 - **复制属性改为按类型分桶 + push model + Iris 兼容**（`UnLuaNovaReplicationComponent` /
   `UnLuaNovaNetPayload`）
   - 载荷从"每字段 `FName + int32 + FString` 整包发送"改为**每种类型一条复制数组**，

@@ -48,7 +48,9 @@ namespace UnLuaNova
         void Remove(const FLuaMap* Container);
         
     private:
-        static void* NewUserdata(lua_State* L, const FScriptContainerDesc& Desc);
+        // 'Dtor' runs the container's C++ destructor on both backends - see LuaBackend.h's
+        // UNLUANOVA_NEWDATA_DTOR for why Luau cannot get there through __gc.
+        static void* NewUserdata(lua_State* L, const FScriptContainerDesc& Desc, FUnLuaNovaUserdataDtor Dtor);
 
         int MapRef;
         FLuaEnv* Env;

@@ -151,6 +151,11 @@ namespace UnLuaNova
     protected:
         lua_State* L;
 
+        // The preloader goes at index 1, which is where plain Lua keeps it: it is
+        // consulted before any file is looked at, and it is how a host hands a module
+        // over without there being a file for it at all.
+        static int LoadFromPreload(lua_State* L);
+
         static int LoadFromBuiltinLibs(lua_State* L);
 
         static int LoadFromCustomLoader(lua_State* L);

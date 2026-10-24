@@ -290,6 +290,18 @@ namespace UnLuaNova
         // so OnStop runs on the next line and sees the flag.
     }
 
+    /**
+     * Push the function that owns the given stack level, so its upvalues can be walked.
+     *
+     * Indexed by level rather than by a lua_Debug the caller holds: Luau addresses a frame
+     * by level and plain Lua by the descriptor, and UNLUANOVA_GETINFO already hides that.
+     */
+    static bool PushFrameFunction(lua_State* L, int32 Level)
+    {
+        lua_Debug Ar;
+        return UNLUANOVA_GETINFO(L, Level, "f", &Ar) != 0;
+    }
+
     bool FLuaDebugService::Evaluate(const FString& Expression, int32 FrameIndex, FString& OutValue, FString& OutError)
     {
         OutValue.Empty();
@@ -308,6 +320,12 @@ namespace UnLuaNova
         // the expression can name them. Two passes: names first (the VM pops each value
         // as it hands it over), then the values in the same order left on the stack.
         TArray<FString> Names;
+        // lua_getupvalue() indices of the names added after the locals - the values have to
+        // be pushed in exactly the order the names were collected, or the wrapper binds them
+        // to the wrong parameters and the expression silently reads the wrong variable.
+        TArray<int32> UpvalueIndices;
+        int32 NumLocals = 0;
+
         if (bPaused && FrameIndex >= 0)
         {
             const int32 Level = FMath::Min(FrameIndex, 127);
@@ -329,8 +347,43 @@ namespace UnLuaNova
                 Names.Add(ANSI_TO_TCHAR(Name));
                 lua_pop(L, 1); // the value it pushed; the name is what we wanted
             }
+            NumLocals = Names.Num();
 
-            for (int32 Index = 0; Index < Names.Num(); ++Index)
+            // ---- upvalues ---------------------------------------------------
+            // Locals alone are not enough to evaluate what someone actually types into a
+            // watch window. Lua keeps most of its state in upvalues: anything closed over,
+            // and - through the way HotReload rebinds a module - most module-level `local`s
+            // too. Without this a variable that is plainly in scope answers "attempt to
+            // index a nil value", which reads as "it is gone" and sends you looking in the
+            // wrong place.
+            if (PushFrameFunction(L, Level))
+            {
+                const int32 FunctionIndex = lua_gettop(L);
+
+                for (int32 Index = 1; Index < 64; ++Index)
+                {
+                    const char* Name = lua_getupvalue(L, FunctionIndex, Index);
+                    if (!Name)
+                        break;
+
+                    const FString UpvalueName = ANSI_TO_TCHAR(Name);
+                    lua_pop(L, 1); // the value; the name is what we wanted
+
+                    // _ENV is every function's first upvalue - binding it as a parameter
+                    // would shadow the globals an expression legitimately names. A local of
+                    // the same name already won: it is the nearer binding, so it wins here
+                    // too rather than making the generated wrapper fail to compile.
+                    if (UpvalueName == TEXT("_ENV") || Names.Contains(UpvalueName))
+                        continue;
+
+                    Names.Add(UpvalueName);
+                    UpvalueIndices.Add(Index);
+                }
+
+                lua_pop(L, 1); // the function
+            }
+
+            for (int32 Index = 0; Index < NumLocals; ++Index)
             {
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
                 lua_getlocal(L, Level, Index + 1);
@@ -340,6 +393,18 @@ namespace UnLuaNova
                     break;
                 lua_getlocal(L, &Ar, Index + 1);
 #endif
+            }
+
+            if (UpvalueIndices.Num() > 0 && PushFrameFunction(L, Level))
+            {
+                const int32 FunctionIndex = lua_gettop(L);
+                for (const int32 Index : UpvalueIndices)
+                {
+                    lua_getupvalue(L, FunctionIndex, Index);
+                }
+                // Drop the function and slide the values down, so what is left above Top is
+                // exactly one value per name, in order.
+                lua_remove(L, FunctionIndex);
             }
         }
 

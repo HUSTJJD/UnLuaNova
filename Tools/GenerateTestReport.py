@@ -71,6 +71,21 @@ SLOWEST_COUNT = 10
 # tests stop, and a hung or crashed run produces no clip at all.
 SESSION_VIDEO_STEM = "session"
 
+# A net run puts more than one window on screen, and RunTests.ps1 -RecordWindow records each
+# of them: session.mp4 for the editor, session-<label>.mp4 for every peer added with
+# -RecordWindow 标签=进程名. They are all the run's own captures - told apart from the
+# showcase clips by name, and all shown together, because the interesting part of a net
+# failure is usually on the peer's window and not the editor's.
+def is_session_video(stem: str) -> bool:
+    return stem == SESSION_VIDEO_STEM or stem.startswith(SESSION_VIDEO_STEM + "-")
+
+
+def session_video_label(stem: str) -> str:
+    """'session' -> '编辑器'; 'session-客户端1' -> '客户端1'."""
+    if stem.startswith(SESSION_VIDEO_STEM + "-"):
+        return stem[len(SESSION_VIDEO_STEM) + 1:]
+    return "编辑器"
+
 # Written by Tools/RunTests.ps1. Which checker runs depends on the backend - Luau scripts
 # are checked with luau-analyze, Lua scripts with LuaLS - and each one writes its summary
 # under its own name next to the automation JSON.
@@ -468,14 +483,24 @@ def collect_media(shot_dir, video_dir):
     stills, sequences = find_frame_sequences(shot_dir)
 
     clips = []
-    session = None
+    sessions = []
     if video_dir.is_dir():
         for p in sorted(video_dir.glob("*.mp4")):
-            entry = {"name": p.stem, "file": p.name, "frames": len(sequences.get(p.stem, []))}
-            if p.stem == SESSION_VIDEO_STEM:
-                session = entry
+            entry = {
+                "name": p.stem,
+                "file": p.name,
+                "label": session_video_label(p.stem),
+                "frames": len(sequences.get(p.stem, [])),
+            }
+            if is_session_video(p.stem):
+                sessions.append(entry)
             else:
                 clips.append(entry)
+
+    # session.mp4 first, then the extra windows in the order they were named. "sorted()"
+    # alone would put session-<label> before session.mp4, and the editor is the one people
+    # open first.
+    sessions.sort(key=lambda e: (e["name"] != SESSION_VIDEO_STEM, e["name"]))
 
     # A burst that was never encoded is still worth showing: the first frame, and how many
     # there are, so the reader knows it is a recording and not a duplicate.
@@ -485,7 +510,7 @@ def collect_media(shot_dir, video_dir):
         if not any(c["name"] == key for c in clips)
     ]
 
-    return stills, clips, uncoded, session
+    return stills, clips, uncoded, sessions
 
 
 def load_typecheck(reports_dir: Path, backend=None):
@@ -655,11 +680,12 @@ def render(
     backend=None,
     crash=None,
     clips=None,
-    session=None,
+    sessions=None,
     uncoded=None,
     typecheck=None,
     encode_failures=None,
     benchmark=None,
+    class_summary=None,
 ):
     total = len(tests)
     failed = [t for t in tests if not t["passed"]]
@@ -775,26 +801,51 @@ def render(
 
     clips = clips or []
     uncoded = uncoded or []
+    sessions = sessions or []
 
     # 整场录屏放在最前面：它是唯一能把"卡在第几秒"说清楚的东西。
-    if session:
-        lines.append("## 整场录屏")
-        lines.append("")
-        lines.append(
-            "不是 showcase 的剪辑——剪辑是用例自己录的，只覆盖 showcase 那几个测试；"
-            "跑挂了的那一轮往往一个剪辑都没有。这一段是 `Tools/RunTests.ps1` 在启动编辑器的同时"
-            "开始录、编辑器退出时结束，从第一条测试到最后一条都在里面（窗口出现前的几秒除外）。"
-        )
-        lines.append("")
-        lines.append(
-            f'<video controls muted playsinline width="640" '
-            f'src="{image_prefix}{session["file"]}"></video>'
-        )
-        lines.append("")
-        lines.append(f"[打不开播放器的话：直接下载这个 mp4（标准 H.264）]({image_prefix}{session['file']})")
-        lines.append("")
+    lines.append("## 整场录屏")
+    lines.append("")
+    lines.append(
+        "不是 showcase 的剪辑——剪辑是用例自己录的，只覆盖 showcase 那几个测试；"
+        "跑挂了的那一轮往往一个剪辑都没有。这一段是 `Tools/RunTests.ps1` 在启动编辑器的同时"
+        "开始录、编辑器退出时结束，从第一条测试到最后一条都在里面（窗口出现前的几秒除外）。"
+    )
+
+    if sessions:
+        if len(sessions) > 1:
+            # 多个窗口：逐个列出来，因为联网用例出问题时，要看的那一端通常不是编辑器这一端。
+            lines.append("")
+            lines.append(
+                f"这一轮录了 {len(sessions)} 个窗口（`-RecordWindow 标签=进程名` 加进来的 peer）。"
+                "每个窗口单独一个文件：跨端的问题要看两端各自的画面，只看一边看不出来。"
+            )
+            lines.append("")
+            for entry in sessions:
+                lines.append(f"### {entry['label']}")
+                lines.append("")
+                lines.append(
+                    f'<video controls muted playsinline width="640" '
+                    f'src="{image_prefix}{entry["file"]}"></video>'
+                )
+                lines.append("")
+                lines.append(
+                    f"[直接下载这个 mp4（标准 H.264）]({image_prefix}{entry['file']})"
+                )
+                lines.append("")
+        else:
+            entry = sessions[0]
+            lines.append("")
+            lines.append(
+                f'<video controls muted playsinline width="640" '
+                f'src="{image_prefix}{entry["file"]}"></video>'
+            )
+            lines.append("")
+            lines.append(
+                f"[打不开播放器的话：直接下载这个 mp4（标准 H.264）]({image_prefix}{entry['file']})"
+            )
+            lines.append("")
     else:
-        lines.append("## 整场录屏")
         lines.append("")
         lines.append(
             "这一轮没有整场录屏：`-NoVideo` / `-NoSessionVideo` / `-NullRHI` 会关掉它，"
@@ -817,6 +868,29 @@ def render(
         lines.append(
             "没有截图。截图由 `UnLuaNova.Showcase.*` 这几条用例产出（默认就会收进报告目录），"
             "加 `-NoScreenshots` 或跑 `-NullRHI`（无头）时不会有画面。"
+        )
+        lines.append("")
+
+    if class_summary:
+        lines.append("## 按运行环境分类")
+        lines.append("")
+        lines.append(
+            "每个用例需要什么环境（由 `Tools/ClassifyTests.py` 静态分析源码得出），以及这一类"
+            "一共花了多少时间。看这一节是为了回答\"" + "把某一类挪走能省多少" + "\"——"
+            "A 类连 `UWorld` 都不需要，B 类只要 world，两者都**不必**跑在编辑器进程里，"
+            "而现在它们和真正需要编辑器的 D / E 一起挤在同一个 `UnrealEditor-Cmd` 里。"
+        )
+        lines.append("")
+        lines.append("| 分类 | 需要什么 | 用例数 | 耗时 | 占比 |")
+        lines.append("|:--|:--|--:|--:|--:|")
+        for row in class_summary:
+            lines.append(
+                f"| {row['cls']} | {row['label']} | {row['tests']} | {row['seconds']:.1f}s | {row['share']:.0%} |"
+            )
+        lines.append("")
+        lines.append(
+            "分类是**声明**出来的，不是实际触碰的：条件性开图的用例会被算进 B 类。"
+            "宁可高估——它决定的是\"哪些可以挪\"，挪错了会红，不会静默通过。"
         )
         lines.append("")
 
@@ -894,6 +968,94 @@ def default_baseline_path(backend):
     return Path(__file__).resolve().parent / "baseline" / name
 
 
+def load_classification(path: Path):
+    """{test name: class} written by Tools/ClassifyTests.py, or None when not given."""
+    if not path.is_file():
+        print(f"WARNING: classification '{path}' not found; skipping the breakdown.", file=sys.stderr)
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        print(f"WARNING: classification '{path}' is unreadable ({exc}); skipping.", file=sys.stderr)
+        return None
+    tests = data.get("tests")
+    return tests if isinstance(tests, dict) else None
+
+
+def classify_by_prefix(name: str, tests: dict):
+    """Longest registered name that prefixes this one.
+
+    A Spec registers one name ('UnLuaNova.API.Net') but the JSON lists every leaf
+    ('UnLuaNova.API.Net.解析...'), so the class travels by prefix, longest match wins to
+    keep 'UnLuaNova.API' from claiming 'UnLuaNova.API.Net.Foo'.
+    """
+    best_cls = None
+    best_len = -1
+    for registered, cls in tests.items():
+        if name == registered or name.startswith(registered + "."):
+            if len(registered) > best_len:
+                best_len = len(registered)
+                best_cls = cls
+    return best_cls
+
+
+def summarise_classes(tests, classification, durations):
+    """[{cls, label, tests, seconds, share}] ordered by cost, dearest first.
+
+    durations is the baseline's per-test map when there is one - a run has the leaf
+    durations already, but the committed baseline is what makes the split reviewable
+    without re-running anything.
+    """
+    if not classification:
+        return []
+
+    labels = CLASS_CLASSIFICATION_LABELS
+    per_class = {}
+    unclassified = 0
+
+    for test in tests:
+        cls = classify_by_prefix(test["name"], classification)
+        if cls is None:
+            unclassified += 1
+            continue
+        bucket = per_class.setdefault(cls, {"tests": 0, "seconds": 0.0})
+        bucket["tests"] += 1
+        duration = test["duration"]
+        if duration is None and durations:
+            duration = durations.get(test["name"])
+        if duration:
+            bucket["seconds"] += float(duration)
+
+    total_seconds = sum(b["seconds"] for b in per_class.values()) or 1.0
+    rows = [
+        {
+            "cls": cls,
+            "label": labels.get(cls, cls),
+            "tests": bucket["tests"],
+            "seconds": bucket["seconds"],
+            "share": bucket["seconds"] / total_seconds,
+        }
+        for cls, bucket in per_class.items()
+    ]
+    rows.sort(key=lambda r: -r["seconds"])
+
+    if unclassified:
+        rows.append({"cls": "?", "label": "未分类", "tests": unclassified, "seconds": 0.0, "share": 0.0})
+    return rows
+
+
+# Kept in sync with Tools/ClassifyTests.py's CLASS_LABELS. Duplicated rather than imported
+# so the report generator does not depend on a script it may not be run next to.
+CLASS_CLASSIFICATION_LABELS = {
+    "A": "纯逻辑（不需要 UWorld）",
+    "B": "需要 UWorld，不联网",
+    "C": "PIE 且联网",
+    "D": "需要真实视口 / RHI",
+    "E": "截图 / 连拍",
+    "?": "未分类",
+}
+
+
 def load_baseline(path: Path):
     if not path.is_file():
         return None
@@ -960,6 +1122,10 @@ def baseline_payload(summary):
         "skipped": summary["skipped"],
         "duration": summary["duration"],
         "names": summary["names"],
+        # Kept even though it moves on every run: it is what makes "which class of test
+        # costs the most" answerable after the fact. It is deliberately not part of the
+        # drift check below - a 5% swing per test is noise, not drift.
+        "durations": summary.get("durations") or {},
     }
 
 
@@ -999,6 +1165,13 @@ def main() -> None:
         action="store_true",
         help="overwrite the baseline with this run - an intentional, reviewed act, which "
         "is why it is not folded into a normal run",
+    )
+    parser.add_argument(
+        "--classification",
+        default=None,
+        metavar="PATH",
+        help="classify.json written by Tools/ClassifyTests.py; adds a 'what does each test "
+        "need, and what did that cost' section",
     )
     parser.add_argument(
         "--fail-on-drift",
@@ -1059,7 +1232,7 @@ def main() -> None:
         for name, reason in sorted(encode_failures.items()):
             print(f"ERROR: clip '{name}' was not encoded: {reason}", file=sys.stderr)
 
-    screenshots, clips, uncoded, session = collect_media(shot_dir, video_dir)
+    screenshots, clips, uncoded, sessions = collect_media(shot_dir, video_dir)
 
     typecheck = load_typecheck(reports_dir, backend)
 
@@ -1073,6 +1246,11 @@ def main() -> None:
     skipped = sum(1 for t in tests if t["skipped"])
     passed = total - failed - skipped
 
+    classification = None
+    if args.classification:
+        classification = load_classification(Path(args.classification).resolve())
+    class_summary = summarise_classes(tests, classification, None)
+
     (out_dir / "report.md").write_text(
         render(
             tests,
@@ -1083,11 +1261,12 @@ def main() -> None:
             backend=backend,
             crash=crash,
             clips=clips,
-            session=session,
+            sessions=sessions,
             uncoded=uncoded,
             typecheck=typecheck,
             encode_failures=encode_failures,
             benchmark=benchmark,
+            class_summary=class_summary,
         ),
         encoding="utf-8",
         newline="\n",
@@ -1103,15 +1282,29 @@ def main() -> None:
         "duration": round(sum(t["duration"] for t in tests if t["duration"] is not None), 3),
         "screenshots": len(screenshots),
         "videos": len(clips),
-        # The whole-run recording is not a clip and does not count as one: it is one file
-        # whatever the run did, including the runs that produced no clip at all.
-        "session_recording": session["file"] if session else None,
+        # The whole-run recordings are not clips and do not count as one: they are recorded
+        # whatever the run did, including the runs that produced no clip at all. A list now
+        # because a net run records one window per peer.
+        "session_recordings": [
+            {"label": e["label"], "file": e["file"]} for e in sessions
+        ],
+        # Kept as the single-file name so anything already reading summary.json keeps
+        # working; it is the editor's own capture, which every run has had all along.
+        "session_recording": sessions[0]["file"] if sessions else None,
         "videos_failed": len(encode_failures),
         "crashed": crash is not None,
         "crash_test": crash["test"] if crash else None,
         # The whole point of the baseline: totals alone cannot tell a renamed test from a
         # deleted one, so the set of names travels with the numbers.
         "names": sorted(t["name"] for t in tests),
+        # Per-test duration. The aggregate alone cannot answer "how much of the run is the
+        # editor starting up, and how much is the tests" - which is the question behind
+        # moving a class of tests off the editor carrier. Only committed baselines carry
+        # it: report.md is regenerated every run and Saved/ is gitignored, so without
+        # this there is no history to compare against at all.
+        "durations": {
+            t["name"]: t["duration"] for t in tests if t["duration"] is not None
+        },
         # None when it was not run this round - deliberately not folded into pass/fail,
         # because it is not an automation test and a skipped check is not a failed test.
         "typecheck": {
@@ -1173,14 +1366,14 @@ def main() -> None:
         images_dir = docs_dir / "Images" / image_dir_name
         # Everything the run produced, not just the stills: the frame sequences a clip is
         # made of are images too, and the report links them when ffmpeg is unavailable.
-        if screenshots or clips or uncoded or session:
+        if screenshots or clips or uncoded or sessions:
             images_dir.mkdir(parents=True, exist_ok=True)
             for name in screenshots + [f for seq in uncoded for f in [seq["first"]]]:
                 shutil.copy2(shot_dir / name, images_dir / name)
             for clip in clips:
                 shutil.copy2(video_dir / clip["file"], images_dir / clip["file"])
-            if session:
-                shutil.copy2(video_dir / session["file"], images_dir / session["file"])
+            for entry in sessions:
+                shutil.copy2(video_dir / entry["file"], images_dir / entry["file"])
         page_path = docs_dir / page_name
         page_path.write_text(
             strip_machine_paths(
@@ -1194,7 +1387,7 @@ def main() -> None:
                     backend=backend,
                     crash=crash,
                     clips=clips,
-                    session=session,
+                    sessions=sessions,
                     uncoded=uncoded,
                     # typecheck / encode_failures were missing here, so the committed page
                     # always said "这一轮没有跑" even on runs whose checker did run - only the
@@ -1202,6 +1395,7 @@ def main() -> None:
                     typecheck=typecheck,
                     encode_failures=encode_failures,
                     benchmark=benchmark,
+                    class_summary=class_summary,
                 ),
                 repo_root,
             ),

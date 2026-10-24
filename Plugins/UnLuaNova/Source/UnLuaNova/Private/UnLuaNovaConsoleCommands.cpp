@@ -1,4 +1,6 @@
 #include "UnLuaNovaConsoleCommands.h"
+#include "LuaBackend.h"
+#include "LuaCoroutineTracker.h"
 #include "LuaDebugService.h"
 #include "LuaEnv.h"
 #include "LuaMemoryStats.h"
@@ -38,6 +40,16 @@ namespace UnLuaNova
               TEXT("lua.dbg"),
               *LOCTEXT("CommandText_Debug", "Headless lua debugger. Args: bp <src> <line> | step | continue | stack | locals | clear | detach, or none for status.").ToString(),
               FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::Debug)
+          ),
+          CoroutinesCommand(
+              TEXT("lua.coroutines"),
+              *LOCTEXT("CommandText_Coroutines", "Live lua coroutines. Args: on | off, or none for a census of what is still alive and where it was created.").ToString(),
+              FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::Coroutines)
+          ),
+          CodeGenCommand(
+              TEXT("lua.codegen"),
+              *LOCTEXT("CommandText_CodeGen", "Luau native compiler. Args: on | off | modules <a,b,c> | none for status.").ToString(),
+              FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::CodeGen)
           ),
           Module(InModule)
     {
@@ -356,6 +368,120 @@ namespace UnLuaNova
                Profiler.IsEnabled() ? TEXT("ON") : TEXT("OFF"),
                Profiler.NumTrackedFunctions(),
                Profiler.NumAggregatedFunctions());
+    }
+
+    void FUnLuaNovaConsoleCommands::Coroutines(const TArray<FString>& Args) const
+    {
+        auto Env = Module->GetEnv();
+        if (!Env)
+        {
+            UE_LOG(LogUnLuaNova, Warning, TEXT("lua.coroutines: no lua env is active."));
+            return;
+        }
+
+        auto& Tracker = UnLuaNova::FLuaCoroutineTracker::Get();
+        Tracker.Attach(Env->GetMainState());
+
+        if (Args.Num() > 0)
+        {
+            const FString& Sub = Args[0];
+
+            if (Sub.Equals(TEXT("on"), ESearchCase::IgnoreCase))
+            {
+                Tracker.SetEnabled(true);
+                UE_LOG(LogUnLuaNova, Log, TEXT("lua.coroutines: tracking on. It replaces coroutine.create/wrap, so it costs a table write per coroutine - turn it off when you are done."));
+                return;
+            }
+
+            if (Sub.Equals(TEXT("off"), ESearchCase::IgnoreCase))
+            {
+                Tracker.SetEnabled(false);
+                // Said out loud rather than left implicit: the originals cannot be put back,
+                // they only exist inside the upvalues of the wrappers.
+                UE_LOG(LogUnLuaNova, Log, TEXT("lua.coroutines: recording off. The wrapped constructors stay installed (there is nothing to restore them from); only new coroutines stop being recorded."));
+                return;
+            }
+
+            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.coroutines [on|off]"));
+            return;
+        }
+
+        if (!Tracker.IsEnabled())
+        {
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.coroutines: tracking is off - run 'lua.coroutines on' first. A census taken before that is empty, not healthy."));
+            return;
+        }
+
+        const TArray<UnLuaNova::FLuaCoroutineTracker::FLiveCoroutine> Live = Tracker.Snapshot();
+
+        int32 Suspended = 0;
+        for (const UnLuaNova::FLuaCoroutineTracker::FLiveCoroutine& Co : Live)
+        {
+            if (Co.Status == TEXT("suspended"))
+                ++Suspended;
+        }
+
+        UE_LOG(LogUnLuaNova, Log, TEXT("lua.coroutines: %d live (%d suspended), %llu created since tracking began"),
+            Live.Num(), Suspended, Tracker.NumCreated());
+
+        for (const UnLuaNova::FLuaCoroutineTracker::FLiveCoroutine& Co : Live)
+        {
+            UE_LOG(LogUnLuaNova, Log, TEXT("  %-10s created at %s, parked at %s"),
+                *Co.Status, *Co.CreatedAt, *Co.SuspendedAt);
+        }
+
+        if (Suspended > 0)
+        {
+            UE_LOG(LogUnLuaNova, Warning,
+                TEXT("lua.coroutines: %d suspended coroutine(s), each holding its stack and everything it captured. ")
+                TEXT("A deliberately parked one is fine; one nobody will ever resume is a leak - and 'created at' is the only thing that tells you which."),
+                Suspended);
+        }
+    }
+
+    void FUnLuaNovaConsoleCommands::CodeGen(const TArray<FString>& Args) const
+    {
+        IConsoleVariable* EnableCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.codegen"));
+        IConsoleVariable* ModulesCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.codegen.modules"));
+
+        if (Args.Num() > 0)
+        {
+            const FString& Sub = Args[0];
+
+            if (Sub.Equals(TEXT("on"), ESearchCase::IgnoreCase) || Sub.Equals(TEXT("off"), ESearchCase::IgnoreCase))
+            {
+                if (EnableCVar)
+                    EnableCVar->Set(Sub.Equals(TEXT("on"), ESearchCase::IgnoreCase) ? 1 : 0, ECVF_SetByConsole);
+                return;
+            }
+
+            if (Sub.Equals(TEXT("modules"), ESearchCase::IgnoreCase))
+            {
+                const FString List = Args.Num() > 1 ? FString::Join(TArray<FString>(Args.GetData() + 1, Args.Num() - 1), TEXT(",")) : FString();
+                if (ModulesCVar)
+                    ModulesCVar->Set(*List, ECVF_SetByConsole);
+                return;
+            }
+
+            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.codegen [on|off|modules <a,b,c>]"));
+            return;
+        }
+
+        // Status. "available" is the build/platform question, "enabled" is the switch, and
+        // they are different: a build with no native backend must say so rather than
+        // reporting the switch as if it were doing something.
+        UE_LOG(LogUnLuaNova, Log,
+            TEXT("lua.codegen: available=%d enabled=%d chunks=%d modules='%s'"),
+            UnLuaNova::IsNativeCodeGenAvailable() ? 1 : 0,
+            EnableCVar ? EnableCVar->GetInt() : 0,
+            UnLuaNova::GetNativeCodeGenChunkCount(),
+            ModulesCVar ? ModulesCVar->GetString() : TEXT(""));
+
+        if (!UnLuaNova::IsNativeCodeGenAvailable())
+        {
+            UE_LOG(LogUnLuaNova, Log,
+                TEXT("This build cannot emit native code: it needs the Luau backend on x64 or arm64."));
+        }
     }
 }
 

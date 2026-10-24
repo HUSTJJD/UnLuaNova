@@ -279,7 +279,7 @@ static const luaL_Reg TSetLib[] =
     {"Clear", TSet_Clear},
     {"ToArray", TSet_ToArray},
     {"ToTable", TSet_ToTable},
-#if UNLUANOVA_HAS_USERDATA_GC
+#if UNLUANOVA_HAS_GC_METAMETHOD
     {"__gc", TSet_Delete},
 #endif
     {"__call", TSet_New},

@@ -33,6 +33,10 @@ namespace UnLuaNova
 
         FAutoConsoleCommand DebugCommand;
 
+        FAutoConsoleCommand CoroutinesCommand;
+
+        FAutoConsoleCommand CodeGenCommand;
+
         explicit FUnLuaNovaConsoleCommands(IUnLuaNovaModule* InModule);
 
         void Do(const TArray<FString>& Args) const;
@@ -46,6 +50,10 @@ namespace UnLuaNova
         void Profiler(const TArray<FString>& Args) const;
 
         void Debug(const TArray<FString>& Args) const;
+
+        void Coroutines(const TArray<FString>& Args) const;
+
+        void CodeGen(const TArray<FString>& Args) const;
 
     private:
         IUnLuaNovaModule* Module;

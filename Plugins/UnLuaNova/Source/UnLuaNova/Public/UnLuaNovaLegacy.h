@@ -178,7 +178,9 @@ namespace UnLuaNova
     FORCEINLINE int32 Push(lua_State* L, FText& V, bool bCopy = false)
     {
 #if UNLUANOVA_ENABLE_FTEXT
-        const auto Userdata = NewTypedUserdata(L, FText);
+        // FText holds a refcount on shared text data, so it has to be destroyed - not just
+        // have its bytes reclaimed. On Luau that only happens through the VM-level finalizer.
+        const auto Userdata = NewTypedUserdataDtor(L, FText, DestroyUserdataPayload<FText>);
         new(Userdata) FText(V);
 #else
         lua_pushstring(L, TCHAR_TO_UTF8(*V.ToString()));
@@ -189,7 +191,9 @@ namespace UnLuaNova
     FORCEINLINE int32 Push(lua_State* L, const FText& V, bool bCopy = false)
     {
 #if UNLUANOVA_ENABLE_FTEXT
-        const auto Userdata = NewTypedUserdata(L, FText);
+        // FText holds a refcount on shared text data, so it has to be destroyed - not just
+        // have its bytes reclaimed. On Luau that only happens through the VM-level finalizer.
+        const auto Userdata = NewTypedUserdataDtor(L, FText, DestroyUserdataPayload<FText>);
 #else
         lua_pushstring(L, TCHAR_TO_UTF8(*V.ToString()));
 #endif
@@ -199,7 +203,9 @@ namespace UnLuaNova
     FORCEINLINE int32 Push(lua_State* L, FText&& V, bool bCopy = false)
     {
 #if UNLUANOVA_ENABLE_FTEXT
-        const auto Userdata = NewTypedUserdata(L, FText);
+        // FText holds a refcount on shared text data, so it has to be destroyed - not just
+        // have its bytes reclaimed. On Luau that only happens through the VM-level finalizer.
+        const auto Userdata = NewTypedUserdataDtor(L, FText, DestroyUserdataPayload<FText>);
 #else
         lua_pushstring(L, TCHAR_TO_UTF8(*V.ToString()));
 #endif

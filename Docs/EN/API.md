@@ -37,8 +37,6 @@ Namespace of UnLuaNova
 
 * `LoadFile` Call to load a Lua file with relative path based on Lua Script path without running it, return true if found the file and loaded successfully, otherwise return false
 
-* `RunFile` Call to load and run a Lua file, return true if loaded and run successfully, otherwise return false
-
 * `LoadChunk` Call to load a Lua chunk without running it, return true if loaded successfully, otherwise return false
 
 * `RunChunk` Call to run a Lua chunk, return true if loaded successfully, otherwise return false

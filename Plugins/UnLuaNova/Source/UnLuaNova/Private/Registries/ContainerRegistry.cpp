@@ -34,7 +34,7 @@ namespace UnLuaNova
     FLuaArray* FContainerRegistry::NewArray(lua_State* L, TSharedPtr<ITypeInterface> ElementType, FLuaArray::EScriptArrayFlag Flag)
     {
         const FScriptArray* ScriptArray = new FScriptArray;
-        void* Userdata = NewUserdata(L, FScriptContainerDesc::Array);
+        void* Userdata = NewUserdata(L, FScriptContainerDesc::Array, DestroyUserdataPayload<FLuaArray>);
         const auto Ret = new(Userdata) FLuaArray(ScriptArray, ElementType, Flag);
         return Ret;
     }
@@ -42,7 +42,7 @@ namespace UnLuaNova
     FLuaSet* FContainerRegistry::NewSet(lua_State* L, TSharedPtr<ITypeInterface> ElementType, FLuaSet::FScriptSetFlag Flag)
     {
         const FScriptSet* ScriptSet = new FScriptSet;
-        void* Userdata = NewUserdata(L, FScriptContainerDesc::Set);
+        void* Userdata = NewUserdata(L, FScriptContainerDesc::Set, DestroyUserdataPayload<FLuaSet>);
         const auto Ret = new(Userdata) FLuaSet(ScriptSet, ElementType, Flag); 
         return Ret;
     }
@@ -50,7 +50,7 @@ namespace UnLuaNova
     FLuaMap* FContainerRegistry::NewMap(lua_State* L, TSharedPtr<ITypeInterface> KeyType, TSharedPtr<ITypeInterface> ValueType, FLuaMap::FScriptMapFlag Flag)
     {
         const FScriptMap* ScriptMap = new FScriptMap;
-        void* Userdata = NewUserdata(L, FScriptContainerDesc::Map);
+        void* Userdata = NewUserdata(L, FScriptContainerDesc::Map, DestroyUserdataPayload<FLuaMap>);
         const auto Ret = new(Userdata) FLuaMap(ScriptMap, KeyType, ValueType, Flag);
         return Ret;
     }
@@ -61,7 +61,7 @@ namespace UnLuaNova
         {
             const auto Array = (FLuaArray*)Cached;
             return Array->Inner == ElementType;
-        });
+        }, DestroyUserdataPayload<FLuaArray>);
 
         if (Userdata)
             new(Userdata) FLuaArray(ContainerPtr, ElementType, FLuaArray::OwnedByOther);
@@ -73,7 +73,7 @@ namespace UnLuaNova
         {
             const auto Set = (FLuaSet*)Cached;
             return Set->ElementInterface == ElementType;
-        });
+        }, DestroyUserdataPayload<FLuaSet>);
 
         if (Userdata)
             new(Userdata) FLuaSet(ContainerPtr, ElementType, FLuaSet::OwnedByOther);
@@ -85,7 +85,7 @@ namespace UnLuaNova
         {
             const auto Map = (FLuaMap*)Cached;
             return Map->KeyInterface == KeyType && Map->ValueInterface == ValueType;
-        });
+        }, DestroyUserdataPayload<FLuaMap>);
 
         if (Userdata)
             new(Userdata) FLuaMap(ContainerPtr, KeyType, ValueType, FLuaMap::OwnedByOther);
@@ -109,9 +109,9 @@ namespace UnLuaNova
         RemoveCachedScriptContainer(L, Container->GetContainerPtr());
     }
 
-    void* FContainerRegistry::NewUserdata(lua_State* L, const FScriptContainerDesc& Desc)
+    void* FContainerRegistry::NewUserdata(lua_State* L, const FScriptContainerDesc& Desc, FUnLuaNovaUserdataDtor Dtor)
     {
-        void* Userdata = NewUserdataWithContainerTag(L, Desc.GetSize());
+        void* Userdata = NewUserdataWithContainerTagDtor(L, Desc.GetSize(), Dtor);
         luaL_setmetatable(L, Desc.GetName());
         return Userdata;
     }

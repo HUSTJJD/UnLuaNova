@@ -248,14 +248,27 @@ inline int UnLuaNovaNewMetatable(lua_State* L, const char* TypeName)
 }
 #define luaL_newmetatable(L, TypeName) UnLuaNovaNewMetatable(L, TypeName)
 
+// Compiler options for luau_compile, from CVars (luau.optimize / luau.debuglevel /
+// luau.coverage). Defined in Private/LuaBackend.cpp rather than inline here: registering
+// console variables from a header would happen once per translation unit that includes
+// it, and IConsoleManager refuses a duplicate name.
+//
+// Level 2 is the one worth knowing about. It enables function inlining and loop
+// unrolling, which is real speed, and it also means a call or a loop is no longer
+// observable: debug.traceback stops showing inlined frames and lua_getlocal cannot see
+// unrolled iterations. That is a good trade for a shipping build and a bad one while a
+// breakpoint is attached, which is why the default stays at 1.
+namespace UnLuaNova
+{
+    UNLUANOVA_API lua_CompileOptions GetLuauCompileOptions();
+}
+
 // Luau has no text loader: source is compiled to bytecode up front and then handed to
 // luau_load. These are the lauxlib spellings the rest of the plugin is written against.
 inline int luaL_loadbufferx(lua_State* L, const char* Buff, size_t Size, const char* Name, const char* Mode)
 {
     (void)Mode; // Luau always compiles source; there is no "binary chunk" mode to honour
-    lua_CompileOptions Options = {};
-    Options.optimizationLevel = 1; // baseline - keeps line info, unlike level 2
-    Options.debugLevel = 1;        // line info + function names: enough for backtraces
+    const lua_CompileOptions Options = UnLuaNova::GetLuauCompileOptions();
 
     size_t BytecodeSize = 0;
     char* Bytecode = luau_compile(Buff, Size, &Options, &BytecodeSize);
@@ -478,6 +491,31 @@ inline bool UnLuaNovaIsIntegralNumber(lua_State* L, int Idx)
 #define UNLUANOVA_NEWDATA(L, Size) lua_newuserdatauv(L, Size, 0)
 #endif
 
+// --- userdata allocation, with a finalizer ----------------------------------
+// Allocate a userdata whose payload has a real C++ destructor that must run when the VM
+// collects it: script containers (they own the FScriptArray and the element cache),
+// FText (owns a refcount on shared text data), exported non-POD classes such as the file
+// wrapper (owns an FArchive).
+//
+//   Lua 5.5: plain userdata; 'Dtor' is ignored and the __gc metamethod on the metatable
+//            does the work, as it always did.
+//   Luau:    lua_newuserdatadtor(), which has no __gc to fall back on. The callback may
+//            not touch the Lua stack - it runs inside the collector - so it is only ever
+//            allowed to destroy C++ state.
+//
+// Either way the callback is handed the address this macro returns, i.e. the start of the
+// [FUserdataDesc][padding][payload] block, so it reaches the payload the same way
+// GetUserdataFast() does.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_NEWDATA_DTOR(L, Size, Dtor) lua_newuserdatadtor(L, Size, Dtor)
+#else
+#define UNLUANOVA_NEWDATA_DTOR(L, Size, Dtor) UNLUANOVA_NEWDATA(L, Size)
+#endif
+
+// The signature Luau's lua_Destructor uses. Named here so call sites can declare a
+// finalizer without branching on the backend - plain Lua never sees it run.
+typedef void (*FUnLuaNovaUserdataDtor)(lua_State* L, void* Block);
+
 // --- size of a userdata payload ---------------------------------------------
 // Lua 5.3+ replaced lua_objlen with lua_rawlen; Luau kept the 5.1 name.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
@@ -510,11 +548,24 @@ inline int lua_gc(lua_State* L, int What)
 // --- garbage collector --------------------------------------------------------
 // Lua 5.5 has a generational mode (LUA_GCGEN). Luau does not - it tunes the
 // incremental collector through the goal / step multiplier instead.
+//
+// G (goal) is a percentage: the heap is allowed to grow to G% of the live data.
+// S (step multiplier) is how much collector work is done per byte allocated.
+// luaconf's own numbers are G=200 / S=200 (see LUAI_GCGOAL / LUAI_GCSTEPMUL), and
+// lua.h documents the pairing rule: S should sit in [100/(G-100), 100+100/(G-100))
+// with a floor of 150% - i.e. [150,200] when G=200.
+//
+// These used to be 100/100, which is not a stricter setting but a broken one: with
+// G=100 the heap goal collapses to `totalbytes / 100 * 100 == totalbytes`, so the
+// collector is asked to keep the heap exactly at the live size, and the post-cycle
+// threshold in luaC_fullgc works out to `totalbytes * (G*S/100 - 100) / S`, which is
+// 0 for G=S=100. The VM clamps it to totalbytes, so the effect is a collector that
+// restarts a cycle the moment it finishes one.
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
 #define UNLUANOVA_SETUP_GC(L)              \
 	do {                                   \
-		lua_gc(L, LUA_GCSETGOAL, 100);      \
-		lua_gc(L, LUA_GCSETSTEPMUL, 100);   \
+		lua_gc(L, LUA_GCSETGOAL, 200);      \
+		lua_gc(L, LUA_GCSETSTEPMUL, 200);   \
 	} while (false)
 #else
 #define UNLUANOVA_SETUP_GC(L)              \
@@ -716,6 +767,76 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #define UNLUANOVA_SET_ALLOC_CALLBACKS(L, Alloc, Free) ((void)0)
 #endif
 
+// --- native code generation (optional JIT) -------------------------------------
+// Luau ships an optional native compiler for x64 and arm64. It is not a tracing JIT:
+// nothing is compiled unless the host asks, there is no runtime type profiling, and the
+// only hints it takes are the type annotations in the source. That is a good fit here,
+// because "compile the modules I know are hot" is a decision a project can make and
+// "guess which function got hot" is not one this VM makes for you.
+//
+// Two calls: luau_codegen_create once per VM, then luau_codegen_compile on a function at
+// a stack index - which also covers everything nested inside it, so compiling a module's
+// main chunk covers the module.
+//
+// Whether it can actually do anything is a runtime question, and it is
+// luau_codegen_supported() that answers it; the macros below only say whether the API is
+// linked in at all.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_HAS_NATIVE_CODEGEN 1
+#define UNLUANOVA_CODEGEN_SUPPORTED() (luau_codegen_supported() != 0)
+#define UNLUANOVA_CODEGEN_CREATE(L) luau_codegen_create(L)
+#define UNLUANOVA_CODEGEN_COMPILE(L, Idx) luau_codegen_compile(L, Idx)
+#else
+#define UNLUANOVA_HAS_NATIVE_CODEGEN 0
+#define UNLUANOVA_CODEGEN_SUPPORTED() false
+#define UNLUANOVA_CODEGEN_CREATE(L) ((void)0)
+#define UNLUANOVA_CODEGEN_COMPILE(L, Idx) ((void)0)
+#endif
+
+namespace UnLuaNova
+{
+    /** Whether this build can emit native code at all: linked in *and* a backend exists. */
+    UNLUANOVA_API bool IsNativeCodeGenAvailable();
+
+    /**
+     * Compile the chunk that was just loaded, if the project asked for it.
+     *
+     * Takes the chunk name so a project can name the modules it wants compiled rather
+     * than paying the compile cost on everything: lua.codegen.modules is a comma
+     * separated list, empty meaning "every chunk".
+     *
+     * Called right after a chunk loads, which is the only moment the function object
+     * exists and is not yet running - luau_codegen_compile refuses a function that is on
+     * the stack of a running thread.
+     */
+    UNLUANOVA_API void MaybeCompileNativeChunk(lua_State* L, const char* ChunkName);
+
+    /** Chunks handed to the native compiler so far, for `lua.codegen` to report. */
+    UNLUANOVA_API int32 GetNativeCodeGenChunkCount();
+}
+
+// --- thread callbacks ---------------------------------------------------------
+// Luau calls userthread whenever a (co)routine is created (LP = the parent) or destroyed
+// (LP = nullptr). Plain Lua has no equivalent - coroutine.create is just a library
+// function there and the VM never tells the host about it.
+//
+// This is the only place to hook thread creation: the plugin never calls lua_newthread
+// itself, every coroutine in a script comes out of coroutine.create, so a host-side
+// wrapper around the constructor would miss all of them. Two features want this slot -
+// sandboxing each new thread, and attributing profiler samples across coroutines - so
+// FLuaVmHooks owns it and fans out, exactly like it does for interrupt.
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+#define UNLUANOVA_HAS_THREAD_CALLBACK 1
+#define UNLUANOVA_SET_THREAD_CALLBACK(L, Cb) \
+    do \
+    { \
+        lua_callbacks(L)->userthread = (Cb); \
+    } while (0)
+#else
+#define UNLUANOVA_HAS_THREAD_CALLBACK 0
+#define UNLUANOVA_SET_THREAD_CALLBACK(L, Cb) ((void)0)
+#endif
+
 // --- per-function id, for profiler keys ----------------------------------------
 // Luau exposes a VM-wide unique proto id on lua_Debug, which makes an ideal cache key.
 // Plain Lua has no such field, so key on (source pointer, line the function was defined
@@ -733,19 +854,27 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
 
 /**
- * 0 on Luau: it has no __gc metamethod at all - "TM_GC" does not exist anywhere in
- * Luau/VM/src. Userdata finalizers there go through lua_newuserdatadtor() instead.
- *
- * Note this is about *userdata*: every __gc in this codebase is registered on a
- * userdata metatable (TArray/TMap/TSet/FText/file handles), which is why the flag used
- * to be called HAS_TABLE_GC - that name was wrong and made it look like an unused
- * corner. Luau's substitute, lua_newuserdatadtor(), is NOT wired in yet: every __gc
- * here ends in ContainerRegistry::Remove(), which goes back through FLuaEnv for the
- * main state and then touches the Lua stack, and that is not safe from a GC callback.
- * Closing the gap needs a different cleanup design - explicit release, or a sweep owned
- * by the env - not a rename. Until then Luau simply never finalizes these userdata.
+ * Whether a metatable may register "__gc". 0 on Luau: "TM_GC" does not exist anywhere in
+ * Luau/VM/src, so such an entry is silently dead. Guard registration sites with this.
  */
-#define UNLUANOVA_HAS_USERDATA_GC 0
+#define UNLUANOVA_HAS_GC_METAMETHOD 0
+/**
+ * Whether a userdata gets finalized at all. 1 on both, by two different mechanisms -
+ * __gc here, lua_newuserdatadtor() there. See UNLUANOVA_NEWDATA_DTOR.
+ *
+ * It used to be 0 on Luau, and that was a leak, not a missing feature: the finalizers
+ * here own real C++ state - the FScriptArray and element cache behind an owned container
+ * (FLuaArray::~FLuaArray), the shared-text refcount behind an FText, the FArchive behind
+ * a file - and none of it was ever released on the default backend.
+ *
+ * What made it look unfixable was that every finalizer ended in
+ * ContainerRegistry::Remove(), which goes back through FLuaEnv for the main state and
+ * then touches the Lua stack - illegal from inside the collector. That call is also
+ * unnecessary: 'ScriptContainerMap' is a weak-*value* table (FContainerRegistry's ctor),
+ * so its entry disappears on its own the moment the userdata dies. Dropping it leaves a
+ * finalizer that is pure C++, which is exactly what a Luau destructor may run.
+ */
+#define UNLUANOVA_HAS_USERDATA_FINALIZER 1
 /**
  * 0 on Luau: it is recognized by the iteration protocol only through __iter (TM_ITER).
  * __pairs/__ipairs do not exist there, and Luau's own pairs() even insists on a real
@@ -755,7 +884,8 @@ inline lua_State* UnLuaNovaGetMainState(lua_State* L)
 #define UNLUANOVA_HAS_ITER_METAMETHOD 1
 #else
 
-#define UNLUANOVA_HAS_USERDATA_GC 1
+#define UNLUANOVA_HAS_GC_METAMETHOD 1
+#define UNLUANOVA_HAS_USERDATA_FINALIZER 1
 #define UNLUANOVA_HAS_ITER_METAMETHOD 0
 
 #endif
