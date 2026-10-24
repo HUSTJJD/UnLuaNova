@@ -213,7 +213,8 @@ vs `Windows`）、日志名（`Editor.log` vs `Game.log`）、后端 DLL 名
 | `UnLuaNova.API.FVector2D` | 同上 | |
 | `UnLuaNova.API.FVector4` | 同上 | |
 | `UnLuaNova.API.Latent` | 主线程调用 latent 的报错文案、报错后环境仍可用 | 文案即契约，改一个字用例即失败 |
-| `UnLuaNova.API.Lifetime` | 释放标记、脚本持有对象的回收、手动引用、环境销毁 | |
+| `UnLuaNova.API.Lifetime` | 手动代理换代、Lua/UE GC、智能指针、派生容器数组释放、Env 销毁 | 新增用例待构建运行 |
+| `UnLuaNova.API.Timer` | coroutine GC、跨 Env、多 World、两种销毁顺序、重入取消、暂停和坏输入 | 需 bTimer=true；新增用例待构建运行 |
 | `UnLuaNova.API.Locators` | 默认 / ByPackage / 自定义模块定位器与环境定位器 | 改全局设置，`AfterEach` 还原 |
 | `UnLuaNova.API.LuaBackend` | 后端适配层、能力对齐、Luau 专属能力、整数类型、协程、Profiler 与调试 | 后端相关 |
 | `UnLuaNova.API.LuaScriptCompat` | `collectgarbage` / `load` 等脚本层兼容 | 后端相关 |

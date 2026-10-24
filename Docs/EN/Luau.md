@@ -19,7 +19,7 @@ See upstream [compatibility](https://luau.org/compatibility/) and [sandbox](http
 
 ## Lua Compatibility
 
-Full Lua 5.x language equivalence is not promised: integer/operator syntax, goto and close semantics differ. Use explicit resource cleanup. The binding layer has dedicated int64 conversion, but networking still has an int32 truncation path.
+Full Lua 5.x language equivalence is not promised: integer/operator syntax, goto and close semantics differ. Use explicit resource cleanup. Replication buckets now use strict int64 conversion with pending boundary tests. Exact values beyond +/-2^53 require native integer64; conversion cannot recover precision already lost in a number.
 
 Luau has no userdata __gc. `UNLUANOVA_HAS_GC_METAMETHOD=0` and `UNLUANOVA_HAS_USERDATA_FINALIZER=1`; containers, FText, nontrivial exported constructors, manual proxies and known smart-pointer allocations use native destructors. New forced-GC/teardown tests await execution. Destructors must not touch the Lua stack; the allocation and LONGJMP cleanup audits remain incomplete.
 

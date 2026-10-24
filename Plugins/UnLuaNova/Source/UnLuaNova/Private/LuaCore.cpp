@@ -177,7 +177,7 @@ static void* NewUserdataWithDesc(lua_State* L, int Size, uint8 Tag, uint8 Paddin
 void* UnLuaNova::GetUserdataPayloadFromBlock(void* Block)
 {
     FUserdataDesc* UserdataDesc = GetUserdataDesc(Block);
-    return UserdataDesc && !(UserdataDesc->tag & BIT_RELEASED_TAG) ? GetUserdataPayload(Block, UserdataDesc) : nullptr;
+    return UserdataDesc && !(UserdataDesc->tag & BIT_DESTROYED_TAG) ? GetUserdataPayload(Block, UserdataDesc) : nullptr;
 }
 
 namespace UnLuaNova
@@ -186,7 +186,7 @@ namespace UnLuaNova
     {
         void* Payload = GetUserdataPayloadFromBlock(Block);
         if (Payload)
-            GetUserdataDesc(Block)->tag |= BIT_RELEASED_TAG;
+            GetUserdataDesc(Block)->tag |= BIT_RELEASED_TAG | BIT_DESTROYED_TAG;
         return Payload;
     }
 }
@@ -338,7 +338,7 @@ void* NewUserdataWithPaddingDtor(lua_State *L, int32 Size, const char *Metatable
         if (!bSuccess)
         {
             // No C++ object was constructed. A native finalizer must skip this payload.
-            SetUserdataFlags(L, -1, BIT_RELEASED_TAG);
+            SetUserdataFlags(L, -1, BIT_RELEASED_TAG | BIT_DESTROYED_TAG);
             UNLUANOVA_LOGERROR(L, TEXT("%s, Invalid metatable, metatable name: %s!"), ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName));
             return nullptr;
         }

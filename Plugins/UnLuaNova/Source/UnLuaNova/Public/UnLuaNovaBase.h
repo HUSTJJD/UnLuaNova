@@ -257,6 +257,7 @@ namespace UnLuaNova
      *
      * @param Size - user data size (in bytes)
      * @param MetatableName - name of the meta table
+     * @param Dtor - native finalizer for owned smart pointers on Luau; use DestroyUserdataPayload<SmartPtrType>
      * @return - the address of new created user data
      */
     UNLUANOVA_API void* NewSmartPointer(lua_State *L, int32 Size, const char *MetatableName, FUnLuaNovaUserdataDtor Dtor = nullptr);
@@ -300,7 +301,7 @@ namespace UnLuaNova
      * reaching into the private tree; both declarations are the same function.
      */
     UNLUANOVA_API void* GetUserdataPayloadFromBlock(void* Block);
-    /** Mark the payload released and return it once; usable inside native GC callbacks. */
+    /** Mark the payload destroyed and return it once. Invalidated borrowed views still need destruction. */
     UNLUANOVA_API void* ReleaseUserdataPayloadFromBlock(void* Block);
 
     /** Finalizer for a payload of type T - hand it to NewUserdataDtor. */

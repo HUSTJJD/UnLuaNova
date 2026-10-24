@@ -18,6 +18,7 @@
 #include "LuaFunction.h"
 #include "UnLuaNovaBase.h"
 #include "UObject/UnrealType.h"
+#include <initializer_list>
 
 namespace UnLuaNova
 {
@@ -78,12 +79,36 @@ namespace UnLuaNova
 
     namespace
     {
+        bool HasOnlyFields(lua_State* L, int32 TableIdx, std::initializer_list<const char*> Allowed)
+        {
+            const int32 Abs = lua_absindex(L, TableIdx);
+            bool bValid = true;
+            lua_pushnil(L);
+            while (lua_next(L, Abs) != 0)
+            {
+                bool bKnown = false;
+                if (lua_type(L, -2) == LUA_TSTRING)
+                {
+                    size_t Length = 0;
+                    const char* Key = lua_tolstring(L, -2, &Length);
+                    for (const char* Field : Allowed)
+                        bKnown |= Length == FCStringAnsi::Strlen(Field) && FMemory::Memcmp(Key, Field, Length) == 0;
+                }
+                bValid &= bKnown;
+                lua_pop(L, 1);
+            }
+            return bValid;
+        }
+
         int32 DenseArrayCount(lua_State* L, int32 TableIdx)
         {
             const int32 Abs = lua_absindex(L, TableIdx);
-            const auto Length = lua_objlen(L, Abs);
-            if (Length > MAX_int32)
+            // lua_objlen() is size_t. Narrow it once here so every comparison below stays
+            // signed - MSVC treats a signed/unsigned mismatch as an error, not a warning.
+            const auto RawLength = lua_objlen(L, Abs);
+            if (RawLength > MAX_int32)
                 return INDEX_NONE;
+            const int64 Length = (int64)RawLength;
             int32 Seen = 0;
             bool bValid = true;
             lua_pushnil(L);
@@ -148,7 +173,10 @@ namespace UnLuaNova
                     const int32 EntryIdx = lua_absindex(L, -1);
                     const FString TypeName = GetStringField(L, EntryIdx, "Type");
                     const FString NameText = GetStringField(L, EntryIdx, "Name");
-                    if (!TypeName.IsEmpty())
+                    const int32 NameType = lua_getfield(L, EntryIdx, "Name");
+                    lua_pop(L, 1);
+                    if (!TypeName.IsEmpty() && HasOnlyFields(L, EntryIdx, { "Name", "Type" })
+                        && (NameType == LUA_TNIL || (NameType == LUA_TSTRING && !NameText.IsEmpty() && !FName(*NameText).IsNone())))
                     {
                         bOk = ParseLuaNetParamType(TypeName, Param.Type);
                         if (!NameText.IsEmpty())
@@ -185,6 +213,8 @@ namespace UnLuaNova
             // UFUNCTION(Server) in C++. Reliability is opt-in through the table form.
             if (!lua_istable(L, Abs))
                 return lua_type(L, Abs) == LUA_TBOOLEAN && lua_toboolean(L, Abs);
+            if (!HasOnlyFields(L, Abs, { "Reliable", "Params" }))
+                return false;
 
             const int32 Type = lua_getfield(L, Abs, "Reliable");
             Decl.bReliable = lua_toboolean(L, -1) != 0;
@@ -442,6 +472,8 @@ namespace UnLuaNova
                 return Reject(TEXT("Every property must be a table."));
 
             const int32 EntryIdx = lua_absindex(L, -1);
+            if (!HasOnlyFields(L, EntryIdx, { "Name", "Type", "Condition" }))
+                return Reject(TEXT("Unknown property declaration field."));
             const FString Name = GetStringField(L, EntryIdx, "Name");
             const FString TypeName = GetStringField(L, EntryIdx, "Type");
             const FString ConditionText = GetStringField(L, EntryIdx, "Condition");

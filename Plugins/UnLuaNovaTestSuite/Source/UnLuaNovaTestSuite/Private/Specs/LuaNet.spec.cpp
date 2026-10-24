@@ -165,6 +165,8 @@ void FNetSpec::Define()
                 "return {ServerRPC={Invalid={Params={[2]='Int'}}}}",
                 "return {ServerRPC={Invalid={Params={{Name='Same',Type='Int'},{Name='same',Type='Float'}}}}}",
                 "return {ServerRPC={Invalid={Params='Int'}}}",
+                "return {ServerRPC={Invalid={Params={{Name=7,Type='Int'}}}}}",
+                "return {ServerRPC={Invalid={Param={'Int'}}}}",
                 "return {ServerRPC={Invalid={Reliable='true'}}}",
                 "return {ServerRPC={Invalid=false}}" })
             {
@@ -347,6 +349,7 @@ void FNetSpec::Define()
                 "return {ReplicatedProps={{Name='Private',Type='String',Condition='OwnerOnly'}}}",
                 "return {ReplicatedProps={{Name='HP',Type='Float',Condition='Typo'}}}",
                 "return {ReplicatedProps={{Name='HP',Type='Float',Condition=7}}}",
+                "return {ReplicatedProps={{Name='HP',Type='Float',Conditions='OwnerOnly'}}}",
                 "return {ReplicatedProps={{Name='HP',Type='Float'},{Name='hp',Type='Int'}}}",
                 "return {ReplicatedProps={{Name='HP',Type='Float'},false}}",
                 "return {ReplicatedProps={[2]={Name='HP',Type='Float'}}}",

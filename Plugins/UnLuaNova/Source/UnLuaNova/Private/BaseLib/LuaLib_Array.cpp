@@ -503,14 +503,14 @@ static int32 TArray_Delete(lua_State* L)
     if (NumParams != 1)
         return luaL_error(L, "invalid parameters");
 
-    FLuaArray* Array = (FLuaArray*)(GetCppInstanceFast(L, 1));
+    FLuaArray* Array = static_cast<FLuaArray*>(UnLuaNova::GetUserdataPayloadFromBlock(lua_touserdata(L, 1)));
     if (!Array)
         return 0;
 
     auto Registry = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetContainerRegistry();
     Registry->Remove(Array);
 
-    Array->~FLuaArray();
+    UnLuaNova::DestroyUserdataPayload<FLuaArray>(L, lua_touserdata(L, 1));
     return 0;
 }
 

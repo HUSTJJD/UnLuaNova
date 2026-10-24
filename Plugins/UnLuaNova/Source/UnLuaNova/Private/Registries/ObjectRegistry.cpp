@@ -96,6 +96,7 @@ namespace UnLuaNova
 
     void FObjectRegistry::NotifyUObjectDeleted(UObject* Object)
     {
+        RemoveManualRef(Object);
         Unbind(Object);
     }
 
@@ -247,7 +248,9 @@ namespace UnLuaNova
     {
         lua_getfield(L, LUA_REGISTRYINDEX, MANUAL_REF_PROXY_MAP);
         lua_pushlightuserdata(L, Object);
-        if (lua_rawget(L, -2) == LUA_TNIL)
+        lua_rawget(L, -2);
+        auto* Existing = static_cast<FManualRefProxy*>(lua_touserdata(L, -1));
+        if (!Existing || Existing->Registry != this || Existing->Object.Get() != Object)
         {
             lua_pop(L, 1);
             auto Ptr = UNLUANOVA_NEWDATA_DTOR(L, sizeof(FManualRefProxy),

@@ -20,15 +20,7 @@
 /**
  * The wire layout of Lua-declared replicated fields.
  *
- * Version 1 of this feature sent every field as `FName + int32 + FString` - one struct per
- * field, the value carried as text. That was chosen because a USTRUCT of plain UPROPERTYs
- * needs no custom serialiser, so there was no NetDeltaSerialize to write and no change mask
- * to get wrong. It works, but it pays for that simplicity on the wire: a float rides as a
- * name, a type tag and a string, and the whole set goes whenever any field changes.
- *
- * This version keeps the "no custom serialiser" property - which is what makes it portable
- * between the legacy replication system and Iris - while getting rid of the text. Fields are
- * grouped by type into one replicated array per type:
+ * Fields are grouped into one replicated UPROPERTY array per type:
  *
  *     Floats  = [ HP, Mana ]      // two Float declarations, in declaration order
  *     Strings = [ NickName ]
@@ -38,19 +30,9 @@
  * does travel is a 32-bit fingerprint of the layout (SchemaVersion) so a peer running a
  * different build of the script reports a mismatch instead of silently decoding garbage.
  *
- * Why one array per type rather than one UPROPERTY per field: a UPROPERTY cannot be added to
- * a class at runtime, so the number of them has to be fixed at compile time. One per type is
- * the finest granularity available without code generation, and it buys:
- *
- *   - **push model granularity**: a change to HP dirties Floats and nothing else;
- *   - **a condition per type** instead of one condition for everything;
- *   - **Iris compatibility**: no NetDeltaSerialize, no FFastArraySerializer, no custom
- *     NetSerializer - just ordinary typed UPROPERTYs, which both replication systems
- *     understand, and which Iris additionally delta-compresses per array element and
- *     quantises per type.
- *
- * The cost, stated honestly: on the legacy system an array is sent whole, so changing HP
- * resends every Float on the actor. Under Iris the element-level delta removes that.
+ * Push-model dirty tracking operates per type. The layout is fixed at class level and
+ * currently accepts only COND_None; conditional declarations are rejected. Legacy/Iris
+ * delivery, delta granularity and bandwidth require connected-peer measurements.
  */
 namespace UnLuaNova
 {

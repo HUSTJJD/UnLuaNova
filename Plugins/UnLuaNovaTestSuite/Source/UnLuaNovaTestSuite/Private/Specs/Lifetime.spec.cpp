@@ -30,6 +30,7 @@
 #include "Misc/AutomationTest.h"
 #include "UnLuaNovaTestHelpers.h"
 #include "Registries/ObjectRegistry.h"
+#include "Containers/LuaArray.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -197,6 +198,27 @@ void FLifetimeSpec::Define()
 
     Describe(TEXT("Smart pointer finalization"), [this]()
     {
+        It(TEXT("derived container arrays release their element type reference"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            for (const char* Script : {
+                "Source = UE.TMap(0,0); Source:Add(1,2); return Source:Keys()",
+                "Source = UE.TMap(0,0); Source:Add(1,2); return Source:Values()",
+                "Source = UE.TSet(0); Source:Add(1); return Source:ToArray()" })
+            {
+                TEST_TRUE(UnLuaNova::RunChunk(L, Script));
+                auto* Array = static_cast<FLuaArray*>(UnLuaNova::GetPointer(L, -1));
+                TEST_TRUE(Array != nullptr);
+                if (!Array)
+                    return;
+                auto Inner = Array->Inner;
+                lua_gc(L, LUA_GCCOLLECT, 0);
+                const int32 Before = Inner.GetSharedReferenceCount();
+                lua_pop(L, 1);
+                lua_gc(L, LUA_GCCOLLECT, 0);
+                TEST_EQUAL(Inner.GetSharedReferenceCount(), Before - 1);
+            }
+        });
+
         It(TEXT("registry shared pointer releases its owner at GC"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             TSharedPtr<int32> Ptr = MakeShared<int32>(42);
@@ -216,6 +238,8 @@ void FLifetimeSpec::Define()
             void* Payload = UnLuaNova::NewSmartPointer(L, sizeof(TSharedPtr<int32>), "TSharedPtr",
                 UnLuaNova::DestroyUserdataPayload<TSharedPtr<int32>>);
             TEST_TRUE(Payload != nullptr);
+            if (!Payload)
+                return;
             new(Payload) TSharedPtr<int32>(Ptr);
             Ptr.Reset();
             Env.Reset();
@@ -230,6 +254,8 @@ void FLifetimeSpec::Define()
             void* Payload = UnLuaNova::NewSmartPointer(L, sizeof(TSharedPtr<int32>), "TSharedPtr",
                 UnLuaNova::DestroyUserdataPayload<TSharedPtr<int32>>);
             TEST_TRUE(Payload != nullptr);
+            if (!Payload)
+                return;
             new(Payload) TSharedPtr<int32>(Ptr);
             Ptr.Reset();
             UnLuaNova::DestroyUserdataPayload<TSharedPtr<int32>>(L, lua_touserdata(L, -1));

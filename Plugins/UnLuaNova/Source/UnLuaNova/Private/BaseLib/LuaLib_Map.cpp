@@ -274,8 +274,14 @@ static int32 TMap_Keys(lua_State* L)
     FLuaMap* Map = (FLuaMap*)(GetCppInstanceFast(L, 1));
     TMap_Guard(L, Map);
 
-    void* Userdata = NewUserdataWithPadding(L, sizeof(FLuaArray), "TArray");
+    void* Userdata = NewUserdataWithPaddingDtor(L, sizeof(FLuaArray), "TArray", CalcUserdataPadding<FLuaArray>(),
+        UnLuaNova::DestroyUserdataPayload<FLuaArray>);
     FLuaArray* Array = Map->Keys(Userdata);
+    if (!Array)
+    {
+        SetUserdataFlags(L, -1, BIT_RELEASED_TAG | BIT_DESTROYED_TAG);
+        return luaL_error(L, "could not construct key array");
+    }
     return 1;
 }
 
@@ -291,8 +297,14 @@ static int32 TMap_Values(lua_State* L)
     FLuaMap* Map = (FLuaMap*)(GetCppInstanceFast(L, 1));
     TMap_Guard(L, Map);
 
-    void* Userdata = NewUserdataWithPadding(L, sizeof(FLuaArray), "TArray");
+    void* Userdata = NewUserdataWithPaddingDtor(L, sizeof(FLuaArray), "TArray", CalcUserdataPadding<FLuaArray>(),
+        UnLuaNova::DestroyUserdataPayload<FLuaArray>);
     FLuaArray* Array = Map->Values(Userdata);
+    if (!Array)
+    {
+        SetUserdataFlags(L, -1, BIT_RELEASED_TAG | BIT_DESTROYED_TAG);
+        return luaL_error(L, "could not construct value array");
+    }
     return 1;
 }
 
@@ -305,14 +317,14 @@ static int32 TMap_Delete(lua_State* L)
     if (NumParams != 1)
         return luaL_error(L, "invalid parameters");
 
-    FLuaMap* Map = (FLuaMap*)(GetCppInstanceFast(L, 1));
+    FLuaMap* Map = static_cast<FLuaMap*>(UnLuaNova::GetUserdataPayloadFromBlock(lua_touserdata(L, 1)));
     if (!Map)
         return 0;
 
     auto Registry = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetContainerRegistry();
     Registry->Remove(Map);
 
-    Map->~FLuaMap();
+    UnLuaNova::DestroyUserdataPayload<FLuaMap>(L, lua_touserdata(L, 1));
     return 0;
 }
 

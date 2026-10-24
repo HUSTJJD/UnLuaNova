@@ -145,6 +145,26 @@ void FTimerSpec::Define()
         TEST_TRUE(Env->DoString(TEXT("assert(not Timer.IsValid(Handle) and not Timer.Clear(Handle))")));
     });
 
+    It(TEXT("closing Env rejects new callback registrations"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        bool bObserved = false;
+        const FDelegateHandle Delegate = UnLuaNova::FLuaEnv::OnDestroyed.AddLambda([this, &bObserved](UnLuaNova::FLuaEnv& Closing)
+        {
+            if (Closing.GetMainState() != L)
+                return;
+            bObserved = true;
+            lua_pushcfunction(L, [](lua_State*) -> int { return 0; });
+            const int32 Ref = luaL_ref(L, LUA_REGISTRYINDEX);
+            TEST_EQUAL(Timer->Add(L, Ref, 0, false, 0, false), INDEX_NONE);
+            luaL_unref(L, LUA_REGISTRYINDEX, Ref);
+        });
+        Env.Reset();
+        UnLuaNova::FLuaEnv::OnDestroyed.Remove(Delegate);
+        L = nullptr;
+        TEST_TRUE(bObserved);
+        TEST_EQUAL(Timer->Num(), 0);
+    });
+
     It(TEXT("multiple worlds require explicit context"), EAsyncExecution::TaskGraphMainThread, [this]
     {
         UWorld* OtherWorld = UWorld::CreateWorld(EWorldType::Game, false, TEXT("TimerOtherWorld"));

@@ -126,7 +126,7 @@ Status: **partial**; priority: P0; references: Luau, FUnLua; execution: pending.
 - Tests: [Lifetime.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Lifetime.spec.cpp)
 - Examples: Missing dedicated evidence.
 
-Boundary: AddManualRef proxy relies on __gc on Luau; full allocation audit incomplete.
+Boundary: Manual proxies, known smart pointers and Map/Set-derived arrays now have native finalizers; invalidation is distinct from destruction. Dual-GC/teardown tests added, unexecuted; full allocation audit incomplete.
 
 Acceptance: Force both collectors; prove release counts and safety under both teardown orders.
 
@@ -138,7 +138,7 @@ Status: **partial**; priority: P0; references: slua, FUnLua; execution: pending.
 - Tests: [LuaEnv.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaEnv.spec.cpp), [Locators.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Locators.spec.cpp)
 - Examples: Missing dedicated evidence.
 
-Boundary: Core multi-env exists; Timer and cache/diagnostic attribution need isolation checks.
+Boundary: Timer handles enforce Env ownership with close cleanup; global network cache and diagnostic attribution still need isolation work.
 
 Acceptance: Create/destroy/recreate Env and World, reuse addresses, forbid cross-environment handles.
 
@@ -161,10 +161,10 @@ Acceptance: Test yield/resume/errors/cancellation with Env and World teardown.
 Status: **partial**; priority: P0; references: slua; execution: pending.
 
 - Source: [UnLuaNovaTimerSubsystem.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaTimerSubsystem.cpp), [LuaLib_Timer.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaLib_Timer.cpp)
-- Tests: [RuntimeModules.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp)
-- Examples: Missing dedicated evidence.
+- Tests: [RuntimeModules.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp), [Timer.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Timer.spec.cpp)
+- Examples: [TimerLifecycle.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Examples/TimerLifecycle.lua)
 
-Boundary: Raw coroutine state, no Env close cleanup, first-world lookup; existing tests mostly API shape.
+Boundary: Main-state callbacks, teardown cleanup, explicit World, Env-scoped handles and reentry tests implemented; pause/time dilation, multi-PIE and packaged execution still pending.
 
 Acceptance: Test due/pause/unscaled/reentry plus coroutine GC, Env-first/World-first destruction and multi-PIE.
 
@@ -214,7 +214,7 @@ Status: **experimental**; priority: P0; references: slua; execution: pending.
 - Tests: [LuaNet.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp), [LuaNetMulticastTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetMulticastTest.cpp)
 - Examples: [NetActor.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Net/NetActor.lua)
 
-Boundary: Sorting added; inheritance, class/net caches, security and cooked acceptance incomplete.
+Boundary: Sorted registration and whole-RPC parameter validation implemented; inheritance, class/net caches, security and cooked acceptance incomplete.
 
 Acceptance: Connected DS + 2 clients, ownership rejection, reliable/unreliable, reconnect and schema mismatch.
 
@@ -226,7 +226,7 @@ Status: **experimental**; priority: P0; references: slua; execution: pending.
 - Tests: [LuaNet.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp), [LuaNetClientServerTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetClientServerTest.cpp)
 - Examples: [NetActor.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Net/NetActor.lua)
 
-Boundary: Instance-derived class-cached conditions; type bucket conflicts; unknown conditions fall back.
+Boundary: Fixed None layout; non-None/malformed declarations rejected atomically and cached schemas immutable. Full conditional layouts and multi-Env cache cleanup remain incomplete.
 
 Acceptance: Fix layout design; test mixed conditions/types across actors, owner/nonowner, late join and dormancy.
 
@@ -238,7 +238,7 @@ Status: **experimental**; priority: P0; references: slua; execution: pending.
 - Tests: [LuaNet.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp)
 - Examples: Missing dedicated evidence.
 
-Boundary: Fixed primitive/math/object types; no arbitrary struct/container support; Luau int64 truncation.
+Boundary: Strict int32/int64 conversion and real bucket round-trip regression sources added, unexecuted. No arbitrary struct/container support or Iris/push acceptance evidence.
 
 Acceptance: Exact integer boundaries, object resolution, legacy/Iris/push combinations and packaged peers.
 

@@ -225,7 +225,7 @@
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Lifetime.spec.cpp"
       ],
       "examples": [],
-      "gap": "Manual proxies and known shared/smart pointer allocations now have native finalizers; dual-GC/teardown tests added but not run; full allocation audit incomplete.",
+      "gap": "Manual proxies, known smart pointers and Map/Set-derived arrays now have native finalizers; invalidation is distinct from destruction. Dual-GC/teardown tests added, unexecuted; full allocation audit incomplete.",
       "acceptance": "Force both collectors; prove release counts and safety under both teardown orders.",
       "upstream": [
         "Luau",

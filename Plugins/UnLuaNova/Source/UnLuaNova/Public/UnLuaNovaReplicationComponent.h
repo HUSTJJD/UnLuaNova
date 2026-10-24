@@ -133,9 +133,7 @@ protected:
     UFUNCTION() void OnRep_SchemaVersion();
 
 private:
-#if WITH_DEV_AUTOMATION_TESTS
     friend class FNetSpec;
-#endif
     /** True when the owner's Lua module actually declared any replicated fields. */
     bool bDeclared = false;
 

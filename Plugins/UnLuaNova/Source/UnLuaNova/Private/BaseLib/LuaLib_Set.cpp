@@ -146,8 +146,14 @@ static int32 TSet_ToArray(lua_State* L)
     FLuaSet* Set = (FLuaSet*)(GetCppInstanceFast(L, 1));
     TSet_Guard(L, Set);
 
-    void* Userdata = NewUserdataWithPadding(L, sizeof(FLuaArray), "TArray");
+    void* Userdata = NewUserdataWithPaddingDtor(L, sizeof(FLuaArray), "TArray", CalcUserdataPadding<FLuaArray>(),
+        UnLuaNova::DestroyUserdataPayload<FLuaArray>);
     FLuaArray* Array = Set->ToArray(Userdata);
+    if (!Array)
+    {
+        SetUserdataFlags(L, -1, BIT_RELEASED_TAG | BIT_DESTROYED_TAG);
+        return luaL_error(L, "could not construct set array");
+    }
     return 1;
 }
 
@@ -160,14 +166,14 @@ static int32 TSet_Delete(lua_State* L)
     if (NumParams != 1)
         return luaL_error(L, "invalid parameters");
 
-    FLuaSet* Set = (FLuaSet*)(GetCppInstanceFast(L, 1));
+    FLuaSet* Set = static_cast<FLuaSet*>(UnLuaNova::GetUserdataPayloadFromBlock(lua_touserdata(L, 1)));
     if (!Set)
         return 0;
 
     auto Registry = UnLuaNova::FLuaEnv::FindEnvChecked(L).GetContainerRegistry();
     Registry->Remove(Set);
 
-    Set->~FLuaSet();
+    UnLuaNova::DestroyUserdataPayload<FLuaSet>(L, lua_touserdata(L, 1));
     return 0;
 }
 

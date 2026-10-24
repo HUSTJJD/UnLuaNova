@@ -54,6 +54,7 @@ bool TryToSetMetatable(lua_State *L, const char *MetatableName, UObject* Object 
 #define BIT_RELEASED_TAG        (1 << 6)    // this userdata was released and should not use anywhere
 #define BIT_TWOLEVEL_PTR        (1 << 5)    // two level pointer flag
 #define BIT_SCRIPT_CONTAINER    (1 << 4)    // script container (TArray, TSet, TMap) flag
+#define BIT_DESTROYED_TAG        (1 << 3)    // payload destructor ran, or construction failed
 
 /**
  * Functions to handle Lua userdata
