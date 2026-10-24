@@ -113,7 +113,7 @@ namespace UnLuaNova
     {
 #if UNLUANOVA_HAS_NATIVE_CODEGEN
         static auto EnableCVar = IConsoleManager::Get().RegisterConsoleVariable(
-            TEXT("lua.codegen"),
+            TEXT("lua.codegen.enabled"),
             0,
             TEXT("Hand loaded chunks to Luau's native compiler. 0=off (default), 1=on. "
                  "Narrow it to named modules with lua.codegen.modules. "
@@ -124,7 +124,7 @@ namespace UnLuaNova
             TEXT("lua.codegen.modules"),
             TEXT(""),
             TEXT("Comma separated module names to native-compile; empty means every chunk. "
-                 "A chunk is compiled when its name contains one of these. Requires lua.codegen=1. "
+                 "A chunk is compiled when its name contains one of these. Requires lua.codegen.enabled=1. "
                  "Luau backend only."),
             ECVF_Default);
 

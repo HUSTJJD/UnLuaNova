@@ -6,6 +6,7 @@
 #include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/Paths.h"
+#include "Misc/OutputDeviceNull.h"
 
 #if WITH_DEV_AUTOMATION_TESTS && UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
 
@@ -100,7 +101,7 @@ void FLuauIntegrationSpec::Define()
         TEST_EQUAL(luaL_loadstring(L, "return 1"), LUA_OK);
         UnLuaNova::MaybeCompileNativeChunk(L, "NativeLifecycle");
         lua_pop(L, 1);
-        auto* Enabled = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.codegen"));
+        auto* Enabled = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.codegen.enabled"));
         auto* Modules = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.codegen.modules"));
         const int32 PreviousEnabled = Enabled->GetInt();
         const FString PreviousModules = Modules->GetString();
@@ -124,6 +125,29 @@ void FLuauIntegrationSpec::Define()
         }
         Modules->Set(*PreviousModules, ECVF_SetByCode);
         Enabled->Set(PreviousEnabled, ECVF_SetByCode);
+    });
+
+    It(TEXT("Native compiler command and enable variable coexist"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+#if UNLUANOVA_HAS_NATIVE_CODEGEN
+        auto& Console = IConsoleManager::Get();
+        auto* Command = Console.FindConsoleObject(TEXT("lua.codegen"));
+        auto* Enabled = Console.FindConsoleVariable(TEXT("lua.codegen.enabled"));
+        TEST_TRUE(Command != nullptr && Command->AsCommand() != nullptr);
+        TEST_TRUE(Enabled != nullptr);
+        if (!Command || !Command->AsCommand() || !Enabled)
+            return;
+
+        const int32 PreviousEnabled = Enabled->GetInt();
+        const EConsoleVariableFlags PreviousFlags = Enabled->GetFlags();
+        FOutputDeviceNull Output;
+        TEST_TRUE(Console.ProcessUserConsoleInput(TEXT("lua.codegen on"), Output, nullptr));
+        TEST_EQUAL(Enabled->GetInt(), 1);
+        TEST_TRUE(Console.ProcessUserConsoleInput(TEXT("lua.codegen off"), Output, nullptr));
+        TEST_EQUAL(Enabled->GetInt(), 0);
+        Enabled->Set(PreviousEnabled, ECVF_SetByConsole);
+        Enabled->SetFlags(PreviousFlags);
+#endif
     });
 }
 

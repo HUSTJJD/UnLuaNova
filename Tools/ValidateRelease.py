@@ -91,7 +91,7 @@ def validate_typecheck(data):
 
 def validate_memory_case(data, name, backend, carrier, run_id):
     errors = []
-    if data.get("schema_version") != 1 or data.get("case") != name:
+    if type(data.get("schema_version")) is not int or data["schema_version"] != 1 or data.get("case") != name:
         errors.append("Memory schema/case mismatch")
     if data.get("backend") != backend or data.get("editor") is not (carrier == "editor") or data.get("cooked") is not (carrier == "game"):
         errors.append("Memory backend/carrier mismatch")

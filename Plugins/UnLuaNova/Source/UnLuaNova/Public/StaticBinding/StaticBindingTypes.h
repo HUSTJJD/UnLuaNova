@@ -10,8 +10,8 @@
 // They are deliberately NOT const. Fields that can only be known at runtime
 // (FProperty*/UFunction*, offsets, flags, bResolved) are filled in *in place* by
 // FStaticBindingRegistry::Resolve() at the first lookup. A const table is placed in a
-// read-only section, and the first resolve then writes into it - an access violation,
-// not a compile error, which is why the generator must keep these writable.
+// read-only section, and the first resolve then writes into it - an access violation.
+// Registration and nested descriptor pointers require writable tables at compile time.
 
 #pragma once
 
@@ -127,7 +127,7 @@ struct FStaticFuncBinding
 
 	FStaticFuncFlags Flags;
 
-	const FStaticParamBinding* Params = nullptr;
+	FStaticParamBinding* Params = nullptr;
 
 	/** Resolved on first registration. */
 	UFunction* Function = nullptr;
@@ -157,10 +157,10 @@ struct FStaticTypeBinding
 	/** Metatable name as UnLuaNova sees it, e.g. TEXT("Actor"), TEXT("Vector"), TEXT("MyEnum"). */
 	const TCHAR* TypeName = nullptr;
 
-	const FStaticPropBinding* Props = nullptr;
+	FStaticPropBinding* Props = nullptr;
 	int32 NumProps = 0;
 
-	const FStaticFuncBinding* Funcs = nullptr;
+	FStaticFuncBinding* Funcs = nullptr;
 	int32 NumFuncs = 0;
 
 	/** Resolved on first registration. */

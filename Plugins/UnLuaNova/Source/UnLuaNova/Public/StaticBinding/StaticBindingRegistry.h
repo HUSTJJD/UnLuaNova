@@ -19,10 +19,11 @@ public:
 	static FStaticBindingRegistry& Get();
 
 	/**
-	 * Resolve every FProperty and UFunction pointer inside the descriptor.
+	 * Queue a writable descriptor for resolution on first lookup.
+	 * The descriptor and its nested tables must outlive the registration and Lua users.
 	 * Safe to call repeatedly; a type is only resolved once.
 	 */
-	void Register(const FStaticTypeBinding* Type);
+	void Register(FStaticTypeBinding* Type);
 
 	void Unregister(const FStaticTypeBinding* Type);
 
@@ -63,14 +64,14 @@ private:
 		TMap<FName, const FStaticFuncBinding*> Funcs;
 	};
 
-	void Resolve(const FStaticTypeBinding* Type, FEntry& Entry);
+	void Resolve(FStaticTypeBinding* Type, FEntry& Entry);
 
 	/** Resolves everything queued by Register(). Deferred until the UObject system is up. */
 	void ResolvePending();
 
 	TMap<FName, FEntry> Types;
 	TMap<const UStruct*, const FStaticTypeBinding*> StructToType;
-	TArray<const FStaticTypeBinding*> Pending;
+	TArray<FStaticTypeBinding*> Pending;
 
 	// Large projects register thousands of types and then hit the read path from Lua on
 	// every property and function access. An exclusive lock serialised all of that, so

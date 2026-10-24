@@ -10,7 +10,7 @@
  */
 struct FStaticBindingAutoRegistrar
 {
-	explicit FStaticBindingAutoRegistrar(const FStaticTypeBinding* Type)
+	explicit FStaticBindingAutoRegistrar(FStaticTypeBinding* Type)
 	{
 		FStaticBindingRegistry::Get().Register(Type);
 	}

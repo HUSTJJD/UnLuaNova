@@ -240,6 +240,8 @@ END_DEFINE_SPEC(FMemoryLeaksSpec)
 
 void FMemoryLeaksSpec::Define()
 {
+    BeforeEach([] { CollectObjects(); });
+
     It(TEXT("Accounting preserves live bytes across enable and reset"), [this]
     {
         UnLuaNova::FLuaMemoryStats Stats;

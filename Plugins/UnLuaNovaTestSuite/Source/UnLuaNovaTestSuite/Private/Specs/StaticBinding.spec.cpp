@@ -26,11 +26,25 @@
 #include "UnLuaNovaTestHelpers.h"
 
 #include "StaticBinding/StaticBindingRegistry.h"
+#include "StaticBinding/StaticBindingRegistrar.h"
+
+#include <type_traits>
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 namespace
 {
+    // Reject read-only tables at every level before Resolve can write into them.
+    static_assert(std::is_invocable_v<decltype(&FStaticBindingRegistry::Register),
+        FStaticBindingRegistry&, FStaticTypeBinding*>);
+    static_assert(!std::is_invocable_v<decltype(&FStaticBindingRegistry::Register),
+        FStaticBindingRegistry&, const FStaticTypeBinding*>);
+    static_assert(std::is_constructible_v<FStaticBindingAutoRegistrar, FStaticTypeBinding*>);
+    static_assert(!std::is_constructible_v<FStaticBindingAutoRegistrar, const FStaticTypeBinding*>);
+    static_assert(!std::is_assignable_v<decltype(FStaticTypeBinding::Props)&, const FStaticPropBinding*>);
+    static_assert(!std::is_assignable_v<decltype(FStaticTypeBinding::Funcs)&, const FStaticFuncBinding*>);
+    static_assert(!std::is_assignable_v<decltype(FStaticFuncBinding::Params)&, const FStaticParamBinding*>);
+
     // Deliberately NOT static constexpr: FStaticBindingRegistry::Resolve() writes the
     // resolved UFunction / FProperty pointers, offsets and flags back into these tables
     // (they are registered from static initialisers, long before UObject exists). Read-only
@@ -138,6 +152,16 @@ void FStaticBindingSpec::Define()
             UFunction* Expected = UUnLuaNovaTestStub::StaticClass()->FindFunctionByName(TEXT("ProbeWithStaticBinding"));
             TEST_TRUE(Func->Function == Expected);
             TEST_TRUE(Func->ParamsSize == Expected->ParmsSize);
+
+            const FProperty* ExpectedParam = Expected->FindPropertyByName(TEXT("In"));
+            TEST_TRUE(ExpectedParam != nullptr);
+            if (!ExpectedParam)
+                return;
+            TEST_TRUE(Func->Params == GSpecParams);
+            TEST_TRUE(Func->Params[0].Property == ExpectedParam);
+            TEST_TRUE(Func->Params[0].Offset == ExpectedParam->GetOffset_ForGC());
+            TEST_TRUE(Func->ReturnProperty == Expected->GetReturnProperty());
+            TEST_TRUE(Func->ReturnKind == EStaticPropKind::Int);
 
             // These three are what the call path branches on (see FunctionDesc::CallUE).
             TEST_FALSE(Func->Flags.bIsNet);

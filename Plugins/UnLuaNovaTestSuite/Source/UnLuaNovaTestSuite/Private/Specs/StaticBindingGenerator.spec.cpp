@@ -64,6 +64,14 @@ void FStaticBindingGeneratorSpec::Define()
             Content.Contains(TEXT("StaticFuncThunk<EStaticPropKind::Int, EStaticPropKind::Int>")));
         TestTrue(TEXT("Generator format participates in the fingerprint"), Content.Contains(TEXT("fingerprint: v2-")));
 
+        for (const TCHAR* Descriptor : {TEXT("FStaticPropBinding"), TEXT("FStaticParamBinding"),
+            TEXT("FStaticFuncBinding"), TEXT("FStaticTypeBinding")})
+        {
+            TestTrue(Descriptor, Content.Contains(FString::Printf(TEXT("static %s "), Descriptor)));
+            TestFalse(Descriptor, Content.Contains(FString::Printf(TEXT("static const %s "), Descriptor)));
+            TestFalse(Descriptor, Content.Contains(FString::Printf(TEXT("static constexpr %s "), Descriptor)));
+        }
+
         FRegexMatcher Thunks(FRegexPattern(TEXT("StaticFuncThunk<([^>]+)>")), Content);
         int32 Count = 0;
         while (Thunks.FindNext())

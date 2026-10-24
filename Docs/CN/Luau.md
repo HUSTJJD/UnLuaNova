@@ -39,7 +39,7 @@ VM dtor 只能销毁 C++ 状态，不能操作 Lua 栈。使用 LONGJMP 的路�
 | CVar | 默认 | 生效范围 |
 |---|---|---|
 | `luau.optimize` / `luau.debuglevel` / `luau.coverage` | 1 / 1 / 0 | 后续编译 chunk |
-| `lua.codegen` / `lua.codegen.modules` | 0 / 空 | 后续加载模块；空筛选为全部 |
+| `lua.codegen.enabled` / `lua.codegen.modules` | 0 / 空 | 后续加载模块；空筛选为全部；`lua.codegen on/off` 命令控制开关 |
 | `lua.gcgoal` / `lua.gcstepmul` / `lua.gcstepsize` | 200 / 200 / 1 KB | 环境初始化 |
 | `lua.sandbox` / `lua.sandboxthread` | 0 / 0 | 环境/线程初始化 |
 | `lua.sandbox.freezeclasstables` | 0 | 类注册 |

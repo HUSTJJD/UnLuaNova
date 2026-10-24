@@ -27,7 +27,7 @@ Debug registry/uservalue functions include placeholders, upvalue identity is app
 
 ## Configuration
 
-Defaults: `luau.optimize=1`, `luau.debuglevel=1`, `luau.coverage=0`, `lua.codegen=0`, GC goal/step multiplier 200/200 and step size 1 KB. Sandbox, sandboxthread, class-table freezing and host io default off. An empty io root means the project directory.
+Defaults: `luau.optimize=1`, `luau.debuglevel=1`, `luau.coverage=0`, `lua.codegen.enabled=0`, GC goal/step multiplier 200/200 and step size 1 KB. The `lua.codegen on/off` command controls `lua.codegen.enabled`. Sandbox, sandboxthread, class-table freezing and host io default off. An empty io root means the project directory.
 
 Read-only globals do not restrict UE/debug/socket/io capabilities. Trusted and untrusted scripts need explicit host policies; the Lua backend's own io is not controlled by the Luau io switch.
 

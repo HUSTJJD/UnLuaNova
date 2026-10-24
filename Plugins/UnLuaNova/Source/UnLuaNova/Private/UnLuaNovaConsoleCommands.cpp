@@ -528,7 +528,7 @@ namespace UnLuaNova
 
     void FUnLuaNovaConsoleCommands::CodeGen(const TArray<FString>& Args) const
     {
-        IConsoleVariable* EnableCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.codegen"));
+        IConsoleVariable* EnableCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.codegen.enabled"));
         IConsoleVariable* ModulesCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.codegen.modules"));
 
         if (Args.Num() > 0)

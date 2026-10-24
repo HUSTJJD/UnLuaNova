@@ -4,7 +4,7 @@
 .DESCRIPTION
     Default Release runs Tools/ReleasePipeline.ps1: tool bootstrap and regressions,
     both backend builds, generated static bindings, Editor and cooked Development
-    automation, connected peers, declaration/type checks, performance evidence,
+    automation, connected peers, declaration/type checks, memory leak and performance evidence,
     Development Server build and Shipping packaging. Missing mandatory evidence fails.
     See Docs/CN/Testing.md and Docs/EN/Testing.md for current scope and remaining gaps.
 
