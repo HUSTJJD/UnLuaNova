@@ -28,6 +28,6 @@ See the [quickstart](Docs/EN/Quickstart_For_UE_Newbie.md), [programming guide](D
 
 ## Validation and Licensing
 
-`python Tools/AuditRepository.py` checks the repository without compiling. It does not prove runtime correctness. [Test instructions](Docs/EN/Testing.md) describe maintainer-run UE validation; `RunTests.ps1` builds by default. No build was started during this audit.
+`python Tools/AuditRepository.py` checks the repository without compiling. Maintainers run only `.\Tools\RunTests.ps1`: it orchestrates Win64 dual-backend builds, Editor/cooked automation, networking, type checks and packaging, failing on missing evidence. Summaries go to `Saved/ReleaseTests/`; see [testing](Docs/EN/Testing.md). The full pipeline has not been executed during this change.
 
 Preserve upstream UnLua MIT notices. The root license contains PolyForm Small Business terms plus additional terms; file notices and the scope of the root license require reconciliation by the rights holder. See [third-party notices](LICENSE-THIRD-PARTY.md) and [license status](Docs/EN/License.md). Comparison does not imply endorsement or permission to copy source.

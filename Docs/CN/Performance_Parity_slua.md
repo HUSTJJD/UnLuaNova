@@ -20,6 +20,6 @@
 
 ## 当前测试工具
 
-`Benchmark.spec.cpp`、`BenchmarkParity.spec.cpp` 已存在。用例有性能阈值逻辑，`RunTests.ps1 -UpdateBaseline` 可记录基线；目前 `Tools/baseline/perf-*.json` 未提交，缺基线只告警。用例名基线不等于性能基线。
+`Benchmark.spec.cpp`、`BenchmarkParity.spec.cpp` 已存在。默认 `RunTests.ps1` 自动运行基准，并由 `ValidateRelease.py` 强制校验基线范围、case 完整性与 25% 回退阈值。目前 `Tools/baseline/perf-*.json` 未提交，缺基线会导致 release 失败，测量候选保留在报告中，不会自动批准。Development 模式的阈值提示与旧用例名基线不能替代 release 判定。
 
 本轮没有运行任何基准或编译。完成以上验收之前，宣传只能描述实现机制，不能承诺速度优势。[当前审计](Benchmark_Review.md)

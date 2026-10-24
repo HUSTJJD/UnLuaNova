@@ -28,9 +28,9 @@ Luau 0.744 与当前 pin 的公开 VM 头文件一致，但 18 个 VM 实现文�
 | BIND-01 / P1 | `UnLuaNovaManager::Classes` 按 UClass 缓存；已有类绑定短路，不能等同于 FUnLua 的同类实例绑定不同模块 | 定义类默认与实例 override 分层；同类 A/B 模块并存、继承、解绑、热重载不串线 |
 | EVENT-01 / P1 | Event token 强持有 Owner；弱键索引不自动解决 owner 保活。Once 重入需要在调用前取消 | 明确主动注销契约；验证递归 Emit、异常、解绑、闭包持有 owner；本轮修复 Once 重入，其他生命周期仍需验收 |
 | SAFE-01 / P1 | sandbox 默认关闭；UE、debug、io、socket 等宿主能力不由只读表自动隔离。io 文件表可修改，路径检查不是 OS 沙盒 | 可信脚本 / 不可信脚本分别定义能力策略；检查符号链接、配额、超时、长跳转清理、调试服务暴露 |
-| TOOL-01 / P1 | 编译 coverage 选项有接入，尚无完整导出与门禁；CodeGen 计数记录请求而非成功函数；LSP 缺失可能跳过 | 导出构建身份、成功/跳过/失败及原因；类型检查在验收任务中必须存在；coverage 给出分母与排除项 |
+| TOOL-01 / P1 | 编译 coverage 导出/门禁仍不完整；CodeGen 计数记录请求。默认 release 已要求分析器/声明、实际用例清单、身份与失败原因，待端到端执行 | 运行单入口验收；coverage 给出分母与排除项 |
 | QA-01 / P1 | 源码用例与旧报告不能覆盖当前修改；部分网络测试只比较独立进程 RPCId | 真正连接的服务器/多客户端、错误输入、GC/销毁、打包、多平台矩阵；按能力证明，不能只按注册用例数 |
-| PERF-01 / P1 | 已有 Benchmark 与阈值逻辑，但没有已提交的性能基线；缺基线只告警。thunk 仍调用 ProcessEvent | 同机同版本运行 slua/FUnLua/本项目，记录分布、分配、GC、冷启动和代码体积；见性能页 |
+| PERF-01 / P1 | 已有 Benchmark 与阈值逻辑，但没有已提交的性能基线；默认 release 因此失败。thunk 仍调用 ProcessEvent | 同机同版本运行 slua/FUnLua/本项目，记录分布、分配、GC、冷启动和代码体积；见性能页 |
 | LEGAL-01 / P0（发布） | 根许可与 MIT 文件头/授权说明范围不清；扩展库清单不全；FUnLua 缺可核对的许可文件 | 权利人确认授权边界，补齐完整 notice 与来源映射；对外发布前完成，不擅自改许可证 |
 
 ## 实施顺序
@@ -54,6 +54,6 @@ Luau 0.744 与当前 pin 的公开 VM 头文件一致，但 18 个 VM 实现文�
 
 已实施 Timer 归属与销毁、手动引用和智能指针析构、网络精确整数与声明拒绝；相关示例和双语 API 说明同步更新。CodeGen VM 归属、io 输入/CRLF、RPC 排序、schema 条件指纹和 Event.Once 重入也已有修正。全部新增 C++/Lua 用例等待维护者构建后执行，不能据此标记 P0 已验收。
 
-维护者下一步：分别构建 Lua、Luau 后端，运行 `UnLuaNova.API.Timer`、`UnLuaNova.API.Lifetime`、`UnLuaNova.API.Net` 和 `UnLuaNova.API.RuntimeModules`，再运行现有容器/静态导出回归。Timer 需要构建选项 `bTimer=true`。随后验真实服务器/客户端，不把单进程编组测试当作传输通过。
+维护者只需运行 `.\Tools\RunTests.ps1`。双后端构建、Timer 开关、全量用例、真实 cooked peer、类型检查与打包由默认 Release 流程完成，缺证据失败；无需额外命令。该流程及新 C++ manifest 尚未完成实际构建/运行验收，范围见 [测试说明](Testing.md)。
 
 文档删除重复历史计划、撤下旧报告结论、保留当前使用说明。仓库检查仅验证文件引用、矩阵结构与脚本逻辑，不执行 UE、不衡量运行覆盖率。测试步骤见 [测试架构](Testing_Architecture.md)。

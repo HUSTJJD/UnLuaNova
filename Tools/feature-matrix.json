@@ -840,6 +840,8 @@
       "priority": "P1",
       "source": [
         "Tools/RunTests.ps1",
+        "Tools/ReleasePipeline.ps1",
+        "Tools/ValidateRelease.py",
         "Tools/GenerateTestReport.py",
         "Tools/ClassifyTests.py"
       ],
@@ -847,7 +849,7 @@
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaSpecs.spec.cpp"
       ],
       "examples": [],
-      "gap": "Static classification is not coverage; reports lack complete reproducible build identity.",
+      "gap": "Release orchestration, runtime manifests, strict evidence gates and provenance are implemented but unexecuted; source classification is not code coverage.",
       "acceptance": "Fail missing/empty/malformed runs; record commit/dirty/dependencies/flags/topology; require type tools.",
       "upstream": [
         "UnLua",
@@ -891,7 +893,7 @@
       ],
       "tests": [],
       "examples": [],
-      "gap": "No current platform/Shipping evidence; editor-only type/debug tools differ from runtime.",
+      "gap": "Win64 Development cooked automation, Server build and Shipping packaging are orchestrated; execution, Shipping runtime and other platforms remain unverified.",
       "acceptance": "Cooked scripts/assets/extensions, DS/client, feature-off, executable-memory targets and upgrade tests.",
       "upstream": [
         "slua",

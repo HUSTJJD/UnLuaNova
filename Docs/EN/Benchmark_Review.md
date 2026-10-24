@@ -18,7 +18,7 @@ slua-unreal: `7970ab72fd59118e1b3f86aac2d016828b54b748`; FUnLua: `7c5f6b5b452126
 | BIND-01 / P1 | UClass-keyed binding is not independent per-instance module binding | Same-class A/B modules, inheritance, unbind and hot reload isolation |
 | EVENT-01 / P1 | Tokens hold owners strongly; weak-key indexing does not release them automatically | Explicit unsubscribe contract; recursive Once fixed this round, teardown and closure ownership still need execution |
 | SAFE-01 / P1 | Read-only globals do not restrict UE/debug/io/socket capabilities; io is not an OS sandbox | Trusted/untrusted policies, path/link/quota/error/timeout checks, debug service exposure policy |
-| TOOL-01 / P1 | Coverage export/gates incomplete; CodeGen counts requests; typecheck can skip | Build provenance, success/skip/failure distinction, mandatory checker in acceptance jobs |
+| TOOL-01 / P1 | Coverage export/gates incomplete; CodeGen counts requests. Default release now requires checkers, declarations, runtime manifests and provenance; end-to-end execution pending | Execute the single entry; define coverage denominators and exclusions |
 | QA-01 / P1 | Old reports cannot certify current edits; some network tests compare unconnected processes | Real server/clients, lifecycle/error cases, packaged/platform runs, feature-based acceptance |
 | PERF-01 / P1 | Benchmark thresholds exist but committed performance baselines are absent; thunks still call ProcessEvent | Same-machine controlled comparison and raw distributions |
 | LEGAL-01 / release P0 | Root/file license scope unresolved; dependency inventory incomplete; FUnLua license file absent | Rights-holder scope decision and complete notices before distribution |
@@ -31,4 +31,4 @@ First fix network/lifetime correctness; then complete feature acceptance, exampl
 
 Timer ownership, manual/smart reference finalization, exact networking integers and strict declarations are implemented with regression sources and updated examples/docs. CodeGen VM ownership, io validation/CRLF, RPC ordering/schema fingerprints and Event.Once reentrancy also have fixes. Runtime changes are **unbuilt and unexecuted**.
 
-Maintainer validation: build Lua and Luau separately, enable bTimer, and run UnLuaNova.API.Timer, UnLuaNova.API.Lifetime, UnLuaNova.API.Net and UnLuaNova.API.RuntimeModules plus existing container/static-export regressions. Connected-peer acceptance remains separate from bucket-conversion tests.
+Maintainer validation uses only `.\Tools\RunTests.ps1`. Its default Release pipeline orchestrates both backend builds, Timer flags, full automation, connected cooked peers, type checks and packaging, failing on missing evidence. No extra test commands are required. The pipeline and new C++ manifest await actual build/runtime validation; see [testing](Testing.md) for scope.

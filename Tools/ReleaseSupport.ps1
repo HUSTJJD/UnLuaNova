@@ -56,8 +56,11 @@ function Stop-ReleasePeers([string] $Root, [datetime] $Since) {
     foreach ($File in Get-ChildItem -LiteralPath $Root -Recurse -Filter topology.json -File) {
         $Topology = Get-Content -LiteralPath $File.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
         foreach ($Peer in $Topology.peers) {
+            if ([int]$Peer.pid -le 0) { continue }
             $Child = Get-Process -Id ([int]$Peer.pid) -ErrorAction SilentlyContinue
-            if ($Child -and $Child.Path -eq $Topology.exe -and $Child.StartTime.ToUniversalTime() -ge $Since.ToUniversalTime()) {
+            if ($Child -and $Child.Path -and $Topology.exe -and
+                [IO.Path]::GetFullPath($Child.Path) -eq [IO.Path]::GetFullPath($Topology.exe) -and
+                $Child.StartTime.ToUniversalTime() -ge $Since.ToUniversalTime()) {
                 Stop-Process -Id $Child.Id -Force -ErrorAction Stop
             }
         }

@@ -22,13 +22,13 @@ hand.
 ## Why the screenshots are automated
 
 Hand-taken pictures go stale: the code moves on and the picture still claims to be current. So
-they are regenerated whenever `Tools/RunTests.ps1 -Publish` runs - the same run that produces
+the release run collects them in its report; `Tools/RunTests.ps1 -Profile Development -Publish` publishes
 [the test reports](../test-luau-report.md). See [Testing and Automation](Testing.md).
 
 Regenerating just the images (fast):
 
 ```powershell
-.\Tools\RunTests.ps1 -Filter UnLuaNova.Showcase -Backend Luau -Publish
+.\Tools\RunTests.ps1 -Profile Development -Filter UnLuaNova.Showcase -Backend Luau -Publish
 ```
 
 Four specs, each opening one tutorial level and taking one shot; the files land in

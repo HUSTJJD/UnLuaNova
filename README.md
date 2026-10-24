@@ -45,7 +45,7 @@ return M
 
 不启动编译的仓库检查：`python Tools/AuditRepository.py`。它只检查能力清单、引用和文档一致性，不证明运行时正确。
 
-UE 构建及运行由维护者执行，见 [测试说明](Docs/CN/Testing.md)。`Tools/RunTests.ps1` 默认会编译；本次审计没有运行它。当前验证状态见 [Lua](Docs/test-lua-report.md) / [Luau](Docs/test-luau-report.md)。
+UE 验收只需 `.\Tools\RunTests.ps1`，默认自动完成 Win64 双后端构建、Editor/cooked 用例、联网、类型检查与打包，见 [测试说明](Docs/CN/Testing.md)。缺少必需证据即失败，汇总位于 `Saved/ReleaseTests/`。完整流程尚未执行；当前状态见 [Lua](Docs/test-lua-report.md) / [Luau](Docs/test-luau-report.md)。
 
 ## 来源与许可
 

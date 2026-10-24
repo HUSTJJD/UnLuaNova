@@ -26,7 +26,7 @@ try {
     $Probe = Join-Path $PSScriptRoot 'fixtures/argv_probe.py'
     $Log = Join-Path $Temporary 'argv.log'
     Invoke-ReleaseProcess -File (Get-Command python).Source -Arguments (@($Probe) + $Arguments) -Log $Log -WorkingDirectory $Temporary
-    $Actual = @(Get-Content $Log -Raw | ConvertFrom-Json)
+    $Actual = Get-Content $Log -Raw | ConvertFrom-Json
     Assert ($Actual.Count -eq $Arguments.Count) 'Argument count changed'
     for ($Index = 0; $Index -lt $Arguments.Count; $Index++) {
         Assert ($Actual[$Index] -ceq $Arguments[$Index]) "Argument $Index changed"

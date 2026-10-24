@@ -18,13 +18,13 @@ description: "可运行示例清单：绑定、覆写、容器访问与 UMG"
 ## 为什么截图要自动化
 
 手截的图会过期——代码一改，图还是旧的，读者却以为它是当前的。所以截图走
-自动化：跑 `Tools/RunTests.ps1 -Publish` 时顺带刷新，
+自动化：默认 release 会收集到报告；开发时跑 `Tools/RunTests.ps1 -Profile Development -Publish` 可发布到文档，
 和[测试报告](../test-luau-report.md)同一批产物。详见[测试与自动化](Testing.md)。
 
 生成方式（只刷图，跑得很快）：
 
 ```powershell
-.\Tools\RunTests.ps1 -Filter UnLuaNova.Showcase -Backend Luau -Publish
+.\Tools\RunTests.ps1 -Profile Development -Filter UnLuaNova.Showcase -Backend Luau -Publish
 ```
 
 四条用例各打开一个教程关卡并截一张图，图落在 `Docs/Images/tests-luau/`：

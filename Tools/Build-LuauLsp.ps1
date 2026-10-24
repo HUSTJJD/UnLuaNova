@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     从子模块构建 luau-lsp，给 Luau 后端做静态检查用。
 

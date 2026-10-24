@@ -19,15 +19,11 @@
 
 `LuaNetDedicatedServerTest.cpp` 中两个独立进程的 RPCId 一致性只能证明确定性的一部分，不代表它们互相联网。`LuaNetMulticastTest.cpp` 声明了一个 server 和两个 client 的会话，仍须执行并检查每个 peer 的日志、报告与拓扑。加入客户端失败、缺失 peer、超时、测试进程崩溃均应失败。
 
-## 验收流程（由维护者执行）
+## 验收入口
 
-1. 记录源码提交和 dirty 状态、所有 submodule pin、UE/编译器/平台/配置、后端和能力 flags。
-2. 分别编译 Lua 与 Luau；先运行本轮修改涉及的 Net、LuauIntegration、Lua Spec，再执行完整 Editor/RHI 与网络用例。
-3. 类型检查要求工具与声明存在，并确认报告没有跳过；Fast、NullRHI、单一 filter 都不能命名为“全量”。
-4. 保留原始 Automation JSON、日志、拓扑、性能样本和失败产物；报告绑定同一构建身份。
-5. 按 [性能验收](Performance_Parity_slua.md) 与 [审计](Benchmark_Review.md) 完成发布门禁。当前没有声明代码覆盖率达到 100%。
+维护者只运行 `.\Tools\RunTests.ps1`。默认 Release 自动完成双后端构建、生成代码重编、完整 Editor 和 cooked Development 用例、真实网络 peer、类型检查、性能门禁、Server 构建与 Shipping 打包。实际顺序、证据路径、失败规则和剩余覆盖边界以 [测试说明](Testing.md) 为准。
 
-`Tools/RunTests.ps1` 默认编译；`-SkipBuild` 仍会启动进程并验证后端二进制。本次两者都没有执行。
+`-Profile Development` 才允许局部 filter、Fast、NullRHI 或 SkipBuild，不能作为 release 结果。本轮未执行编译或 UE。
 
 ## 无编译检查
 

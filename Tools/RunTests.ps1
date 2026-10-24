@@ -1,154 +1,36 @@
 ﻿<#
 .SYNOPSIS
-    Runs the UnLuaNova automation tests and writes a readable report.
-
+    One-command Win64 release validation for Lua and Luau.
 .DESCRIPTION
-    Thin wrapper around the UE commandlet that everyone on the team can call the same
-    way, so "did it pass?" never depends on how somebody spelled -ExecCmds:
+    Default Release runs Tools/ReleasePipeline.ps1: tool bootstrap and regressions,
+    both backend builds, generated static bindings, Editor and cooked Development
+    automation, connected peers, declaration/type checks, performance evidence,
+    Development Server build and Shipping packaging. Missing mandatory evidence fails.
+    See Docs/CN/Testing.md and Docs/EN/Testing.md for current scope and remaining gaps.
 
-        UnrealEditor-Cmd.exe <uproject> -unattended -NoSplash
-            -ExecCmds="Automation RunTests <filter>; Quit"
-            -ReportExportPath=<dir> -abslog=<dir>\Editor.log
-
-    The Lua backend is a compile-time choice (Config/DefaultUnLuaNova.ini ->
-    LuaBackend, read by UnLuaNova.Build.cs), so this builds before it tests: otherwise the
-    binaries silently come from whichever backend was built last and the report labels the
-    run with the wrong one. -Backend Both (the default) therefore switches the setting,
-    rebuilds, runs, then does the same for the other backend - one report directory per
-    backend, and two pages when publishing.
-
-    That setting is global state, so switching it is treated as a transaction: an exclusive
-    lock keeps two runs from interleaving (a second Build.bat would otherwise just wait on
-    UBT's mutex and then run the first run's binaries), the ini is restored the moment a
-    build fails rather than only at the end, and before the editor starts the run checks
-    the artifacts UBT left behind - not the directory name - to confirm which backend is
-    actually on disk. -SkipBuild still switches nothing.
-
-    After each run it collects the JSON the automation framework exported, grabs any
-    screenshots the tests took, and hands both to Tools/GenerateTestReport.py, which
-    writes the actual conclusions (report.md + summary.json).
-
-    The tests need a real UE build, so this always runs locally - see
-    Docs/CN/Testing.md. Use -Publish when you want the result on the docs site; CI only
-    renders what has been committed.
-
+    Development retains selective test/debug options and is not a release verdict.
+    Release accepts only EnginePath, ProjectPath, OutputDir, TimeoutMinutes and DryRun.
+.PARAMETER Profile
+    Release by default. Development permits partial runs, SkipBuild, BuildOnly,
+    custom filters/carriers, NullRHI, media/report switches and baseline maintenance.
 .PARAMETER EnginePath
-    UE root (the directory containing Engine/). Left empty it is discovered: the
-    UNREAL_ENGINE_PATH environment variable, then a source build in this repository or one
-    of its parents, then any build registered by UnrealVersionSelector. Nothing here is
-    machine specific, so the script works on a fresh clone.
-
+    Optional UE root. Otherwise uses UNREAL_ENGINE_PATH or the project's registered engine.
 .PARAMETER ProjectPath
-    Path to the .uproject. Left empty, the first .uproject found in the repository root is
-    used - so this does not have to be edited per checkout either.
-
-.PARAMETER Backend
-    Which Lua backend to build and test: Lua, Luau, or Both (default). Both runs the whole
-    thing twice - switch the setting, rebuild, test - and reports each backend separately.
-    The project config is put back the way it was afterwards.
-
-.PARAMETER Platform
-    Platform handed to UBT. Default Win64.
-
-.PARAMETER Configuration
-    Configuration handed to UBT. Default Development.
-
-.PARAMETER SkipBuild
-    Skip the build and test whatever binaries are already there. Refuses to run if the
-    backend being asked for is not the one the project is currently set to: switching the
-    setting without rebuilding would only relabel the existing binaries, and every result
-    would be filed - and read - as the wrong backend.
-
-.PARAMETER Filter
-    Automation test filter, matched as a prefix. Default "UnLuaNova" runs everything the
-    plugin registers. Use "UnLuaNova.API" etc. to narrow it down.
-
-.PARAMETER Map
-    Map to open before running. Most UnLuaNova tests build their own world, so this is
-    only needed for the scene/showcase tests that expect a specific level.
-
-.PARAMETER ExtraCommands
-    Console commands appended after the suite, separated by ';'. Use it for screenshots in
-    a run that is not driven by a test, e.g.
-    -ExtraCommands "UnLuaNovaTest.Screenshot Showcase_Binding".
-
-.PARAMETER Carrier
-    Which process the tests run in:
-      Editor - UnrealEditor-Cmd.exe, as always. Everything works here, including the tests
-              that need a viewport.
-      Game   - the project's own <Project>.exe -game. No editor: no editor startup, no
-              editor tick in the background. Tests that need a viewport (screenshots,
-              NonNullRHI) or a PIE net session are not in this suite.
-      Auto   - (default) pick it from the static classification in
-              Tools/ClassifyTests.py: if the filter matches any test that needs a viewport
-              or captures pixels, Editor; otherwise Game.
-
-.PARAMETER NoScreenshots
-    Do not collect the pictures the tests took. They are collected by default: the docs site
-    shows them (Docs/CN/Showcase.md and the gallery in each report), and a run that leaves
-    them behind is a run whose report has an empty gallery for no reason anybody can see
-    afterwards.
-
-.PARAMETER NoVideo
-    Skip recording entirely - both the whole-run screen recording and the showcase clips.
-    Recording is on by default, and it is two different things: the run records the editor
-    window from start to finish (see -NoSessionVideo), and the showcase tests additionally
-    capture a burst of frames that the report generator encodes into one .mp4 each. No
-    system-wide ffmpeg is needed - it comes from the pip package in Tools/requirements.txt -
-    and a burst that cannot be encoded fails the run instead of quietly leaving a pile of PNGs.
-
-.PARAMETER NoSessionVideo
-    Skip only the whole-run screen recording and keep the showcase clips. The showcase clips
-    are recorded by the tests themselves, so they stop where the showcase tests stop: a hang
-    in Issue430, a crash in a spec, the 40 seconds of editor startup - none of it is in any
-    clip. The session recording is what covers the run end to end.
-
-.PARAMETER NullRHI
-    Run headless (-NullRHI). Faster, but it is not the same suite: Slate does not tick UMG
-    without a viewport, so tests that need one - Issue434 waits for a widget's Tick - are
-    skipped by the framework rather than run. Use it when you want a quick answer, not when
-    you want the whole suite.
-
-.PARAMETER Sound
-    Keep audio on. It is off by default (-nosound): every map test ends the previous test's
-    PIE session, and shutting that session down means shutting its audio device down. On a
-    machine whose device is slow to stop, that teardown can block the editor's main thread
-    for good - one run sat on a single frame for 40 minutes and never moved again. Nothing
-    in this suite listens to audio, so the device is simply not created.
-
-.PARAMETER Publish
-    Copy the generated report.md and its screenshots into Docs/ so the GitHub Pages
-    build picks them up.
-
-.PARAMETER NoReport
-    Skip report generation; just run the tests and leave the raw JSON behind.
-
+    Optional repository demo .uproject path.
+.PARAMETER OutputDir
+    Release output directory; must be empty. Default Saved/ReleaseTests/<timestamp>.
+.PARAMETER TimeoutMinutes
+    Per external release stage timeout, default 60 minutes.
 .PARAMETER DryRun
-    Print what would run - resolved engine, project, output dir and the full command line -
-    and exit without starting the editor. Use it to check the discovered paths.
-
-.PARAMETER BuildOnly
-    Build and stop: compile each requested backend, verify the binaries really are that
-    backend, and exit without starting the editor or generating a report. This is what a
-    nightly scheduled task wants - it catches a spec that no longer compiles within a day,
-    without paying for a full test run. Mutually exclusive with -SkipBuild.
-
+    Release prints its full plan without file writes, installation, compilation or UE.
 .EXAMPLE
     .\Tools\RunTests.ps1
-
 .EXAMPLE
-    .\Tools\RunTests.ps1 -Filter UnLuaNova.API -Publish
-
+    .\Tools\RunTests.ps1 -DryRun
 .EXAMPLE
-    .\Tools\RunTests.ps1 -Backend Lua -Publish
-
-    Builds the plain-Lua backend, runs the suite and publishes Docs/test-lua-report.md only.
-
+    .\Tools\RunTests.ps1 -Profile Development -Backend Luau -Filter UnLuaNova.API.Timer
 .EXAMPLE
-    .\Tools\RunTests.ps1 -Backend Luau -BuildOnly
-
-    Compiles the Luau backend and exits - no editor, no report. Exits non-zero if it does
-    not compile, which is the point.
+    .\Tools\RunTests.ps1 -Profile Development -Backend Luau -BuildOnly
 #>
 
 [CmdletBinding()]
@@ -564,7 +446,7 @@ $PluginRoot = Join-Path $RepoRoot "Plugins/UnLuaNova"
 
 function Get-BuiltBackend {
     # 中间目录按目标名分层：编辑器目标是 UnrealEditor，游戏目标是 <Project>。
-    # 两个都试，因为一次 -game 的跑动只编了其中一个，另一个可能是上一轮留下的。
+    # 只接受当前目标的定义，不能借另一个目标的旧头文件通过后端校验。
     $Folders = if ($IsGameCarrier) { @($ProjectName) } else { @('UnrealEditor') }
     foreach ($Folder in $Folders) {
         $Definitions = Join-Path $PluginRoot "Intermediate/Build/$Platform/x64/$Folder/$Configuration/UnLuaNova/Definitions.UnLuaNova.h"
@@ -1582,7 +1464,10 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
             (New-Object System.Text.UTF8Encoding($false)))
         $RunArgLine = ((Get-TestArgs -ReportDir $RunDir) | ForEach-Object { Format-EditorArg $_ }) -join ' '
         $RunExe = if ($IsGameCarrier) { Resolve-GameExe } else { $EditorCmd }
-        $RunLog = Join-Path $RunDir (if ($IsGameCarrier) { "Game.log" } else { "Editor.log" })
+        # $(...) and not just (...): a bare `if` in an argument list is parsed as a command
+        # name, which fails at run time with "The term 'if' is not recognized" - inside a
+        # subexpression it is an expression, which is what is meant here.
+        $RunLog = Join-Path $RunDir $(if ($IsGameCarrier) { "Game.log" } else { "Editor.log" })
         if (-not (Test-Path $RunExe)) {
             # Only reachable for -game: the editor cmd is checked at startup. The usual
             # cause is a project whose Game target has never been built here.

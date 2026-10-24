@@ -472,11 +472,11 @@ Acceptance: Large/malformed payloads, socket close/failure, userdata GC and pack
 
 Status: **partial**; priority: P1; references: UnLua, slua, FUnLua; execution: pending.
 
-- Source: [RunTests.ps1](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/RunTests.ps1), [GenerateTestReport.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/GenerateTestReport.py), [ClassifyTests.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/ClassifyTests.py)
+- Source: [RunTests.ps1](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/RunTests.ps1), [ReleasePipeline.ps1](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/ReleasePipeline.ps1), [ValidateRelease.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/ValidateRelease.py), [GenerateTestReport.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/GenerateTestReport.py), [ClassifyTests.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/ClassifyTests.py)
 - Tests: [LuaSpecs.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaSpecs.spec.cpp)
 - Examples: Missing dedicated evidence.
 
-Boundary: Static classification is not coverage; reports lack complete reproducible build identity.
+Boundary: Release orchestration, runtime manifests, strict evidence gates and provenance are implemented but unexecuted; source classification is not code coverage.
 
 Acceptance: Fail missing/empty/malformed runs; record commit/dirty/dependencies/flags/topology; require type tools.
 
@@ -502,7 +502,7 @@ Status: **partial**; priority: P1; references: slua, FUnLua; execution: pending.
 - Tests: Missing dedicated evidence.
 - Examples: Missing dedicated evidence.
 
-Boundary: No current platform/Shipping evidence; editor-only type/debug tools differ from runtime.
+Boundary: Win64 Development cooked automation, Server build and Shipping packaging are orchestrated; execution, Shipping runtime and other platforms remain unverified.
 
 Acceptance: Cooked scripts/assets/extensions, DS/client, feature-off, executable-memory targets and upgrade tests.
 

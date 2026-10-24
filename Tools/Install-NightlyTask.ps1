@@ -67,7 +67,7 @@ if (-not (Test-Path $LogDir)) {
 
 # Quoted individually: the repo path can contain spaces, and the task scheduler hands the
 # argument string to pwsh verbatim.
-$Command = "& '$RunTests' -Backend $Backend -BuildOnly -NoReport *>&1 | Out-File -FilePath '$LogPath' -Encoding utf8"
+$Command = "& '$RunTests' -Profile Development -Backend $Backend -BuildOnly -NoReport *>&1 | Out-File -FilePath '$LogPath' -Encoding utf8"
 $Argument = "-NoProfile -ExecutionPolicy Bypass -Command `"$Command`""
 
 # Prefer PowerShell 7 when it exists, but fall back to Windows PowerShell 5.1: a machine
