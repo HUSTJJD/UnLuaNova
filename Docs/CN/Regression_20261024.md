@@ -9,9 +9,48 @@ description: "静态绑定崩溃、双后端兼容和完整测试验证记录"
 
 **2026-10-25 联网覆盖更正：Release22 的 DedicatedServer 仅比较未连接进程的声明，客户端报告为 `NetMode=0`、`Connected=false`。原通过结果不能证明独立 DS/client 的双向 RPC 与变量同步。现已增加真实 DS + 两客户端、两 Actor、两轮同步及 Owner 隔离断言；下方 Release22 数字仅为旧矩阵的历史结果。**
 
-### 当前联网补充验证
+### Release28 完整验收
+
+2026-10-25 的 `Saved/ReleaseTests/ConnectedNet-Release-28/` 完整通过：`release-summary.json` 为 `complete=true`、`passed=true`，**33/33 阶段通过、进程退出码 0**。运行时间为本地 19:22:41 至 20:17:28。以下结果来自同一轮完整矩阵，未拼接历史诊断。
+
+| 后端 | 载体 | 通过 / 总数 | 失败 | 跳过 | 本轮报告相对目录 |
+|---|---|---|---|---|---|
+| Lua | Editor | 626 / 626 | 0 | 0 | `lua/editor/lua/report.md` |
+| Lua | cooked Development | 600 / 600 | 0 | 0 | `lua/game/report.md` |
+| Luau | Editor | 641 / 641 | 0 | 0 | `luau/editor/luau/report.md` |
+| Luau | cooked Development | 615 / 615 | 0 | 0 | `luau/game/report.md` |
+| 合计 | | **2482 / 2482** | **0** | **0** | |
+
+两后端的 Development Game、Dedicated Server 和 Shipping 打包均通过。二进制复用默认 `Binaries/Win64`、`Saved/StagedBuilds/Windows` 和 `WindowsServer`；各后端 `metadata/binary-*.json` 保留当时的路径、大小及 SHA-256。默认目录最终保留 Luau 的输出，配置已恢复，旧轮次归档未删除。完整总报告为本轮根目录的 `release-summary.md`；可阅读的 Editor 报告同步到 [Lua 报告](../test-lua-report.md) 和 [Luau 报告](../test-luau-report.md)。
+
+四组网络证据再次独立通过 `ValidateRelease.py`。每组的三个进程共享下列服务端生成的会话，两客户端均为 `NM_Client`、实际连接 `127.0.0.1:7777`，Server 为 `NM_DedicatedServer`。PID 顺序为 Server / Client1 / Client2。
+
+| 后端 / 载体 | SessionId | PID | Actor 1 HP：第一轮 -> 第二轮 | Actor 2 HP：第一轮 -> 第二轮 | Client1 首轮等待 |
+|---|---|---|---|---|---|
+| Lua Editor | `1C2857B2491B325830F77C8C68510440` | 4040 / 81964 / 83392 | 892983 -> 892993 | 893083 -> 893093 | 5012.54 ms |
+| Lua cooked | `EF70B3F541B40E0DC5803089FBD95FEA` | 14332 / 30936 / 35084 | 919591 -> 919601 | 919691 -> 919701 | 5004.44 ms |
+| Luau Editor | `F732231E49B1D018DE888AAE16B0E827` | 54400 / 31932 / 40296 | 855820 -> 855830 | 855920 -> 855930 | 5008.15 ms |
+| Luau cooked | `3C718E634507AAAE19E0B8B12795B70E` | 68848 / 8100 / 82300 | 648158 -> 648168 | 648258 -> 648268 | 5006.30 ms |
+
+原始数据在各载体的 `net/DedicatedServer/Server.json`、`Client1.json`、`Client2.json`、`topology.json` 和 `logs/`。两个客户端拥有不同 Actor，均观察到两个 Actor 的两轮 Lua HP；严格日志校验确认 Server RPC、Owner 定向 Client RPC、multicast、确认屏障及调用次数，非 Owner 未收到定向 RPC。此前 `ConnectedNet-24-SkipServerRpc`、`SkipClientRpc`、`SkipReplication` 三个真实连接故障反例均失败，原始证据和 `metadata/negative-summary.json` 保留，未计入通过矩阵。
+
+40 项 Python 工具测试、PowerShell 支持测试、两个分析器构建均通过。LuaLS 包含下述明确记录的测试夹具补丁；bee 为 110 通过、0 失败、2 项上游固定跳过，不能把这个依赖测试集描述为零跳过。静态检查为零错误，保留 Lua 298 条、Luau 7 条警告。
+
+36 份内存报告均验证 VM 关闭后残留字节、块数和记账错误为 0。16 张 Showcase 截图及 16 段短片齐全，视频完整解码通过，并检查了四组代表截图；媒体来自测试帧，不是整场录屏。Editor 截图沿用保存的视口布局，不能作为 UI 排版验收。
+
+性能参考文件哈希未变，独立门禁按原 25% 上限校验原始样本通过。Lua `VM.Call` 为 0.02742910 微秒/操作，Luau `VM.Arithmetic` 为 0.00649768、`VM.TableGrow` 为 0.01418460。测试 Editor 的 AboveNormal 优先级及离屏参数记录在 `metadata/process.json`。历史参考为 Normal 优先级及旧采样方法，后台负载仍可能影响测量；此次通过仅证明当前条件下原门槛通过，不证明运行时优化。
+
+范围为 UE 5.8.3 / Win64 的既定矩阵及代表性 Lua HP/RPC 场景。Shipping 仅验证构建打包；其他平台、所有复制类型、晚加入/重连、非法 RPC 拒绝、Iris/push model 等仍按 [联网限制](LuaNetworking.md) 和 [测试范围](Testing.md) 保留为未覆盖。
+
+### 联网修复过程
+
+Release28 之前的固定四轮性能对照 `Saved/TestReports/Perf-28-diagnostics/` 按 Normal、AboveNormal、Normal、AboveNormal 顺序运行同一 Luau Editor：结果分别为失败、通过、通过、通过，全部原始样本保留。这仍不足以证明唯一干扰来源；Release 改为固定测试 Editor 的 AboveNormal 优先级并记录设置，不改变参考、工作量、采样或门槛。该测量条件与历史 Normal 基线的差异不构成运行时性能提升证据。
 
 Release27 再次发现 LuaLS `load-relative-library` 失败：夹具在注册配置处理器前初始化一次，随后又初始化同一客户端，定义查询与第二次异步配置加载竞争。`Tools/patches/luals-relative-library-initialize.patch` 将其改为创建库、注册配置后携带原工作区路径初始化一次，保留全部原始断言；构建脚本幂等应用补丁，不匹配时失败。该补丁只改第三方测试夹具，不改分析器运行代码；后续不能称为完全未经修改的上游测试。Release27 保留失败，不用于最终验收。
+
+补丁后的独立单元测试及完整重建均以 0 退出，日志在 `Saved/TestReports/LuaLS-27-fixture/unit.log` 和 `rebuild.log`。后者再次运行引导与主测试，验证了补丁幂等性；不覆盖或改写 Release27 的原始失败。
+
+Release27 完整结束，`complete=true`、`passed=false`。Lua Editor 626/626、Lua cooked 600/600、Luau Editor 640/641、Luau cooked 615/615，共 2481/2482 通过、0 跳过；两后端 Shipping 成功。唯一 UE 失败用例为 Luau 性能门禁：`VM.Arithmetic` 0.0074933508 微秒/操作，比原参考高 26.24%；`VM.TableGrow` 0.0194129233，高 25.94%。Lua 类型检查因前置 LuaLS 失败被阻塞。四组真实 DedicatedServer 证据均独立通过，Issue434、profiler 回归及全部媒体生成通过。该轮说明离屏渲染消除了此次窗口依赖失败，但不能说明性能波动已解决。
 
 `ConnectedNet-Release-26` 在 Luau Shipping 构建期间按默认输出路径要求中止，保留为未完成、未通过。Lua Editor 626/626、Lua cooked 600/600、Luau cooked 615/615；Luau Editor 639/641，失败为性能门禁及 Issue434，另有四组截图/视频缺失，证据门禁已拒绝。四个载体的真实 DedicatedServer 场景均通过，但不能据此拼成完整验收。分析器构建测试及新增 profiler 回归在本轮通过。
 

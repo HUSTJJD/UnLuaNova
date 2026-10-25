@@ -9,9 +9,48 @@ description: "Static binding crash, backend compatibility and release validation
 
 **Networking coverage correction, 2026-10-25: Release22's DedicatedServer case only compared disconnected declarations. Its client reported `NetMode=0`, `Connected=false`. That passing result does not establish bidirectional RPCs or field replication between independent DS/client processes. A connected DS/two-client, two-actor, two-round scenario with owner isolation assertions has now been added. Release22 totals below describe the historical matrix only.**
 
-### Current Networking Validation
+### Complete Release28 Acceptance
+
+`Saved/ReleaseTests/ConnectedNet-Release-28/` completed on 2026-10-25 with `complete=true`, `passed=true`, **33/33 stages passed and process exit code 0**. It ran from 19:22:41 to 20:17:28 local time. These results come from one complete matrix, without combining historical diagnostics.
+
+| Backend | Carrier | Passed / Total | Failed | Skipped | Relative report path |
+|---|---|---|---|---|---|
+| Lua | Editor | 626 / 626 | 0 | 0 | `lua/editor/lua/report.md` |
+| Lua | cooked Development | 600 / 600 | 0 | 0 | `lua/game/report.md` |
+| Luau | Editor | 641 / 641 | 0 | 0 | `luau/editor/luau/report.md` |
+| Luau | cooked Development | 615 / 615 | 0 | 0 | `luau/game/report.md` |
+| Total | | **2482 / 2482** | **0** | **0** | |
+
+Both backends passed Development Game, Dedicated Server and Shipping packaging. Binaries reuse default `Binaries/Win64`, `Saved/StagedBuilds/Windows` and `WindowsServer`; each backend's `metadata/binary-*.json` retains the path, size and SHA-256 at use. Default outputs now contain Luau binaries, configuration was restored, and historical archives were not deleted. The complete report is `release-summary.md` in the run root. Published Editor results are in the [Lua report](../test-lua-report.md) and [Luau report](../test-luau-report.md).
+
+All four network evidence sets independently passed `ValidateRelease.py` again. Each trio shares the following server-generated session; clients are `NM_Client`, connected to `127.0.0.1:7777`, and the server is `NM_DedicatedServer`. PID order is Server / Client1 / Client2.
+
+| Backend / Carrier | SessionId | PIDs | Actor 1 HP: round 1 -> 2 | Actor 2 HP: round 1 -> 2 | Client1 first observation |
+|---|---|---|---|---|---|
+| Lua Editor | `1C2857B2491B325830F77C8C68510440` | 4040 / 81964 / 83392 | 892983 -> 892993 | 893083 -> 893093 | 5012.54 ms |
+| Lua cooked | `EF70B3F541B40E0DC5803089FBD95FEA` | 14332 / 30936 / 35084 | 919591 -> 919601 | 919691 -> 919701 | 5004.44 ms |
+| Luau Editor | `F732231E49B1D018DE888AAE16B0E827` | 54400 / 31932 / 40296 | 855820 -> 855830 | 855920 -> 855930 | 5008.15 ms |
+| Luau cooked | `3C718E634507AAAE19E0B8B12795B70E` | 68848 / 8100 / 82300 | 648158 -> 648168 | 648258 -> 648268 | 5006.30 ms |
+
+Raw evidence lives under each carrier's `net/DedicatedServer/`: `Server.json`, `Client1.json`, `Client2.json`, `topology.json` and `logs/`. Clients own different actors and each observes both actors' Lua HP in both rounds. Exact local logs verify Server RPC, owner-targeted Client RPC, multicast, acknowledgement barriers and call counts, with no targeted RPC on non-owners. The earlier connected `ConnectedNet-24-SkipServerRpc`, `SkipClientRpc` and `SkipReplication` controls all failed as expected; raw artifacts and `metadata/negative-summary.json` remain separate from acceptance totals.
+
+All 40 Python tooling tests, PowerShell support checks and both analyzer builds passed. LuaLS includes the explicitly documented fixture patch below. Its bee dependency reported 110 passes, zero failures and two upstream-disabled tests; that dependency suite is not zero-skip. Static analysis had zero errors, retaining 298 Lua warnings and seven Luau warnings.
+
+All 36 memory reports show zero remaining bytes, blocks and accounting errors after VM closure. Sixteen Showcase screenshots and sixteen clips are present; every clip decoded successfully and representative screenshots from all four groups were inspected. Clips contain test frames, not a desktop session recording. Editor screenshots retain the saved viewport layout and do not certify UI layout quality.
+
+Performance reference hashes are unchanged; independent checks accepted raw samples against the original 25% limit. Lua `VM.Call` measured 0.02742910 us/op; Luau `VM.Arithmetic` measured 0.00649768 and `VM.TableGrow` 0.01418460. `metadata/process.json` records AboveNormal priority and offscreen rendering for test Editors. References used Normal priority and the older sampling method; background load can still affect measurements. Passing establishes the original gate under these conditions, not a runtime speedup.
+
+Scope is the defined UE 5.8.3 / Win64 matrix and representative Lua HP/RPC scenarios. Shipping is packaging-only. Other platforms, all replication types, late join/reconnect, unauthorized RPC rejection and Iris/push model remain outside this acceptance as described in [networking limits](LuaNetworking.md) and [test scope](Testing.md).
+
+### Networking Fix History
+
+Before Release28, four predefined probes in `Saved/TestReports/Perf-28-diagnostics/` used the same Luau Editor in Normal, AboveNormal, Normal, AboveNormal order: failed, passed, passed, passed. All samples are retained. This does not identify a sole interference source. Release now fixes the test Editor at AboveNormal and records that setting without changing references, workload, sampling or limits. The environmental difference from the historical Normal-priority baseline is not evidence of a runtime speedup.
 
 Release27 again failed LuaLS `load-relative-library`: the fixture initialized before registering its configuration handler and initialized the same client again, racing definition lookup against the second asynchronous configuration load. `Tools/patches/luals-relative-library-initialize.patch` creates the library and registers configuration before one initialization with the intended root, preserving all original assertions. The build applies this patch idempotently and fails on mismatched context. Only the third-party test fixture changes, not analyzer runtime code; subsequent upstream tests include this explicit correction. Release27 retains its failure and is not final acceptance.
+
+The patched standalone unit tests and full rebuild both exited 0; logs are in `Saved/TestReports/LuaLS-27-fixture/unit.log` and `rebuild.log`. The rebuild repeated bootstrap and main tests and verified idempotent patch application. These diagnostics do not overwrite Release27's original failure.
+
+Release27 completed with `complete=true`, `passed=false`. Lua Editor passed 626/626, Lua cooked 600/600, Luau Editor 640/641 and Luau cooked 615/615: 2481/2482 executions passed, with zero skips. Both Shipping packages succeeded. The only failing UE case was Luau performance: `VM.Arithmetic` measured 0.0074933508 us/op, 26.24% above the original reference; `VM.TableGrow` measured 0.0194129233, 25.94% above. Lua type checking was blocked by the earlier LuaLS failure. All four real DedicatedServer sessions passed independent validation; Issue434, profiler regressions and media generation passed. Offscreen rendering resolved the observed window-dependent failures but did not eliminate performance variability.
 
 `ConnectedNet-Release-26` was interrupted during Luau Shipping to adopt the requested default output paths. It remains incomplete and failed. Lua Editor passed 626/626, Lua cooked 600/600 and Luau cooked 615/615. Luau Editor passed 639/641: performance and Issue434 failed, and four missing screenshot/video pairs also failed the evidence gate. Real DedicatedServer scenarios passed in all four carriers, but these results do not establish complete acceptance. Analyzer builds/tests and the new profiler regression passed.
 

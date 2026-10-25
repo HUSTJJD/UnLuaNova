@@ -1528,6 +1528,16 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         $EditorPsi.UseShellExecute = $false
         $EditorProc = [System.Diagnostics.Process]::Start($EditorPsi)
         try {
+            if ($ReleaseManaged) {
+                $EditorProc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::AboveNormal
+                $MetadataDir = Join-Path $RunDir 'metadata'
+                New-Item -ItemType Directory -Path $MetadataDir -Force | Out-Null
+                [ordered]@{ pid = $EditorProc.Id; executable = $RunExe;
+                    priority_class = $EditorProc.PriorityClass.ToString(); render_offscreen = [bool]$RenderOffScreen;
+                    recorded_utc = [DateTime]::UtcNow.ToString('o') } |
+                    ConvertTo-Json | Set-Content (Join-Path $MetadataDir 'process.json') -Encoding UTF8
+                Write-Host 'Scheduling   : AboveNormal for this release test process.'
+            }
             # 联网 peer 的录制要边跑边发现（见下面的轮询）：$RecordedLabels 是"已经录过 /
             # 已经试过"的 peer。窗口按 pid 认（Wait-PeerWindow），所以不需要"已占用的窗口"
             # 这种名单 —— 同名进程也能分辨。

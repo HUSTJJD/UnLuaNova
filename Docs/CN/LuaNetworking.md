@@ -78,7 +78,7 @@ end
 |---|---|---|
 | UnLuaNova.API.Net | 声明拒绝/幂等、flags、还原、排序、schema 指纹、实际桶编组的 int64 边界 | 双后端 Editor 已通过；不验证实际传输 |
 | UnLuaNova.API.Net.ClientServer | PIE 中 RPC / 字段传输 | 单进程共享类状态 |
-| UnLuaNova.API.Net.DedicatedServer | DS + 两个独立客户端、仅服务端生成两个 Actor 和设置 Owner、两轮 Server/Client/Multicast RPC 与 Lua HP 同步 | Release26 四个载体已通过此项；完整轮次仍未通过。Release22 及以前仅为未连接的声明/ID 对照 |
+| UnLuaNova.API.Net.DedicatedServer | DS + 两个独立客户端、仅服务端生成两个 Actor 和设置 Owner、两轮 Server/Client/Multicast RPC 与 Lua HP 同步 | Release28 四个载体及完整 33 阶段均通过，含原始会话/PID/HP/逐端日志校验；Release22 及以前仅为未连接的声明/ID 对照 |
 | UnLuaNova.Slow.Net.Multicast | server + 两个连接的 client | 双后端 Editor 完整诊断轮已通过；Fast 层排除 |
 
 API.Net、ClientServer、Multicast 的历史诊断见 `FullFix-Complete-11`；替换后的 DedicatedServer 及完整发布矩阵结论见 [回归验证记录](Regression_20261024.md)。

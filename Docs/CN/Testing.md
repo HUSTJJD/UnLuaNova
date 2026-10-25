@@ -36,6 +36,8 @@ Release 自动设置 `UNLUANOVA_TEST_PEER_EXE` 和 `UNLUANOVA_TEST_SERVER_EXE`�
 
 Release 的 Editor、Game 和非 headless peer 使用 `-RenderOffScreen`，保留真实 RHI、视口用例、截图和测试帧视频，避免依赖桌面窗口是否可见；不启动桌面录屏。DS 仍使用 `-NullRHI`。Development 可显式选择 `-RenderOffScreen`。
 
+Release 测试 Editor 固定使用 `AboveNormal` 进程优先级，设置与 PID 写入 `metadata/process.json`，减少普通优先级后台任务的调度干扰；只调整本轮测试进程。原参考来自 Normal 环境，优先级差异必须保留为测量条件，不能据此声称运行时优化；工作量、采样、基线和阈值不变，仍可能受频率、内存和其他负载影响。
+
 LuaLS 构建在 `Saved/ReleaseTools/luals-temp/` 使用每次独立的临时目录，并在退出时恢复 TMP/TEMP。引导工具和主分析器的构建、测试分别检查退出码，任何一步失败都会阻止分析器阶段通过。
 
 静态绑定备份保存在各后端的 `metadata/static-binding-backup/`，仅处理带生成器标记的固定输出文件；其他源码不参与此流程。若流程结束时未生成新文件，自动恢复旧文件并保留备份。这样旧版生成代码不会阻止新版生成器启动，也不需要手动删除源码。生成器指纹包含格式版本，格式修复可使旧输出失效。
@@ -91,6 +93,6 @@ Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混
 
 此入口覆盖当前定义的 Win64 测试矩阵，不等于所有产品需求已实现，也不是 100% 代码覆盖率。feature-off 组合、其他目标平台/设备、Shipping 运行 smoke、Iris/push model 和外部项目性能对照仍是 [审计](Benchmark_Review.md) 中的未完成工作。许可归属与第三方 notice 也不能由自动化通过替代。
 
-验证状态：`FullFix-Release-22` 的 33/33 阶段、2478/2478 次执行仅为历史矩阵结果，其 DedicatedServer 未验证实际连接，不能作为当前联网验收。替换后的真实 DS/双客户端场景已在四个载体通过；`ConnectedNet-Release-26` 因性能、Issue434、媒体缺失及中止而未通过，完整复验为 `ConnectedNet-Release-27`。40 项 Python 工具测试和 PowerShell 支持检查通过。各轮原始结果及当前完整验收状态见下方回归记录。
+验证状态：2026-10-25 的 `ConnectedNet-Release-28` 完整通过，33/33 阶段、2482/2482 次 UE 执行、0 失败、0 跳过，四组真实 DS/双客户端及证据门禁均通过，两后端 Shipping 打包成功。40 项 Python 工具测试和 PowerShell 支持检查通过。静态检查零错误，保留 Lua 298 条、Luau 7 条警告。LuaLS 使用已记录的夹具初始化补丁，其 bee 依赖仍有两项上游固定跳过。当前默认输出为 Luau，按默认目录覆盖复用。Release22 的旧 DedicatedServer 不构成传输证据；历史失败和验收边界见下方回归记录。
 
 本次修复和运行证据见 [2026-10-24 回归记录](Regression_20261024.md)。静态检查保留所有警告和分析器原始 `analyzer_exit`；最终 `exit` 依据错误级诊断判定。仅警告不阻断，类型错误、异常退出和缺少结果均失败。
