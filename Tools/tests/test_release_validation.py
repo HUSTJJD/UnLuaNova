@@ -23,8 +23,28 @@ class ReleaseValidationTests(unittest.TestCase):
     def check(self, carrier="editor", source=()):
         return gate.validate_automation(self.manifest, self.report, "Lua", carrier, source)
 
+    def test_ue_json_encodings_preserve_non_ascii_test_names(self):
+        manifest = dict(self.manifest, tests=["UnLuaNova.Regression.\u7ed3\u6784\u4f53"])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "manifest.json"
+            for encoding in ("utf-8", "utf-8-sig", "utf-16", "utf-16-be"):
+                with self.subTest(encoding=encoding):
+                    path.write_bytes(json.dumps(manifest, ensure_ascii=False).encode(encoding))
+                    self.assertEqual(gate.read_json(path), manifest)
+            path.write_bytes(b"\xff\xfe{\x00invalid")
+            with self.assertRaises((ValueError, UnicodeError)):
+                gate.read_json(path)
+
     def test_complete_run_and_native_lua_exclusion(self):
         self.assertEqual(self.check(source=["UnLuaNova.API.Timer", "UnLuaNova.API.LuauIntegration"]), [])
+
+    def test_namespace_matches_ue_case_insensitive_filter(self):
+        name = "UNLUANOVA.Regression.Issue362"
+        self.manifest["tests"] = [name]
+        self.report["tests"] = [dict(fullTestPath=name, state="Success")]
+        self.assertEqual(self.check(), [])
+        self.manifest["tests"] = ["UnLuaNovaOther.Regression.Issue362"]
+        self.assertTrue(self.check())
 
     def test_display_names_cannot_replace_full_paths(self):
         for test in self.report["tests"]:
@@ -91,6 +111,33 @@ class ReleaseValidationTests(unittest.TestCase):
         for name in ("automation", "network", "performance", "typecheck", "media", "memory"):
             self.assertTrue(any(e.startswith(name + ":") for e in errors))
 
+    def performance_samples(self):
+        baseline = dict(Backend="Lua", EngineVersion="UE-test", Machine="runner",
+                        Cases=[dict(Case="call", Iterations=100, PerOpUs=2)])
+        actual = copy.deepcopy(baseline)
+        actual["Measurement"] = dict(Method="median-of-5-batch-means", WarmupMinMs=250, SampleMinMs=100)
+        actual["Cases"][0].update(WarmupMs=250, WarmupBatches=1250,
+            Samples=[dict(ElapsedMs=100, Batches=batches) for batches in (500, 500, 500, 10, 1000)])
+        return actual, baseline
+
+    def test_performance_median_recomputed_from_raw_samples(self):
+        actual, baseline = self.performance_samples()
+        self.assertEqual(gate.validate_performance(actual, baseline, "Lua", require_samples=True), [])
+        actual["Cases"][0]["PerOpUs"] = 1  # The fastest sample must not replace the median.
+        self.assertTrue(gate.validate_performance(actual, baseline, "Lua", require_samples=True))
+
+    def test_performance_rejects_missing_short_or_invalid_samples(self):
+        actual, baseline = self.performance_samples()
+        self.assertTrue(gate.validate_performance(baseline, baseline, "Lua", require_samples=True))
+        for field, value in (("WarmupMs", 249), ("WarmupBatches", 0), ("Samples", []),
+                             ("Samples", [dict(ElapsedMs=99, Batches=500)] * 5),
+                             ("Samples", [dict(ElapsedMs=100, Batches=0)] * 5),
+                             ("Samples", [dict(ElapsedMs=float("nan"), Batches=500)] * 5)):
+            with self.subTest(field=field, value=value):
+                invalid = copy.deepcopy(actual)
+                invalid["Cases"][0][field] = value
+                self.assertTrue(gate.validate_performance(invalid, baseline, "Lua", require_samples=True))
+
     def memory_case(self, name, backend="Lua", carrier="editor"):
         envs, count, resources = gate.MEMORY_CASES[name]
         samples = [dict(bytes=0, blocks=0) for _ in range(count)]
@@ -98,7 +145,9 @@ class ReleaseValidationTests(unittest.TestCase):
             samples = [dict(bytes=200000, blocks=500) for _ in range(count)]
         if name == "retained_reference":
             samples = [dict(bytes=200000, blocks=500), dict(bytes=1200000, blocks=10000), dict(bytes=200000, blocks=500)]
-        return dict(schema_version=1, case=name, backend=backend, editor=carrier == "editor", cooked=carrier == "game",
+        for sample in samples:
+            sample["live_bytes"] = sample["bytes"]
+        return dict(schema_version=2, case=name, backend=backend, editor=carrier == "editor", cooked=carrier == "game",
                     run_id="current-run", passed=True, closed_envs=envs, allocation_events=10000,
                     remaining_bytes=0, remaining_blocks=0, accounting_errors=0, checked_resources=resources,
                     retained_resources=0, initial_envs=1, final_envs=1, warmup=8,
@@ -124,7 +173,7 @@ class ReleaseValidationTests(unittest.TestCase):
                 self.assertTrue(gate.validate_memory_case(data, "native_payloads", "Lua", "editor", "current-run"))
 
     def test_memory_detects_growth_instead_of_trusting_passed_flag(self):
-        for key, growth in (("bytes", 9000), ("blocks", 17)):
+        for key, growth in (("live_bytes", 9000), ("blocks", 17)):
             data = self.memory_case("steady_heap")
             data["samples"][-1][key] += growth
             self.assertTrue(gate.validate_memory_case(data, "steady_heap", "Lua", "editor", "current-run"))
@@ -144,6 +193,15 @@ class ReleaseValidationTests(unittest.TestCase):
             else:
                 del data["remaining_bytes"]
             self.assertTrue(gate.validate_memory_case(data, "retained_reference", "Lua", "editor", "current-run"))
+
+    def test_live_heap_does_not_confuse_luau_page_reservations_with_live_objects(self):
+        data = self.memory_case("hot_reload", backend="Luau")
+        data["samples"][10]["bytes"] += 32768
+        self.assertEqual(gate.validate_memory_case(data, "hot_reload", "Luau", "editor", "current-run"), [])
+        data["samples"][10]["live_bytes"] += 9000
+        self.assertTrue(gate.validate_memory_case(data, "hot_reload", "Luau", "editor", "current-run"))
+        del data["samples"][10]["live_bytes"]
+        self.assertTrue(gate.validate_memory_case(data, "hot_reload", "Luau", "editor", "current-run"))
 
     def test_memory_requires_every_fresh_registered_report(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -61,10 +61,11 @@ description: "运行时与编辑器全部设置项的含义，含 Lua 后端切�
 ```ini
 [/Script/UnLuaNova.UnLuaNovaSettings]
 +ClassModuleBindings=(Class="/Script/UAKDemo.AKDemoCharacter",ModuleName="UAKDemoCharacter")
++ClassModuleBindings=(ClassName="MyNativeActor",ModuleName="Gameplay.NativeActor")
 ```
 
-- 匹配**沿继承链向上找**：绑基类即覆盖它的所有蓝图子类（蓝图子类的类名不是基类名，
-  只能靠父类链命中），不想要这个行为就写完整路径精确匹配
+- `Class` 接受完整软类路径；短类名使用 `ClassName`，不能放入 `Class`（UE 会清空无效路径）。
+- 先匹配当前类的完整路径，再沿继承链匹配 `ClassName` 或路径中的类名；绑定基类也会覆盖其子类。
 - 只比字符串，**不解析 `Class` 资产**：`TryBind` 是在 UObject 创建过程中调的，那里 `LoadObject` 是自找麻烦
 - 编辑器里不缓存"这个类没绑"的结论，改完配置即时生效；打包构建里会缓存
 

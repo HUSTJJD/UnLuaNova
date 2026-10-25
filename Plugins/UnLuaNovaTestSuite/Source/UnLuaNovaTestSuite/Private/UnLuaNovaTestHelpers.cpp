@@ -13,8 +13,32 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaTestHelpers.h"
+#include "UnLuaNovaEx.h"
 
 #include "Net/UnrealNetwork.h"
+
+BEGIN_EXPORT_CLASS(FUnLuaNovaTestLib)
+ADD_STATIC_FUNCTION(TestForBaseSpec1)
+ADD_STATIC_FUNCTION(TestForBaseSpec2)
+ADD_SHARED_PTR_CONSTRUCTOR(ESPMode::NotThreadSafe)
+END_EXPORT_CLASS()
+IMPLEMENT_EXPORTED_CLASS(FUnLuaNovaTestLib)
+
+BEGIN_EXPORT_ENUM_EX(EScopedEnum::Type, EScopedEnum)
+ADD_SCOPED_ENUM_VALUE(Value1)
+ADD_SCOPED_ENUM_VALUE(Value2)
+END_EXPORT_ENUM(EScopedEnum)
+
+BEGIN_EXPORT_ENUM(EEnumClass)
+ADD_SCOPED_ENUM_VALUE(Value1)
+ADD_SCOPED_ENUM_VALUE(Value2)
+END_EXPORT_ENUM(EEnumClass)
+
+BEGIN_EXPORT_REFLECTED_CLASS(UUnLuaNovaTestStub)
+ADD_PROPERTY(ScopedEnum)
+ADD_PROPERTY(EnumClass)
+END_EXPORT_CLASS()
+IMPLEMENT_EXPORTED_CLASS(UUnLuaNovaTestStub)
 
 AUnLuaNovaTestNetActor::AUnLuaNovaTestNetActor()
 {

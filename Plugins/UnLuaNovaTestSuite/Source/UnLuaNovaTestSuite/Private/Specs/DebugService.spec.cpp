@@ -37,12 +37,15 @@
 
 #include "LuaBackend.h"
 #include "LuaDebugService.h"
+#include "HAL/IConsoleManager.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 BEGIN_DEFINE_SPEC(FDebugServiceSpec, "UnLuaNova.API.DebugService", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
     TSharedPtr<UnLuaNova::FLuaEnv> Env;
     lua_State* L;
+    int32 SavedOptimize = 0;
+    int32 SavedDebugLevel = 0;
 
     // HitCount is a process-wide counter on a singleton and there is no reset, so every
     // case compares a delta instead of an absolute - otherwise the second case to stop
@@ -54,6 +57,16 @@ void FDebugServiceSpec::Define()
 {
     BeforeEach([this]
     {
+        if (auto* Optimize = IConsoleManager::Get().FindConsoleVariable(TEXT("luau.optimize")))
+        {
+            SavedOptimize = Optimize->GetInt();
+            Optimize->Set(0, ECVF_SetByCode);
+        }
+        if (auto* DebugLevel = IConsoleManager::Get().FindConsoleVariable(TEXT("luau.debuglevel")))
+        {
+            SavedDebugLevel = DebugLevel->GetInt();
+            DebugLevel->Set(2, ECVF_SetByCode);
+        }
         Env = MakeShared<UnLuaNova::FLuaEnv>();
         L = Env->GetMainState();
         HitsBefore = UnLuaNova::FLuaDebugService::Get().GetHitCount();
@@ -71,6 +84,10 @@ void FDebugServiceSpec::Define()
         Debug.Detach();
         Env.Reset();
         L = nullptr;
+        if (auto* Optimize = IConsoleManager::Get().FindConsoleVariable(TEXT("luau.optimize")))
+            Optimize->Set(SavedOptimize, ECVF_SetByCode);
+        if (auto* DebugLevel = IConsoleManager::Get().FindConsoleVariable(TEXT("luau.debuglevel")))
+            DebugLevel->Set(SavedDebugLevel, ECVF_SetByCode);
     });
 
     Describe(TEXT("断点"), [this]()
@@ -134,9 +151,9 @@ void FDebugServiceSpec::Define()
             TEST_TRUE(Debug.AddBreakpoint(ChunkName, 2));
 
             const FString Chunk = TEXT("local function Inner()\n    return 1\nend\n"
-                                       "local function Outer()\n    return Inner()\nend\n"
-                                       "return Outer()");
-            Env->DoString(Chunk, ChunkName);
+                                       "local function Outer()\n    local value = Inner()\n    return value\nend\n"
+                                       "local value = Outer()\nreturn value");
+            TEST_TRUE(Env->DoString(Chunk, ChunkName));
 
             TEST_TRUE(Debug.IsPaused());
 
@@ -230,7 +247,7 @@ void FDebugServiceSpec::Define()
 
             // runtime error too - a watch window that swallows these looks like it is
             // showing you a value when it is actually showing you nothing
-            TEST_FALSE(Debug.Evaluate(TEXT("nil.Field"), -1, Value, Error));
+            TEST_FALSE(Debug.Evaluate(TEXT("(nil).Field"), -1, Value, Error));
             TEST_TRUE(Error.Contains(TEXT("runtime error")));
         });
 

@@ -159,7 +159,7 @@ Interval and delay must be finite nonnegative numbers representable as floats; b
 - Pause preserves remaining delay. Repeating timers run at most once per frame, without replaying missed periods.
 - Scaled timers stop while the World is paused; unscaled timers use real world time. Callback errors are logged and other tasks continue.
 
-Example: [TimerLifecycle.lua](../../Content/Script/Examples/TimerLifecycle.lua). Regression entry: `UnLuaNova.API.Timer`. Multi-PIE, world pause/time dilation and packaged behavior still require execution.
+Example: [TimerLifecycle.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Examples/TimerLifecycle.lua). Regression entry: `UnLuaNova.API.Timer`. Multi-PIE, world pause/time dilation and packaged behavior still require execution.
 
 ## Event (pure Lua)
 

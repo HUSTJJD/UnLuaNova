@@ -55,7 +55,7 @@ Plugins/UnLuaNova/IntelliSense/
 把 `.d.lua` 放进脚本工程、脚本头部写 `--!strict`，就可以用 `luau-lsp` 把 UE API 误用
 提前暴露出来。
 
-详见[Luau 后端](Luau.md#三类型声明与-luau-lsp)。
+详见[Luau 后端](Luau.md#类型示例与剖析)。
 
 ---
 

@@ -587,7 +587,7 @@ inline int lua_gc(lua_State* L, int What)
 // G (goal) is a percentage: the heap is allowed to grow to G% of the live data.
 // S (step multiplier) is how much collector work is done per byte allocated.
 // luaconf's own numbers are G=200 / S=200 (see LUAI_GCGOAL / LUAI_GCSTEPMUL), and
-// lua.h documents the pairing rule: S should sit in [100/(G-100), 100+100/(G-100))
+// Expressed as integer percentages, S should sit in [10000/(G-100), 100+10000/(G-100)]
 // with a floor of 150% - i.e. [150,200] when G=200.
 //
 // These used to be 100/100, which is not a stricter setting but a broken one: with

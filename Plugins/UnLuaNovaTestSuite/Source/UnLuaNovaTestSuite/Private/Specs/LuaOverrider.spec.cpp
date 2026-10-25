@@ -30,6 +30,7 @@
 #include "LuaBackend.h"
 #include "LuaEnv.h"
 #include "UnLuaNovaManager.h"
+#include "UnLuaNovaModule.h"
 #include "UnLuaNovaOverrider.h"
 #include "UnLuaNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
@@ -48,7 +49,7 @@ namespace
 
     int LuaLessThan(lua_State* L)
     {
-        lua_pushboolean(L, lua_tointeger(L, 1) < lua_tointeger(L, 2));
+        lua_pushboolean(L, lua_tointeger(L, 2) < lua_tointeger(L, 3));
         return 1;
     }
 
@@ -59,7 +60,7 @@ namespace
 
     int LuaSum(lua_State* L)
     {
-        lua_pushnumber(L, lua_tonumber(L, 1) + lua_tonumber(L, 2));
+        lua_pushnumber(L, lua_tonumber(L, 2) + lua_tonumber(L, 3));
         return 1;
     }
 
@@ -89,14 +90,14 @@ namespace
 }
 
 BEGIN_DEFINE_SPEC(FOverriderSpec, "UnLuaNova.API.Overrider", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
-    TSharedPtr<UnLuaNova::FLuaEnv> Env;
+    UnLuaNova::FLuaEnv* Env = nullptr;
     lua_State* L;
     UObject* Bound;
 
     /** Bind a throwaway UObject to the built-in spec module. */
     UObject* MakeBoundObject()
     {
-        UObject* Object = NewObject<UObject>();
+        UObject* Object = NewObject<UUnLuaNovaTestStub>();
         Env->GetManager()->Bind(Object, SpecModuleName);
         return Object;
     }
@@ -106,7 +107,8 @@ void FOverriderSpec::Define()
 {
     BeforeEach([this]
     {
-        Env = MakeShared<UnLuaNova::FLuaEnv>();
+        UnLuaNova::Startup();
+        Env = IUnLuaNovaModule::Get().GetEnv(nullptr);
         L = Env->GetMainState();
         Env->AddBuiltInLoader(SpecModuleName, SpecModuleLoader);
         Bound = MakeBoundObject();
@@ -120,7 +122,8 @@ void FOverriderSpec::Define()
             Bound->RemoveFromRoot();
             Bound = nullptr;
         }
-        Env.Reset();
+        UnLuaNova::Shutdown();
+        Env = nullptr;
         L = nullptr;
     });
 
@@ -134,7 +137,7 @@ void FOverriderSpec::Define()
 
         It(TEXT("未绑定的对象一律回答“不存在”而不是崩溃"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
-            UObject* Unbound = NewObject<UObject>();
+            UObject* Unbound = NewObject<UUnLuaNovaTestStub>();
             TEST_FALSE(UnLuaNova::IsLuaFunctionExist(Unbound, TEXT("Answer")));
             TEST_EQUAL(UnLuaNova::CallLuaFunctionIfExist<int32>(Unbound, TEXT("Answer")), 0);
         });

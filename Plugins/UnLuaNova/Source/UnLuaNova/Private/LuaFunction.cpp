@@ -151,6 +151,8 @@ void ULuaFunction::Override(UFunction* Function, UClass* Class, bool bAddNew)
     bActivated = false;
     bAdded = bAddNew;
     From = Function;
+    if (bAddNew && Function->HasAnyFunctionFlags(FUNC_Net) && !Function->GetOuter()->IsA<UClass>())
+        DeclaredRpcTemplate = Function;
 
     if (Function->GetNativeFunc() == execScriptCallLua)
     {
@@ -184,7 +186,11 @@ void ULuaFunction::Restore()
         // is not necessarily a ULuaOverridesClass, and this is the teardown path, where
         // a bad cast would turn into a crash on the way out.
         if (const auto OverriddenClass = GetOverriddenUClass())
+        {
             OverriddenClass->RemoveFunctionFromFunctionMap(this);
+            if (DeclaredRpcTemplate)
+                OverriddenClass->NetFields.Remove(this);
+        }
     }
     else
     {
@@ -222,12 +228,22 @@ void ULuaFunction::SetActive(const bool bActive)
         if (bAdded)
         {
             check(!Class->FindFunctionByName(GetFName(), EIncludeSuperFlag::ExcludeSuper));
-            SetSuperStruct(Function);
+            SetSuperStruct(DeclaredRpcTemplate ? nullptr : Function);
             FunctionFlags |= FUNC_Native;
             ClearInternalFlags(EInternalObjectFlags::Native);
             SetNativeFunc(execCallLua);
 
             Class->AddFunctionToFunctionMap(this, *GetName());
+            if (DeclaredRpcTemplate)
+            {
+                // The engine sends root RPCs using NetFields, not the function lookup map.
+                Class->SetUpRuntimeReplicationData();
+                Class->NetFields.AddUnique(this);
+                Class->NetFields.Sort([](const UField& A, const UField& B)
+                {
+                    return A.GetFName().LexicalLess(B.GetFName());
+                });
+            }
             if (Function->HasAnyFunctionFlags(FUNC_Native))
                 Class->AddNativeFunction(*GetName(), &ULuaFunction::execCallLua);
         }
@@ -254,6 +270,8 @@ void ULuaFunction::SetActive(const bool bActive)
         if (bAdded)
         {
             Class->RemoveFunctionFromFunctionMap(this);
+            if (DeclaredRpcTemplate)
+                Class->NetFields.Remove(this);
         }
         else
         {

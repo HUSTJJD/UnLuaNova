@@ -23,7 +23,8 @@ MEMORY_CASES = {
 
 
 def read_json(path):
-    return json.loads(path.read_text(encoding="utf-8-sig"))
+    # UE's AutoDetect writer emits UTF-16 when test names contain non-ASCII text.
+    return json.loads(path.read_bytes())
 
 
 def validate_automation(manifest, report, backend, carrier, source_tests=()):
@@ -38,7 +39,7 @@ def validate_automation(manifest, report, backend, carrier, source_tests=()):
         if manifest.get(feature) is not True:
             errors.append(f"Required feature disabled: {feature}")
     expected = manifest.get("tests", [])
-    if not isinstance(expected, list) or not expected or any(not isinstance(n, str) or not n.startswith("UnLuaNova.") for n in expected):
+    if not isinstance(expected, list) or not expected or any(not isinstance(n, str) or not n.casefold().startswith("unluanova.") for n in expected):
         return errors + ["Invalid or empty runtime test manifest"]
     if len(expected) != len(set(expected)):
         errors.append("Duplicate manifest test paths")
@@ -91,7 +92,7 @@ def validate_typecheck(data):
 
 def validate_memory_case(data, name, backend, carrier, run_id):
     errors = []
-    if type(data.get("schema_version")) is not int or data["schema_version"] != 1 or data.get("case") != name:
+    if type(data.get("schema_version")) is not int or data["schema_version"] != 2 or data.get("case") != name:
         errors.append("Memory schema/case mismatch")
     if data.get("backend") != backend or data.get("editor") is not (carrier == "editor") or data.get("cooked") is not (carrier == "game"):
         errors.append("Memory backend/carrier mismatch")
@@ -112,15 +113,15 @@ def validate_memory_case(data, name, backend, carrier, run_id):
         errors.append("Environment registry did not recover")
     samples = data.get("samples")
     if not isinstance(samples, list) or len(samples) != sample_count or any(
-        not isinstance(s, dict) or any(type(s.get(k)) is not int or s[k] < 0 for k in ("bytes", "blocks"))
+        not isinstance(s, dict) or any(type(s.get(k)) is not int or s[k] < 0 for k in ("bytes", "live_bytes", "blocks"))
         for s in samples
     ):
         return errors + ["Invalid or incomplete memory samples"]
     if name in ("steady_heap", "hot_reload"):
-        if data["warmup"] < 8 or samples[0]["bytes"] == 0 or samples[0]["blocks"] == 0:
+        if data["warmup"] < 8 or samples[0]["live_bytes"] == 0 or samples[0]["blocks"] == 0:
             errors.append("Missing warmed live-heap evidence")
         # Bound both high-water growth and late growth after the first sampled window.
-        for key, limit in (("bytes", 8192), ("blocks", 16)):
+        for key, limit in (("live_bytes", 8192), ("blocks", 16)):
             values = [s[key] for s in samples]
             if max(values) > min(values[:8]) + limit or sum(values[-8:]) > sum(values[:8]) + 8 * limit:
                 errors.append(f"Post-GC {key} growth exceeds the warmed budget")
@@ -149,7 +150,7 @@ def validate_memory(run, backend, carrier):
     return errors
 
 
-def validate_performance(actual, baseline, backend):
+def validate_performance(actual, baseline, backend, require_samples=False):
     errors = []
     for field in ("Backend", "EngineVersion", "Machine"):
         if not actual.get(field) or actual.get(field) != baseline.get(field):
@@ -175,6 +176,32 @@ def validate_performance(actual, baseline, backend):
             values[name] = row
         maps.append(values)
     current, previous = maps
+    if require_samples or "Measurement" in actual:
+        expected = dict(Method="median-of-5-batch-means", WarmupMinMs=250, SampleMinMs=100)
+        if actual.get("Measurement") != expected:
+            errors.append("Missing or unsupported performance sampling method")
+        for name, row in current.items():
+            warmup, batches = row.get("WarmupMs"), row.get("WarmupBatches")
+            if (type(warmup) not in (int, float) or not math.isfinite(warmup) or warmup < 250
+                    or type(batches) is not int or batches <= 0):
+                errors.append(f"Insufficient performance warmup: {name}")
+            samples = row.get("Samples")
+            if not isinstance(samples, list) or len(samples) != 5:
+                errors.append(f"Missing five performance samples: {name}")
+                continue
+            means = []
+            for sample in samples:
+                if not isinstance(sample, dict):
+                    errors.append(f"Invalid performance sample: {name}")
+                    continue
+                elapsed, batches = sample.get("ElapsedMs"), sample.get("Batches")
+                if (type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 100
+                        or type(batches) is not int or batches <= 0):
+                    errors.append(f"Insufficient performance sample: {name}")
+                    continue
+                means.append(elapsed * 1000 / batches / row["Iterations"])
+            if len(means) == 5 and not math.isclose(row["PerOpUs"], sorted(means)[2], rel_tol=1e-9):
+                errors.append(f"Performance summary differs from sample median: {name}")
     if current.keys() != previous.keys():
         errors.append("Performance case inventory changed; baseline cannot cover this run")
     for name in current.keys() & previous.keys():
@@ -238,7 +265,7 @@ def validate_run(run, backend, carrier, root=ROOT):
     if carrier == "editor":
         checks["typecheck"] = lambda: validate_typecheck(read_json(run / f"{backend.lower()}-analyze.json"))
         checks["performance"] = lambda: validate_performance(read_json(run / "metadata/perf.json"),
-            read_json(root / f"Tools/baseline/perf-{backend.lower()}.json"), backend)
+            read_json(root / f"Tools/baseline/perf-{backend.lower()}.json"), backend, require_samples=True)
         checks["media"] = lambda: validate_media(run)
     for name, check in checks.items():
         try:

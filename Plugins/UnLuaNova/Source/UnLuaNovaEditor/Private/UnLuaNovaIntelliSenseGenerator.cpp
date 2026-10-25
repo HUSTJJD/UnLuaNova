@@ -125,8 +125,9 @@ bool FUnLuaNovaIntelliSenseGenerator::IsBlueprint(const FAssetData& AssetData)
     const FName AssetClass = AssetData.AssetClass;
     return AssetClass == UBlueprint::StaticClass()->GetFName() || AssetClass == UWidgetBlueprint::StaticClass()->GetFName();
 #else
-    const auto AssetClassPath = AssetData.AssetClassPath.ToString();
-    return AssetClassPath == UBlueprint::StaticClass()->GetName() || AssetClassPath == UWidgetBlueprint::StaticClass()->GetName();
+    const auto AssetClassPath = AssetData.AssetClassPath;
+    return AssetClassPath == UBlueprint::StaticClass()->GetClassPathName()
+        || AssetClassPath == UWidgetBlueprint::StaticClass()->GetClassPathName();
 #endif
 }
 

@@ -8,7 +8,7 @@
     另外 14 个 meta/3rd 是别的框架的 API 元数据）—— 第一次构建前要把它们拉下来，
     本脚本会代劳（git submodule update --init --recursive）。
 
-    构建走的是官方 make.bat：需要 Ninja 和一个 C++17 编译器（MSVC）。
+    构建执行官方 make.bat 的引导和 rebuild 步骤，并分别检查退出码：需要 Ninja 和 C++17 编译器（MSVC）。
     MSVC 的 cl.exe 只在 VS 的开发者环境里，所以**请在 Developer PowerShell / x64 Native
     Tools Command Prompt 里跑这个脚本**，否则 cl 找不到、报的是一行看不懂的 ninja 错误。
 
@@ -60,16 +60,9 @@ LuaLS 子模块是空的：$SubDir
 # 3rd/ 下全是空目录就说明没拉过。luamake 是构建工具本身，缺了 make.bat 直接失败。
 if (-not $NoSubmodules)
 {
-    $Need = Join-Path $SubDir "3rd/luamake"
-    $Empty = (-not (Test-Path -LiteralPath $Need)) -or
-             ((Get-ChildItem -LiteralPath $Need -Force -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0)
-
-    if ($Empty)
-    {
-        Write-Host "拉取 LuaLS 的嵌套子模块（21 个，含 meta/3rd 下与 UE 无关的框架元数据）…"
-        & git -C $SubDir submodule update --init --recursive --depth 1
-        if ($LASTEXITCODE -ne 0) { throw "git submodule update 失败（exit $LASTEXITCODE）。" }
-    }
+    Write-Host "初始化 LuaLS 的嵌套子模块…"
+    & git -C $SubDir submodule update --init --recursive
+    if ($LASTEXITCODE -ne 0) { throw "git submodule update 失败（exit $LASTEXITCODE）。" }
 }
 
 # --- 前置检查 ---------------------------------------------------------------
@@ -93,18 +86,28 @@ Prompt）里重跑本脚本 —— 普通 PowerShell 里没有 MSVC 的环境变
 }
 
 # --- 构建 -------------------------------------------------------------------
-Push-Location $SubDir
+$PreviousTmp = $env:TMP
+$PreviousTemp = $env:TEMP
+$BuildTemp = Join-Path $RepoRoot ('Saved/ReleaseTools/luals-temp/' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $BuildTemp -Force | Out-Null
+$env:TMP = $BuildTemp
+$env:TEMP = $BuildTemp
+Push-Location (Join-Path $SubDir '3rd/luamake')
 try
 {
-    & cmd /c "make.bat"
-    $Code = $LASTEXITCODE
+    # Upstream make.bat continues after a failed bootstrap. Check each step explicitly.
+    & cmd /c 'compile\build.bat'
+    if ($LASTEXITCODE -ne 0) { throw "luamake 引导构建或测试失败（exit $LASTEXITCODE）。" }
+    Set-Location $SubDir
+    & ./3rd/luamake/luamake.exe rebuild
+    if ($LASTEXITCODE -ne 0) { throw "LuaLS rebuild 失败（exit $LASTEXITCODE）。" }
 }
 finally
 {
     Pop-Location
+    $env:TMP = $PreviousTmp
+    $env:TEMP = $PreviousTemp
 }
-
-if ($Code -ne 0) { throw "make.bat 失败（exit $Code）。" }
 
 if (-not (Test-Path -LiteralPath $Exe))
 {

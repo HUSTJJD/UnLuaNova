@@ -69,6 +69,7 @@ namespace
 }
 
 BEGIN_DEFINE_SPEC(FStaticBindingSpec, "UnLuaNova.API.StaticBinding", EAutomationTestFlags::ProductFilter | ApplicationContextMask)
+    FStaticTypeBinding* PreviousBinding = nullptr;
 END_DEFINE_SPEC(FStaticBindingSpec)
 
 void FStaticBindingSpec::Define()
@@ -78,12 +79,20 @@ void FStaticBindingSpec::Define()
         // Class has to be filled before the first lookup: resolution uses it to find the
         // functions, and the table is a static that outlives every test.
         GSpecType.Class = UUnLuaNovaTestStub::StaticClass();
+        auto& Registry = FStaticBindingRegistry::Get();
+        Registry.Find(GSpecType.Class);
+        PreviousBinding = const_cast<FStaticTypeBinding*>(Registry.Find(FName(GSpecType.TypeName)));
+        if (PreviousBinding)
+            Registry.Unregister(PreviousBinding);
         FStaticBindingRegistry::Get().Register(&GSpecType);
     });
 
     AfterEach([this]
     {
         FStaticBindingRegistry::Get().Unregister(&GSpecType);
+        if (PreviousBinding)
+            FStaticBindingRegistry::Get().Register(PreviousBinding);
+        PreviousBinding = nullptr;
     });
 
     Describe(TEXT("注册表"), [this]()
@@ -109,9 +118,12 @@ void FStaticBindingSpec::Define()
         {
             auto& Registry = FStaticBindingRegistry::Get();
             Registry.Find(UUnLuaNovaTestStub::StaticClass()); // force resolution
+            const FStaticTypeBinding* ParentBinding = Registry.Find(UUnLuaNovaTestStub::StaticClass()->GetSuperClass());
 
             Registry.Unregister(&GSpecType);
-            TEST_TRUE(Registry.Find(UUnLuaNovaTestStub::StaticClass()) == nullptr);
+            TEST_TRUE(Registry.Find(FName(GSpecType.TypeName)) == nullptr);
+            // Generated tables can bind UObject; struct lookup still inherits that binding.
+            TEST_TRUE(Registry.Find(UUnLuaNovaTestStub::StaticClass()) == ParentBinding);
         });
     });
 

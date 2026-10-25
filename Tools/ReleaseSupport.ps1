@@ -58,8 +58,9 @@ function Stop-ReleasePeers([string] $Root, [datetime] $Since) {
         foreach ($Peer in $Topology.peers) {
             if ([int]$Peer.pid -le 0) { continue }
             $Child = Get-Process -Id ([int]$Peer.pid) -ErrorAction SilentlyContinue
-            if ($Child -and $Child.Path -and $Topology.exe -and
-                [IO.Path]::GetFullPath($Child.Path) -eq [IO.Path]::GetFullPath($Topology.exe) -and
+            $PeerExe = if ($Peer.exe) { $Peer.exe } else { $Topology.exe }
+            if ($Child -and $Child.Path -and $PeerExe -and
+                [IO.Path]::GetFullPath($Child.Path) -eq [IO.Path]::GetFullPath($PeerExe) -and
                 $Child.StartTime.ToUniversalTime() -ge $Since.ToUniversalTime()) {
                 Stop-Process -Id $Child.Id -Force -ErrorAction Stop
             }

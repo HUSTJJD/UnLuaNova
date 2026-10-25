@@ -59,7 +59,8 @@ return M
 
 ```ini
 [/Script/UnLuaNova.UnLuaNovaSettings]
-+ClassModuleBindings=(Class="/Game/Blueprints/BP_Pickup.BP_Pickup_C",Module="Gameplay.Pickup")
++ClassModuleBindings=(Class="/Game/Blueprints/BP_Pickup.BP_Pickup_C",ModuleName="Gameplay.Pickup")
++ClassModuleBindings=(ClassName="MyNativeActor",ModuleName="Gameplay.NativeActor")
 ```
 
 **绑定完成后的钩子已经存在**：`UUnLuaNovaManager::Bind` 会调用模块里的 `Initialize`

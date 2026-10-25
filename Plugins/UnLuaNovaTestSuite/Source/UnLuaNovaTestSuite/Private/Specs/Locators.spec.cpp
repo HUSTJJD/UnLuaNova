@@ -181,7 +181,7 @@ void FLocatorsSpec::Define()
             Settings.ClassModuleBindings.Empty();
             FUnLuaNovaClassModuleBinding Binding;
             // Bare class name, not a path: what a user actually types in the ini.
-            Binding.Class = FSoftClassPath(TEXT("UnLuaNovaTestStub"));
+            Binding.ClassName = TEXT("UnLuaNovaTestStub");
             Binding.ModuleName = TEXT("Spec.Module.FromShortName");
             Settings.ClassModuleBindings.Add(Binding);
 
@@ -213,14 +213,14 @@ void FLocatorsSpec::Define()
 
             Settings.ClassModuleBindings.Empty();
             FUnLuaNovaClassModuleBinding First;
-            First.Class = FSoftClassPath(TEXT("UnLuaNovaTestStub"));
+            First.ClassName = TEXT("UnLuaNovaTestStub");
             First.ModuleName = TEXT("Spec.Module.First");
             Settings.ClassModuleBindings.Add(First);
             const FString A = Locator->Locate(Stub);
 
             Settings.ClassModuleBindings.Empty();
             FUnLuaNovaClassModuleBinding Second;
-            Second.Class = FSoftClassPath(TEXT("UnLuaNovaTestStub"));
+            Second.ClassName = TEXT("UnLuaNovaTestStub");
             Second.ModuleName = TEXT("Spec.Module.Second");
             Settings.ClassModuleBindings.Add(Second);
             const FString B = Locator->Locate(Stub);

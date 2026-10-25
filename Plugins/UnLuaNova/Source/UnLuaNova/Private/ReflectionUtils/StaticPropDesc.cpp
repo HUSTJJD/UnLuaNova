@@ -101,6 +101,11 @@ namespace
 	}
 }
 
+bool FStaticPropDesc::Supports(EStaticPropKind Kind)
+{
+	return IsHandled(Kind);
+}
+
 FStaticPropDesc::FStaticPropDesc(FProperty* InProperty, const FStaticPropBinding* InBinding)
 	: FPropertyDesc(InProperty)
 	, Binding(InBinding)

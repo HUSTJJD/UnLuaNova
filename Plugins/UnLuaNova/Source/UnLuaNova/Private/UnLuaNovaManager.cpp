@@ -266,7 +266,8 @@ bool UUnLuaNovaManager::BindClass(UClass* Class, const FString& InModuleName, FS
     {
 #if WITH_EDITOR
         // 兼容蓝图Recompile导致FuncMap被清空的情况
-        if (Class->FindFunctionByName("__UClassBindSucceeded", EIncludeSuperFlag::Type::ExcludeSuper))
+        if (Class->HasAnyClassFlags(CLASS_Native)
+            || Class->FindFunctionByName("__UClassBindSucceeded", EIncludeSuperFlag::Type::ExcludeSuper))
             return true;
         
         ULuaFunction::RestoreOverrides(Class);
@@ -335,6 +336,18 @@ bool UUnLuaNovaManager::BindClass(UClass* Class, const FString& InModuleName, FS
         }
         lua_settop(L, Top);
     }
+
+#if WITH_EDITOR
+    // Lua-declared RPCs are absent from UEFunctions, but must survive subsequent instance binds.
+    for (const FName& Name : BindInfo.LuaFunctions)
+    {
+        if (UFunction* Function = Class->FindFunctionByName(Name, EIncludeSuperFlag::ExcludeSuper))
+        {
+            Class->AddFunctionToFunctionMap(Function, "__UClassBindSucceeded");
+            break;
+        }
+    }
+#endif
 
     if (BindInfo.LuaFunctions.Num() == 0 || BindInfo.UEFunctions.Num() == 0)
         return true;

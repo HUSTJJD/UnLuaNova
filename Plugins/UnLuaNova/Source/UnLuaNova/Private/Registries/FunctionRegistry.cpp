@@ -82,6 +82,8 @@ namespace UnLuaNova
 
         if (FuncRef == LUA_NOREF)
         {
+            if (Function->IsLuaDeclaredRpc())
+                UE_LOG(LogUnLuaNova, Warning, TEXT("Declared RPC handler missing: %s"), UTF8_TO_TCHAR(FuncDesc->GetLuaFunctionName()));
             // 可能因为Lua模块加载失败导致找不到对应的function，转发给原函数
             const auto Overridden = Function->GetOverridden();
             if (Overridden && Stack.Code)

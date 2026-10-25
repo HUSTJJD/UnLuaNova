@@ -1,0 +1,49 @@
+{
+	"Backend": "Luau",
+	"EngineVersion": "5.8.3-0+UE5",
+	"MeasuredUtc": "2026-10-24T15:00:26.011Z",
+	"Machine": "davidsjian-PC2",
+	"Tolerance": 1.25,
+	"Cases": [
+		{
+			"Case": "Native",
+			"Iterations": 20000,
+			"PerOpUs": 0.0016899779438972473
+		},
+		{
+			"Case": "Reflection",
+			"Iterations": 20000,
+			"PerOpUs": 0.45900512486696243
+		},
+		{
+			"Case": "Lua",
+			"Iterations": 20000,
+			"PerOpUs": 1.5429100021719933
+		},
+		{
+			"Case": "VM.Arithmetic",
+			"Iterations": 200000,
+			"PerOpUs": 0.00593600794672966
+		},
+		{
+			"Case": "VM.Call",
+			"Iterations": 200000,
+			"PerOpUs": 0.020270496606826782
+		},
+		{
+			"Case": "VM.TableGrow",
+			"Iterations": 200000,
+			"PerOpUs": 0.015414003282785416
+		},
+		{
+			"Case": "VM.TableRead",
+			"Iterations": 200000,
+			"PerOpUs": 0.007631499320268631
+		},
+		{
+			"Case": "Lua.Container.PointsAreCoplanar",
+			"Iterations": 20000,
+			"PerOpUs": 10.868035070598125
+		}
+	]
+}

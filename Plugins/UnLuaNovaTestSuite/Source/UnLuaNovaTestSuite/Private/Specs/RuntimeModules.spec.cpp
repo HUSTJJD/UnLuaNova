@@ -256,6 +256,7 @@ void FRuntimeModulesSpec::Define()
 
         It(TEXT("一个监听者报错不影响其他监听者"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
+            AddExpectedError(TEXT("boom"), EAutomationExpectedErrorFlags::Contains, 1);
             UnLuaNova::RunChunk(L, R"(
                 local M = require('UnLuaNova.Event')
                 M.Clear()

@@ -15,6 +15,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "TestCommands.h"
+#include "UnLuaNovaBase.h"
 
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
@@ -24,8 +25,10 @@
 #include "IImageWrapperModule.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Misc/PackageName.h"
 #include "Modules/ModuleManager.h"
 #include "UnrealClient.h"
+#include "Kismet/GameplayStatics.h"
 
 #if WITH_EDITOR
 #include "FileHelpers.h"
@@ -59,7 +62,7 @@ namespace UnLuaNovaTestSuite
     }
 
     FOpenMapLatentCommand::FOpenMapLatentCommand(FString MapName, bool bForceReload, int32 InNumClients, EUnLuaNovaPlayNetMode InPlayNetMode)
-        : MapName(MapName), bForceReload(bForceReload)
+        : MapName(FPackageName::ObjectPathToPackageName(MapName)), bForceReload(bForceReload)
         , NumClients(InNumClients), PlayNetMode(InPlayNetMode)
     {
         NumClients = FMath::Max(NumClients, 1);
@@ -101,22 +104,31 @@ namespace UnLuaNovaTestSuite
     bool FOpenMapLatentCommand::Update()
     {
 #if !WITH_EDITOR
-        // The -game carrier: there is no PIE and no editor to ask for a map. The engine is
-        // already running the map named on the command line, so "opening" it is not a thing
-        // this process can do - what it can do is wait until the world exists.
-        //
-        // This used to be a bare `return true`, which let every test that needs a world
-        // race ahead of it: SpawnActor got a null world and the failure read like the
-        // feature under test was broken. Waiting here is what makes the same test source
-        // usable on both carriers.
         if (GEngine)
         {
             for (const FWorldContext& Context : GEngine->GetWorldContexts())
             {
-                // PIE is listed too: a packaged or -game build still reports EWorldType::Game,
-                // and accepting both keeps this from depending on which one wins.
-                if ((Context.WorldType == EWorldType::Game || Context.WorldType == EWorldType::PIE)
-                    && Context.World())
+                UWorld* World = Context.World();
+                if (Context.WorldType != EWorldType::Game || !World)
+                    continue;
+
+                const bool bMatchesMap = World->GetOutermost()->GetName() == MapName;
+                if (!bTravelRequested)
+                {
+                    if (!bForceReload && bMatchesMap && World->HasBegunPlay() && UnLuaNova::GetState())
+                        return true;
+
+                    bTravelRequested = true;
+                    PreviousWorld = World;
+                    WaitDeadline = FPlatformTime::Seconds() + WaitTimeoutSeconds;
+                    UnLuaNova::Startup();
+                    UGameplayStatics::SetGamePaused(World, false);
+                    UGameplayStatics::OpenLevel(World, FName(*MapName));
+                    return false;
+                }
+
+                // A same-map reload must replace the old world before assertions run.
+                if (bMatchesMap && World != PreviousWorld.Get() && World->HasBegunPlay())
                 {
                     return true;
                 }
@@ -125,8 +137,8 @@ namespace UnLuaNovaTestSuite
 
         if (FPlatformTime::Seconds() > WaitDeadline)
         {
-            UE_LOG(LogTemp, Error, TEXT("no game world came up after %.0fs - tests that need one will fail against a null world. Pass a map on the command line (and check -game / -server)."),
-                WaitTimeoutSeconds);
+            UE_LOG(LogTemp, Error, TEXT("Game map '%s' did not begin play after %.0fs."),
+                *MapName, WaitTimeoutSeconds);
             return true;
         }
 

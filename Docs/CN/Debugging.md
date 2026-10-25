@@ -94,7 +94,7 @@ lua.dbg detach                 -- 卸载调试 Hook，恢复零开销
   要换就用 `lua.dbg env <n>`；DAP 侧是 launch.json 里的 `arguments.env`
 * 它本身不带界面，能力是暴露给外部工具驱动的 —— IDE 那层是 [`lua.dap`](#使用-dap-服务在-ide-里调试luadap)
 
-详见[Luau 后端](Luau.md#原生断点调试)。
+详见[Luau 后端](Luau.md#支持范围)。
 
 ## 使用 LuaPanda / LuaHelper 调试
 

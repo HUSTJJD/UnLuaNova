@@ -80,6 +80,8 @@ public:
 
     UFunction* GetOverridden() const;
 
+    bool IsLuaDeclaredRpc() const { return DeclaredRpcTemplate != nullptr; }
+
     virtual void Bind() override;
 
     void SetActive(const bool bActive);
@@ -88,6 +90,9 @@ public:
 
 private:
     TWeakObjectPtr<UFunction> From;
+
+    UPROPERTY()
+    TObjectPtr<UFunction> DeclaredRpcTemplate;
 
 // #if UE_VERSION_OLDER_THAN(5, 1, 0)
 //     UPROPERTY()

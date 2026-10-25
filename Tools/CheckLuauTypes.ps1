@@ -56,6 +56,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'TypeCheckSupport.ps1')
 
 # 仓库根目录 = Tools 的父目录，这样换个克隆/换台机器都能直接跑
 $RepoRoot = Split-Path -Parent $PSScriptRoot
@@ -363,6 +364,7 @@ if ($Lines.Count -gt 0)
 }
 
 Write-Host "类型检查：错误 $($Errors.Count) 条，警告 $($Warnings.Count) 条。"
+$CheckExit = Get-TypeCheckExitCode $ExitCode $Errors.Count $Warnings.Count
 
 Write-TypeCheckSummary @{
     skipped  = $false
@@ -373,10 +375,9 @@ Write-TypeCheckSummary @{
     files    = $Files.Count
     errors   = @($Errors)
     warnings = @($Warnings)
-    exit     = $ExitCode
+    exit     = $CheckExit
+    analyzer_exit = $ExitCode
 }
 
 # luau-lsp 有诊断就返回非 0，但"有警告也要算失败"太吵，所以以错误计数为准
-if ($Errors.Count -gt 0) { exit 1 }
-if ($ExitCode -ne 0) { exit $ExitCode }
-exit 0
+exit $CheckExit

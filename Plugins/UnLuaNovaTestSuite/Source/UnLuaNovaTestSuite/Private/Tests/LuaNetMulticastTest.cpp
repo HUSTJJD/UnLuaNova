@@ -43,6 +43,9 @@
 #include "EngineUtils.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/CommandLine.h"
+#include "UObject/CoreNet.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
 
 namespace UnLuaNovaTestSuite
 {
@@ -53,6 +56,7 @@ namespace UnLuaNovaTestSuite
     /** What the Lua module appends to CallLog: "<Name>:<Value>|" (Tests/Net/NetActor.lua). */
     static const TCHAR* MulticastToken = TEXT("ToAll:99");
     constexpr int32 MulticastValue = 99;
+    static TSharedRef<FJsonObject> BuildMulticastReport();
 
     /** How many clients the server peer waits for; passed on the peer's command line. */
     static int32 ExpectedClientsFromCommandLine()
@@ -112,7 +116,13 @@ namespace UnLuaNovaTestSuite
                 }
             }
 
-            if (Clients >= Expected)
+            bool bClientsReady = Clients >= Expected;
+            for (int32 Index = 1; Index <= Expected; ++Index)
+            {
+                TSharedPtr<FJsonObject> Ready;
+                bClientsReady &= ReadNetReport(GetNetSessionName(), FString::Printf(TEXT("Client%d-ready"), Index), Ready);
+            }
+            if (bClientsReady)
             {
                 Test.AddInfo(FString::Printf(TEXT("%d client(s) connected after %.1fs"), Clients, Now - StartedAt));
                 return true;
@@ -157,6 +167,8 @@ namespace UnLuaNovaTestSuite
 
             InvokeRpc(Actor, MulticastCall, MulticastValue);
             Test.AddInfo(FString::Printf(TEXT("called %s(%d) on the server"), MulticastCall, MulticastValue));
+            // Snapshot topology before successful clients can finish and disconnect.
+            Test.TestTrue(TEXT("Server multicast report written"), WriteNetReport(GetNetRole(), BuildMulticastReport()));
             return true;
         }
 
@@ -183,6 +195,12 @@ namespace UnLuaNovaTestSuite
             }
 
             const AUnLuaNovaTestNetActor* Actor = FindNetActor(GetRunWorld());
+            if (Actor && !bReadyWritten)
+            {
+                bReadyWritten = WriteNetReport(GetNetRole() + TEXT("-ready"), MakeShared<FJsonObject>());
+                if (!bReadyWritten)
+                    Test.AddError(TEXT("Could not write multicast client readiness"));
+            }
             if (Actor && Actor->CallLog.Contains(MulticastToken))
             {
                 Test.AddInfo(FString::Printf(TEXT("%s arrived after %.1fs (CallLog=%s)"),
@@ -205,8 +223,39 @@ namespace UnLuaNovaTestSuite
 
     private:
         FAutomationTestBase& Test;
+        bool bReadyWritten = false;
         double StartedAt = 0.0;
         double TimeoutSeconds = 90.0;
+    };
+
+    class FMulticastWaitForReportsCommand : public IAutomationLatentCommand
+    {
+    public:
+        explicit FMulticastWaitForReportsCommand(FAutomationTestBase& InTest) : Test(InTest) {}
+
+        virtual bool Update() override
+        {
+            if (StartedAt == 0.0)
+                StartedAt = FPlatformTime::Seconds();
+            bool bComplete = true;
+            for (int32 Index = 1; Index <= ExpectedClientsFromCommandLine(); ++Index)
+            {
+                TSharedPtr<FJsonObject> Report;
+                bComplete &= ReadNetReport(GetNetSessionName(), FString::Printf(TEXT("Client%d"), Index), Report);
+            }
+            if (bComplete)
+                return true;
+            if (FPlatformTime::Seconds() - StartedAt > 120.0)
+            {
+                Test.AddError(TEXT("Clients did not finish multicast reports before server shutdown"));
+                return true;
+            }
+            return false;
+        }
+
+    private:
+        FAutomationTestBase& Test;
+        double StartedAt = 0.0;
     };
 
     /** What a peer writes: the declaration, what the world is, and what arrived here. */
@@ -216,6 +265,19 @@ namespace UnLuaNovaTestSuite
         AppendWorldFacts(GetRunWorld(), *Report);
 
         const AUnLuaNovaTestNetActor* Actor = FindNetActor(GetRunWorld());
+        if (Actor && GetRunWorld()->GetNetDriver())
+        {
+            const FClassNetCache* Cache = GetRunWorld()->GetNetDriver()->NetCache->GetClassNetCache(Actor->GetClass());
+            Report->SetNumberField(TEXT("NetMaxIndex"), Cache->GetMaxIndex());
+            TArray<TSharedPtr<FJsonValue>> Fields;
+            for (int32 Index = 0; Index < Cache->GetMaxIndex(); ++Index)
+            {
+                const FFieldNetCache* Field = Cache->GetFromIndex(Index);
+                if (Field)
+                    Fields.Add(MakeShared<FJsonValueString>(FString::Printf(TEXT("%d:%s"), Index, *Field->Field.GetName())));
+            }
+            Report->SetArrayField(TEXT("NetFields"), Fields);
+        }
         Report->SetBoolField(TEXT("ActorFound"), Actor != nullptr);
         Report->SetStringField(TEXT("CallLog"), Actor ? Actor->CallLog : FString());
         Report->SetBoolField(TEXT("MulticastSeen"), Actor && Actor->CallLog.Contains(MulticastToken));
@@ -255,6 +317,13 @@ namespace UnLuaNovaTestSuite
             {
                 Test.TestEqual(FString::Printf(TEXT("RPC ids agree: %s vs %s"), *Labels[0], *Label),
                     DescribeRpcs(Reports[Label]), Reference);
+                Test.TestEqual(FString::Printf(TEXT("Network field cache size agrees: %s"), *Label),
+                    Reports[Label]->GetNumberField(TEXT("NetMaxIndex")), Reports[Labels[0]]->GetNumberField(TEXT("NetMaxIndex")));
+                const auto& Fields = Reports[Label]->GetArrayField(TEXT("NetFields"));
+                const auto& ReferenceFields = Reports[Labels[0]]->GetArrayField(TEXT("NetFields"));
+                Test.TestEqual(TEXT("Network field count agrees"), Fields.Num(), ReferenceFields.Num());
+                for (int32 Index = 0; Index < FMath::Min(Fields.Num(), ReferenceFields.Num()); ++Index)
+                    Test.TestEqual(TEXT("Network field index agrees"), Fields[Index]->AsString(), ReferenceFields[Index]->AsString());
             }
 
             // 2. the topology is what was asked for. A client that came up standalone proves
@@ -327,19 +396,18 @@ BEGIN_TESTSUITE_ANY_CONTEXT(FLuaNetMulticastReportTest,
             // is connected is not sent to them, and the engine does not queue it either.
             ADD_LATENT_AUTOMATION_COMMAND(FMulticastWaitForClientsCommand(*this, ExpectedClientsFromCommandLine()));
             ADD_LATENT_AUTOMATION_COMMAND(FMulticastInvokeCommand(*this));
-            // Long enough for the RPC to cross and for Lua to run on each client. Wall-clock
-            // seconds, not ticks: a client's Lua runs on its own frame clock.
-            ADD_LATENT_AUTOMATION_COMMAND(FUnLuaNovaTestCommand_WaitSeconds(5.0f));
         }
         else
         {
             ADD_LATENT_AUTOMATION_COMMAND(FMulticastWaitForCallCommand(*this));
+            ADD_LATENT_AUTOMATION_COMMAND(FNetWriteReportCommand(*this, []() -> TSharedRef<FJsonObject>
+            {
+                return BuildMulticastReport();
+            }));
         }
-
-        ADD_LATENT_AUTOMATION_COMMAND(FNetWriteReportCommand(*this, []() -> TSharedRef<FJsonObject>
-        {
-            return BuildMulticastReport();
-        }));
+        // Keep the world alive until clients have recorded their received RPC.
+        if (Role == TEXT("Server"))
+            ADD_LATENT_AUTOMATION_COMMAND(FMulticastWaitForReportsCommand(*this));
         return true;
     }
 END_TESTSUITE(FLuaNetMulticastReportTest)
@@ -396,3 +464,5 @@ BEGIN_TESTSUITE(FLuaNetMulticastTest,
         return true;
     }
 END_TESTSUITE(FLuaNetMulticastTest)
+
+#endif // WITH_DEV_AUTOMATION_TESTS

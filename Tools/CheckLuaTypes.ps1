@@ -75,6 +75,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'TypeCheckSupport.ps1')
 
 # 仓库根目录 = Tools 的父目录，这样换个克隆/换台机器都能直接跑
 $RepoRoot = Split-Path -Parent $PSScriptRoot
@@ -450,8 +451,8 @@ if (Test-Path -LiteralPath $CheckJson)
     }
     catch
     {
-        # check.json 读不出来不能让整轮测试挂掉，但也得让人知道检查其实没结果
-        $Lines += "check.json 解析失败：$($_.Exception.Message)"
+        $NoResultReason = "check.json 解析失败：$($_.Exception.Message)"
+        $Lines += $NoResultReason
     }
 }
 else
@@ -501,6 +502,7 @@ if ($Lines.Count -gt 0)
 }
 
 Write-Host "静态检查：错误 $($Errors.Count) 条，警告 $($Warnings.Count) 条。"
+$CheckExit = Get-TypeCheckExitCode $ExitCode $Errors.Count $Warnings.Count (-not $NoResultReason)
 
 Write-TypeCheckSummary @{
     skipped  = [bool] $NoResultReason
@@ -512,7 +514,8 @@ Write-TypeCheckSummary @{
     files    = $Files.Count
     errors   = @($Errors)
     warnings = @($Warnings)
-    exit     = $ExitCode
+    exit     = $CheckExit
+    analyzer_exit = $ExitCode
 }
 
 # 没结果不能算通过：报告里必须能区分"检查通过"和"检查没跑"。
@@ -523,6 +526,4 @@ if ($NoResultReason)
     exit 0
 }
 
-if ($Errors.Count -gt 0) { exit 1 }
-if ($ExitCode -ne 0) { exit $ExitCode }
-exit 0
+exit $CheckExit

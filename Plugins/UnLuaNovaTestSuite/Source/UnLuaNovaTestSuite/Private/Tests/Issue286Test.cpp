@@ -26,6 +26,8 @@ BEGIN_TESTSUITE(FIssue286Test, TEXT("UnLuaNova.Regression.Issue286 蓝图 TMap F
         ADD_LATENT_AUTOMATION_COMMAND(FOpenMapLatentCommand(MapName))
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this] {
             const auto L = UnLuaNova::GetState();
+            if (!TestNotNull(TEXT("Lua state after map BeginPlay"), L))
+                return true;
             lua_getglobal(L, "Result");
             const auto Error = lua_tostring(L, -1);
             TestEqual(TEXT("Result"), FString(Error), "passed");

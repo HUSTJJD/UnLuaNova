@@ -16,6 +16,7 @@
 
 #include "Engine/EngineBaseTypes.h"
 #include "LuaFunction.h"
+#include "LuaOverridesClass.h"
 #include "UnLuaNovaBase.h"
 #include "UObject/UnrealType.h"
 #include <initializer_list>
@@ -292,6 +293,15 @@ namespace UnLuaNova
             int32 Max = 0;
             for (TFieldIterator<UFunction> It(Class, EFieldIteratorFlags::IncludeSuper); It; ++It)
                 Max = FMath::Max(Max, int32(It->RPCId));
+            // Runtime overrides live in the function map, outside the linked field list.
+            for (TFieldIterator<ULuaOverridesClass> Overrides(Class, EFieldIteratorFlags::IncludeSuper); Overrides; ++Overrides)
+            {
+                for (TFieldIterator<ULuaFunction> It(*Overrides, EFieldIteratorFlags::ExcludeSuper); It; ++It)
+                {
+                    if (Class->FindFunctionByName(It->GetFName()) == *It)
+                        Max = FMath::Max(Max, int32(It->RPCId));
+                }
+            }
 
             Function->RPCId = int16(Max + 1);
         }

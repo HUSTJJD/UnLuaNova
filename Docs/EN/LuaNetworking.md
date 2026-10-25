@@ -26,6 +26,17 @@ RPC names are sorted within each kind. Inheritance, existing functions, net cach
 
 Property declarations require dense arrays, unique non-None FNames, known types and omitted/None conditions. Empty first declarations are valid. Cached class schemas are immutable; identical redeclarations succeed, invalid or changed declarations preserve the existing schema without partial registration. Schema changes require a full network/environment restart. Ownership of global declaration-cache cleanup across multiple Envs still needs work.
 
+## Bind Before Connecting
+
+Dynamic RPCs must be registered before either NetDriver first caches the class. Binding when the client's first replicated actor is created can be too late: class/archetype checksum resolution may already have cached a field table without the RPCs. Add loaded network classes to the project's `Config/DefaultUnLuaNova.ini`:
+
+```ini
+[/Script/UnLuaNova.UnLuaNovaSettings]
++PreBindClasses=/Script/MyGame.MyNetworkActor
+```
+
+Configured classes bind when Lua activates and are checked again after engine initialization, including native classes registered by Default-phase modules. This resolves loaded classes only; Blueprint network classes must be loaded and bound before connecting. Both peers need identical declarations, and RPC layouts must remain unchanged during a network session. The demo config includes `UnLuaNovaTestNetActor`.
+
 ## Limits
 
 - Component layouts now use fixed None conditions, independent of instance owners. OwnerOnly and other conditional declarations are rejected. Old assets with a non-None component Condition disable replication at BeginPlay. Full conditional layouts remain P0 work.
@@ -34,6 +45,6 @@ Property declarations require dense arrays, unique non-None FNames, known types 
 - Typed UPROPERTY and push-model macros do not prove Iris compatibility, element-level deltas, compression or runtime fallback.
 - Reload, inheritance, duplicate declarations, peer schema mismatch and authorization need coverage.
 
-API.Net tests declaration behavior; ClientServer covers PIE; DedicatedServer compares separate process declarations without proving connected transport; Slow.Net.Multicast describes a server plus two connected clients. None was executed during this audit. Required additions include owner/nonowner, multiple actors, numeric edges, late join/reconnect, dormancy/relevancy, packet loss and packaged legacy/Iris/push-model combinations.
+API.Net tests declaration behavior; ClientServer covers PIE; DedicatedServer compares separate process declarations without proving connected transport; Slow.Net.Multicast runs a server plus two connected clients. These passed on both backends in the full Editor diagnostic run `FullFix-Complete-11`. Packaged execution and final release acceptance are tracked in the [regression validation record](Regression_20261024.md). Required additions include owner/nonowner, multiple actors, numeric edges, late join/reconnect, dormancy/relevancy, packet loss and packaged legacy/Iris/push-model combinations.
 
 [Testing](Testing.md) | [Object binding](LuaDrivenObjects.md) | [Capability matrix](../feature-matrix.md)

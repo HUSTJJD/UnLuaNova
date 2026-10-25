@@ -23,6 +23,17 @@ return M
 
 声明构造带网络 flags 的 UFunction，交给现有覆写链路。RPC 名称已按种类内排序注册，减少 Lua table 遍历顺序差异；这不证明继承、已有函数、NetCache、热重载及 cooked 环境中的 ID 一致。
 
+### 连接前预绑定
+
+动态 RPC 必须在两端的 NetDriver 首次缓存类之前注册。等到客户端收到 Actor、再由实例创建触发绑定会太晚：引擎可能已在解析类/模板的网络校验信息时缓存了不含 RPC 的字段表。将已加载的网络类加入项目 `Config/DefaultUnLuaNova.ini`：
+
+```ini
+[/Script/UnLuaNova.UnLuaNovaSettings]
++PreBindClasses=/Script/MyGame.MyNetworkActor
+```
+
+预绑定在 Lua 启用时执行，并在引擎初始化完成后再次检查，覆盖 Default 阶段模块注册的原生类。配置只解析已加载类，不主动加载蓝图资产；蓝图网络类必须在连接前加载并完成绑定。服务端与客户端应使用相同声明，网络会话期间不能更改 RPC 布局。示例工程为 `UnLuaNovaTestNetActor` 配置了此项。
+
 ## 复制字段
 
 ```lua
@@ -65,10 +76,12 @@ end
 
 | 用例 | 检查目标 | 证据限制 |
 |---|---|---|
-| UnLuaNova.API.Net | 声明拒绝/幂等、flags、还原、排序、schema 指纹、实际桶编组的 int64 边界 | 不验证实际传输；新增用例未运行 |
+| UnLuaNova.API.Net | 声明拒绝/幂等、flags、还原、排序、schema 指纹、实际桶编组的 int64 边界 | 双后端 Editor 已通过；不验证实际传输 |
 | UnLuaNova.API.Net.ClientServer | PIE 中 RPC / 字段传输 | 单进程共享类状态 |
 | UnLuaNova.API.Net.DedicatedServer | 独立进程声明结果/ID 对照 | 不是相互连接的传输测试 |
-| UnLuaNova.Slow.Net.Multicast | server + 两个连接的 client | 本轮未执行；Fast 层排除 |
+| UnLuaNova.Slow.Net.Multicast | server + 两个连接的 client | 双后端 Editor 完整诊断轮已通过；Fast 层排除 |
+
+以上执行状态对应 `FullFix-Complete-11`，打包环境与完整发布矩阵的最终结论见 [回归验证记录](Regression_20261024.md)。
 
 需要补充 owner/非 owner、多 actor 混合条件、int64 边界、晚加入、断线重连、dormancy/relevancy、丢包及 legacy/Iris/push model 的打包矩阵。存在测试源码不等于测试已通过。
 

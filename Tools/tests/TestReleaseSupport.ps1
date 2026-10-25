@@ -3,10 +3,18 @@ $Tools = Split-Path -Parent $PSScriptRoot
 $RepoRoot = Split-Path -Parent $Tools
 $PowerShellExe = (Get-Process -Id $PID).Path
 . (Join-Path $Tools 'ReleaseSupport.ps1')
+. (Join-Path $Tools 'TypeCheckSupport.ps1')
 $Temporary = Join-Path ([IO.Path]::GetTempPath()) ('UnLuaNova-release-test-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $Temporary | Out-Null
 function Assert([bool] $Condition, [string] $Message) { if (-not $Condition) { throw $Message } }
 try {
+    Assert ((Get-TypeCheckExitCode 0 0 0) -eq 0) 'Clean type check failed'
+    Assert ((Get-TypeCheckExitCode 1 0 7) -eq 0) 'Warnings contradicted the nonblocking diagnostic policy'
+    Assert ((Get-TypeCheckExitCode 1 1 7) -ne 0) 'Type error was accepted'
+    Assert ((Get-TypeCheckExitCode 0 1 0) -ne 0) 'Analyzer zero exit hid a type error'
+    Assert ((Get-TypeCheckExitCode 1 0 0) -ne 0) 'Unexplained analyzer failure was accepted'
+    Assert ((Get-TypeCheckExitCode 7 0 7) -eq 7) 'Abnormal analyzer exit was hidden by warnings'
+    Assert ((Get-TypeCheckExitCode 0 0 0 $false) -ne 0) 'Missing analysis result was accepted'
     foreach ($File in @(Get-ChildItem -LiteralPath $Tools -Filter '*.ps1' -File) + @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1' -File)) {
         $Tokens = $null
         $ParseErrors = $null
@@ -72,6 +80,28 @@ try {
     } catch { $Failed = $_.Exception.Message -like 'Timeout*' }
     Assert $Failed 'Process timeout did not fail the gate'
 
+    # Packaged Server and Game peers have different executable paths.
+    $PeerRoot = Join-Path $Temporary 'peers'
+    New-Item -ItemType Directory -Path $PeerRoot | Out-Null
+    $PeerStarted = [datetime]::UtcNow.AddSeconds(-1)
+    $PythonRuntime = (& python -c 'import sys; print(sys.executable)').Trim()
+    $PeerProcess = Start-Process -FilePath $PythonRuntime -ArgumentList @('-c', '"import time; time.sleep(30)"') -WindowStyle Hidden -PassThru
+    try {
+        $PeerPath = (Get-Process -Id $PeerProcess.Id).Path
+        @{ exe = $PowerShellExe; peers = @(@{ pid = $PeerProcess.Id; exe = $PowerShellExe }) } |
+            ConvertTo-Json -Depth 4 | Set-Content (Join-Path $PeerRoot 'topology.json')
+        Stop-ReleasePeers $PeerRoot $PeerStarted
+        $PeerProcess.Refresh()
+        Assert (-not $PeerProcess.HasExited) 'Cleanup terminated a mismatched executable'
+        @{ exe = $PowerShellExe; peers = @(@{ pid = $PeerProcess.Id; exe = $PeerPath }) } |
+            ConvertTo-Json -Depth 4 | Set-Content (Join-Path $PeerRoot 'topology.json')
+        Stop-ReleasePeers $PeerRoot $PeerStarted
+        Assert ($PeerProcess.WaitForExit(5000)) 'Cleanup ignored the per-peer executable'
+    } finally {
+        if (-not $PeerProcess.HasExited) { $PeerProcess.Kill() }
+        $PeerProcess.Dispose()
+    }
+
     $Before = Get-FileHash (Join-Path $RepoRoot 'Config/DefaultUnLuaNova.ini')
     Invoke-ReleaseProcess -File $PowerShellExe -Arguments @('-NoProfile', '-NonInteractive', '-File',
         (Join-Path $Tools 'RunTests.ps1'), '-DryRun') -Log (Join-Path $Temporary 'dry-run.log') -WorkingDirectory $RepoRoot
@@ -92,7 +122,7 @@ try {
     Assert $Failed 'Missing engine was accepted'
     $Summary = Get-Content (Join-Path $FailedOutput 'release-summary.json') -Raw | ConvertFrom-Json
     Assert ($Summary.complete -and -not $Summary.passed) 'Failed preflight lost the aggregate verdict'
-    Assert (@($Summary.stages | Where-Object status -eq 'blocked').Count -eq 31) 'Unexecuted stages disappeared from summary'
+    Assert (@($Summary.stages | Where-Object status -eq 'blocked').Count -eq 33) 'Unexecuted stages disappeared from summary'
     Assert ((Get-FileHash $Before.Path).Hash -eq $Before.Hash) 'Failed preflight modified project config'
     Write-Host 'Release support tests passed.'
 } finally {

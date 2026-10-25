@@ -14,7 +14,7 @@ Release / Win64 / Lua + Luau (no operations performed):
   2. Initialize pinned submodules; prepare isolated Python tools and MSVC environment.
   3. Repository audit, Python and PowerShell tooling regressions; build both analyzers.
   4. Per backend: enable features; archive old bindings; build Editor/generator; regenerate; rebuild.
-  5. Build/cook/archive Development game; build Development Server target.
+  5. Build/cook/archive Development game and Dedicated Server targets.
   6. Full Editor automation including Slow, connected cooked peers, screenshots and benchmark.
   7. Fresh declaration export and mandatory backend type checking.
   8. Full applicable cooked Development automation with runtime manifest verification.
@@ -36,7 +36,7 @@ $Stages = [Collections.Generic.List[object]]::new()
 $Statuses = @{}
 $RequiredStages = @('tool-environment', 'repository-audit', 'tooling-tests', 'analyzer-LuaLS', 'analyzer-LuauLsp')
 foreach ($BackendName in @('Lua', 'Luau')) {
-    foreach ($Step in @('config', 'editor-build', 'static-bindings', 'package-development', 'server-build',
+    foreach ($Step in @('config', 'editor-build', 'static-bindings', 'package-development', 'server-build', 'package-server',
         'editor-tests', 'declarations', 'typecheck', 'editor-evidence', 'game-tests', 'game-evidence', 'reports', 'package-shipping')) {
         $RequiredStages += "$BackendName-$Step"
     }
@@ -47,7 +47,7 @@ $ConfigCaptured = $false
 $BindingBackups = [Collections.Generic.List[object]]::new()
 $SavedEnvironment = @{}
 $EnvironmentNames = @('PATH', 'LUA_LANGUAGE_SERVER', 'LUAU_LSP', 'UNLUANOVA_RELEASE_TOKEN',
-    'UNLUANOVA_TEST_MANIFEST', 'UNLUANOVA_TEST_PEER_EXE', 'UNLUANOVA_TEST_NET_ROOT', 'UNLUANOVA_RECORD_FRAMES')
+    'UNLUANOVA_TEST_MANIFEST', 'UNLUANOVA_TEST_PEER_EXE', 'UNLUANOVA_TEST_SERVER_EXE', 'UNLUANOVA_TEST_NET_ROOT', 'UNLUANOVA_RECORD_FRAMES')
 foreach ($Name in $EnvironmentNames) { $SavedEnvironment[$Name] = [Environment]::GetEnvironmentVariable($Name, 'Process') }
 $Provenance = [ordered]@{ platform = 'Win64'; backends = @('Lua', 'Luau'); machine = $env:COMPUTERNAME }
 
@@ -72,7 +72,7 @@ function Write-ReleaseSummary {
     $Passed = $Complete -and $Stages.Count -gt 0 -and @($Stages | Where-Object { $_.status -ne 'passed' }).Count -eq 0
     $Result = [ordered]@{ schema_version = 1; complete = $Complete; passed = $Passed;
         started_utc = $Started.ToString('o'); updated_utc = [DateTime]::UtcNow.ToString('o');
-        scope = 'Win64 Editor and cooked Development automation; Development Server build; Shipping packaging';
+        scope = 'Win64 Editor and cooked Development automation; packaged Development Dedicated Server peers; Shipping packaging';
         provenance = $Provenance; stages = @($Stages.ToArray()) }
     $Result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $OutputDir 'release-summary.json') -Encoding UTF8
     $Lines = @('# Release Validation', '', "Complete: $Complete. Passed: $Passed.", '',
@@ -81,6 +81,28 @@ function Write-ReleaseSummary {
         $Detail = $Stage.detail.Replace('|', '/').Replace("`r", ' ').Replace("`n", ' ')
         $Lines += "| $($Stage.name) | $($Stage.status) | $Detail |"
     }
+    $Lines += @('', '## Automation Reports', '',
+        '| Backend | Carrier | Total | Passed | Failed | Skipped | Screenshots | Clips | Report |',
+        '| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
+    foreach ($BackendName in @('Lua', 'Luau')) {
+        $Tag = $BackendName.ToLowerInvariant()
+        foreach ($CarrierName in @('editor', 'game')) {
+            $Relative = if ($CarrierName -eq 'editor') { "$Tag/editor/$Tag" } else { "$Tag/game" }
+            $SummaryPath = Join-Path $OutputDir "$Relative/summary.json"
+            if (Test-Path -LiteralPath $SummaryPath) {
+                try {
+                    $RunSummary = Get-Content -LiteralPath $SummaryPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                    $Lines += "| $BackendName | $CarrierName | $($RunSummary.total) | $($RunSummary.passed) | $($RunSummary.failed) | $($RunSummary.skipped) | $($RunSummary.screenshots) | $($RunSummary.videos) | [Details]($Relative/report.md) |"
+                } catch {
+                    $Lines += "| $BackendName | $CarrierName | - | - | - | - | - | - | Invalid summary |"
+                }
+            } else {
+                $Lines += "| $BackendName | $CarrierName | - | - | - | - | - | - | Not available |"
+            }
+        }
+    }
+    $Lines += @('', 'The stage verdict also requires runtime manifests, memory and network evidence, type checks, and independent performance references. Test totals alone do not establish release acceptance.', '',
+        'Source provenance and file hashes are recorded in [release-summary.json](release-summary.json).')
     $Lines | Set-Content -LiteralPath (Join-Path $OutputDir 'release-summary.md') -Encoding UTF8
 }
 
@@ -95,7 +117,7 @@ function Build-Target([string] $Target, [string] $Label) {
 }
 function Package-Game([string] $Configuration, [string] $Destination, [string] $Label) {
     Run $Uat @('BuildCookRun', "-project=$ProjectPath", '-noP4', '-unattended', '-utf8output',
-        '-platform=Win64', "-clientconfig=$Configuration", "-target=$ProjectName", '-build', '-cook',
+        '-platform=Win64', "-clientconfig=$Configuration", "-target=$ProjectName", '-build', '-skipbuildeditor', '-cook',
         '-stage', '-pak', '-iostore', '-package', '-archive', "-archivedirectory=$Destination",
         "-stagingdirectory=$Destination-stage") $Label
     Get-ReleaseGameExe $Destination $ProjectName $Configuration | Out-Null
@@ -135,6 +157,15 @@ try {
     $Provenance.worktree = @(& git -C $RepoRoot status --short)
     Run 'git' @('-C', $RepoRoot, 'diff', 'HEAD', '--binary', '--no-ext-diff') 'source-diff'
     $Provenance.source_diff_sha256 = (Get-FileHash (Join-Path $OutputDir 'logs/source-diff.log') -Algorithm SHA256).Hash
+    $Provenance.untracked_files = @(
+        foreach ($Relative in (& git -C $RepoRoot -c core.quotepath=false ls-files --others --exclude-standard -- Source Plugins Tools Config Docs)) {
+            $Source = Join-Path $RepoRoot $Relative
+            $Destination = Join-Path $OutputDir ('metadata/untracked-source/' + $Relative)
+            New-Item -ItemType Directory -Path (Split-Path -Parent $Destination) -Force | Out-Null
+            Copy-Item -LiteralPath $Source -Destination $Destination
+            [ordered]@{ path = $Relative; sha256 = (Get-FileHash -LiteralPath $Source -Algorithm SHA256).Hash }
+        }
+    )
     $Provenance.project_sha256 = (Get-FileHash -LiteralPath $ProjectPath -Algorithm SHA256).Hash
 
     Invoke-Stage 'tool-environment' {
@@ -159,17 +190,21 @@ try {
         Run $PythonExe @('-B', '-m', 'unittest', 'discover', '-s', (Join-Path $PSScriptRoot 'tests'), '-p', 'test_*.py') 'python-tests'
         Run-Script 'tests/TestReleaseSupport.ps1' @() 'powershell-tests'
     } @('tool-environment')
+    $LspBuild = Join-Path $RepoRoot 'Saved/ReleaseTools/luau-lsp-ninja'
     foreach ($Tool in @('LuaLS', 'LuauLsp')) {
         Invoke-Stage "analyzer-$Tool" {
             $BuildScript = Join-Path $PSScriptRoot "Build-$Tool.ps1"
+            $ToolArguments = if ($Tool -eq 'LuauLsp') {
+                " -Generator Ninja -BuildDir '" + $LspBuild.Replace("'", "''") + "'"
+            } else { '' }
             $Command = "& '" + $DevShell.Replace("'", "''") + "' -Arch amd64 -HostArch amd64 -SkipAutomaticLocation; & '" +
-                $BuildScript.Replace("'", "''") + "' -Force -NoSubmodules; exit `$LASTEXITCODE"
+                $BuildScript.Replace("'", "''") + "' -Force -NoSubmodules" + $ToolArguments + "; exit `$LASTEXITCODE"
             Run $PowerShellExe @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand',
                 [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Command))) "build-$Tool"
         } @('tool-environment')
     }
     $env:LUA_LANGUAGE_SERVER = Join-Path $PSScriptRoot 'lua-language-server/bin/lua-language-server.exe'
-    $Lsp = Get-ChildItem (Join-Path $PSScriptRoot 'luau-lsp/build') -Recurse -Filter 'luau-lsp.exe' -File -ErrorAction SilentlyContinue |
+    $Lsp = Get-ChildItem $LspBuild -Recurse -Filter 'luau-lsp.exe' -File -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
     if ($Lsp) { $env:LUAU_LSP = $Lsp.FullName }
 
@@ -180,6 +215,7 @@ try {
         $EditorDir = Join-Path $BackendDir "editor/$Lower"
         $GameDir = Join-Path $BackendDir 'game'
         $DevArchive = Join-Path $BackendDir 'packages/Development'
+        $ServerArchive = Join-Path $BackendDir 'packages/Server'
         New-Item -ItemType Directory -Path $EditorDir, $GameDir -Force | Out-Null
         Invoke-Stage "$B-config" {
             Set-ReleaseIniValue $IniPath '[/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]' 'LuaBackend' $B
@@ -200,9 +236,17 @@ try {
                 throw "Static binding generator produced no source: $($BindingState.Source)"
             }
             Build-Target ($ProjectName + 'Editor') "$B-rebuild-bindings"
+            Build-Target 'ShaderCompileWorker' "$B-shader-worker-build"
         } @("$B-editor-build")
         Invoke-Stage "$B-package-development" { Package-Game 'Development' $DevArchive "$B-package-development" } @("$B-static-bindings")
         Invoke-Stage "$B-server-build" { Build-Target ($ProjectName + 'Server') "$B-server-build" } @("$B-static-bindings")
+        Invoke-Stage "$B-package-server" {
+            Run $Uat @('BuildCookRun', "-project=$ProjectPath", '-noP4', '-unattended', '-utf8output',
+                '-server', '-noclient', '-serverplatform=Win64', '-serverconfig=Development',
+                "-target=$($ProjectName)Server", '-build', '-skipbuildeditor', '-cook', '-stage', '-pak', '-iostore', '-package',
+                '-archive', "-archivedirectory=$ServerArchive", "-stagingdirectory=$ServerArchive-stage") "$B-package-server"
+            $env:UNLUANOVA_TEST_SERVER_EXE = Get-ReleaseGameExe $ServerArchive ($ProjectName + 'Server') 'Development'
+        } @("$B-server-build")
         Invoke-Stage "$B-editor-tests" {
             $env:UNLUANOVA_TEST_PEER_EXE = Get-ReleaseGameExe $DevArchive $ProjectName 'Development'
             $env:UNLUANOVA_TEST_NET_ROOT = Join-Path $EditorDir 'net'
@@ -214,7 +258,7 @@ try {
                     '-ProjectPath', $ProjectPath, '-Backend', $B, '-Carrier', 'Editor', '-SkipBuild',
                     '-OutputDir', (Join-Path $BackendDir 'editor'), '-TimeoutMinutes', "$TimeoutMinutes") "$B-editor-tests"
             } finally { Stop-ReleasePeers $env:UNLUANOVA_TEST_NET_ROOT $EditorStarted }
-        } @("$B-package-development")
+        } @("$B-package-development", "$B-package-server")
         Invoke-Stage "$B-declarations" {
             $script:DeclarationStarted = [DateTime]::UtcNow
             $DeclRoot = Join-Path $RepoRoot 'Plugins/UnLuaNova/IntelliSense'
@@ -244,12 +288,10 @@ try {
             }
         } @("$B-declarations", "analyzer-$Analyzer")
         Invoke-Stage "$B-editor-evidence" {
-            $Perf = Join-Path $RepoRoot "Saved/Benchmark/perf-$B.json"
+            $Perf = Join-Path $EditorDir 'metadata/perf.json'
             if (-not $EditorStarted -or -not (Test-Path $Perf) -or (Get-Item $Perf).LastWriteTimeUtc -lt $EditorStarted) {
                 throw 'Missing fresh benchmark artifact.'
             }
-            New-Item -ItemType Directory -Path (Join-Path $EditorDir 'metadata') -Force | Out-Null
-            Copy-Item -LiteralPath $Perf -Destination (Join-Path $EditorDir 'metadata/perf.json')
             Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'ValidateRelease.py'), '--run', $EditorDir, '--backend', $B, '--carrier', 'editor') "$B-editor-evidence"
         } @('tool-environment')
         Invoke-Stage "$B-game-tests" {
@@ -260,10 +302,21 @@ try {
             $GameStarted = [DateTime]::UtcNow
             try {
                 Run $Exe @('/UnLuaNovaTestSuite/Tests/Misc/Empty', '-game', '-unattended', '-NoSplash', '-nosound', '-stdout',
-                    '-ExecCmds=UnLuaNovaTest.ExportManifest; Automation RunTests UnLuaNova; Quit',
+                    '-ExecCmds=UnLuaNovaTest.ExportManifest, Automation RunTests UnLuaNova; Quit',
                     "-ReportExportPath=$GameDir", "-abslog=$GameDir/Game.log") "$B-game-tests"
-            } finally { Stop-ReleasePeers $env:UNLUANOVA_TEST_NET_ROOT $GameStarted }
-        } @("$B-package-development")
+            } finally {
+                Stop-ReleasePeers $env:UNLUANOVA_TEST_NET_ROOT $GameStarted
+                $PackagedProject = [IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $Exe) '../..'))
+                $ShotDir = Join-Path $PackagedProject 'Saved/Screenshots/Windows'
+                $Shots = @(Get-ChildItem -LiteralPath $ShotDir -Filter '*.png' -File -ErrorAction SilentlyContinue |
+                    Where-Object { $_.LastWriteTimeUtc -ge $GameStarted })
+                if ($Shots.Count) {
+                    $ShotDestination = Join-Path $GameDir 'screenshots'
+                    New-Item -ItemType Directory -Path $ShotDestination -Force | Out-Null
+                    $Shots | Copy-Item -Destination $ShotDestination -Force
+                }
+            }
+        } @("$B-package-development", "$B-package-server")
         Invoke-Stage "$B-game-evidence" {
             Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'ValidateRelease.py'), '--run', $GameDir, '--backend', $B, '--carrier', 'game') "$B-game-evidence"
         } @('tool-environment')

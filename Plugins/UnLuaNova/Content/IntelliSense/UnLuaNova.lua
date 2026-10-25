@@ -8,12 +8,13 @@ Lua.PackagePath = "Content/Script/?.lua;Plugins/UnLuaNova/Content/Script/?.lua"
 Lua.FTextEnabled = false
 
 ---Define a lua class for binding.
----@param SuperClass string @[opt]
+---@param SuperClass? string
+---@return table
 function Lua.Class(SuperClass)
 end
 
 ---Hot reload lua modules
----@param ModuleNames table @[opt]Specify a list of module names that need hot reloading. If this parameter is not passed, it will be obtained by default according to the file modification timestamp
+---@param ModuleNames? table Specify a list of module names that need hot reloading. If omitted, use file modification timestamps.
 function Lua.HotReload(ModuleNames)
 end
 

@@ -40,7 +40,8 @@ FFunctionDesc::FFunctionDesc(UFunction *InFunction, FParameterCollection *InDefa
     FuncName = InFunction->GetName();
     ParmsSize = InFunction->ParmsSize;
 
-    if (InFunction->HasAnyFunctionFlags(FUNC_Net))
+    const auto LuaFunction = Cast<ULuaFunction>(InFunction);
+    if (InFunction->HasAnyFunctionFlags(FUNC_Net) && !(LuaFunction && LuaFunction->IsLuaDeclaredRpc()))
         LuaFunctionName = MakeUnique<FTCHARToUTF8>(*FString::Printf(TEXT("%s_RPC"), *FuncName));
     else
         LuaFunctionName = MakeUnique<FTCHARToUTF8>(*FuncName);

@@ -138,7 +138,7 @@ local N = Timer.Count(WorldContext)
 - 暂停保存剩余等待时间，恢复继续等待；循环任务每帧至多调用一次，不补发错过的周期。
 - scaled 任务在世界暂停时不运行；unscaled 使用真实世界时间。回调异常记录日志，其他任务继续。
 
-可执行示例：[TimerLifecycle.lua](../../Content/Script/Examples/TimerLifecycle.lua)。回归入口：`UnLuaNova.API.Timer`；多 PIE、世界暂停/时间膨胀和打包行为仍需维护者实际验收。
+可执行示例：[TimerLifecycle.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Examples/TimerLifecycle.lua)。回归入口：`UnLuaNova.API.Timer`；多 PIE、世界暂停/时间膨胀和打包行为仍需维护者实际验收。
 
 ## Event（纯 Lua）
 

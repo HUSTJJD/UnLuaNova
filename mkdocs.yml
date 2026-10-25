@@ -84,6 +84,7 @@ nav:
           - 智能提示: CN/IntelliSense.md
           - 测试与自动化: CN/Testing.md
           - 测试架构与验收: CN/Testing_Architecture.md
+          - 2026-10-24 回归验证: CN/Regression_20261024.md
           - 测试报告 Lua: test-lua-report.md
           - 测试报告 Luau: test-luau-report.md
       - 参考:
@@ -121,6 +122,7 @@ nav:
           - Debugging: EN/Debugging.md
           - IntelliSense: EN/IntelliSense.md
           - Testing and Automation: EN/Testing.md
+          - 2026-10-24 Regression Validation: EN/Regression_20261024.md
           - Test reports: EN/TestReports.md
       - Reference:
           - Showcase Samples: EN/Showcase.md

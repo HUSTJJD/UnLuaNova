@@ -92,14 +92,12 @@ namespace UnLuaNova
      * Luau's collector has no generational mode, so G (goal) and S (step multiplier) are
      * the whole story, and they are not independent: S has to be able to keep up with the
      * heap growth G permits. lua.h spells the pairing out - S belongs in
-     * [100/(G-100), 100+100/(G-100)) with a floor of 150%, so [150,200] at G=200 - and a
-     * pair outside it does not merely collect more or less, it collects *wrong*: too small
-     * an S lets the heap outrun the collector and the effective goal silently grows, and
-     * too large an S spends CPU on a cycle that keeps restarting.
+     * [10000/(G-100), 100+10000/(G-100)] with a floor of 150%, so [150,200] at G=200.
+     * Too small an S lets the heap outrun the collector and the effective goal grows.
      *
      * The check is a warning rather than a clamp because a project that deliberately
      * overrides both should be allowed to; it just has to be told when the pair is one
-     * the VM cannot honour.
+     * outside the VM's recommended range.
      */
     static void ApplyLuauGcTuning(lua_State* L)
     {
@@ -134,11 +132,11 @@ namespace UnLuaNova
         const int32 MinStepMul = FMath::Max(150, Ratio);
         const int32 MaxStepMul = 100 + Ratio;
 
-        if (StepMul < MinStepMul || StepMul >= MaxStepMul)
+        if (StepMul < MinStepMul || StepMul > MaxStepMul)
         {
             UE_LOG(LogUnLuaNova, Warning,
-                TEXT("lua.gcstepmul=%d is outside the interval [%d, %d) that lua.gcgoal=%d needs; "
-                     "the collector will not reach the goal. See the GC note in LuaBackend.h."),
+                TEXT("lua.gcstepmul=%d is outside the interval [%d, %d] recommended for lua.gcgoal=%d; "
+                     "review GC pacing. See the GC note in LuaBackend.h."),
                 StepMul, MinStepMul, MaxStepMul, Goal);
         }
     }

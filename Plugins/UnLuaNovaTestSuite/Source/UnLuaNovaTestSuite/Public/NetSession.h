@@ -130,11 +130,10 @@ namespace UnLuaNovaTestSuite
         FString BuildPeerCommandLine(const FNetPeerSpec& Spec) const;
 
         /**
-         * The executable peers run. The project's own game binary when it exists - it starts
-         * in seconds where the editor takes tens of them, and a peer has no reason to run
-         * editor code - and otherwise this process's own binary with -game.
+         * Select the configured packaged executable for the role. Editor diagnostics can
+         * use the editor with -server; cooked runs require a separate Server target.
          */
-        static FString ResolvePeerExe();
+        static FString ResolvePeerExe(ENetPeerRole Role = ENetPeerRole::Client);
 
         /**
          * Launches every peer that is still pending (or just OnlyLabel), in one call.
@@ -152,6 +151,7 @@ namespace UnLuaNovaTestSuite
         /** True when launching a peer failed - the wait for reports then stops instead of hanging. */
         bool HasLaunchFailure() const { return bLaunchFailed; }
 
+        /** True only after every published report can be parsed. */
         bool AllReportsPresent() const;
         void TerminateAll();
         bool ReadReport(const FString& Label, TSharedPtr<FJsonObject>& Out) const;
@@ -176,7 +176,7 @@ namespace UnLuaNovaTestSuite
     /** -UnLuaNovaNetSession=<name>; "Default" when absent. */
     FString GetNetSessionName();
 
-    /** Writes this peer's report into the session directory. Deletes any stale file first. */
+    /** Deletes stale output, then publishes a closed temporary file in the session directory. */
     bool WriteNetReport(const FString& Label, const TSharedRef<FJsonObject>& Report);
     bool ReadNetReport(const FString& SessionName, const FString& Label, TSharedPtr<FJsonObject>& Out);
 

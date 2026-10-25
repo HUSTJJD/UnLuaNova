@@ -46,6 +46,8 @@ namespace UnLuaNova
             lua_gc(L, LUA_GCSTOP);
             DebtBytes = 0;
             BaselineBytes = GetHeapBytes();
+            Stats.HeapBytes = BaselineBytes;
+            bCycleComplete = false;
         }
         else
         {
@@ -103,6 +105,9 @@ namespace UnLuaNova
         // would book that as zero work owed and never collect the 4 MB at all.
         const int64 Grown = Heap > BaselineBytes ? Heap - BaselineBytes : 0;
         DebtBytes = Grown * int64(StepMultiplier) / 100;
+        // Finish the inherited/current cycle even without further allocations.
+        if (!bCycleComplete && StepMultiplier > 0)
+            DebtBytes = FMath::Max<int64>(DebtBytes, FMath::Max<int64>(1024, Heap * int64(StepMultiplier) / 100));
         Stats.PendingDebtBytes = DebtBytes;
 
         if (DebtBytes <= 0)

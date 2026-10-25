@@ -13,9 +13,7 @@
 #include "LuaVmHooks.h"
 #include "UnLuaNovaBase.h"
 
-#if CPUPROFILERTRACE_ENABLED
 #include "ProfilingDebugging/CpuProfilerTrace.h"
-#endif
 
 #include "HAL/FileManager.h"
 #include "HAL/PlatformTime.h"
@@ -450,6 +448,7 @@ namespace UnLuaNova
 
     uint32 FLuaProfiler::ResolveSpecId(lua_State* L, lua_Debug* Ar)
     {
+#if CPUPROFILERTRACE_ENABLED
         const uint64 Key = UNLUANOVA_DEBUG_PROTOID(Ar);
 
         if (const uint32* Found = SpecIds.Find(Key))
@@ -467,6 +466,9 @@ namespace UnLuaNova
         const uint32 Spec = FCpuProfilerTrace::OutputEventType(*EventName);
         SpecIds.Add(Key, Spec);
         return Spec;
+#else
+        return 0;
+#endif
     }
 
 #if UNLUANOVA_HAS_HOOK_EVENT
@@ -486,17 +488,23 @@ namespace UnLuaNova
         }
 
         const uint64 Key = UNLUANOVA_DEBUG_PROTOID(Ar);
+#if CPUPROFILERTRACE_ENABLED
         const uint32 Spec = Self.ResolveSpecId(L, Ar);
+#endif
         if (Ar->event == LUA_HOOKCALL || Ar->event == LUA_HOOKTAILCALL)
         {
+#if CPUPROFILERTRACE_ENABLED
             FCpuProfilerTrace::OutputBeginEvent(Spec);
+#endif
             Self.RecordEnter(L, Ar, Key, FPlatformTime::Cycles64());
             // Only on entry: a return would double the sample rate for the same instant.
             Self.MaybeTraceSample(L, 0);
         }
         else
         {
+#if CPUPROFILERTRACE_ENABLED
             FCpuProfilerTrace::OutputEndEvent();
+#endif
             Self.RecordLeave(FPlatformTime::Cycles64());
         }
     }
@@ -519,9 +527,11 @@ namespace UnLuaNova
 
         // No call/return pairing on this backend, so each safe point is reported as a
         // zero-length event. Insights shows the density of hits per function.
+#if CPUPROFILERTRACE_ENABLED
         const uint32 Spec = Self.ResolveSpecId(L, &Ar);
         FCpuProfilerTrace::OutputBeginEvent(Spec);
         FCpuProfilerTrace::OutputEndEvent();
+#endif
 
         // GC is passed through: time spent collecting is not time spent in the function
         // the stack says we are in, and the format has a place to say so.

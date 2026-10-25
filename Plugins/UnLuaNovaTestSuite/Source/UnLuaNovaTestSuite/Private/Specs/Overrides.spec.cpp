@@ -115,7 +115,7 @@ void FUnLuaNovaOverridesSpec::Define()
             // coverage at all. Built by hand here: no UHT, no fixture change.
             const auto MakeFunction = [](uint32 Flags) -> UFunction*
             {
-                auto* Function = NewObject<UFunction>(GetTransientPackage(), TEXT("SpecFlagProbe"), RF_Transient);
+                auto* Function = NewObject<UFunction>(GetTransientPackage(), NAME_None, RF_Transient);
                 Function->FunctionFlags = static_cast<EFunctionFlags>(Flags);
                 Function->StaticLink(true);
                 return Function;

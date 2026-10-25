@@ -180,7 +180,7 @@ def _state(entry):
 
 def _name(entry, fallback):
     return str(
-        _get_path(entry, ("testDisplayName",), ("fullTestPath",), ("name",), ("testName",))
+        _get_path(entry, ("fullTestPath",), ("testDisplayName",), ("name",), ("testName",))
         or fallback
     )
 
@@ -592,7 +592,7 @@ BENCHMARK_PREVIOUS = "previous-{backend}.csv"
 BENCHMARK_DRIFT = 0.30
 
 
-def load_benchmark(repo_root: Path, backend=None):
+def load_benchmark(repo_root: Path, backend=None, reports_dir=None):
     """Read Saved/Benchmark for this backend: this run's CSV and, if there is one, the run
     before it - of the *same* backend.
 
@@ -601,6 +601,22 @@ def load_benchmark(repo_root: Path, backend=None):
     not execute it should lose the section, not fail the report.
     """
     import csv
+
+    if reports_dir is not None:
+        def read_run(path):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8-sig"))
+                if data.get("Backend") != backend:
+                    return None
+                return {row["Case"]: float(row["PerOpUs"]) for row in data["Cases"]}
+            except (OSError, ValueError, KeyError, TypeError):
+                return None
+        current = reports_dir / "metadata/perf.json"
+        baseline = repo_root / f"Tools/baseline/perf-{(backend or 'unknown').lower()}.json"
+        previous = read_run(baseline)
+        if previous is not None and current.is_file() and current.read_bytes() == baseline.read_bytes():
+            previous = None
+        return read_run(current), previous
 
     bench_dir = repo_root / "Saved" / "Benchmark"
 
@@ -639,13 +655,13 @@ def compare_benchmark(rows, previous):
 
 
 def render_benchmark(comparison) -> list:
-    lines = ["## 性能环比", ""]
+    lines = ["## 性能基线对比", ""]
     if not comparison:
         lines.append("这一轮没有性能数据（`Saved/Benchmark/latest-<后端>.csv` 不存在）。")
         lines.append("")
         return lines
 
-    lines.append("| 用例 | 本次（µs/次） | 上次（µs/次） | 变化 |")
+    lines.append("| 用例 | 本次（µs/次） | 基线（µs/次） | 变化 |")
     lines.append("|---|---|---|---|")
     for row in comparison:
         if row["change"] is None:
@@ -663,10 +679,32 @@ def render_benchmark(comparison) -> list:
     lines.append("> 拆开是为了区分「建表贵」和「读表贵」，这两件事对脚本作者完全不是一回事。")
     lines.append("")
     lines.append(
-        f"> 与**同一后端**的上一轮比较（CSV 按后端分开存），超过 ±{int(BENCHMARK_DRIFT * 100)}% 会标 ⚠️，"
-        "但**不会**让这轮失败：计时受机器负载影响，这里只做提示，不做判定。"
+        f"> 本次数据来自报告目录的 `metadata/perf.json`，与同后端性能基线比较。超过 ±{int(BENCHMARK_DRIFT * 100)}% 会标 ⚠️。"
+        "Release 独立检查同机器、引擎、用例和迭代数，并以耗时增长 25% 为失败门槛。"
     )
     lines.append("")
+    return lines
+
+
+def render_memory(reports_dir):
+    paths = sorted((Path(reports_dir) / "metadata/memory").glob("*.json"))
+    if not paths:
+        return []
+    lines = ["## 内存与资源回收", "",
+             "| 用例 | 通过 | 已关闭 VM | 剩余分配字节 | 剩余分配块 | 保留资源 | 活跃堆范围（字节） |",
+             "|---|---|---|---|---|---|---|"]
+    for path in paths:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
+            live = [s["live_bytes"] for s in data.get("samples", [])]
+            span = f"{min(live)} - {max(live)}" if live else "-"
+            values = [data.get(k, "?") for k in
+                      ("case", "passed", "closed_envs", "remaining_bytes", "remaining_blocks", "retained_resources")]
+            lines.append("| " + " | ".join(map(str, values + [span])) + " |")
+        except (OSError, ValueError, KeyError, TypeError):
+            lines.append(f"| {path.name} | 无法读取 | - | - | - | - | - |")
+    lines.extend(["", "稳态测试以 VM 活跃堆计数评估增长；物理分配还包含 Luau 页容量。VM 关闭后要求分配与资源残留均为零。",
+                  "完整计数、采样和运行标识保存在 `metadata/memory/`；Release 另行核验工作量与所属运行。", ""])
     return lines
 
 
@@ -732,7 +770,8 @@ def render(
             )
     else:
         rate = len(passed) / total * 100
-        verdict = "全部通过 ✅" if not failed else f"存在失败 ❌（{len(failed)} 项）"
+        verdict = (f"存在失败 ❌（{len(failed)} 项）" if failed else
+                   f"存在跳过或未执行（{len(skipped)} 项）" if skipped else "全部通过 ✅")
         lines.append(f"**{verdict}** — 通过率 {rate:.1f}%")
         lines.append("")
         lines.append("| 指标 | 数值 |")
@@ -947,6 +986,7 @@ def render(
         lines.append(f"这一轮没有跑：`Tools/RunTests.ps1` 没写 `{TYPECHECK_FILES[backend]}`。")
         lines.append("")
 
+    lines.extend(render_memory(reports_dir))
     if benchmark is not None:
         lines.extend(render_benchmark(benchmark))
 
@@ -956,9 +996,10 @@ def render(
         # This copy is committed and rendered by MkDocs, so it must not carry a machine
         # specific path or a run timestamp: either one makes the file diff on every run
         # even when the results did not change.
-        regenerate = "Tools/RunTests.ps1 -Backend " + (backend if backend else "<Lua|Luau>") + " -Publish"
+        regenerate = "Tools/RunTests.ps1 -Profile Development -Backend " + (backend if backend else "<Lua|Luau>") + " -Publish"
         lines.append(
-            "原始 JSON 留在本机 `Saved/TestReports/<时间戳>/<后端>/`（`Saved/` 不入库），"
+            "原始 JSON 留在本机对应的 `Saved/TestReports/`（Development）或 "
+            "`Saved/ReleaseTests/`（Release）运行目录（`Saved/` 不入库），"
             f"这里只提交结论。重新生成：`{regenerate}`"
             + ("（要两份就 `-Backend Both`）。" if backend else "。")
         )
@@ -1321,7 +1362,7 @@ def main() -> None:
     typecheck = load_typecheck(reports_dir, backend)
 
     repo_root = Path(__file__).resolve().parent.parent
-    bench_rows, bench_previous = load_benchmark(repo_root, backend)
+    bench_rows, bench_previous = load_benchmark(repo_root, backend, reports_dir)
     benchmark = compare_benchmark(bench_rows, bench_previous) if bench_rows else None
 
     generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

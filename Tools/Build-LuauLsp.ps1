@@ -36,6 +36,9 @@ param(
     [ValidateSet("Release", "RelWithDebInfo", "Debug")]
     [string] $Configuration = "Release",
 
+    # Optional explicit generator; use a separate BuildDir when changing generators.
+    [string] $Generator = '',
+
     # 已构建过也重新构建一次
     [switch] $Force,
 
@@ -130,7 +133,9 @@ Write-Host "build    : $Build ($Configuration)"
 
 # -DLSP_WERROR=OFF：上游默认把警告当错误（/WX）。这套代码不是我们写的，换一个更新的
 # MSVC 就会带进新的警告，然后构建挂在一条跟我们毫无关系的警告上。关掉它。
-& cmake -S $SubDir -B $Build -DCMAKE_BUILD_TYPE=$Configuration -DLSP_WERROR=OFF
+$ConfigureArgs = @('-S', $SubDir, '-B', $Build, "-DCMAKE_BUILD_TYPE=$Configuration", '-DLSP_WERROR=OFF')
+if ($Generator) { $ConfigureArgs += @('-G', $Generator) }
+& cmake @ConfigureArgs
 if ($LASTEXITCODE -ne 0) { throw "cmake 配置失败（exit $LASTEXITCODE）。" }
 
 # 只构建 CLI 这一个 target：Luau.LanguageServer.Test 跟检查无关，编它要几分钟。

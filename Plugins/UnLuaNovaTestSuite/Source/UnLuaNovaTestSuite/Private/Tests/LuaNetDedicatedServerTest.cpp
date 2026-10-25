@@ -43,10 +43,8 @@
 //     to prove the ids match - and every port this test does not bind is one less way for a
 //     nightly run to fail for the wrong reason. The connected case is
 //     UnLuaNova.Slow.Net.Multicast (LuaNetMulticastTest.cpp).
-//   - The peers are `-game`, not editor, processes: a peer has no reason to load the editor,
-//     and two editors starting up put this test on the wrong side of a minute. -server is
-//     what makes the server peer a real dedicated server (NM_DedicatedServer), a net mode
-//     PIE never reaches.
+//   - Release peers use separate packaged Game and Server targets. An editor diagnostic
+//     can select dedicated mode with -server; a packaged Game executable cannot.
 
 #include "NetSession.h"
 #include "UnLuaNovaTestCommon.h"
@@ -58,6 +56,8 @@
 #include "Misc/CommandLine.h"
 #include "UnLuaNovaNet.h"
 #include "UnLuaNovaNetDecl.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
 
 namespace UnLuaNovaTestSuite
 {
@@ -125,8 +125,7 @@ namespace UnLuaNovaTestSuite
                 const int32 NetMode = (int32)Report->GetNumberField(TEXT("NetMode"));
                 if (Label == TEXT("Server"))
                 {
-                    // Why this test is called DedicatedServer: -server puts the peer in a net
-                    // mode PIE never reaches, and the declaration has to hold there too.
+                    // Verify the actual role as well as declaration equality.
                     Test.TestEqual(TEXT("the server peer runs as NM_DedicatedServer"), NetMode, (int32)NM_DedicatedServer);
                 }
                 Test.AddInfo(FString::Printf(TEXT("%s: NetMode=%d, RPCs=%d, fields=%d"),
@@ -225,3 +224,5 @@ BEGIN_TESTSUITE(FLuaNetDedicatedServerTest,
         return true;
     }
 END_TESTSUITE(FLuaNetDedicatedServerTest)
+
+#endif // WITH_DEV_AUTOMATION_TESTS

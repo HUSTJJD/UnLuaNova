@@ -77,10 +77,16 @@ namespace
             lua_settop(Env.GetMainState(), 0);
         }
 
-        void Sample(const FVmLedger& Ledger)
+        static int64 LiveBytes(lua_State* L)
+        {
+            return int64(lua_gc(L, LUA_GCCOUNT, 0)) * 1024 + lua_gc(L, LUA_GCCOUNTB, 0);
+        }
+
+        void Sample(const FVmLedger& Ledger, lua_State* L = nullptr)
         {
             auto Row = MakeShared<FJsonObject>();
             Row->SetNumberField(TEXT("bytes"), Ledger.Bytes);
+            Row->SetNumberField(TEXT("live_bytes"), L ? LiveBytes(L) : Ledger.Bytes);
             Row->SetNumberField(TEXT("blocks"), Ledger.Live.Num());
             Samples.Add(MakeShared<FJsonValueObject>(Row));
         }
@@ -109,7 +115,7 @@ namespace
             const int32 FinalEnvs = UnLuaNova::FLuaEnv::GetAll().Num();
             Check(FinalEnvs == InitialEnvs, TEXT("Environment registry returned to its initial size"));
             auto Root = MakeShared<FJsonObject>();
-            Root->SetNumberField(TEXT("schema_version"), 1);
+            Root->SetNumberField(TEXT("schema_version"), 2);
             Root->SetStringField(TEXT("case"), Case);
             Root->SetStringField(TEXT("backend"), UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU ? TEXT("Luau") : TEXT("Lua"));
             Root->SetBoolField(TEXT("editor"), GIsEditor);
@@ -220,13 +226,14 @@ namespace
                 Env.GC();
                 if (Iteration == Result.Warmup - 1)
                 {
-                    BaselineBytes = Ledger.Bytes;
+                    BaselineBytes = FLeakResult::LiveBytes(Env.GetMainState());
                     BaselineBlocks = Ledger.Live.Num();
                 }
                 if (Iteration >= Result.Warmup)
                 {
-                    Result.Sample(Ledger);
-                    Result.Check(Ledger.Bytes <= BaselineBytes + 8192 && Ledger.Live.Num() <= BaselineBlocks + 16,
+                    // Luau's allocator reserves pages; compare live heap and retain physical page evidence separately.
+                    Result.Sample(Ledger, Env.GetMainState());
+                    Result.Check(FLeakResult::LiveBytes(Env.GetMainState()) <= BaselineBytes + 8192 && Ledger.Live.Num() <= BaselineBlocks + 16,
                         TEXT("Post-GC heap remains within the warmed budget"));
                 }
             }

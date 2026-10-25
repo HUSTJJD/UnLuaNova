@@ -1315,10 +1315,12 @@ function Get-TestArgs {
     # world the tests left behind, not the one at startup.
     # One RunTests per filter: -Tier Fast 是"跑了 N 个段"而不是"跑了一个段再排除"。
     $Cmds = @()
-    if ($ReleaseManaged) { $Cmds += 'UnLuaNovaTest.ExportManifest' }
     foreach ($F in $RunFilters) { $Cmds += "Automation RunTests $F" }
     if ($ExtraCommands) { $Cmds += $ExtraCommands }
     $Cmds += "Quit"
+    $ExecCommands = $Cmds -join '; '
+    # UE separates console commands with commas; Automation owns the semicolon chain.
+    if ($ReleaseManaged) { $ExecCommands = 'UnLuaNovaTest.ExportManifest, ' + $ExecCommands }
 
     $A = @($ProjectPath)
     if ($Map) { $A += $Map }
@@ -1332,7 +1334,7 @@ function Get-TestArgs {
         # Quoted on purpose: the value is one argument holding spaces and a semicolon. UE
         # reads -ExecCmds out of the raw command line, so the quotes have to be part of the
         # string the child sees (Format-EditorArg leaves an already-quoted argument alone).
-        "-ExecCmds=`"$($Cmds -join '; ')`""
+        "-ExecCmds=`"$ExecCommands`""
         "-ReportExportPath=$ReportDir"
         "-abslog=$LogFile"
     )

@@ -12,22 +12,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and limitations under the License.
 
-// Turns the benchmark into an automation case that leaves a CSV behind.
-//
-// The benchmark used to be a level you opened by hand and read off the screen. Numbers
-// nobody commits are not a baseline, they are a screenshot, so the point of this file is
-// the CSV: GenerateTestReport.py reads Saved/Benchmark/ and compares against the previous
-// run, which is what makes "this change made calls slower" visible at all.
-//
-// That comparison is per backend (latest-Luau.csv, latest-Lua.csv). One shared file looked
-// fine until -Backend Both ran the two back to back: the Luau run then found the Lua 5.5 run
-// as "previous" and reported the difference between two different VMs as a 20% regression.
-// The tag is a compile-time constant, exactly like the VM it labels.
-//
-// What it asserts is deliberately weak - that work happened, took time, and was recorded.
-// Asserting an absolute duration would make the suite red on a loaded CI machine, and a
-// flaky case is worse than no case. The comparison lives in the report, where a 30%
-// regression is a warning and not a failure.
+// Record per-backend timings and raw samples in the current run directory. The committed
+// independent reference supplies the 25% gate; short VM loops are repeated within each
+// timed sample so a single millisecond-scale interruption cannot dominate its average.
 
 #include "UnLuaNovaBase.h"
 // LuaBackend.h is where UNLUANOVA_LUA_BACKEND is defined, and it is not reachable from
@@ -40,6 +27,8 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
+#include "Misc/CommandLine.h"
+#include "Misc/EngineVersion.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
@@ -61,6 +50,14 @@ static constexpr int32 SpecIterations = 20000;
 static constexpr int32 VmIterations = 200000;
 
 static constexpr int32 ContainerIterations = 20000;
+static constexpr int32 PerfSampleCount = 5;
+static constexpr double PerfWarmupMs = 250.0;
+static constexpr double PerfSampleMs = 100.0;
+
+static FORCENOINLINE int32 CallNativeBenchmark(AUnLuaBenchmarkProxy* Proxy, int32 Value)
+{
+    return Proxy->UpdateMeshID(Value);
+}
 
 // One container iteration is "build a TArray<FVector>, push 8 FVectors, hand the whole thing
 // to a UFunction" - roughly an order of magnitude more work than the single call the
@@ -91,11 +88,20 @@ BEGIN_DEFINE_SPEC(FBenchmarkSpec, "UnLuaNova.Perf.Benchmark", EAutomationTestFla
     TSharedPtr<UnLuaNova::FLuaEnv> Env;
     lua_State* L;
 
+    struct FSample
+    {
+        double ElapsedMs;
+        int32 Batches;
+    };
+
     struct FRow
     {
         FString Case;
         int32 Iterations;
         double TotalMs;
+        int32 WarmupBatches = 0;
+        double WarmupMs = 0.0;
+        TArray<FSample> Samples;
     };
 
     TArray<FRow> Rows;
@@ -114,9 +120,34 @@ BEGIN_DEFINE_SPEC(FBenchmarkSpec, "UnLuaNova.Perf.Benchmark", EAutomationTestFla
     // meaningless and the run-to-run comparison pure noise.
     void Measure(const FString& Case, int32 Iterations, TFunctionRef<void()> Body)
     {
-        const double Start = FPlatformTime::Seconds();
-        Body();
-        Rows.Add({Case, Iterations, (FPlatformTime::Seconds() - Start) * 1000.0});
+        FRow Row;
+        Row.Case = Case;
+        Row.Iterations = Iterations;
+        const double WarmupStart = FPlatformTime::Seconds();
+        do
+        {
+            Body();
+            ++Row.WarmupBatches;
+            Row.WarmupMs = (FPlatformTime::Seconds() - WarmupStart) * 1000.0;
+        } while (Row.WarmupMs < PerfWarmupMs);
+
+        TArray<double, TInlineAllocator<PerfSampleCount>> BatchMeans;
+        for (int32 Sample = 0; Sample < PerfSampleCount; ++Sample)
+        {
+            const double Start = FPlatformTime::Seconds();
+            FSample Timing{0.0, 0};
+            do
+            {
+                Body();
+                ++Timing.Batches;
+                Timing.ElapsedMs = (FPlatformTime::Seconds() - Start) * 1000.0;
+            } while (Timing.ElapsedMs < PerfSampleMs);
+            Row.Samples.Add(Timing);
+            BatchMeans.Add(Timing.ElapsedMs / Timing.Batches);
+        }
+        BatchMeans.Sort();
+        Row.TotalMs = BatchMeans[PerfSampleCount / 2];
+        Rows.Add(MoveTemp(Row));
     }
 END_DEFINE_SPEC(FBenchmarkSpec)
 
@@ -142,8 +173,9 @@ void FBenchmarkSpec::Define()
 
         Measure(TEXT("Native"), SpecIterations, [Proxy, this]()
         {
+            volatile int32 Result = 0;
             for (int32 i = 0; i < SpecIterations; ++i)
-                Proxy->UpdateMeshID(i);
+                Result = CallNativeBenchmark(Proxy, i);
         });
 
         Measure(TEXT("Reflection"), SpecIterations, [Proxy]()
@@ -289,6 +321,13 @@ void FBenchmarkSpec::Define()
         // only on this machine and no one else can check them.
         const FString JsonPath = Dir / FString::Printf(TEXT("perf-%s.json"), BackendTag());
         TEST_TRUE(WriteJson(JsonPath));
+        FString ReportDirectory;
+        if (FParse::Value(FCommandLine::Get(), TEXT("ReportExportPath="), ReportDirectory))
+        {
+            const FString Metadata = ReportDirectory / TEXT("metadata");
+            IFileManager::Get().MakeDirectory(*Metadata, true);
+            TEST_TRUE(WriteJson(Metadata / TEXT("perf.json")));
+        }
 
         // ---- and hold it against the committed baseline ---------------------
         CheckAgainstBaseline();
@@ -313,9 +352,15 @@ bool FBenchmarkSpec::WriteJson(const FString& Path) const
     // these is exactly what made the documented figures unverifiable: a duration with no
     // VM, no machine and no engine version behind it says nothing.
     Root->SetStringField(TEXT("Backend"), BackendTag());
-    Root->SetStringField(TEXT("EngineVersion"), FApp::GetBuildVersion());
+    Root->SetStringField(TEXT("EngineVersion"), FEngineVersion::Current().ToString());
+    Root->SetStringField(TEXT("MeasuredUtc"), FDateTime::UtcNow().ToIso8601());
     Root->SetStringField(TEXT("Machine"), FPlatformProcess::ComputerName());
     Root->SetNumberField(TEXT("Tolerance"), PerfBaselineTolerance);
+    const TSharedRef<FJsonObject> Measurement = MakeShared<FJsonObject>();
+    Measurement->SetStringField(TEXT("Method"), TEXT("median-of-5-batch-means"));
+    Measurement->SetNumberField(TEXT("WarmupMinMs"), PerfWarmupMs);
+    Measurement->SetNumberField(TEXT("SampleMinMs"), PerfSampleMs);
+    Root->SetObjectField(TEXT("Measurement"), Measurement);
 
     TArray<TSharedPtr<FJsonValue>> Cases;
     for (const FRow& Row : Rows)
@@ -324,6 +369,17 @@ bool FBenchmarkSpec::WriteJson(const FString& Path) const
         Case->SetStringField(TEXT("Case"), Row.Case);
         Case->SetNumberField(TEXT("Iterations"), Row.Iterations);
         Case->SetNumberField(TEXT("PerOpUs"), PerOpUs(Row));
+        Case->SetNumberField(TEXT("WarmupBatches"), Row.WarmupBatches);
+        Case->SetNumberField(TEXT("WarmupMs"), Row.WarmupMs);
+        TArray<TSharedPtr<FJsonValue>> Samples;
+        for (const FSample& Timing : Row.Samples)
+        {
+            const TSharedRef<FJsonObject> Sample = MakeShared<FJsonObject>();
+            Sample->SetNumberField(TEXT("ElapsedMs"), Timing.ElapsedMs);
+            Sample->SetNumberField(TEXT("Batches"), Timing.Batches);
+            Samples.Add(MakeShared<FJsonValueObject>(Sample));
+        }
+        Case->SetArrayField(TEXT("Samples"), Samples);
         Cases.Add(MakeShared<FJsonValueObject>(Case));
     }
     Root->SetArrayField(TEXT("Cases"), Cases);
@@ -338,7 +394,7 @@ bool FBenchmarkSpec::WriteJson(const FString& Path) const
 
 void FBenchmarkSpec::CheckAgainstBaseline()
 {
-    const FString Path = FPaths::ProjectPluginsDir() / TEXT("UnLuaNova") / TEXT("Tools") / TEXT("baseline")
+    const FString Path = FPaths::ProjectDir() / TEXT("Tools") / TEXT("baseline")
         / FString::Printf(TEXT("perf-%s.json"), BackendTag());
 
     FString Text;

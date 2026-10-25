@@ -1005,7 +1005,8 @@ static bool TryPushStaticBindingField(lua_State* L, FClassDesc* ClassDesc, const
 
     if (const FStaticPropBinding* Prop = FStaticBindingRegistry::Get().FindProp(TypeBinding, Key))
     {
-        if (!Prop->Property)
+        // Complex properties need their specialized descriptors, including owner-aware delegates.
+        if (!Prop->Property || !FStaticPropDesc::Supports(Prop->Kind))
             return false;
 
         const auto& Env = UnLuaNova::FLuaEnv::FindEnvChecked(L);

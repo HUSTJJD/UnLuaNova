@@ -106,12 +106,12 @@ FString ULuaModuleLocator_ByBinding::LocateByConfig(const UClass* Class) const
         const FString Name = Current->GetName();
         for (const FUnLuaNovaClassModuleBinding& Binding : Settings->ClassModuleBindings)
         {
-            if (Binding.ModuleName.IsEmpty() || !Binding.Class.IsValid())
+            if (Binding.ModuleName.IsEmpty())
                 continue;
 
             // 既收裸类名（"AKDemoCharacter"）也收完整路径里的对象名
             // （"/Script/UAKDemo.AKDemoCharacter" → GetAssetName() = "AKDemoCharacter"）
-            if (Binding.Class.ToString() == Name || Binding.Class.GetAssetName() == Name)
+            if (Binding.ClassName == Current->GetFName() || Binding.Class.GetAssetName() == Name)
                 return Binding.ModuleName;
         }
     }

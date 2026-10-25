@@ -45,6 +45,23 @@ namespace UnLuaNovaTestSuite
         const FString Override = FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_TEST_NET_ROOT"));
         return Override.IsEmpty() ? FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("UnLuaNovaNet")) : Override;
     }
+
+    static bool PublishNetJson(const FString& Path, const TSharedRef<FJsonObject>& Report)
+    {
+        FString Text;
+        const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Text);
+        if (!FJsonSerializer::Serialize(Report, Writer))
+            return false;
+
+        IFileManager::Get().MakeDirectory(*FPaths::GetPath(Path), true);
+        // Readers must never observe the destination while its JSON is still being written.
+        const FString Pending = Path + FString::Printf(TEXT(".pending-%u"), FPlatformProcess::GetCurrentProcessId());
+        const bool bPublished = FFileHelper::SaveStringToFile(Text, *Pending, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM)
+            && IFileManager::Get().Move(*Path, *Pending, true, true, false, true);
+        if (!bPublished)
+            IFileManager::Get().Delete(*Pending, false, true, true);
+        return bPublished;
+    }
     // ------------------------------------------------------------- paths ----
 
     FNetSession::FNetSession(FString InName, FString InMapName)
@@ -92,6 +109,7 @@ namespace UnLuaNovaTestSuite
         for (const FNetPeerRun& Peer : Peers)
         {
             IFileManager::Get().Delete(*ReportPath(Peer.Spec.Label), false, true, true);
+            IFileManager::Get().Delete(*ReportPath(Peer.Spec.Label + TEXT("-ready")), false, true, true);
         }
         // The topology file too: it is what tells the runner which windows to record, and a
         // stale one would point it at pids that belong to a previous run.
@@ -100,8 +118,20 @@ namespace UnLuaNovaTestSuite
 
     // ------------------------------------------------------- peer launch ----
 
-    FString FNetSession::ResolvePeerExe()
+    FString FNetSession::ResolvePeerExe(ENetPeerRole Role)
     {
+        if (Role == ENetPeerRole::Server)
+        {
+            const FString Server = FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_TEST_SERVER_EXE"));
+            if (!Server.IsEmpty()) return Server;
+#if WITH_EDITOR
+            // Only the editor executable supports selecting dedicated mode with -server.
+            return FPlatformProcess::ExecutablePath();
+#else
+            return FPaths::Combine(FPaths::ProjectDir(), TEXT("Binaries/Win64"),
+                FString(FApp::GetProjectName()) + TEXT("Server.exe"));
+#endif
+        }
         const FString Override = FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_TEST_PEER_EXE"));
         if (!Override.IsEmpty()) return Override;
 #if PLATFORM_WINDOWS
@@ -134,7 +164,9 @@ namespace UnLuaNovaTestSuite
 
     FString FNetSession::BuildPeerCommandLine(const FNetPeerSpec& Spec) const
     {
-        const bool bPackagedPeer = !FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_TEST_PEER_EXE")).IsEmpty();
+        const TCHAR* OverrideName = Spec.Role == ENetPeerRole::Server
+            ? TEXT("UNLUANOVA_TEST_SERVER_EXE") : TEXT("UNLUANOVA_TEST_PEER_EXE");
+        const bool bPackagedPeer = !FPlatformMisc::GetEnvironmentVariable(OverrideName).IsEmpty();
         FString Args = bPackagedPeer ? FString() : FString::Printf(TEXT("\"%s\" "), *FPaths::GetProjectFilePath());
 
         if (Spec.Role == ENetPeerRole::Server)
@@ -199,7 +231,7 @@ namespace UnLuaNovaTestSuite
 
             Peer.bLaunched = true;
 
-            const FString Exe = ResolvePeerExe();
+            const FString Exe = ResolvePeerExe(Peer.Spec.Role);
             if (!FPaths::FileExists(Exe))
             {
                 Test.AddError(FString::Printf(
@@ -242,7 +274,8 @@ namespace UnLuaNovaTestSuite
     {
         for (const FNetPeerRun& Peer : Peers)
         {
-            if (!FPaths::FileExists(ReportPath(Peer.Spec.Label)))
+            TSharedPtr<FJsonObject> Report;
+            if (!ReadReport(Peer.Spec.Label, Report))
             {
                 return false;
             }
@@ -282,6 +315,7 @@ namespace UnLuaNovaTestSuite
         {
             TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
             Entry->SetStringField(TEXT("label"), Peer.Spec.Label);
+            Entry->SetStringField(TEXT("exe"), ResolvePeerExe(Peer.Spec.Role));
             Entry->SetStringField(TEXT("role"), Peer.Spec.Role == ENetPeerRole::Server ? TEXT("Server") : TEXT("Client"));
             Entry->SetBoolField(TEXT("headless"), Peer.Spec.bHeadless);
             Entry->SetNumberField(TEXT("pid"), (double)Peer.Pid);
@@ -290,15 +324,7 @@ namespace UnLuaNovaTestSuite
         }
         Root->SetArrayField(TEXT("peers"), PeersJson);
 
-        FString Text;
-        const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Text);
-        if (!FJsonSerializer::Serialize(Root, Writer))
-        {
-            return false;
-        }
-
-        IFileManager::Get().MakeDirectory(*GetDir(), true);
-        return FFileHelper::SaveStringToFile(Text, *FPaths::Combine(GetDir(), TEXT("topology.json")));
+        return PublishNetJson(FPaths::Combine(GetDir(), TEXT("topology.json")), Root);
     }
 
     // ---------------------------------------------------------- peer side ----
@@ -325,15 +351,7 @@ namespace UnLuaNovaTestSuite
         // A stale report is the dangerous case: the driving process would read last run's
         // file and pass on a peer that never answered.
         IFileManager::Get().Delete(*Path, false, true, true);
-        IFileManager::Get().MakeDirectory(*FPaths::GetPath(Path), true);
-
-        FString Text;
-        const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Text);
-        if (!FJsonSerializer::Serialize(Report, Writer))
-        {
-            return false;
-        }
-        return FFileHelper::SaveStringToFile(Text, *Path);
+        return PublishNetJson(Path, Report);
     }
 
     bool ReadNetReport(const FString& SessionName, const FString& Label, TSharedPtr<FJsonObject>& Out)
@@ -342,7 +360,7 @@ namespace UnLuaNovaTestSuite
             SessionName, Label + TEXT(".json"));
 
         FString Text;
-        if (!FFileHelper::LoadFileToString(Text, *Path))
+        if (!FPaths::FileExists(Path) || !FFileHelper::LoadFileToString(Text, *Path))
         {
             return false;
         }
@@ -358,10 +376,11 @@ namespace UnLuaNovaTestSuite
         UClass* Class = AUnLuaNovaTestNetActor::StaticClass();
 
         TArray<TSharedPtr<FJsonValue>> Rpcs;
-        for (TFieldIterator<UFunction> It(Class, EFieldIteratorFlags::IncludeSuper); It; ++It)
+        Class->SetUpRuntimeReplicationData();
+        for (const UField* Field : Class->NetFields)
         {
-            const UFunction* Function = *It;
-            if (!Function->HasAnyFunctionFlags(FUNC_Net))
+            const UFunction* Function = Cast<UFunction>(Field);
+            if (!Function || !Function->HasAnyFunctionFlags(FUNC_Net))
             {
                 continue;
             }
@@ -482,7 +501,8 @@ namespace UnLuaNovaTestSuite
         // peer it was under a wall of identical "never produced" lines.
         for (const FNetPeerRun& Peer : Session->GetPeers())
         {
-            if (FPaths::FileExists(Session->ReportPath(Peer.Spec.Label)))
+            TSharedPtr<FJsonObject> Report;
+            if (Session->ReadReport(Peer.Spec.Label, Report))
             {
                 continue;
             }
@@ -491,7 +511,7 @@ namespace UnLuaNovaTestSuite
             FProcHandle Handle = Peer.Handle;
             if (Handle.IsValid() && !FPlatformProcess::IsProcRunning(Handle))
             {
-                Test.AddError(FString::Printf(TEXT("%s peer exited (%.0fs in) without writing a report - see %s"),
+                Test.AddError(FString::Printf(TEXT("%s peer exited (%.0fs in) without a readable report - see %s"),
                     *Peer.Spec.Label, Now - StartedAt, *Session->LogPath(Peer.Spec.Label)));
                 return true;
             }
@@ -501,10 +521,11 @@ namespace UnLuaNovaTestSuite
         {
             for (const FNetPeerRun& Peer : Session->GetPeers())
             {
-                if (!FPaths::FileExists(Session->ReportPath(Peer.Spec.Label)))
+                TSharedPtr<FJsonObject> Report;
+                if (!Session->ReadReport(Peer.Spec.Label, Report))
                 {
                     Test.AddError(FString::Printf(
-                        TEXT("%s peer never produced %s (%.0fs) - see %s"),
+                        TEXT("%s peer never produced readable JSON at %s (%.0fs) - see %s"),
                         *Peer.Spec.Label, *Session->ReportPath(Peer.Spec.Label), TimeoutSeconds,
                         *Session->LogPath(Peer.Spec.Label)));
                 }

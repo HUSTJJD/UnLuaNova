@@ -67,7 +67,7 @@ Lua 在跑完一轮之前不会释放任何东西，所以"先建 4 MB 再整个
 userdata，这些只能在游戏线程上做；把清扫搬去工作线程意味着改 VM 的回收器并给每次分配加锁。
 把同一份工作摊到若干帧，延迟收益一样，风险小得多。
 
-详见[架构](Architecture.md#垃圾回收)与 [GC 调度器 API](CxxApi.md#fluaenv--帧分摊-gc)。
+详见[架构](Architecture.md#所有权与调度)与 [GC 调度器 API](CxxApi.md#帧分摊-gc)。
 
 ### lua.profiler \[on\|off\|agg on\|off\|reset\|top \[n\]\|dump \[文件\]\]
 
@@ -198,7 +198,7 @@ lua.sandbox=1
 ```
 
 *注：默认关闭，因为这是对已有脚本的行为变更。该能力依赖 Luau 原生沙盒，Lua 5.5 后端不支持。
-详见[Luau 后端](Luau.md#沙盒)。*
+详见[Luau 后端](Luau.md#配置与安全)。
 
 CVar 本身在两个后端上都存在，所以 `lua.sandbox` 在任何后端都能读写，不会因为后端不支持而变成
 "命令不存在"——只是写入在 Lua 5.5 下不产生效果。脚本要判断它是否真的生效，用

@@ -85,6 +85,9 @@ namespace UnLuaNovaTestSuite
         double WaitDeadline = 0.0;
 #if WITH_EDITOR
         TUniquePtr<FWaitForSpecifiedMapToLoadCommand> WaitForMapToLoad;
+#else
+        bool bTravelRequested = false;
+        TWeakObjectPtr<UWorld> PreviousWorld;
 #endif
     };
 

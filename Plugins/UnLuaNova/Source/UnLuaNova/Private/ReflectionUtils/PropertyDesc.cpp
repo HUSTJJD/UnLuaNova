@@ -1194,6 +1194,10 @@ public:
         : FStructPropertyDesc(InProperty), StructName(*UnLuaNova::LowLevel::GetMetatableName(StructProperty->Struct))
     {
         const auto ScriptStruct = CastChecked<UScriptStruct>(StructProperty->Struct);
+        // Lua-owned values can outlive both the declaring property and a map unload.
+        StructType = ScriptStruct;
+        StructArrayDim = InProperty->ArrayDim;
+        StructReference.Add(ScriptStruct);
         const auto CppStructOps = ScriptStruct->GetCppStructOps();
         StructSize = CppStructOps ? CppStructOps->GetSize() : ScriptStruct->GetStructureSize();
         UserdataPadding = UnLuaNova::LowLevel::CalculateUserdataPadding(StructProperty->Struct);
@@ -1202,6 +1206,11 @@ public:
     virtual int32 GetSize() const override
     {
         return StructSize;
+    }
+
+    virtual void Destruct(void* Dest) const override
+    {
+        StructType->DestroyStruct(Dest, StructArrayDim);
     }
 
     virtual bool CopyBack(lua_State *L, int32 SrcIndexInStack, void *DestContainerPtr) override
@@ -1342,6 +1351,9 @@ public:
 
 private:
     FTCHARToUTF8 StructName;
+    UnLuaNova::FObjectReferencer StructReference;
+    UScriptStruct* StructType;
+    int32 StructArrayDim;
     int32 StructSize;
     uint8 UserdataPadding;
 };

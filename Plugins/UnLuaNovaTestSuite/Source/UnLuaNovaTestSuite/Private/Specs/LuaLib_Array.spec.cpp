@@ -330,7 +330,16 @@ void FUnLuaNovaLibArraySpec::Define()
             TEST_TRUE(ScriptArray!=nullptr);
 
             const auto& Array = *(TArray<int32>*)ScriptArray;
-            TEST_EQUAL(Array.GetAllocatedSize(), (SIZE_T)10 * 4);
+            TEST_EQUAL(Array.Num(), 0);
+            TEST_TRUE(Array.Max() >= 10);
+            const void* ReservedData = Array.GetData();
+            const int32 ReservedCapacity = Array.Max();
+            lua_pushvalue(L, -1);
+            lua_setglobal(L, "ReservedArray");
+            Env->DoString("for i = 1, 10 do ReservedArray:Add(i) end");
+            TEST_EQUAL(Array.Num(), 10);
+            TEST_EQUAL(Array.Max(), ReservedCapacity);
+            TEST_TRUE(Array.GetData() == ReservedData);
         });
 
         It(TEXT("只能够对空数组进行预留空间操作"), EAsyncExecution::TaskGraphMainThread, [this]

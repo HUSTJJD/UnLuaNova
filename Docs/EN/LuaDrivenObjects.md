@@ -65,7 +65,8 @@ base class:
 
 ```ini
 [/Script/UnLuaNova.UnLuaNovaSettings]
-+ClassModuleBindings=(Class="/Game/Blueprints/BP_Pickup.BP_Pickup_C",Module="Gameplay.Pickup")
++ClassModuleBindings=(Class="/Game/Blueprints/BP_Pickup.BP_Pickup_C",ModuleName="Gameplay.Pickup")
++ClassModuleBindings=(ClassName="MyNativeActor",ModuleName="Gameplay.NativeActor")
 ```
 
 **The post-binding hook already exists**: `UUnLuaNovaManager::Bind` calls `Initialize` in the

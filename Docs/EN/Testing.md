@@ -21,9 +21,9 @@ The default `Release` profile orchestrates the current **Win64** matrix. Operato
 | Analyzers | Initialize the MSVC environment and build pinned LuaLS and luau-lsp |
 | Backends | Run both Lua and Luau with Timer/Event/OOP and static binding enabled |
 | Editor | Archive old static binding source, build Editor/generator, regenerate and rebuild the generated code |
-| Development | Build/cook/package/archive the game and build the Server target |
+| Development | Build/cook/package/archive separate Game and Dedicated Server targets |
 | Editor automation | All registered UnLuaNova tests, including Slow, lifetime, extensions, showcase media and benchmarks |
-| Connected peers | Launch the current backend's cooked game, retaining topology, reports and logs; verify multicast reaches two clients |
+| Connected peers | Launch the current backend's cooked Server and Game executables by role, retaining topology, reports and logs; verify multicast reaches two clients |
 | Types | Back up old generated declarations, export fresh declarations, require successful backend type checks |
 | Cooked automation | Run all tests registered for the Development game's actual UE context |
 | Memory | Require `UnLuaNova.Memory` evidence in both backend/carrier combinations: VM allocation balance, resource release and warmed heap growth |
@@ -31,6 +31,10 @@ The default `Release` profile orchestrates the current **Win64** matrix. Operato
 | Cleanup | Restore original config bytes and changed environment variables, clean up owned processes, write an aggregate verdict |
 
 `Saved/RunTests.lock` prevents concurrent runner backend changes. Avoid editing/building the same project in another process during validation. Configuration is restored; the last built binaries still belong to the last backend.
+
+Release sets `UNLUANOVA_TEST_PEER_EXE` and `UNLUANOVA_TEST_SERVER_EXE` to the current archived Game and Server executables. A UE 5.8 Game binary cannot become a dedicated server through `-server`. Topology records each peer's executable; cleanup checks its PID, path and start time.
+
+LuaLS builds use a unique temporary directory under `Saved/ReleaseTools/luals-temp/` and restore TMP/TEMP on exit. Bootstrap and main analyzer builds/tests have separate exit-code checks; either failure blocks the analyzer stage.
 
 Static binding backups live in each backend's `metadata/static-binding-backup/`. Only the fixed output file bearing the generator's ownership marker is archived. If no replacement exists when the pipeline finishes, the original is restored and the backup retained. Old generated code therefore cannot prevent the updated generator from building, and operators need no manual source cleanup. Fingerprints include a generator format version to invalidate obsolete output.
 
@@ -42,9 +46,11 @@ Read `Saved/ReleaseTests/<timestamp>/release-summary.md` or `release-summary.jso
 
 Backend outputs include `editor/<backend>/`, `game/`, packaged Development/Shipping archives and logs. The actual process exports `metadata/manifest.json` with backend, feature flags, Editor/cooked state and full leaf test paths. `ValidateRelease.py` compares this against UE's `index.json`. Empty, missing, duplicate, skipped, unknown, error-bearing and wrong-backend results fail. Editor source suites must also be registered. Historical display-name/count baselines no longer decide release completeness.
 
-All four Showcase PNGs and encoded clips are required. Connected network evidence must contain Server/Client1/Client2 logs, backend/role identity, matching RPCIds and actual multicast reception. A peer-report helper's no-op does not prove transmission.
+The Editor evidence gate requires all four Showcase PNGs and encoded clips. Cooked reports also collect newly generated screenshots and encode clips; dedicated servers are archived under `packages/Server/`. Connected network evidence must contain Server/Client1/Client2 logs, backend/role identity, matching RPCIds and actual multicast reception. A peer-report helper's no-op does not prove transmission.
 
-Performance requires reviewed `Tools/baseline/perf-lua.json` and `perf-luau.json`, matching backend, engine, machine, case inventory and iteration counts, with a 25% regression limit. These baselines are currently absent. The first run retains `metadata/perf.json` and fails this gate; it does not automatically approve its own measurements. Baseline maintenance does not require operators to run extra test commands. External performance claims still require [controlled acceptance](Performance_Parity_slua.md).
+Performance requires `Tools/baseline/perf-lua.json` and `perf-luau.json`, matching backend, engine, machine, case inventory and iteration counts, with a 25% regression limit. Current references come from the independent `FullFix-Complete-11` diagnostic run, documented in the baseline README. They are not pre-fix measurements and cannot establish a performance improvement from these fixes. Missing comparable references fail the gate; the runner never promotes its own measurements automatically. External performance claims still require [controlled acceptance](Performance_Parity_slua.md).
+
+Performance sampling warms each case for at least 250 ms, then records five samples of at least 100 ms each. Each sample repeats the same iteration batch; the result is the median of the five per-operation averages. `metadata/perf.json` retains raw elapsed times and batch counts. The gate recomputes the result and rejects missing, short or inconsistent samples. The original reference files remain unchanged and used single-batch samples. Workload, per-batch iterations, units and thresholds remain comparable, but the sampling-method change cannot establish a runtime speedup.
 
 ## Memory Leak Gate
 
@@ -52,10 +58,10 @@ No extra command or manual `lua.memstats` toggle is required. Nine reports under
 
 - Audited environments install a pointer ledger before VM creation and retain it through `lua_close`. Every closed VM must have zero live bytes, live blocks and accounting errors. Ordinary environments do not maintain this map.
 - Lifecycle cases run 24 cycles; each World teardown order runs 12. Weak pointers verify native payload and UObject release; Timer cases check callbacks and captured owners.
-- Heap stability and hot reload warm up for 8 rounds, then sample 32 full-GC rounds. Growth is limited to 8 KiB and 16 live blocks. Limits are fixed in code and the validator, not provided by reports.
+- Heap stability and hot reload warm up for 8 rounds, then sample 32 full-GC rounds. Growth is limited to 8 KiB of VM live heap and 16 allocator blocks. Schema 2 records GC-reported `live_bytes` separately from ledger `bytes` and `blocks`: Luau allocates pages, whose normal unused capacity can vary by about 32 KiB. Every allocation must still be released at VM close. Limits are fixed in code and the validator, not provided by reports.
 - A control retains a graph across full GC, requires growth above 64 KiB, then releases it and verifies recovery. The validator checks measurements independently of `passed=true`.
 
-This is scenario-based leak regression, not proof of process-wide memory safety. Native ownership checks do not cover every C++ allocation; GPU/RHI resources, Luau CodeGen executable pages, third-party libraries and long production sessions still need dedicated coverage. Process working-set retention alone is not evidence of a leak. New C++ cases and budgets await actual runs on both backends.
+This is scenario-based leak regression, not proof of process-wide memory safety. Native ownership checks do not cover every C++ allocation; GPU/RHI resources, Luau CodeGen executable pages, third-party libraries and long production sessions still need dedicated coverage. Process working-set retention alone is not evidence of a leak. `FullFix-Release-22` passed all four backend/carrier runs and evidence gates: 36 memory reports, with zero residue and accounting errors after closure.
 
 ## Development
 
@@ -81,4 +87,6 @@ Register new `UnLuaNova.*` suites in the test plugin's `Private/Specs` or `Priva
 
 This entry covers the defined Win64 matrix, not every unfinished product requirement or 100% code coverage. Feature-off combinations, other platforms/devices, Shipping runtime smoke, Iris/push-model modes and external benchmark adapters remain [audit work](Benchmark_Review.md). License scope and third-party notices also require separate maintenance.
 
-Validation status: tool regressions, script parsing and safe DryRun have passed. The full release pipeline and new C++ regressions still await validation through the single command above. Script checks do not establish successful compilation or UE runtime behavior.
+Validation status: `FullFix-Release-22` passed on 2026-10-25, with 33/33 stages and 2478/2478 UE test executions, zero failures and skips. This includes the new C++ regressions, both Game/Server archives and both Shipping packages. All 34 Python tool tests and PowerShell support checks passed. Static analysis reported zero errors, retaining 298 Lua warnings and seven Luau warnings. See the [complete regression record](Regression_20261024.md) for evidence and limits. The last built binaries belong to Luau.
+
+Type-check summaries retain every warning and the raw `analyzer_exit`. The final `exit` follows error-level diagnostics: warnings alone do not block, while type errors, abnormal analyzer exits and missing results fail.

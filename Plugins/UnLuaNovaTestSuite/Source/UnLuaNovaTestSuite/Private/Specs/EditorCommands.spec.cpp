@@ -74,6 +74,7 @@ void FEditorCommandsSpec::Define()
 
     Describe(TEXT("Lua 模板"), [this]()
     {
+#if WITH_EDITOR
         It(TEXT("随插件发布且带 ClassName 占位符"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             // CreateLuaTemplate_Executed looks these up by class name under
@@ -102,6 +103,7 @@ void FEditorCommandsSpec::Define()
             }
         });
 
+#endif
         It(TEXT("脚本根目录指向工程的 Content/Script"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             // The template is written to GLuaSrcFullPath + relative module path, so a wrong

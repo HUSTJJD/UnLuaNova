@@ -26,6 +26,7 @@ local M = {
 }
 
 local dump = function(tbl, max_indent)
+    if not config.debug then return "" end
     local rep = string.rep
     local handled = {}
     local function traverse(tbl, indent)
@@ -96,6 +97,7 @@ end
 local function load_error_handler(err)
     local msg = err .. "\n" .. debug.traceback()
     Lua.LogError(msg)
+    return msg
 end
 
 local function call_hook(name, ...)
@@ -125,9 +127,9 @@ local function make_sandbox()
     local env_mt = { __index = proxy, __newindex = proxy }
 
     local function load(module_name)
-        local found, chunk
+        local found, chunk, loader_data
         for i, searcher in ipairs(package.searchers) do
-            chunk = searcher(module_name)
+            chunk, loader_data = searcher(module_name)
             if type(chunk) == "function" then
                 found = true
                 break
@@ -140,8 +142,22 @@ local function make_sandbox()
 
         local env = {}
         setmetatable(env, env_mt)
-        debug.setupvalue(chunk, 1, env)
-        return chunk, env
+        if setfenv then
+            -- C loaders have no replaceable environment.
+            pcall(setfenv, chunk, env)
+        else
+            local i = 1
+            while true do
+                local name = debug.getupvalue(chunk, i)
+                if not name then break end
+                if name == "_ENV" then
+                    debug.setupvalue(chunk, i, env)
+                    break
+                end
+                i = i + 1
+            end
+        end
+        return chunk, env, loader_data
     end
 
     local function require(module_name, ...)
@@ -160,9 +176,16 @@ local function make_sandbox()
             return loaded, nil
         end
 
-        local func, env = load(module_name)
+        local func, env, loader_data = load(module_name)
         if func then
-            local _, new_module = xpcall(func, load_error_handler, ...)
+            local ok, new_module
+            if select("#", ...) > 0 then
+                -- FLuaEnv.Start supplies an explicit startup argument table.
+                ok, new_module = xpcall(func, load_error_handler, ...)
+            else
+                ok, new_module = xpcall(func, load_error_handler, module_name, loader_data)
+            end
+            if not ok then error(new_module or ("error loading module " .. module_name), 0) end
             if loaded_modules[module_name] == nil then
                 loaded_modules[module_name] = new_module
                 -- package.loaded is the record of "this module ran": FLuaEnv::Start() and
@@ -171,7 +194,11 @@ local function make_sandbox()
                 -- for a module that returns nothing. Writing the nil verbatim deletes the
                 -- entry instead, so a module that did run reads back as one that never
                 -- did (Start() reports it at Error) and the next require() runs it again.
-                package.loaded[module_name] = new_module == nil and true or new_module
+                if new_module ~= nil then
+                    package.loaded[module_name] = new_module
+                elseif package.loaded[module_name] == nil then
+                    package.loaded[module_name] = true
+                end
                 loaded_module_times[module_name] = get_last_modified_time(module_name)
                 call_hook("module_loaded", new_module, module_name, false)
                 return package.loaded[module_name], nil
@@ -372,7 +399,8 @@ end
 
 local function update_global(value_map)
     local running_state = coroutine.running()
-    local exclude = { [debug] = true, [coroutine] = true, [io] = true }
+    local exclude = { [debug] = true, [coroutine] = true }
+    if io then exclude[io] = true end
     exclude[exclude] = true
     exclude[M] = true
     exclude[sandbox] = true
@@ -385,46 +413,67 @@ local function update_global(value_map)
     local update_table
 
     local function update_running_stack(co, level)
-        local info = debug.getinfo(co, level + 1, "f")
-        if info == nil then
-            return
-        end
-        local f = info.func
-        info = nil
-        update_table(f)
-        local i = 1
+        -- Luau does not eliminate tail calls: recursion would grow the stack as we inspect it.
         while true do
-            local name, v = debug.getlocal(co, level + 1, i)
-            if name == nil then
-                if i > 0 then
-                    i = -1
+            local f
+            if debug.getinfo then
+                local info = debug.getinfo(co, level + 1, "f")
+                f = info and info.func
+            elseif co then
+                f = debug.info(co, level + 1, "f")
+            else
+                f = debug.info(level + 1, "f")
+            end
+            if f == nil then
+                return
+            end
+            update_table(f)
+            local i = 1
+            while true do
+                local name, v
+                if co then
+                    name, v = debug.getlocal(co, level + 1, i)
                 else
-                    break
+                    name, v = debug.getlocal(level + 1, i)
+                end
+                if name == nil then
+                    if i > 0 then
+                        i = -1
+                    else
+                        break
+                    end
+                end
+                local nv = value_map[v]
+                if nv then
+                    if co then
+                        debug.setlocal(co, level + 1, i, nv)
+                    else
+                        debug.setlocal(level + 1, i, nv)
+                    end
+                    update_table(nv)
+                else
+                    update_table(v)
+                end
+                if i > 0 then
+                    i = i + 1
+                else
+                    i = i - 1
                 end
             end
-            local nv = value_map[v]
-            if nv then
-                debug.setlocal(co, level + 1, i, nv)
-                update_table(nv)
-            else
-                update_table(v)
-            end
-            if i > 0 then
-                i = i + 1
-            else
-                i = i - 1
-            end
+            level = level + 1
         end
-        return update_running_stack(co, level + 1)
     end
 
     function update_table(root)
+        local t = type(root)
+        if t ~= "table" and t ~= "userdata" and t ~= "function" then
+            return
+        end
         if root == nil or exclude[root] then
             return
         end
         -- print("update_table : ", dump(root, 2))
         exclude[root] = true
-        local t = type(root)
         if t == "table" then
             local mt = getmetatable(root)
             if mt then update_table(mt) end
@@ -551,6 +600,15 @@ local function update_modules(old_modules, new_modules, new_envs)
     print("--------------Print AllValueMap--------------")
     print(dump(all_value_maps))
     update_global(all_value_maps)
+    for name, old_module in pairs(loaded_modules) do
+        local replacement = all_value_maps[old_module]
+        if replacement then
+            loaded_modules[name] = replacement
+            if package.loaded[name] == old_module then
+                package.loaded[name] = replacement
+            end
+        end
+    end
 
     print("HOT RELOAD END")
 end
@@ -578,9 +636,9 @@ local function reload_modules(module_names)
         if loaded_modules[module_name] == nil then
             sandbox.require(module_name)
         else
-            local func, env = sandbox.load(module_name)
+            local func, env, loader_data = sandbox.load(module_name)
             if func ~= nil then
-                local ok, new_module = xpcall(func, load_error_handler)
+                local ok, new_module = xpcall(func, load_error_handler, module_name, loader_data)
                 if not ok then
                     sandbox.exit()
                     return

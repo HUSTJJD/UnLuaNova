@@ -43,6 +43,8 @@
 
 #include "LuaEnv.h"
 
+#if WITH_DEV_AUTOMATION_TESTS
+
 namespace
 {
 	bool IsContainerCached(lua_State* L, void* Key)
@@ -166,3 +168,5 @@ void FDanglingCheckSpec::Define()
 		});
 	});
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

@@ -31,13 +31,14 @@
  * "add an offset, push by type".
  *
  * It derives from FPropertyDesc rather than replacing it: Class_Index/Class_NewIndex and
- * every container path keep working through ITypeOps unchanged, and any kind this class
- * does not handle falls back to the base implementation, so nothing can silently change
- * behaviour.
+ * every container path keep working through ITypeOps unchanged. Callers must use Supports()
+ * before constructing this descriptor; other kinds require FPropertyDesc::Create() or the
+ * normal class registry lookup to obtain their specialized descriptor.
  */
 class FStaticPropDesc : public FPropertyDesc
 {
 public:
+	static bool Supports(EStaticPropKind Kind);
 	FStaticPropDesc(FProperty* InProperty, const FStaticPropBinding* InBinding);
 
 	virtual bool IsValid() const override;

@@ -53,6 +53,7 @@
 
 #include "Engine/NetConnection.h"
 #include "Engine/NetDriver.h"
+#include "UObject/CoreNet.h"
 #include "GameFramework/PlayerController.h"
 
 namespace UnLuaNovaTestSuite
@@ -199,6 +200,8 @@ namespace UnLuaNovaTestSuite
 
         case EStep::SpawnOnServer:
         {
+            if (!ServerWorld.IsValid())
+                return Next(EStep::WaitForPeers);
             FActorSpawnParameters SpawnParams;
             SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
             AUnLuaNovaTestNetActor* Actor = ServerWorld->SpawnActor<AUnLuaNovaTestNetActor>(
@@ -220,6 +223,11 @@ namespace UnLuaNovaTestSuite
 
         case EStep::WaitForClientActor:
         {
+            // Joining the server replaces the client's initial PIE world.
+            const FPieNetWorlds Peers = GetPieNetWorlds();
+            if (Peers.Clients.IsEmpty())
+                return Retry(TEXT("client world after travel"));
+            ClientWorld = Peers.Clients[0];
             AUnLuaNovaTestNetActor* Found = nullptr;
             for (TActorIterator<AUnLuaNovaTestNetActor> It(ClientWorld.Get()); It; ++It)
             {
@@ -265,8 +273,19 @@ namespace UnLuaNovaTestSuite
         }
 
         case EStep::CallServerRpc:
+        {
+            UFunction* Function = ClientActor->FindFunction(TEXT("FromClient"));
+            if (!Test.TestNotNull(TEXT("Client has declared Server RPC"), Function))
+                return Next(EStep::Done);
+            for (UWorld* World : {ServerWorld.Get(), ClientWorld.Get()})
+            {
+                const FClassNetCache* Cache = World->GetNetDriver()->NetCache->GetClassNetCache(ClientActor->GetClass());
+                Test.TestTrue(TEXT("Declared RPC remains in class NetFields"), ClientActor->GetClass()->NetFields.Contains(Function));
+                Test.TestNotNull(TEXT("Declared RPC exists in the driver's network field cache"), Cache ? Cache->GetFromField(Function) : nullptr);
+            }
             InvokeRpc(ClientActor.Get(), TEXT("FromClient"), ServerRpcArg);
             return Next(EStep::WaitServerRpc);
+        }
 
         case EStep::WaitServerRpc:
             if (!ServerActor->CallLog.Contains(TEXT("FromClient:77")))

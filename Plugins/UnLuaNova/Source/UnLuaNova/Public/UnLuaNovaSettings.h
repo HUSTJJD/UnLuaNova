@@ -26,9 +26,13 @@ struct FUnLuaNovaClassModuleBinding
 {
     GENERATED_BODY()
 
-    /** 要绑定的类：蓝图写 /Game/Blueprints/BP_Foo.BP_Foo_C，原生类写类名即可。 */
+    /** Full class path, e.g. /Game/Blueprints/BP_Foo.BP_Foo_C. */
     UPROPERTY(EditAnywhere, Category="Runtime")
     FSoftClassPath Class;
+
+    /** Optional short class name, also matched against parent classes. */
+    UPROPERTY(EditAnywhere, Category="Runtime")
+    FName ClassName;
 
     /** Lua 模块名，相对 Content/Script，点分。 */
     UPROPERTY(EditAnywhere, Category="Runtime")

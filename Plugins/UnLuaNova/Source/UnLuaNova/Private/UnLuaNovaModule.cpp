@@ -36,6 +36,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Registries/ClassRegistry.h"
 #include "Registries/EnumRegistry.h"
+#include "Misc/EngineVersionComparison.h"
 
 #define LOCTEXT_NAMESPACE "FUnLuaNovaModule"
 
@@ -59,6 +60,11 @@ namespace UnLuaNova
 #endif
 
             PostLoadMapWithWorldHandle = FCoreUObjectDelegates::PostLoadMapWithWorld.AddRaw(this, &FUnLuaNovaModule::PostLoadMapWithWorld);
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
+            PostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddRaw(this, &FUnLuaNovaModule::PreBindConfiguredClasses);
+#else
+            PostEngineInitHandle = FCoreDelegates::GetOnPostEngineInit().AddRaw(this, &FUnLuaNovaModule::PreBindConfiguredClasses);
+#endif
 
             CreateDefaultParamCollection();
 
@@ -86,6 +92,12 @@ namespace UnLuaNova
             // into freed memory.
             FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(PostLoadMapWithWorldHandle);
             PostLoadMapWithWorldHandle.Reset();
+#if UE_VERSION_OLDER_THAN(5, 8, 0)
+            FCoreDelegates::OnPostEngineInit.Remove(PostEngineInitHandle);
+#else
+            FCoreDelegates::GetOnPostEngineInit().Remove(PostEngineInitHandle);
+#endif
+            PostEngineInitHandle.Reset();
 
 #if AUTO_UNLUA_STARTUP
 #if WITH_EDITOR
@@ -133,25 +145,7 @@ namespace UnLuaNova
                 FDeadLoopCheck::Timeout = Settings.DeadLoopCheck;
                 FDanglingCheck::Enabled = Settings.DanglingCheck;
 
-                for (const auto Class : TObjectRange<UClass>())
-                {
-                    for (const auto& ClassPath : Settings.PreBindClasses)
-                    {
-                        if (!ClassPath.IsValid())
-                            continue;
-
-                        const auto TargetClass = ClassPath.ResolveClass();
-                        if (!TargetClass)
-                            continue;
-
-                        if (Class->IsChildOf(TargetClass))
-                        {
-                            const auto Env = EnvLocator->Locate(Class);
-                            Env->TryBind(Class);
-                            break;
-                        }
-                    }
-                }
+                PreBindConfiguredClasses();
             }
             else
             {
@@ -162,6 +156,7 @@ namespace UnLuaNova
                 EnvLocator->Reset();
                 EnvLocator->RemoveFromRoot();
                 EnvLocator = nullptr;
+                PreBoundClasses.Empty();
                 FLuaOverrides::Get().RestoreAll();
             }
 
@@ -183,6 +178,33 @@ namespace UnLuaNova
         }
 
     private:
+        void PreBindConfiguredClasses()
+        {
+            if (!EnvLocator)
+                return;
+
+            // Default-phase modules may register classes after this PreDefault module starts.
+            const auto& Paths = GetDefault<UUnLuaNovaSettings>()->PreBindClasses;
+            for (UClass* Class : TObjectRange<UClass>())
+            {
+                if (PreBoundClasses.Contains(Class))
+                    continue;
+                for (const FSoftClassPath& Path : Paths)
+                {
+                    UClass* Target = Path.ResolveClass();
+                    if (Target && Class->IsChildOf(Target))
+                    {
+                        if (FLuaEnv* Env = EnvLocator->Locate(Class))
+                        {
+                            if (Env->TryBind(Class))
+                                PreBoundClasses.Add(Class);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         virtual void NotifyUObjectCreated(const UObjectBase* ObjectBase, int32 Index) override
         {
             // UE_LOG(LogTemp, Log, TEXT("NotifyUObjectCreated : %p"), ObjectBase);
@@ -335,6 +357,8 @@ namespace UnLuaNova
         FDelegateHandle OnHandleSystemErrorHandle;
         FDelegateHandle OnHandleSystemEnsureHandle;
         FDelegateHandle PostLoadMapWithWorldHandle;
+        FDelegateHandle PostEngineInitHandle;
+        TSet<TWeakObjectPtr<UClass>> PreBoundClasses;
 #if AUTO_UNLUA_STARTUP
 #if WITH_EDITOR
         FDelegateHandle PreBeginPIEHandle;
