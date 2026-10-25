@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -9,6 +10,30 @@ from GenerateTestReport import load_benchmark, render_memory, load_tests as load
 
 
 class ReportEvidenceTests(unittest.TestCase):
+    def test_legacy_recordings_are_not_encoded_or_linked_in_reports(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "index.json").write_text(json.dumps({"tests": []}))
+            shots = root / "screenshots"
+            shots.mkdir()
+            (shots / "Showcase_Binding.png").write_bytes(b"still")
+            (shots / "Showcase_Binding_Clip_0001.png").write_bytes(b"frame")
+            (root / "videos").mkdir()
+            (root / "videos/session.mp4").write_bytes(b"legacy recording")
+            subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] /
+                            "GenerateTestReport.py"), "--reports", str(root)], check=True,
+                           capture_output=True, text=True)
+            report = (root / "report.md").read_text(encoding="utf-8")
+            self.assertIn("Showcase_Binding.png", report)
+            self.assertNotIn("_Clip_", report)
+            self.assertNotIn(".mp4", report)
+            self.assertNotIn("<video", report)
+            self.assertFalse((root / "videos/Showcase_Binding_Clip.mp4").exists())
+            summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["screenshots"], 1)
+            self.assertFalse(summary["recording_enabled"])
+            self.assertNotIn("session_recordings", summary)
+
     def test_network_report_exposes_disconnected_and_raw_delivery_evidence(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

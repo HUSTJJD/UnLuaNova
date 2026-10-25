@@ -444,8 +444,7 @@ BEGIN_TESTSUITE(FLuaNetMulticastTest,
             Client.Role = ENetPeerRole::Client;
             Client.MapName = MulticastMap;
             Client.ReportTestName = MulticastReportTest;
-            // A window on purpose: this is the peer a recording is worth having - see
-            // topology.json, which is what RunTests.ps1 picks the recorded windows from.
+            // Exercise the client with a real viewport; Release renders it offscreen.
             Client.bHeadless = false;
             Client.ConnectTo = TEXT("127.0.0.1");
             Session->AddPeer(Client);

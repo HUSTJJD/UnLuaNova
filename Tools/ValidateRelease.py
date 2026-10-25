@@ -351,7 +351,7 @@ def validate_network(run, backend):
 def validate_media(run):
     errors = []
     for name in ("Binding", "Override", "Container", "UMG"):
-        for relative in (f"screenshots/Showcase_{name}.png", f"videos/Showcase_{name}_Clip.mp4"):
+        for relative in (f"screenshots/Showcase_{name}.png",):
             path = run / relative
             if not path.is_file() or path.stat().st_size == 0:
                 errors.append(f"Missing showcase artifact: {relative}")

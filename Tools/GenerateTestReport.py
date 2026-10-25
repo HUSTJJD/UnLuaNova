@@ -48,10 +48,8 @@ Usage:
 
 import argparse
 import json
-import os
 import re
 import shutil
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -64,40 +62,11 @@ SKIP_STATES = {"skipped", "skip", "notrun", "notrun", "ignored", "na"}
 MAX_MESSAGE_LEN = 400
 SLOWEST_COUNT = 10
 
-# The whole-run recording written by Tools/RunTests.ps1 (it starts a gdigrab capture with the
-# editor and stops it when the editor exits). It lives in the same videos/ directory as the
-# showcase clips, which are recorded by the tests themselves - so it has to be told apart by
-# name and is shown on its own, above everything else: the clips stop where the showcase
-# tests stop, and a hung or crashed run produces no clip at all.
-SESSION_VIDEO_STEM = "session"
-
-# A net run puts more than one window on screen, and RunTests.ps1 -RecordWindow records each
-# of them: session.mp4 for the editor, session-<label>.mp4 for every peer added with
-# -RecordWindow 标签=进程名. They are all the run's own captures - told apart from the
-# showcase clips by name, and all shown together, because the interesting part of a net
-# failure is usually on the peer's window and not the editor's.
-def is_session_video(stem: str) -> bool:
-    return stem == SESSION_VIDEO_STEM or stem.startswith(SESSION_VIDEO_STEM + "-")
-
-
-def session_video_label(stem: str) -> str:
-    """'session' -> '编辑器'; 'session-客户端1' -> '客户端1'."""
-    if stem.startswith(SESSION_VIDEO_STEM + "-"):
-        return stem[len(SESSION_VIDEO_STEM) + 1:]
-    return "编辑器"
-
 # Written by Tools/RunTests.ps1. Which checker runs depends on the backend - Luau scripts
 # are checked with luau-analyze, Lua scripts with LuaLS - and each one writes its summary
 # under its own name next to the automation JSON.
 TYPECHECK_FILES = {"Lua": "lua-analyze.json", "Luau": "luau-analyze.json"}
 TYPECHECK_SHOWN = 20
-
-# A clip is this many seconds long, whatever the capture count was: the playback rate is
-# derived per sequence (frames / CLIP_SECONDS). Every captured frame is a full viewport
-# readback plus a PNG encode, and that is what stalls the run, so RunTests.ps1 wants to be
-# able to halve the capture count without halving the clip - 30 frames at 15fps and 60 frames
-# at 30fps are both a 2-second clip.
-CLIP_SECONDS = 2.0
 
 # What a crash looks like in Editor.log. The automation framework exports nothing when the
 # process dies, so the log is the only evidence there is.
@@ -379,138 +348,10 @@ def render_crash(crash):
     return lines
 
 
-def find_frame_sequences(shot_dir):
-    """Group a run's PNGs into stills and frame sequences (<name>_0001.png ... <name>_0060.png)."""
-    names = sorted(p.name for p in shot_dir.glob("*.png")) if shot_dir.is_dir() else []
-
-    sequences = {}
-    stills = []
-    for name in names:
-        m = re.match(r"^(.+)_(\d{4,})\.png$", name)
-        if m:
-            sequences.setdefault(m.group(1), []).append(name)
-        else:
-            stills.append(name)
-
-    return stills, sequences
-
-
-def find_ffmpeg(explicit=None):
-    """Locate an encoder.
-
-    Order: --ffmpeg, $FFMPEG, ffmpeg on PATH, then the static binary imageio-ffmpeg ships.
-    The last one is why no system-wide ffmpeg install is needed: it is an ordinary pip
-    package (Tools/requirements.txt) that carries its own ffmpeg.
-    """
-    candidates = []
-    if explicit:
-        candidates.append(("--ffmpeg", explicit))
-    if os.environ.get("FFMPEG"):
-        candidates.append(("$FFMPEG", os.environ["FFMPEG"]))
-    on_path = shutil.which("ffmpeg")
-    if on_path:
-        candidates.append(("PATH", on_path))
-    try:
-        import imageio_ffmpeg
-
-        candidates.append(("imageio-ffmpeg", imageio_ffmpeg.get_ffmpeg_exe()))
-    except Exception:
-        pass
-
-    for origin, path in candidates:
-        if path and Path(path).is_file():
-            return origin, path
-    return None, None
-
-
-def encode_sequences(shot_dir, video_dir, sequences, ffmpeg, fps=None):
-    """Encode every frame sequence into one .mp4. Returns a {name: reason} map of failures.
-
-    Recording is part of the run, not an extra, so a burst that cannot be encoded is a
-    failure with a reason - never a silent pile of PNGs the reader has to decode by eye.
-
-    fps is the playback rate for all sequences; leave it None to derive it per sequence from
-    CLIP_SECONDS.
-    """
-    failures = {}
-    if not sequences:
-        return failures
-
-    video_dir.mkdir(parents=True, exist_ok=True)
-    for name, frames in sorted(sequences.items()):
-        out = video_dir / f"{name}.mp4"
-        # -framerate: the frames were grabbed one per rendered frame, so any real frame rate
-        # is a guess. Deriving it from the frame count keeps the clip CLIP_SECONDS long:
-        # 60 frames play at 30fps, 30 frames at 15fps. Without this, halving the captures to
-        # make the run less stuttery would also halve every clip.
-        rate = fps if fps else max(1, round(len(frames) / CLIP_SECONDS))
-        cmd = [
-            ffmpeg, "-y", "-loglevel", "error",
-            "-framerate", str(rate),
-            "-i", str(shot_dir / f"{name}_%04d.png"),
-            # libx264 refuses odd dimensions, and a viewport can be any size (a resized
-            # editor window, a custom -ResX/-ResY). Crop the last row/column rather than
-            # letting the encode fail on something that is not the tests' problem.
-            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "23",
-            str(out),
-        ]
-        try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        except (OSError, subprocess.SubprocessError) as e:
-            failures[name] = f"编码器跑不起来：{e}"
-            continue
-
-        if proc.returncode != 0 or not out.is_file():
-            # The last line is usually just "Conversion failed!"; the useful line is above it.
-            detail = [line.strip() for line in (proc.stderr or "").strip().splitlines() if line.strip()]
-            failures[name] = " / ".join(detail[-3:]) if detail else f"退出码 {proc.returncode}"
-
-    return failures
-
-
-def collect_media(shot_dir, video_dir):
-    """Split what the run produced into stills, frame sequences and encoded clips.
-
-    A clip arrives as a burst of <name>_0001.png ... <name>_0060.png. Listing sixty copies of
-    the same scene as if they were sixty different pictures buries the stills, so they are
-    collapsed into one entry per clip; if an encoder ran there is a real video instead.
-
-    One mp4 in there is not a clip: session.mp4 is the whole run, recorded by the runner. It
-    is returned separately so the report can lead with it - the clips are recorded by the
-    tests, so they are silent exactly when something goes wrong.
-    """
-    stills, sequences = find_frame_sequences(shot_dir)
-
-    clips = []
-    sessions = []
-    if video_dir.is_dir():
-        for p in sorted(video_dir.glob("*.mp4")):
-            entry = {
-                "name": p.stem,
-                "file": p.name,
-                "label": session_video_label(p.stem),
-                "frames": len(sequences.get(p.stem, [])),
-            }
-            if is_session_video(p.stem):
-                sessions.append(entry)
-            else:
-                clips.append(entry)
-
-    # session.mp4 first, then the extra windows in the order they were named. "sorted()"
-    # alone would put session-<label> before session.mp4, and the editor is the one people
-    # open first.
-    sessions.sort(key=lambda e: (e["name"] != SESSION_VIDEO_STEM, e["name"]))
-
-    # A burst that was never encoded is still worth showing: the first frame, and how many
-    # there are, so the reader knows it is a recording and not a duplicate.
-    uncoded = [
-        {"name": key, "first": frames[0], "frames": len(frames)}
-        for key, frames in sorted(sequences.items())
-        if not any(c["name"] == key for c in clips)
-    ]
-
-    return stills, clips, uncoded, sessions
+def collect_screenshots(shot_dir):
+    """Collect stills without republishing legacy recording frames."""
+    return sorted(p.name for p in shot_dir.glob("*.png")
+                  if not re.match(r"^.+_\d{4,}\.png$", p.name))
 
 
 def load_typecheck(reports_dir: Path, backend=None):
@@ -717,11 +558,7 @@ def render(
     published=False,
     backend=None,
     crash=None,
-    clips=None,
-    sessions=None,
-    uncoded=None,
     typecheck=None,
-    encode_failures=None,
     benchmark=None,
     class_summary=None,
     net_sessions=None,
@@ -839,62 +676,7 @@ def render(
             lines.append(f"| `{t['name']}` | {t['duration']:.3f}s |")
         lines.append("")
 
-    clips = clips or []
-    uncoded = uncoded or []
-    sessions = sessions or []
-
-    # 整场录屏放在最前面：它是唯一能把"卡在第几秒"说清楚的东西。
-    lines.append("## 整场录屏")
-    lines.append("")
-    lines.append(
-        "不是 showcase 的剪辑——剪辑是用例自己录的，只覆盖 showcase 那几个测试；"
-        "跑挂了的那一轮往往一个剪辑都没有。这一段是 `Tools/RunTests.ps1` 在启动编辑器的同时"
-        "开始录、编辑器退出时结束，从第一条测试到最后一条都在里面（窗口出现前的几秒除外）。"
-    )
-
-    if sessions:
-        if len(sessions) > 1:
-            # 多个窗口：逐个列出来，因为联网用例出问题时，要看的那一端通常不是编辑器这一端。
-            lines.append("")
-            lines.append(
-                f"这一轮录了 {len(sessions)} 个窗口（`-RecordWindow 标签=进程名` 加进来的 peer）。"
-                "每个窗口单独一个文件：跨端的问题要看两端各自的画面，只看一边看不出来。"
-            )
-            lines.append("")
-            for entry in sessions:
-                lines.append(f"### {entry['label']}")
-                lines.append("")
-                lines.append(
-                    f'<video controls muted playsinline width="640" '
-                    f'src="{image_prefix}{entry["file"]}"></video>'
-                )
-                lines.append("")
-                lines.append(
-                    f"[直接下载这个 mp4（标准 H.264）]({image_prefix}{entry['file']})"
-                )
-                lines.append("")
-        else:
-            entry = sessions[0]
-            lines.append("")
-            lines.append(
-                f'<video controls muted playsinline width="640" '
-                f'src="{image_prefix}{entry["file"]}"></video>'
-            )
-            lines.append("")
-            lines.append(
-                f"[打不开播放器的话：直接下载这个 mp4（标准 H.264）]({image_prefix}{entry['file']})"
-            )
-            lines.append("")
-    else:
-        lines.append("")
-        lines.append(
-            "这一轮没有整场录屏：`-NoVideo` / `-NoSessionVideo` / `-NullRHI` 会关掉它，"
-            "找不到 ffmpeg（没装 imageio-ffmpeg，见 `Tools/requirements.txt`）时也不会录。"
-        )
-        lines.append("")
-
     if net_sessions:
-        # 紧挨着录屏：联网会话的画面在上面，日志在这里，两者合起来才是"两端各看到了什么"。
         # 缺了这一节，net/ 归档的东西就只是躺在磁盘上 —— 知道它存在的人才会去看。
         lines.extend(render_net_sessions(net_sessions, published=published))
 
@@ -938,42 +720,6 @@ def render(
             "宁可高估——它决定的是\"哪些可以挪\"，挪错了会红，不会静默通过。"
         )
         lines.append("")
-
-    if clips or uncoded:
-        lines.append("## 视频")
-        lines.append("")
-        for clip in clips:
-            title = clip["name"].replace("-", " ")
-            lines.append(f"### {title}")
-            lines.append("")
-            # Raw HTML: plain Markdown has no video syntax, and md_in_html is enabled for
-            # exactly this kind of embed.
-            lines.append(
-                f'<video controls muted loop playsinline width="640" src="{image_prefix}{clip["file"]}"></video>'
-            )
-            lines.append("")
-            # GitHub's markdown renderer strips raw HTML, so on a report page read there the
-            # <video> above silently disappears and reads as "the clip cannot be played" - the
-            # file itself is a standard H.264 mp4. A plain link survives every renderer.
-            lines.append(f"[播放不了？直接打开视频文件（标准 H.264 mp4）]({image_prefix}{clip['file']})")
-            lines.append("")
-            frames = f"，{clip['frames']} 帧" if clip["frames"] else ""
-            lines.append(f"{frames}，由这些帧编码而成（`Tools/RunTests.ps1 -Video`）。")
-            lines.append("")
-        for seq in uncoded:
-            title = seq["name"].replace("-", " ")
-            lines.append(f"### {title}")
-            lines.append("")
-            lines.append(f"![{title}]({image_prefix}{seq['first']})")
-            lines.append("")
-            # An unencoded burst is a failure, not a fallback: the point of the run was the
-            # clip, and a reader cannot tell "not encoded" from "nothing happened".
-            reason = (encode_failures or {}).get(seq["name"], "编码器没有产出文件。")
-            lines.append(
-                f"**编码失败 ❌** —— 只拿到帧序列（{seq['frames']} 帧："
-                f"`{seq['name']}_0001.png` … `{seq['name']}_{seq['frames']:04d}.png`）。原因：{reason}"
-            )
-            lines.append("")
 
     # Type checking is not an automation test, so it never appears in the JSON the engine
     # exports - and before this it never appeared in the report either, which left the
@@ -1066,7 +812,7 @@ def render_net_sessions(sessions, published=False) -> list:
     )
     lines.append("")
     lines.append(
-        "headless 的独立服务器 `-NullRHI` 起、没有窗口，上面那段录屏里没有它 —— "
+        "headless 的独立服务器使用 `-NullRHI`，没有窗口；"
         "它的日志是它唯一的痕迹，所以每个 peer 都列了。"
     )
     lines.append("")
@@ -1077,9 +823,9 @@ def render_net_sessions(sessions, published=False) -> list:
         lines.append("| peer | 角色 | 窗口 | 报告 | 日志 |")
         lines.append("|:--|:--|:--|:--|:--|")
         for peer in entry["peers"]:
-            window = "headless（不录）" if peer["headless"] else "有窗口（录屏是否成功见媒体结果）"
+            window = "headless" if peer["headless"] else "有视口"
             if published:
-                # 发布页只带页面与图片/视频，日志不跟着走。给一个点不开的链接比不给更糟。
+                # 发布页只带页面与图片，日志保存在本地运行目录。
                 report = f"`{peer['report']}`"
                 log = f"`{peer['log']}`"
             else:
@@ -1297,13 +1043,6 @@ def main() -> None:
         " (Docs/test-lua-report.md or Docs/test-luau-report.md)",
     )
     parser.add_argument(
-        "--ffmpeg",
-        default=None,
-        metavar="PATH",
-        help="encoder to use for the recorded frame sequences; by default $FFMPEG, then "
-        "ffmpeg on PATH, then the binary imageio-ffmpeg ships",
-    )
-    parser.add_argument(
         "--publish",
         action="store_true",
         help="also write the Docs/ copy; that copy is committed, so it carries no "
@@ -1367,28 +1106,7 @@ def main() -> None:
         )
 
     shot_dir = out_dir / "screenshots"
-    video_dir = out_dir / "videos"
-
-    # Recording is part of the run: the showcase tests capture a burst of frames, and those
-    # bursts are encoded here. Encoding lives in this script rather than in RunTests.ps1 so
-    # that "which encoder" is decided in exactly one place.
-    _, sequences = find_frame_sequences(shot_dir)
-    encode_failures = {}
-    if sequences:
-        origin, ffmpeg = find_ffmpeg(args.ffmpeg)
-        if ffmpeg:
-            print(f"Encoding   : {len(sequences)} clip(s) with ffmpeg from {origin}")
-            encode_failures = encode_sequences(shot_dir, video_dir, sequences, ffmpeg)
-        else:
-            for name in sequences:
-                encode_failures[name] = (
-                    "找不到编码器：`pip install -r Tools/requirements.txt`（imageio-ffmpeg 自带静态 ffmpeg），"
-                    "或把 ffmpeg 放进 PATH，或用 --ffmpeg 指定。"
-                )
-        for name, reason in sorted(encode_failures.items()):
-            print(f"ERROR: clip '{name}' was not encoded: {reason}", file=sys.stderr)
-
-    screenshots, clips, uncoded, sessions = collect_media(shot_dir, video_dir)
+    screenshots = collect_screenshots(shot_dir)
 
     typecheck = load_typecheck(reports_dir, backend)
 
@@ -1417,11 +1135,7 @@ def main() -> None:
             reports_dir,
             backend=backend,
             crash=crash,
-            clips=clips,
-            sessions=sessions,
-            uncoded=uncoded,
             typecheck=typecheck,
-            encode_failures=encode_failures,
             benchmark=benchmark,
             class_summary=class_summary,
             net_sessions=net_sessions,
@@ -1439,22 +1153,12 @@ def main() -> None:
         "skipped": skipped,
         "duration": round(sum(t["duration"] for t in tests if t["duration"] is not None), 3),
         "screenshots": len(screenshots),
-        "videos": len(clips),
-        # The whole-run recordings are not clips and do not count as one: they are recorded
-        # whatever the run did, including the runs that produced no clip at all. A list now
-        # because a net run records one window per peer.
-        "session_recordings": [
-            {"label": e["label"], "file": e["file"]} for e in sessions
-        ],
-        # Kept as the single-file name so anything already reading summary.json keeps
-        # working; it is the editor's own capture, which every run has had all along.
-        "session_recording": sessions[0]["file"] if sessions else None,
+        "recording_enabled": False,
         # Empty on a run with no net test in it. The files themselves are archived under
         # <RunDir>/net/, which is not published - this is the machine-readable index of them.
         "net_sessions": [
             {"session": e["session"], "peers": e["peers"]} for e in net_sessions
         ],
-        "videos_failed": len(encode_failures),
         "crashed": crash is not None,
         "crash_test": crash["test"] if crash else None,
         # The whole point of the baseline: totals alone cannot tell a renamed test from a
@@ -1512,11 +1216,6 @@ def main() -> None:
             )
             print(f"BASELINE: 已写入 {baseline_path}（{summary['total']} 个用例）")
 
-    if encode_failures:
-        # Loud, not silent: a report that quietly shows a pile of PNGs looks like a run that
-        # recorded something. Failing here also makes RunTests.ps1 exit non-zero.
-        raise SystemExit(f"{len(encode_failures)} clip(s) could not be encoded; see the report.")
-
     if args.publish:
         repo_root = Path(__file__).resolve().parent.parent
         docs_dir = repo_root / "Docs"
@@ -1527,16 +1226,10 @@ def main() -> None:
         page_name = f"test-{tag}-report.md" if tag else "test-report.md"
         image_dir_name = f"tests-{tag}" if tag else "tests"
         images_dir = docs_dir / "Images" / image_dir_name
-        # Everything the run produced, not just the stills: the frame sequences a clip is
-        # made of are images too, and the report links them when ffmpeg is unavailable.
-        if screenshots or clips or uncoded or sessions:
+        if screenshots:
             images_dir.mkdir(parents=True, exist_ok=True)
-            for name in screenshots + [f for seq in uncoded for f in [seq["first"]]]:
+            for name in screenshots:
                 shutil.copy2(shot_dir / name, images_dir / name)
-            for clip in clips:
-                shutil.copy2(video_dir / clip["file"], images_dir / clip["file"])
-            for entry in sessions:
-                shutil.copy2(video_dir / entry["file"], images_dir / entry["file"])
         page_path = docs_dir / page_name
         page_path.write_text(
             strip_machine_paths(
@@ -1549,14 +1242,7 @@ def main() -> None:
                     published=True,
                     backend=backend,
                     crash=crash,
-                    clips=clips,
-                    sessions=sessions,
-                    uncoded=uncoded,
-                    # typecheck / encode_failures were missing here, so the committed page
-                    # always said "这一轮没有跑" even on runs whose checker did run - only the
-                    # copy under Saved/ ever showed the section.
                     typecheck=typecheck,
-                    encode_failures=encode_failures,
                     benchmark=benchmark,
                     class_summary=class_summary,
                     net_sessions=net_sessions,

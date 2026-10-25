@@ -177,39 +177,6 @@ namespace UnLuaNovaTestSuite
         int32 FramesWaited = 0;
     };
 
-    // Captures a burst of consecutive frames as <Name>_0001.png, <Name>_0002.png, ... so an
-    // offline encoder (-Video in Tools/RunTests.ps1) can turn them into a clip. Still images
-    // are what the docs site shows; a clip is what shows something moving.
-    //
-    // One screenshot per update, each waited for: FScreenshotRequest has no completion
-    // callback, and asking for the next frame before the previous PNG exists produces a
-    // sequence with holes in it. The wait is bounded on purpose for the same reason the
-    // single-shot command's is - a -NullRHI run never writes a PNG.
-    //
-    // The first couple of frames are dropped rather than captured: the very first one can still
-    // show the level editor viewport (grid and axis gizmo) instead of the PIE view, which leaves
-    // a jarring frame of the wrong thing at the head of every clip.
-    class FCaptureFramesLatentCommand : public IAutomationLatentCommand
-    {
-    public:
-        FCaptureFramesLatentCommand(FString ClipName, int32 NumFrames, int32 WarmupFrames = 3);
-
-        virtual bool Update() override;
-
-    private:
-        FString Name;
-        int32 Frames;
-        int32 WarmupFrames;
-        int32 WarmedUp = 0;
-        int32 Captured = 0;
-        int32 FramesWaited = 0;
-        bool bPending = false;
-    };
-
-    // Whether this run was asked to record clips as well as stills. Read from the
-    // environment because the switch lives on RunTests.ps1, not on the test.
-    bool IsFrameRecordingEnabled();
-    int32 GetFrameRecordingCount();
 }
 
 #endif

@@ -1,4 +1,6 @@
 ---
+
+> 2026-10-25 privacy update: Recording, frame-sequence capture and video encoding have been removed at the user's request, together with existing videos and sequence frames. Video counts and decoding results below describe historical validation before deletion, not currently downloadable artifacts. The current media gate requires single game-viewport screenshots only. Original test results are preserved; this change does not constitute a new full Release matrix run.
 title: "2026-10-24 Regression Fixes and Validation"
 description: "Static binding crash, backend compatibility and release validation evidence"
 ---

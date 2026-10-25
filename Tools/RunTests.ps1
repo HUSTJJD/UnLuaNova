@@ -63,18 +63,6 @@ param(
     # 只能表示成"跑这些段"。
     [string[]] $SlowPrefix = @("UnLuaNova.Slow."),
     [switch] $NoScreenshots,
-    [switch] $NoVideo,
-    # 只关掉"整场录屏"，保留 showcase 剪辑：剪辑是用例自己录的，卡死/崩溃/启动那几十秒都不在里面。
-    [switch] $NoSessionVideo,
-    # 录屏帧率。整场录屏动辄几分钟，15fps 足够看清"卡在哪一帧"，文件也只有一半大。
-    [int] $SessionFps = 15,
-    # 除编辑器外还要录的窗口，格式 "标签=进程名"，可重复。
-    # 联网测试里服务器和一个或多个客户端各有各的画面，只录编辑器那一个窗口的话，
-    # "客户端没收到复制字段"这种事在录像里根本看不见。
-    #   -RecordWindow "客户端1=UnrealEditor" -RecordWindow "客户端2=UnrealEditor"
-    # 每个窗口单独出一个 videos/session-<标签>.mp4；没有窗口的进程（独立服务器是
-    # headless 的）不录，日志里会说明。
-    [string[]] $RecordWindow = @(),
     [switch] $NullRHI,
     [switch] $RenderOffScreen,
     [switch] $Sound,
@@ -98,7 +86,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Dispatch before discovery, config writes, classification or Win32 Add-Type.
+# Dispatch before discovery, config writes or classification.
 if ($Profile -eq "Release") {
     $Allowed = @('Profile', 'EnginePath', 'ProjectPath', 'OutputDir', 'TimeoutMinutes', 'DryRun')
     foreach ($Key in $PSBoundParameters.Keys) {
@@ -550,18 +538,14 @@ function Show-NoTestsQueuedHint {
         ForEach-Object { Write-Host "           $($_.Line)" -ForegroundColor Yellow }
 }
 
-# --- screenshots and clips -----------------------------------------------------------
+# --- screenshots ---------------------------------------------------------------------
 # Screenshots go to the project's Saved/Screenshots, not next to the JSON the automation
 # framework exports, so they have to be pulled into the run directory for the report to be
-# self-contained. Two things make that more than a copy:
+# self-contained.
 #
 #   - The directory is not cleaned by the editor. A run that takes no picture at all would
 #     otherwise publish last week's PNGs as this run's gallery, which is worse than an empty
 #     one: nobody can tell the pictures are not from this run. So it is emptied first.
-#   - A clip is a frame sequence (Name_0001.png, Name_0002.png, ...) that becomes a video in
-#     the report generator. Encoding is not optional and does not need a system ffmpeg: it
-#     comes from the pip package in Tools/requirements.txt. A burst that cannot be encoded
-#     fails the run rather than passing as a pile of stills.
 
 function Get-ScreenshotDir {
     # 截图落在项目 Saved/Screenshots/<平台名> 下，而平台名带着载体：编辑器是
@@ -578,310 +562,6 @@ function Clear-StaleScreenshots {
         Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
-# --- whole-run screen recording ---------------------------------------------------------
-# The showcase clips are recorded by the tests themselves, so they cover exactly the showcase
-# tests and nothing else: not the 40 seconds of editor startup, not the PIE teardown between
-# two regression tests, and above all not a hang - a run that freezes produces no clip at all,
-# which is the one run everybody wants to watch afterwards.
-#
-# So the run records the editor window end to end: the recorder starts with the editor and is
-# stopped when the editor exits, and the .mp4 lands in <RunDir>/videos/session.mp4, where the
-# report generator already looks for video.
-
-function Resolve-FfmpegExe {
-    $cmd = Get-Command ffmpeg -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-
-    # Same source the report generator uses for its clips, so a machine that can produce a
-    # report can record the run - no system-wide install, nothing on PATH.
-    try {
-        $out = & python -c "import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())" 2>$null
-        if ($LASTEXITCODE -eq 0 -and $out) {
-            $exe = ($out | Select-Object -Last 1).Trim()
-            if ($exe -and (Test-Path -LiteralPath $exe)) { return $exe }
-        }
-    } catch { }
-    return $null
-}
-
-function Wait-EditorWindow {
-    param([string] $ProcessName, [int] $TimeoutSeconds = 90, [int[]] $ExcludeId = @())
-
-    # -ExcludeId matters once more than one window is being recorded: several peers of a
-    # net run share a process name (the editor and each client it launched), and without it
-    # every target would claim the same first window and record it repeatedly.
-    #
-    # The window does not exist the moment the process does: the editor spends its first
-    # seconds loading, and gdigrab cannot capture a title that is not there yet. Wait for it
-    # rather than recording forty seconds of desktop.
-    $Deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $Deadline) {
-        $Proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
-            Where-Object { $_.MainWindowTitle -and $ExcludeId -notcontains $_.Id } | Select-Object -First 1
-        if ($Proc) { return $Proc }
-
-        # Nothing left to wait for - the editor died on startup. Sitting out the rest of the
-        # timeout only delays the desktop fallback.
-        if (-not (Get-Process -Name $ProcessName -ErrorAction SilentlyContinue)) { return $null }
-
-        Start-Sleep -Milliseconds 500
-    }
-    return $null
-}
-
-if (-not ("UnLuaNova.WindowTools" -as [type])) {
-    Add-Type -Namespace UnLuaNova -Name WindowTools -MemberDefinition @'
-        public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
-        [DllImport("user32.dll")] public static extern bool IsIconic(System.IntPtr hWnd);
-        [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr hWnd);
-        [DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
-        [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr hWnd, out RECT r);
-        [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
-        [DllImport("user32.dll")] public static extern System.IntPtr SetThreadDpiAwarenessContext(System.IntPtr context);
-'@
-}
-
-function Restore-EditorWindow {
-    param($Process)
-
-    # A minimized window is the one case that has to be fixed before recording: gdigrab exits
-    # with -5 and writes no file at all, while MainWindowTitle stays non-empty, so "the window
-    # exists" is not enough to go on. Restore it - no focus stealing, no foreground business,
-    # nobody's typing is interrupted.
-    $Handle = $Process.MainWindowHandle
-    if (-not $Handle -or $Handle -eq [System.IntPtr]::Zero) { return $false }
-
-    if ([UnLuaNova.WindowTools]::IsIconic($Handle)) {
-        [void] [UnLuaNova.WindowTools]::ShowWindow($Handle, 9) # SW_RESTORE
-        Start-Sleep -Milliseconds 500
-        if ([UnLuaNova.WindowTools]::IsIconic($Handle)) { return $false }
-    }
-
-    return [UnLuaNova.WindowTools]::IsWindowVisible($Handle)
-}
-
-function Get-WindowCaptureRegion {
-    param($Process)
-
-    # The editor window's rectangle in *physical* pixels, clamped to the virtual screen.
-    #
-    # Physical, because gdigrab works in real device pixels while PowerShell - DPI-unaware by
-    # default - reports scaled ones: on a 150% display the rect would come back 2/3 of its
-    # real size and the capture would be of the wrong part of the screen. Per-monitor-v2
-    # awareness for this thread fixes the numbers without touching the rest of the session.
-    $Handle = $Process.MainWindowHandle
-    if (-not $Handle -or $Handle -eq [System.IntPtr]::Zero) { return $null }
-
-    $Saved = [UnLuaNova.WindowTools]::SetThreadDpiAwarenessContext([System.IntPtr](-4))
-    try {
-        $Rect = New-Object UnLuaNova.WindowTools+RECT
-        if (-not [UnLuaNova.WindowTools]::GetWindowRect($Handle, [ref] $Rect)) { return $null }
-
-        # gdigrab's desktop source starts at (0,0) whatever the virtual screen's origin is, so
-        # a monitor sitting left of / above the primary one would give negative offsets.
-        $OriginX = [UnLuaNova.WindowTools]::GetSystemMetrics(76) # SM_XVIRTUALSCREEN
-        $OriginY = [UnLuaNova.WindowTools]::GetSystemMetrics(77) # SM_YVIRTUALSCREEN
-        $ScreenW = [UnLuaNova.WindowTools]::GetSystemMetrics(78) # SM_CXVIRTUALSCREEN
-        $ScreenH = [UnLuaNova.WindowTools]::GetSystemMetrics(79) # SM_CYVIRTUALSCREEN
-
-        $X = [Math]::Max($Rect.Left - $OriginX, 0)
-        $Y = [Math]::Max($Rect.Top - $OriginY, 0)
-        $W = [Math]::Min($Rect.Right - $OriginX, $ScreenW) - $X
-        $H = [Math]::Min($Rect.Bottom - $OriginY, $ScreenH) - $Y
-
-        # A maximized window hangs a few pixels over the screen edge; yuv420p has no odd
-        # dimensions either. Both are cheaper to fix here than to let gdigrab refuse.
-        if ($W -lt 16 -or $H -lt 16) { return $null }
-        if ($W % 2) { $W-- }
-        if ($H % 2) { $H-- }
-
-        return [pscustomobject]@{ X = $X; Y = $Y; Width = $W; Height = $H }
-    } finally {
-        [void] [UnLuaNova.WindowTools]::SetThreadDpiAwarenessContext($Saved)
-    }
-}
-
-function Start-SessionRecording {
-    # One recording per target window.
-    #
-    # A net run has more than one picture worth keeping: the editor, and each client that
-    # joins it. Recording them separately is the only way to see "the client never got the
-    # replicated field" - a single capture of one window shows the server's side of it and
-    # nothing else.
-    #
-    # A target with no window (a dedicated server: no MainWindowTitle at all, it is
-    # headless) is skipped rather than falling back to the whole screen. Two targets both
-    # falling back would record the same desktop twice under different names, which is
-    # strictly worse than one honest gap. Only when *no* target produced a window does the
-    # whole-screen fallback run, which is what a single-window run has always done.
-    param(
-        # @(@{ Label = 'Editor'; ProcessName = 'UnrealEditor-Cmd'; OutFile = '...\session.mp4' })
-        [Parameter(Mandatory)] [array] $Targets,
-        [int] $Fps = 15
-    )
-
-    $Ffmpeg = Resolve-FfmpegExe
-    if (-not $Ffmpeg) {
-        Write-Host "Record    : skipped - 没找到 ffmpeg（pip install -r Tools/requirements.txt，或放进 PATH）" -ForegroundColor Yellow
-        return @()
-    }
-
-    $Recordings = @()
-    $UsedIds = @()
-
-    foreach ($Target in $Targets) {
-        # -ExcludeId so two targets on the same process name (editor + a second client
-        # launched from it) do not both grab the first window and record it twice.
-        $Window = Wait-EditorWindow -ProcessName $Target.ProcessName -ExcludeId $UsedIds
-        $Region = if ($Window -and (Restore-EditorWindow -Process $Window)) { Get-WindowCaptureRegion -Process $Window } else { $null }
-
-        if (-not $Region) {
-            Write-Host ("Record    : {0} 没有可录的窗口（headless / 窗口没起来 / 最小化后没还原），不录。" -f $Target.Label) -ForegroundColor Yellow
-            continue
-        }
-
-        $Recording = Start-GdigrabRecording -Ffmpeg $Ffmpeg -OutFile $Target.OutFile -Fps $Fps -Region $Region
-        if ($Recording) {
-            $Recording | Add-Member -NotePropertyName Label -NotePropertyValue $Target.Label -Force
-            $Recordings += $Recording
-            $UsedIds += $Window.Id
-        }
-    }
-
-    if ($Recordings.Count -eq 0) {
-        # Nothing had a window: a headless run, or one that died before paint. Record the
-        # desktop anyway - a run with no picture at all is worse than one with the desktop
-        # in it, and this is the single-window behaviour people already rely on.
-        Write-Host "Record    : 一个窗口都没等到，退回整屏录制。" -ForegroundColor Yellow
-        $Recording = Start-GdigrabRecording -Ffmpeg $Ffmpeg -OutFile $Targets[0].OutFile -Fps $Fps -Region $null
-        if ($Recording) {
-            $Recording | Add-Member -NotePropertyName Label -NotePropertyValue "整屏" -Force
-            $Recordings += $Recording
-        }
-    }
-
-    return $Recordings
-}
-
-function Start-GdigrabRecording {
-    param(
-        [Parameter(Mandatory)] [string] $Ffmpeg,
-        [Parameter(Mandatory)] [string] $OutFile,
-        [int] $Fps = 15,
-        $Region = $null
-    )
-
-    $OutDir = Split-Path -Parent $OutFile
-    if ($OutDir) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
-
-    # Always the desktop - see the note in the $Region branch for why never "title=<window>".
-    # Assigned outside the branch because the whole-screen fallback needs it too, and it did
-    # not used to have it: -i "" is what ffmpeg was handed whenever no window turned up,
-    # which is exactly the run whose recording everybody wants.
-    $Source = "desktop"
-
-    if ($Region) {
-        # NOT "-i title=<window>": gdigrab reads the window's own surface, and for a
-        # D3D-composited window that surface is black. Measured on this machine, capturing a
-        # 3840x2088 editor window that way: 8 KB of black frames per 2 seconds, with ffmpeg
-        # repeating the last good frame for the rest of the run ("Failed to capture image
-        # (error 8)"), i.e. a 333 KB "video" of one still frame. The same window area read off
-        # the composed desktop is 1.2 MB per 2 seconds of real picture.
-        #
-        # So: capture the desktop and crop it to the window. Same pixels, minus the failure.
-        # The trade-off is that another window dragged over the editor is now in the video -
-        # unavoidable, since the desktop is what the compositor hands out.
-        $Crop = " -offset_x $($Region.X) -offset_y $($Region.Y) -video_size $($Region.Width)x$($Region.Height)"
-        $What = "窗口区域 $($Region.Width)x$($Region.Height) @ $($Region.X),$($Region.Y)（整屏裁切）"
-    } else {
-        $Crop = ""
-        # No window to crop to: a headless run, a window that never came up, or one that
-        # stayed minimized. Record the whole screen instead - a run with no picture at all is
-        # worse than one with the desktop in it. Mind the gap: nothing before this point is on
-        # tape, which is why the wait is not longer.
-        $What = "整个屏幕（没等到可用窗口：无头运行 / 窗口没起来 / 最小化后没还原）—— 开头的几十秒不在录像里"
-    }
-
-    # Two things the scale filter buys: it caps the width, because the source is the whole
-    # virtual screen (7680x2160 on a two-monitor box - recording that at 15fps loses more
-    # frames than it keeps), and it forces even dimensions, because yuv420p has no odd width
-    # and an editor window is whatever size it was last dragged to.
-    $Args = "-hide_banner -loglevel error -y -f gdigrab -framerate $Fps -draw_mouse 0$Crop " +
-            "-i `"$Source`" -filter_threads 1 -vf `"scale=2*trunc(min(1920\,iw)/2):-2`" " +
-            "-c:v libx264 -threads 2 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart " +
-            "`"$OutFile`""
-
-    $Psi = New-Object System.Diagnostics.ProcessStartInfo
-    $Psi.FileName = $Ffmpeg
-    $Psi.Arguments = $Args
-    $Psi.UseShellExecute = $false
-    # stdin is how gdigrab is told to stop: 'q' lets ffmpeg finish the file properly, where
-    # killing it leaves an mp4 without a moov atom - i.e. unplayable, and exactly the file
-    # somebody opens after a hang.
-    $Psi.RedirectStandardInput = $true
-
-    $Proc = [System.Diagnostics.Process]::Start($Psi)
-    if (-not $Proc) { return $null }
-    # Recording must not compete at normal priority with the benchmark it observes.
-    try { $Proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::BelowNormal }
-    catch { Write-Warning "Could not lower recording priority: $($_.Exception.Message)" }
-
-    Write-Host "Record    : $What -> $OutFile"
-    return [pscustomobject]@{ Process = $Proc; OutFile = $OutFile; Started = (Get-Date) }
-}
-
-function Stop-SessionRecording {
-    # An array now: one entry per window that was being recorded. Looping here rather than
-    # at the call site keeps the "always stop, even when the editor hung" guarantee in one
-    # place - that finally block is the only reason a hung run still ends up on disk.
-    param($Recordings)
-
-    foreach ($Recording in @($Recordings)) {
-        if ($Recording) { Stop-OneRecording -Recording $Recording }
-    }
-}
-
-function Stop-OneRecording {
-    param($Recording)
-
-    if (-not $Recording) { return }
-
-    $Proc = $Recording.Process
-    try {
-        if (-not $Proc.HasExited) {
-            $Proc.StandardInput.Write("q")
-            $Proc.StandardInput.Flush()
-            # Encoding a few minutes of 1280x720 is not instant; give it room rather than
-            # killing a file that is one second from being finished.
-            if (-not $Proc.WaitForExit(30000)) {
-                $Proc.Kill()
-                $Proc.WaitForExit(5000)
-            }
-        }
-    } catch {
-        # The recorder dying on its own is not this run's failure - say so and move on.
-    }
-
-    $Size = if (Test-Path -LiteralPath $Recording.OutFile) {
-        (Get-Item -LiteralPath $Recording.OutFile).Length
-    } else { 0 }
-
-    if ($Size -gt 0) {
-        Write-Host ("Record    : 整场录屏 {0}（{1}）" -f $Recording.OutFile, (Format-DataSize $Size))
-    } else {
-        Write-Host "Record    : 录屏没有产出文件（ffmpeg 退出码 $($Proc.ExitCode)）。" -ForegroundColor Yellow
-    }
-}
-
-# --- 联网 peer 的窗口：从拓扑里来，不从命令行里来 ---------------------------------
-# 一个联网用例的 peer 是用例自己起的（FNetSession::LaunchPending），脚本根本不知道它们
-# 什么时候出现、叫什么。所以 FNetSession 每起一个 peer 就把 topology.json 写到
-# Saved/UnLuaNovaNet/<session>/ 下，脚本在跑的过程中轮询它 —— 于是"客户端 1 的窗口"
-# 这种东西不用再手打 -RecordWindow 也能录到，标签还是用例自己取的（Client1）。
-#
-# -Since 是"这一轮开始的时间"。Saved/UnLuaNovaNet 不会自己清理，上一轮的 topology 一直
-# 躺在那里；不看时间的话，每 3 秒一次的轮询会把前几轮的 peer 全部当作新 peer 再试一遍
-# —— 进程早就没了，于是每个旧 peer 都要干等 20 秒的窗口超时，一轮下来白白多花好几分钟。
 function Get-NetTopologyFiles {
     param([Parameter(Mandatory)] [datetime] $Since)
 
@@ -890,78 +570,6 @@ function Get-NetTopologyFiles {
 
     return @(Get-ChildItem -Path $Root -Filter "topology.json" -Recurse -File -ErrorAction SilentlyContinue |
         Where-Object { $_.LastWriteTime -ge $Since })
-}
-
-function Get-NetRecordingTargets {
-    param(
-        [Parameter(Mandatory)] [string] $RunDir,
-        [Parameter(Mandatory)] [datetime] $Since,
-        [string[]] $Done = @()
-    )
-
-    $Targets = @()
-    foreach ($Topology in (Get-NetTopologyFiles -Since $Since)) {
-        try {
-            $Json = Get-Content $Topology.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
-        } catch {
-            continue
-        }
-
-        foreach ($Peer in @($Json.peers)) {
-            # 独立服务器是 -NullRHI 的，没有窗口可录；它的东西在日志里（见 Copy-NetArtifacts）。
-            if ($Peer.headless) { continue }
-            if ($Done -contains $Peer.label) { continue }
-
-            $Slug = ($Peer.label -replace '[^A-Za-z0-9_-]', '_')
-            $Targets += @{
-                Label   = [string]$Peer.label
-                # 按 pid 认窗口，不按进程名：一次拓扑里的 peer 是同一个 exe，"名字匹配的
-                # 第一个窗口"会把 Client2 的录制指向 Client1 的窗口，两个文件一段画面。
-                Pid     = [int]$Peer.pid
-                OutFile = (Join-Path $RunDir "videos/session-$Slug.mp4")
-            }
-        }
-    }
-    return $Targets
-}
-
-function Wait-PeerWindow {
-    # 与 Wait-EditorWindow 的区别：按 pid，而且进程一没就立刻返回 —— 名字找窗口那套在
-    # 同名进程面前是不可用的，而"进程已经退出"不是"窗口还没出来"，等它没意义。
-    param([Parameter(Mandatory)] [int] $ProcessId, [int] $TimeoutSeconds = 20)
-
-    $Deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $Deadline) {
-        $Proc = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
-        if (-not $Proc) { return $null }
-        if ($Proc.MainWindowTitle) { return $Proc }
-
-        Start-Sleep -Milliseconds 500
-    }
-    return $null
-}
-
-function Start-PeerRecording {
-    # 与 Start-SessionRecording 的区别只有一个：不退回整屏。主窗口没等到才退回整屏是
-    # 合理的（那一场总得留下点东西），而一个 peer 没窗口通常意味着它是 headless 的，
-    # 整屏只会把主窗口那块画面再录一遍、换个名字。
-    param(
-        [Parameter(Mandatory)] [hashtable] $Target,
-        [int] $Fps = 15
-    )
-
-    $Ffmpeg = Resolve-FfmpegExe
-    if (-not $Ffmpeg) { return $null }
-
-    $Window = Wait-PeerWindow -ProcessId $Target.Pid
-    $Region = if ($Window -and (Restore-EditorWindow -Process $Window)) { Get-WindowCaptureRegion -Process $Window } else { $null }
-    if (-not $Region) { return $null }
-
-    $Recording = Start-GdigrabRecording -Ffmpeg $Ffmpeg -OutFile $Target.OutFile -Fps $Fps -Region $Region
-    if (-not $Recording) { return $null }
-
-    $Recording | Add-Member -NotePropertyName Label -NotePropertyValue $Target.Label -Force
-    return $Recording
 }
 
 function Stop-NetPeers {
@@ -1362,14 +970,14 @@ Write-Host "Tier         : $Tier$(if ($Tier -eq 'Fast') { " (跳过 $($SlowPrefi
 Write-Host "Filter       : $($RunFilters -join ' | ')"
 Write-Host "Backend(s)   : $($Backends -join ', ')"
 Write-Host "Output       : $OutputDir"
-Write-Host "Media        : $(if ($NoScreenshots) { 'off' } else { 'screenshots' })$(if ($NoVideo -or $NoScreenshots) { '' } else { ' + clips (encoded by the report generator)' })"
+Write-Host "Media        : $(if ($NoScreenshots) { 'off' } else { 'screenshots' })"
 if ($NullRHI -and -not $NoScreenshots) {
     # Not an error: the suite still runs, it just has nothing to photograph.
     Write-Host "               -NullRHI: no viewport, so no picture will come out of this run." -ForegroundColor Yellow
 }
 Write-Host "Audio        : $(if ($Sound) { 'on (-Sound)' } else { 'off (-nosound)' })"
 if ($RenderOffScreen) {
-    Write-Host 'Rendering    : offscreen RHI; test screenshots/clips enabled, desktop recording disabled.'
+    Write-Host 'Rendering    : offscreen RHI; test screenshots enabled.'
 }
 
 if ($DryRun)
@@ -1489,26 +1097,9 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         # publish the previous run's PNGs as its own.
         if (-not $NoScreenshots) { Clear-StaleScreenshots }
 
-        # Read by the showcase tests: they capture a burst of frames while it is set.
-        # Recording is on unless -NoVideo; the frames are encoded by the report generator.
-        if ($NoVideo) {
-            $env:UNLUANOVA_RECORD_FRAMES = $null
-        } elseif ($env:UNLUANOVA_RECORD_FRAMES) {
-            # already set by the caller - leave it alone
-        } else {
-            # 帧数，不是帧率：showcase 用例每个 tick 抓一张截图，抓满这么多张为止。
-            # 每一张都是一次完整的视口回读 + PNG 编码，是跑测试时最主要的卡顿来源
-            # （4 个 showcase 各 60 帧时，它们占了整轮 183s 里的 77s）。
-            # 30 张 + 报告生成器按 15fps 编码 = 仍是 2 秒的剪辑，截图数少一半。
-            $env:UNLUANOVA_RECORD_FRAMES = "30"
-        }
+        # Suppress frame capture even when running an older prebuilt test binary.
+        $env:UNLUANOVA_RECORD_FRAMES = '0'
 
-        # Launched with Start-Process and not with `&` on purpose: `&` blocks until the editor
-        # exits, and by then there is nothing left to record. Handing the recorder the live
-        # process is what makes "from the first second to the last" possible.
-        $EditorProcessName = [System.IO.Path]::GetFileNameWithoutExtension($RunExe)
-        $WantSessionVideo = -not $NoVideo -and -not $NoSessionVideo -and -not $NullRHI -and -not $RenderOffScreen
-        $Recording = $null
         # 本轮开始时间：联网 peer 的产物（topology / 报告 / 日志）都按它区分"这轮的"和
         # "以前留下的" —— 那个目录不会自己清理，不区分就会一直翻旧账。
         $RunStart = Get-Date
@@ -1538,69 +1129,14 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
                     ConvertTo-Json | Set-Content (Join-Path $MetadataDir 'process.json') -Encoding UTF8
                 Write-Host 'Scheduling   : AboveNormal for this release test process.'
             }
-            # 联网 peer 的录制要边跑边发现（见下面的轮询）：$RecordedLabels 是"已经录过 /
-            # 已经试过"的 peer。窗口按 pid 认（Wait-PeerWindow），所以不需要"已占用的窗口"
-            # 这种名单 —— 同名进程也能分辨。
-            $RecordedLabels = @()
-
-            if ($WantSessionVideo) {
-                # The editor is always one target; -RecordWindow adds the peers a net run
-                # puts on screen beside it (each client that joined the server). Their
-                # windows are the only place "the client never received the replicated
-                # field" is visible, so they get their own file - see Start-SessionRecording.
-                $MainLabel = if ($IsGameCarrier) { "游戏" } else { "编辑器" }
-                $RecordTargets = @(
-                    @{ Label = $MainLabel; ProcessName = $EditorProcessName; OutFile = (Join-Path $RunDir "videos/session.mp4") }
-                )
-                foreach ($W in $RecordWindow) {
-                    $Parts = $W -split '=', 2
-                    if ($Parts.Count -ne 2 -or -not $Parts[1]) {
-                        Write-Host "Record    : -RecordWindow '$W' 格式应为 标签=进程名，已忽略。" -ForegroundColor Yellow
-                        continue
-                    }
-                    $Slug = ($Parts[0] -replace '[^A-Za-z0-9_-]', '_')
-                    $RecordTargets += @{
-                        Label       = $Parts[0]
-                        ProcessName = $Parts[1]
-                        OutFile     = (Join-Path $RunDir "videos/session-$Slug.mp4")
-                    }
-                }
-
-                $Recording = Start-SessionRecording -Targets $RecordTargets -Fps $SessionFps
-                # 手工登记的窗口也算"已经录过"，免得下面再给它开一路。
-                $RecordedLabels = @($RecordTargets | ForEach-Object { $_.Label })
-            } elseif ($NullRHI -and -not $NoVideo -and -not $NoSessionVideo) {
-                Write-Host "Record    : skipped - -NullRHI 没有画面可录。" -ForegroundColor Yellow
-            }
-
-            # 联网 peer 不是脚本启动的，是用例启动的（FNetSession），所以它们的窗口只能
-            # 在跑的过程中被发现：每 3 秒看一眼 topology.json，新出现的 peer 补一个录制。
             while (-not $EditorProc.WaitForExit(3000)) {
                 if ($sw.Elapsed.TotalMinutes -ge $TimeoutMinutes) {
                     & taskkill.exe /PID $EditorProc.Id /T /F | Out-Null
                     throw "Automation exceeded $TimeoutMinutes minutes. See $RunLog"
                 }
-                if (-not $WantSessionVideo) { continue }
-                $New = Get-NetRecordingTargets -RunDir $RunDir -Since $RunStart -Done $RecordedLabels
-                foreach ($T in $New) {
-                    # 试一次就登记：窗口没等到的 peer（headless 的、启动失败的）不该每 3
-                    # 秒重试一次直到这轮结束。
-                    $RecordedLabels += $T.Label
-                    $Started = Start-PeerRecording -Target $T -Fps $SessionFps
-                    if ($Started) {
-                        $Recording += $Started
-                        Write-Host ("Record    : 联网 peer {0} 开始录制 -> {1}" -f $T.Label, $T.OutFile)
-                    } else {
-                        Write-Host ("Record    : 联网 peer {0} 没等到窗口（headless 或启动失败），不录。" -f $T.Label) -ForegroundColor Yellow
-                    }
-                }
             }
         } finally {
             if (-not $EditorProc.HasExited) { & taskkill.exe /PID $EditorProc.Id /T /F | Out-Null }
-            # Always stop it: a hung editor is exactly the run that has to end up on disk, and
-            # it is stopped from here - not by the editor, which is the thing that hung.
-            Stop-SessionRecording -Recording $Recording
-            # 用例崩在半路时，peer 进程没人收 —— 这里按 topology 再收一次。
             Stop-NetPeers -Since $RunStart
         }
         $EditorExit = $EditorProc.ExitCode

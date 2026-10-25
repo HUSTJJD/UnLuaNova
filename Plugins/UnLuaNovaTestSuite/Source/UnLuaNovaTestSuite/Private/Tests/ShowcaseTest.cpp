@@ -24,11 +24,7 @@
 // registered with BEGIN_VIEWPORT_TESTSUITE: without a viewport there is no picture to take,
 // and "no screenshot" must not be reported as "the showcase broke".
 //
-// Stills are always taken. Clips (a burst of frames, encoded to video by Tools/RunTests.ps1
-// -Video) only when the run asked for them, because they cost a second or two each and most
-// runs only want the stills:
-//
-//   Tools\RunTests.ps1 -Filter UnLuaNova.Showcase -Video -Publish
+//   Tools\RunTests.ps1 -Profile Development -Filter UnLuaNova.Showcase -Publish
 
 #include "TestCommands.h"
 #include "UnLuaNovaTestCommon.h"
@@ -38,7 +34,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 // Opens the level, lets PIE settle, takes the still, verifies it is not a uniform (blank)
-// image, and - if this run is recording - captures a clip of the same scene. The wait is not
+// image. The wait is not
 // cosmetic: PIE needs a few ticks before there is anything to photograph, and a shot taken at
 // frame 0 is a picture of a loading frame.
 #define SHOWCASE_SHOT(MapName, ShotName) \
@@ -46,10 +42,6 @@
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f)) \
     ADD_LATENT_AUTOMATION_COMMAND(FScreenshotLatentCommand(ShotName)) \
     ADD_LATENT_AUTOMATION_COMMAND(FVerifyScreenshotNotBlankLatentCommand(ShotName, *this)) \
-    if (IsFrameRecordingEnabled()) \
-    { \
-        ADD_LATENT_AUTOMATION_COMMAND(FCaptureFramesLatentCommand(FString(ShotName) + TEXT("_Clip"), GetFrameRecordingCount())) \
-    } \
     ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
 
 BEGIN_VIEWPORT_TESTSUITE(FShowcaseBindingTest, TEXT("UnLuaNova.Showcase.Binding 静态绑定示例截图"))

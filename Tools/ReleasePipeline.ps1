@@ -82,8 +82,8 @@ function Write-ReleaseSummary {
         $Lines += "| $($Stage.name) | $($Stage.status) | $Detail |"
     }
     $Lines += @('', '## Automation Reports', '',
-        '| Backend | Carrier | Total | Passed | Failed | Skipped | Screenshots | Clips | Report |',
-        '| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
+        '| Backend | Carrier | Total | Passed | Failed | Skipped | Screenshots | Report |',
+        '| --- | --- | --- | --- | --- | --- | --- | --- |')
     foreach ($BackendName in @('Lua', 'Luau')) {
         $Tag = $BackendName.ToLowerInvariant()
         foreach ($CarrierName in @('editor', 'game')) {
@@ -92,12 +92,12 @@ function Write-ReleaseSummary {
             if (Test-Path -LiteralPath $SummaryPath) {
                 try {
                     $RunSummary = Get-Content -LiteralPath $SummaryPath -Raw -Encoding UTF8 | ConvertFrom-Json
-                    $Lines += "| $BackendName | $CarrierName | $($RunSummary.total) | $($RunSummary.passed) | $($RunSummary.failed) | $($RunSummary.skipped) | $($RunSummary.screenshots) | $($RunSummary.videos) | [Details]($Relative/report.md) |"
+                    $Lines += "| $BackendName | $CarrierName | $($RunSummary.total) | $($RunSummary.passed) | $($RunSummary.failed) | $($RunSummary.skipped) | $($RunSummary.screenshots) | [Details]($Relative/report.md) |"
                 } catch {
-                    $Lines += "| $BackendName | $CarrierName | - | - | - | - | - | - | Invalid summary |"
+                    $Lines += "| $BackendName | $CarrierName | - | - | - | - | - | Invalid summary |"
                 }
             } else {
-                $Lines += "| $BackendName | $CarrierName | - | - | - | - | - | - | Not available |"
+                $Lines += "| $BackendName | $CarrierName | - | - | - | - | - | Not available |"
             }
         }
     }
@@ -258,7 +258,7 @@ try {
             $env:UNLUANOVA_TEST_NET_ROOT = Join-Path $EditorDir 'net'
             $env:UNLUANOVA_TEST_MANIFEST = Join-Path $EditorDir 'metadata/manifest.json'
             $script:EditorStarted = [DateTime]::UtcNow
-            $env:UNLUANOVA_RECORD_FRAMES = '30'
+            $env:UNLUANOVA_RECORD_FRAMES = '0'
             try {
                 Run-Script 'RunTests.ps1' @('-Profile', 'Development', '-ReleaseManaged', '-EnginePath', $EnginePath,
                     '-ProjectPath', $ProjectPath, '-Backend', $B, '-Carrier', 'Editor', '-SkipBuild', '-RenderOffScreen',

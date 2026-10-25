@@ -67,7 +67,6 @@ CLASS_LABELS = {
 MARKERS = [
     # E first in effect only through CLASS_ORDER; order here does not matter.
     ("E", re.compile(r"\bFScreenshotLatentCommand\b")),
-    ("E", re.compile(r"\bFCaptureFramesLatentCommand\b")),
     ("D", re.compile(r"\bBEGIN_VIEWPORT_TESTSUITE\b")),
     # A network session is signalled by passing NumClients / PlayNetMode, i.e. more than
     # the map name (and optionally bForceReload). FOpenMapLatentCommand's signature is

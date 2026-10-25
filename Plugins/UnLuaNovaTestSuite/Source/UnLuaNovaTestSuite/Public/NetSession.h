@@ -156,7 +156,7 @@ namespace UnLuaNovaTestSuite
         void TerminateAll();
         bool ReadReport(const FString& Label, TSharedPtr<FJsonObject>& Out) const;
 
-        /** Peers, roles and pids - read by RunTests.ps1 to name the recordings and keep the logs. */
+        /** Peers, roles and pids - read by RunTests.ps1 for log collection and process cleanup. */
         bool WriteTopology() const;
 
         /** Port of the Server peer, for clients that connect without naming one. */

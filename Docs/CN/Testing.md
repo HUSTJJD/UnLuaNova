@@ -22,7 +22,7 @@ description: "单入口 release 验证、证据与失败判定"
 | 每个后端 | Lua、Luau 分别执行，开启 Timer/Event/OOP 和静态绑定 |
 | Editor | 备份移出旧静态绑定源码，构建 Editor/生成器，重新生成并再次构建，确保本轮生成代码参与编译 |
 | Development | 构建、cook、打包 Game 和 Dedicated Server target 到默认输出路径 |
-| Editor 全量测试 | 全部 `UnLuaNova` 注册用例，包括 Slow、VM/绑定/生命周期、扩展、示例截图/视频及性能用例 |
+| Editor 全量测试 | 全部 `UnLuaNova` 注册用例，包括 Slow、VM/绑定/生命周期、扩展、示例截图及性能用例 |
 | 跨进程联网 | 本轮同后端 cooked Server/Game 组成一个 DS 和两个客户端；验证两个服务端生成 Actor 的两轮 Lua 字段同步、双向 RPC、Owner 定向投递及 multicast，保留逐端原始观测 |
 | 静态类型 | 备份旧生成声明，重新导出；LuaLS 和 luau-lsp 必须实际执行，不能静默跳过 |
 | Cooked 全量测试 | 在 Development 包中执行 UE 当前游戏上下文可运行的全部注册用例 |
@@ -34,7 +34,7 @@ description: "单入口 release 验证、证据与失败判定"
 
 Release 自动设置 `UNLUANOVA_TEST_PEER_EXE` 和 `UNLUANOVA_TEST_SERVER_EXE`，分别指向默认 staging 路径的当前 Game 和 Server 程序。编译复用 `Binaries/Win64`，打包复用 `Saved/StagedBuilds/Windows` 和 `WindowsServer`；后续后端及 Shipping 会覆盖相应输出，不为每轮复制 exe。各后端的 `metadata/binary-*.json` 保存当时的路径、大小及 SHA-256。UE 5.8 普通 Game 二进制不会因 `-server` 参数变成 Dedicated Server。拓扑文件记录每个 peer 的实际可执行文件，清理时同时核对 PID、路径及启动时间。
 
-Release 的 Editor、Game 和非 headless peer 使用 `-RenderOffScreen`，保留真实 RHI、视口用例、截图和测试帧视频，避免依赖桌面窗口是否可见；不启动桌面录屏。DS 仍使用 `-NullRHI`。Development 可显式选择 `-RenderOffScreen`。
+Release 的 Editor、Game 和非 headless peer 使用 `-RenderOffScreen`，保留真实 RHI、视口用例、单张游戏视口截图，避免依赖桌面窗口是否可见；已移除桌面录屏、连续帧采集及视频编码。DS 仍使用 `-NullRHI`。Development 可显式选择 `-RenderOffScreen`。
 
 Release 测试 Editor 固定使用 `AboveNormal` 进程优先级，设置与 PID 写入 `metadata/process.json`，减少普通优先级后台任务的调度干扰；只调整本轮测试进程。原参考来自 Normal 环境，优先级差异必须保留为测量条件，不能据此声称运行时优化；工作量、采样、基线和阈值不变，仍可能受频率、内存和其他负载影响。
 
@@ -50,7 +50,7 @@ DAP 会话测试使用系统分配的回环端口，由游戏线程逐帧处理�
 
 每个后端保留 `editor/<backend>/`、`game/`、二进制元数据和日志。`metadata/manifest.json` 来自实际进程，记录编译后端、能力开关、Editor/cooked 状态及完整测试路径。`ValidateRelease.py` 逐项核对 UE `index.json`，零用例、漏跑、重复、跳过、未知状态、错误信息、错误后端和未注册源码 suite 都不能通过。测试数量和名称基线不再决定 release 完整性。
 
-Editor 证据门禁要求四个 Showcase 的 PNG 和编码视频。cooked 报告也自动收集本轮新生成的截图并编码视频。网络要求 Server/Client1/Client2 的日志、角色、后端、RPCId、不同 PID、实际打开的连接及相同服务器地址。DedicatedServer schema 2 还要求相同服务端生成的 SessionId、两个不同 Owner、两轮 Lua HP 与准确的逐端 RPC 日志；Standalone 或只有声明编号一致的旧报告不能通过。单独运行报告 helper 的空操作不算联网通过。
+Editor 证据门禁要求四个 Showcase 的 PNG。cooked 报告也自动收集本轮新生成的单张截图。网络要求 Server/Client1/Client2 的日志、角色、后端、RPCId、不同 PID、实际打开的连接及相同服务器地址。DedicatedServer schema 2 还要求相同服务端生成的 SessionId、两个不同 Owner、两轮 Lua HP 与准确的逐端 RPC 日志；Standalone 或只有声明编号一致的旧报告不能通过。单独运行报告 helper 的空操作不算联网通过。
 
 Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混入旧 Game 二进制；Release 通过环境变量显式指定默认 staging 路径的当前 Server/Game。客户端不在本地生成测试 Actor 或设置 Owner。
 

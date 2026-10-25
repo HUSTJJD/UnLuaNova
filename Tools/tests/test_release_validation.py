@@ -346,16 +346,13 @@ class ReleaseValidationTests(unittest.TestCase):
             (net / "Client2.json").write_text(json.dumps(data))
             self.assertGreaterEqual(len(gate.validate_network(run, "Lua")), 3)
 
-    def test_media_requires_every_showcase_not_a_session_recording(self):
+    def test_media_requires_every_showcase_screenshot(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
-            (run / "videos").mkdir()
             (run / "screenshots").mkdir()
-            (run / "videos/session.mp4").write_bytes(b"recording")
-            self.assertEqual(len(gate.validate_media(run)), 8)
+            self.assertEqual(len(gate.validate_media(run)), 4)
             for name in ("Binding", "Override", "Container", "UMG"):
                 (run / f"screenshots/Showcase_{name}.png").write_bytes(b"image")
-                (run / f"videos/Showcase_{name}_Clip.mp4").write_bytes(b"clip")
             self.assertEqual(gate.validate_media(run), [])
 
 

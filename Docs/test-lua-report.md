@@ -5,7 +5,7 @@ description: "自动化测试产出的通过率、通过明细、失败明细与
 
 # 测试报告（Lua 后端）
 
-> 由 `Tools/GenerateTestReport.py` 自动生成于 2026-10-25 20:14:38。请勿手工编辑。
+> 由 `Tools/GenerateTestReport.py` 自动生成于 2026-10-25 21:43:26。请勿手工编辑。
 
 ## 结论
 
@@ -666,25 +666,19 @@ description: "自动化测试产出的通过率、通过明细、失败明细与
 | `UnLuaNova.Showcase.Container 容器访问示例截图` | 2.917s |
 | `UnLuaNova.Regression.Issue455 CacheScriptContainer导致的崩溃` | 2.674s |
 
-## 整场录屏
-
-不是 showcase 的剪辑——剪辑是用例自己录的，只覆盖 showcase 那几个测试；跑挂了的那一轮往往一个剪辑都没有。这一段是 `Tools/RunTests.ps1` 在启动编辑器的同时开始录、编辑器退出时结束，从第一条测试到最后一条都在里面（窗口出现前的几秒除外）。
-
-这一轮没有整场录屏：`-NoVideo` / `-NoSessionVideo` / `-NullRHI` 会关掉它，找不到 ffmpeg（没装 imageio-ffmpeg，见 `Tools/requirements.txt`）时也不会录。
-
 ## 联网会话
 
 这一轮跑过的跨进程拓扑。用例用 `FNetSession` 声明要几个 peer、各自什么角色，每个 peer 把自己的报告与日志写进 `Saved/UnLuaNovaNet/<会话>/`，`Tools/RunTests.ps1` 再归档到本轮目录的 `net/` 下。
 
-headless 的独立服务器 `-NullRHI` 起、没有窗口，上面那段录屏里没有它 —— 它的日志是它唯一的痕迹，所以每个 peer 都列了。
+headless 的独立服务器使用 `-NullRHI`，没有窗口；它的日志是它唯一的痕迹，所以每个 peer 都列了。
 
 ### DedicatedServer
 
 | peer | 角色 | 窗口 | 报告 | 日志 |
 |:--|:--|:--|:--|:--|
-| Server | Server | headless（不录） | `net/DedicatedServer/Server.json` | `net/DedicatedServer/logs/Server.log` |
-| Client1 | Client | 有窗口（录屏是否成功见媒体结果） | `net/DedicatedServer/Client1.json` | `net/DedicatedServer/logs/Client1.log` |
-| Client2 | Client | 有窗口（录屏是否成功见媒体结果） | `net/DedicatedServer/Client2.json` | `net/DedicatedServer/logs/Client2.log` |
+| Server | Server | headless | `net/DedicatedServer/Server.json` | `net/DedicatedServer/logs/Server.log` |
+| Client1 | Client | 有视口 | `net/DedicatedServer/Client1.json` | `net/DedicatedServer/logs/Client1.log` |
+| Client2 | Client | 有视口 | `net/DedicatedServer/Client2.json` | `net/DedicatedServer/logs/Client2.log` |
 
 | peer | PID | NetMode | Connected | SessionId | Complete | 第一轮观测等待 ms |
 |---|---:|---:|---|---|---|---:|
@@ -719,9 +713,9 @@ headless 的独立服务器 `-NullRHI` 起、没有窗口，上面那段录屏�
 
 | peer | 角色 | 窗口 | 报告 | 日志 |
 |:--|:--|:--|:--|:--|
-| Server | Server | headless（不录） | `net/Multicast/Server.json` | `net/Multicast/logs/Server.log` |
-| Client1 | Client | 有窗口（录屏是否成功见媒体结果） | `net/Multicast/Client1.json` | `net/Multicast/logs/Client1.log` |
-| Client2 | Client | 有窗口（录屏是否成功见媒体结果） | `net/Multicast/Client2.json` | `net/Multicast/logs/Client2.log` |
+| Server | Server | headless | `net/Multicast/Server.json` | `net/Multicast/logs/Server.log` |
+| Client1 | Client | 有视口 | `net/Multicast/Client1.json` | `net/Multicast/logs/Client1.log` |
+| Client2 | Client | 有视口 | `net/Multicast/Client2.json` | `net/Multicast/logs/Client2.log` |
 
 | peer | PID | NetMode | Connected | SessionId | Complete | 第一轮观测等待 ms |
 |---|---:|---:|---|---|---|---:|
@@ -749,39 +743,20 @@ headless 的独立服务器 `-NullRHI` 起、没有窗口，上面那段录屏�
 
 ![Showcase_UMG](Images/tests-lua/Showcase_UMG.png)
 
-## 视频
+## 按运行环境分类
 
-### Showcase_Binding_Clip
+每个用例需要什么环境（由 `Tools/ClassifyTests.py` 静态分析源码得出），以及这一类一共花了多少时间。看这一节是为了回答"把某一类挪走能省多少"——A 类连 `UWorld` 都不需要，B 类只要 world，两者都**不必**跑在编辑器进程里，而现在它们和真正需要编辑器的 D / E 一起挤在同一个 `UnrealEditor-Cmd` 里。
 
-<video controls muted loop playsinline width="640" src="Images/tests-lua/Showcase_Binding_Clip.mp4"></video>
+| 分类 | 需要什么 | 用例数 | 耗时 | 占比 |
+|:--|:--|--:|--:|--:|
+| C | PIE 且联网 | 6 | 79.9s | 46% |
+| A | 纯逻辑（不需要 UWorld） | 517 | 41.6s | 24% |
+| B | 需要 UWorld，不联网 | 55 | 37.1s | 22% |
+| E | 截图 / 连拍 | 4 | 12.8s | 7% |
+| D | 需要真实视口 / RHI | 1 | 0.6s | 0% |
+| ? | 未分类 | 43 | 0.0s | 0% |
 
-[播放不了？直接打开视频文件（标准 H.264 mp4）](Images/tests-lua/Showcase_Binding_Clip.mp4)
-
-，30 帧，由这些帧编码而成（`Tools/RunTests.ps1 -Video`）。
-
-### Showcase_Container_Clip
-
-<video controls muted loop playsinline width="640" src="Images/tests-lua/Showcase_Container_Clip.mp4"></video>
-
-[播放不了？直接打开视频文件（标准 H.264 mp4）](Images/tests-lua/Showcase_Container_Clip.mp4)
-
-，30 帧，由这些帧编码而成（`Tools/RunTests.ps1 -Video`）。
-
-### Showcase_Override_Clip
-
-<video controls muted loop playsinline width="640" src="Images/tests-lua/Showcase_Override_Clip.mp4"></video>
-
-[播放不了？直接打开视频文件（标准 H.264 mp4）](Images/tests-lua/Showcase_Override_Clip.mp4)
-
-，30 帧，由这些帧编码而成（`Tools/RunTests.ps1 -Video`）。
-
-### Showcase_UMG_Clip
-
-<video controls muted loop playsinline width="640" src="Images/tests-lua/Showcase_UMG_Clip.mp4"></video>
-
-[播放不了？直接打开视频文件（标准 H.264 mp4）](Images/tests-lua/Showcase_UMG_Clip.mp4)
-
-，30 帧，由这些帧编码而成（`Tools/RunTests.ps1 -Video`）。
+分类是**声明**出来的，不是实际触碰的：条件性开图的用例会被算进 B 类。宁可高估——它决定的是"哪些可以挪"，挪错了会红，不会静默通过。
 
 ## 静态类型检查（LuaLS）
 
