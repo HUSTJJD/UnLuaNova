@@ -21,18 +21,20 @@ description: "单入口 release 验证、证据与失败判定"
 | 分析器 | 初始化 MSVC 环境，从固定子模块构建 LuaLS 和 luau-lsp |
 | 每个后端 | Lua、Luau 分别执行，开启 Timer/Event/OOP 和静态绑定 |
 | Editor | 备份移出旧静态绑定源码，构建 Editor/生成器，重新生成并再次构建，确保本轮生成代码参与编译 |
-| Development | 构建、cook、打包并分别归档 Game 和 Dedicated Server target |
+| Development | 构建、cook、打包 Game 和 Dedicated Server target 到默认输出路径 |
 | Editor 全量测试 | 全部 `UnLuaNova` 注册用例，包括 Slow、VM/绑定/生命周期、扩展、示例截图/视频及性能用例 |
 | 跨进程联网 | 本轮同后端 cooked Server/Game 组成一个 DS 和两个客户端；验证两个服务端生成 Actor 的两轮 Lua 字段同步、双向 RPC、Owner 定向投递及 multicast，保留逐端原始观测 |
 | 静态类型 | 备份旧生成声明，重新导出；LuaLS 和 luau-lsp 必须实际执行，不能静默跳过 |
 | Cooked 全量测试 | 在 Development 包中执行 UE 当前游戏上下文可运行的全部注册用例 |
 | 内存 | 两个后端的 Editor 与 cooked Development 均执行 `UnLuaNova.Memory`，逐块核对 VM 释放、资源释放和预热后堆增长；报告缺失或残留超标失败 |
-| Shipping | 构建、cook、打包并检查归档可执行文件；这是打包门禁，尚不等于 Shipping 运行验收 |
+| Shipping | 构建、cook、打包到默认输出路径并检查可执行文件；这是打包门禁，尚不等于 Shipping 运行验收 |
 | 收尾 | 恢复配置原始字节及修改过的环境变量，清理本轮残留进程，输出总结果 |
 
 使用 `Saved/RunTests.lock` 防止脚本并发切换后端。测试期间不要在另一编辑器或构建任务中修改同一项目配置/二进制。脚本恢复配置，但最后构建的二进制仍属于最后一个后端。
 
-Release 自动设置 `UNLUANOVA_TEST_PEER_EXE` 和 `UNLUANOVA_TEST_SERVER_EXE`，分别指向本轮归档的 Game 和 Server 程序。UE 5.8 普通 Game 二进制不会因 `-server` 参数变成 Dedicated Server。拓扑文件记录每个 peer 的实际可执行文件，清理时同时核对 PID、路径及启动时间。
+Release 自动设置 `UNLUANOVA_TEST_PEER_EXE` 和 `UNLUANOVA_TEST_SERVER_EXE`，分别指向默认 staging 路径的当前 Game 和 Server 程序。编译复用 `Binaries/Win64`，打包复用 `Saved/StagedBuilds/Windows` 和 `WindowsServer`；后续后端及 Shipping 会覆盖相应输出，不为每轮复制 exe。各后端的 `metadata/binary-*.json` 保存当时的路径、大小及 SHA-256。UE 5.8 普通 Game 二进制不会因 `-server` 参数变成 Dedicated Server。拓扑文件记录每个 peer 的实际可执行文件，清理时同时核对 PID、路径及启动时间。
+
+Release 的 Editor、Game 和非 headless peer 使用 `-RenderOffScreen`，保留真实 RHI、视口用例、截图和测试帧视频，避免依赖桌面窗口是否可见；不启动桌面录屏。DS 仍使用 `-NullRHI`。Development 可显式选择 `-RenderOffScreen`。
 
 LuaLS 构建在 `Saved/ReleaseTools/luals-temp/` 使用每次独立的临时目录，并在退出时恢复 TMP/TEMP。引导工具和主分析器的构建、测试分别检查退出码，任何一步失败都会阻止分析器阶段通过。
 
@@ -44,11 +46,11 @@ DAP 会话测试使用系统分配的回环端口，由游戏线程逐帧处理�
 
 总结果在 `Saved/ReleaseTests/<时间>/release-summary.md` 和 `release-summary.json`。每个阶段记录 `passed`、`failed` 或 `blocked`；任一失败或依赖阻塞均返回非零退出码。执行中 `complete=false`，不能视为完成。每个独立外部阶段默认最多 60 分钟，可统一通过 `-TimeoutMinutes` 调整。
 
-每个后端保留 `editor/<backend>/`、`game/`、`packages/Development/`、`packages/Shipping/` 和日志。`metadata/manifest.json` 来自实际进程，记录编译后端、能力开关、Editor/cooked 状态及完整测试路径。`ValidateRelease.py` 逐项核对 UE `index.json`，零用例、漏跑、重复、跳过、未知状态、错误信息、错误后端和未注册源码 suite 都不能通过。测试数量和名称基线不再决定 release 完整性。
+每个后端保留 `editor/<backend>/`、`game/`、二进制元数据和日志。`metadata/manifest.json` 来自实际进程，记录编译后端、能力开关、Editor/cooked 状态及完整测试路径。`ValidateRelease.py` 逐项核对 UE `index.json`，零用例、漏跑、重复、跳过、未知状态、错误信息、错误后端和未注册源码 suite 都不能通过。测试数量和名称基线不再决定 release 完整性。
 
-Editor 证据门禁要求四个 Showcase 的 PNG 和编码视频。cooked 报告也自动收集本轮新生成的截图并编码视频；独立服务器归档在 `packages/Server/`。网络要求 Server/Client1/Client2 的日志、角色、后端、RPCId、不同 PID、实际打开的连接及相同服务器地址。DedicatedServer schema 2 还要求相同服务端生成的 SessionId、两个不同 Owner、两轮 Lua HP 与准确的逐端 RPC 日志；Standalone 或只有声明编号一致的旧报告不能通过。单独运行报告 helper 的空操作不算联网通过。
+Editor 证据门禁要求四个 Showcase 的 PNG 和编码视频。cooked 报告也自动收集本轮新生成的截图并编码视频。网络要求 Server/Client1/Client2 的日志、角色、后端、RPCId、不同 PID、实际打开的连接及相同服务器地址。DedicatedServer schema 2 还要求相同服务端生成的 SessionId、两个不同 Owner、两轮 Lua HP 与准确的逐端 RPC 日志；Standalone 或只有声明编号一致的旧报告不能通过。单独运行报告 helper 的空操作不算联网通过。
 
-Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混入旧 Game 二进制；Release 通过环境变量显式指定本轮归档的 Server/Game。客户端不在本地生成测试 Actor 或设置 Owner。
+Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混入旧 Game 二进制；Release 通过环境变量显式指定默认 staging 路径的当前 Server/Game。客户端不在本地生成测试 Actor 或设置 Owner。
 
 性能门禁要求 `Tools/baseline/perf-lua.json`、`perf-luau.json`，核对后端、引擎、机器、case 与迭代次数，并拒绝超过 25% 的回退。当前参考值来自独立的 `FullFix-Complete-11` 诊断轮，来源见基线目录 README；它们不是修复前基线，不能证明修复带来了性能提升。缺少可比参考值时门禁失败，**不会自动将待测结果提升为基线**。对外性能结论仍须遵守 [性能验收](Performance_Parity_slua.md)。
 
@@ -89,6 +91,6 @@ Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混
 
 此入口覆盖当前定义的 Win64 测试矩阵，不等于所有产品需求已实现，也不是 100% 代码覆盖率。feature-off 组合、其他目标平台/设备、Shipping 运行 smoke、Iris/push model 和外部项目性能对照仍是 [审计](Benchmark_Review.md) 中的未完成工作。许可归属与第三方 notice 也不能由自动化通过替代。
 
-验证状态：2026-10-25 的 `FullFix-Release-22` 完整通过，33/33 阶段、2478/2478 次 UE 用例执行，零失败、零跳过；包括新增 C++ 回归、两后端 Game/Server 归档和 Shipping 打包。34 项 Python 工具测试及 PowerShell 支持检查通过。静态检查保留 Lua 298 条、Luau 7 条警告，均为零错误。完整结果见下方回归记录；最后构建的二进制为 Luau。
+验证状态：`FullFix-Release-22` 的 33/33 阶段、2478/2478 次执行仅为历史矩阵结果，其 DedicatedServer 未验证实际连接，不能作为当前联网验收。替换后的真实 DS/双客户端场景已在四个载体通过；`ConnectedNet-Release-26` 因性能、Issue434、媒体缺失及中止而未通过，完整复验为 `ConnectedNet-Release-27`。40 项 Python 工具测试和 PowerShell 支持检查通过。各轮原始结果及当前完整验收状态见下方回归记录。
 
 本次修复和运行证据见 [2026-10-24 回归记录](Regression_20261024.md)。静态检查保留所有警告和分析器原始 `analyzer_exit`；最终 `exit` 依据错误级诊断判定。仅警告不阻断，类型错误、异常退出和缺少结果均失败。

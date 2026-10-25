@@ -11,6 +11,12 @@ description: "静态绑定崩溃、双后端兼容和完整测试验证记录"
 
 ### 当前联网补充验证
 
+Release27 再次发现 LuaLS `load-relative-library` 失败：夹具在注册配置处理器前初始化一次，随后又初始化同一客户端，定义查询与第二次异步配置加载竞争。`Tools/patches/luals-relative-library-initialize.patch` 将其改为创建库、注册配置后携带原工作区路径初始化一次，保留全部原始断言；构建脚本幂等应用补丁，不匹配时失败。该补丁只改第三方测试夹具，不改分析器运行代码；后续不能称为完全未经修改的上游测试。Release27 保留失败，不用于最终验收。
+
+`ConnectedNet-Release-26` 在 Luau Shipping 构建期间按默认输出路径要求中止，保留为未完成、未通过。Lua Editor 626/626、Lua cooked 600/600、Luau cooked 615/615；Luau Editor 639/641，失败为性能门禁及 Issue434，另有四组截图/视频缺失，证据门禁已拒绝。四个载体的真实 DedicatedServer 场景均通过，但不能据此拼成完整验收。分析器构建测试及新增 profiler 回归在本轮通过。
+
+后续完整复验使用 `ConnectedNet-Release-27`。编译输出复用 `Binaries/Win64`，打包复用 `Saved/StagedBuilds/Windows` 与 `WindowsServer`，每轮只保存报告、日志及二进制路径/哈希。Release 使用真实 RHI 的 `-RenderOffScreen`，保留视口测试和测试帧截图/视频，不录桌面。离屏局部验证 `Offscreen-27-pilot` 为 5/5，已生成四张截图与四段视频。Issue434 改为最多 10 秒等待实际 Tick 结果并恢复 Lua 栈，不修改正值及三值相等断言。性能参考和 25% 门槛保持不变。
+
 `ConnectedNet-Release-24` 已完成但未通过：Lua Editor 624/625，唯一失败为 `VM.Call` 0.0331382814 微秒/操作，超过未修改基线的 25% 上限 0.0328324968；Lua cooked 599/599、Luau Editor 640/640 通过。三组已完成载体的真实 DS/双客户端证据均通过独立校验。Luau cooked 在 `lua.profiler` 开关用例发生访问违规，未导出完整结果，因此不能声明四组全部通过。
 
 Luau profiler 崩溃来自 `lua_getinfo("np")` 未填充 `what/source/linedefined` 却读取这些字段。修正为初始化 `lua_Debug` 并请求 `"snp"`，新增回归检查实际聚合报告中的函数名、源文件、定义行号，避免仅“不崩溃”漏掉无效采样。另观察到整场录屏使用 69 个线程、5 秒消耗约 6.95 秒 CPU；将滤镜/编码线程限制为 1/2 并降低优先级，以减少测试工具干扰。这不证明录屏是性能超限的唯一原因；性能基线、工作量、采样规则和阈值均未调整。下一完整复验目录为 `ConnectedNet-Release-25`。

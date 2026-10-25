@@ -203,6 +203,10 @@ namespace UnLuaNovaTestSuite
         {
             Args += TEXT("-NullRHI ");
         }
+        else if (FParse::Param(FCommandLine::Get(), TEXT("RenderOffScreen")))
+        {
+            Args += TEXT("-RenderOffScreen ");
+        }
 
         // Quoted: the value is one argument holding spaces and a semicolon, and UE reads
         // -ExecCmds straight off the command line.

@@ -21,18 +21,20 @@ The default `Release` profile orchestrates the current **Win64** matrix. Operato
 | Analyzers | Initialize the MSVC environment and build pinned LuaLS and luau-lsp |
 | Backends | Run both Lua and Luau with Timer/Event/OOP and static binding enabled |
 | Editor | Archive old static binding source, build Editor/generator, regenerate and rebuild the generated code |
-| Development | Build/cook/package/archive separate Game and Dedicated Server targets |
+| Development | Build/cook/package Game and Dedicated Server targets into default output paths |
 | Editor automation | All registered UnLuaNova tests, including Slow, lifetime, extensions, showcase media and benchmarks |
-| Connected peers | Use this backend's cooked Server/Game archives for one DS and two clients; verify two server-spawned actors, two rounds of Lua field replication, bidirectional RPCs, owner-targeted delivery and multicast with raw per-peer observations |
+| Connected peers | Use this backend's current staged Server/Game for one DS and two clients; verify two server-spawned actors, two rounds of Lua field replication, bidirectional RPCs, owner-targeted delivery and multicast with raw per-peer observations |
 | Types | Back up old generated declarations, export fresh declarations, require successful backend type checks |
 | Cooked automation | Run all tests registered for the Development game's actual UE context |
 | Memory | Require `UnLuaNova.Memory` evidence in both backend/carrier combinations: VM allocation balance, resource release and warmed heap growth |
-| Shipping | Build/cook/package and verify the archived executable; this is not Shipping runtime certification |
+| Shipping | Build/cook/package into default output paths and verify the executable; this is not Shipping runtime certification |
 | Cleanup | Restore original config bytes and changed environment variables, clean up owned processes, write an aggregate verdict |
 
 `Saved/RunTests.lock` prevents concurrent runner backend changes. Avoid editing/building the same project in another process during validation. Configuration is restored; the last built binaries still belong to the last backend.
 
-Release sets `UNLUANOVA_TEST_PEER_EXE` and `UNLUANOVA_TEST_SERVER_EXE` to the current archived Game and Server executables. A UE 5.8 Game binary cannot become a dedicated server through `-server`. Topology records each peer's executable; cleanup checks its PID, path and start time.
+Release sets `UNLUANOVA_TEST_PEER_EXE` and `UNLUANOVA_TEST_SERVER_EXE` to the current Game and Server executables in default staging paths. Compilation reuses `Binaries/Win64`; packaging reuses `Saved/StagedBuilds/Windows` and `WindowsServer`. Subsequent backends and Shipping overwrite the corresponding outputs without copying per-run executables. Each backend's `metadata/binary-*.json` retains the path, size and SHA-256 at the time of use. A UE 5.8 Game binary cannot become a dedicated server through `-server`. Topology records each peer's executable; cleanup checks its PID, path and start time.
+
+Release Editor, Game and non-headless peers use `-RenderOffScreen`, retaining real RHI, viewport tests, screenshots and test-frame clips independently of desktop window visibility. Desktop recording is disabled; DS still uses `-NullRHI`. Development can explicitly select `-RenderOffScreen`.
 
 LuaLS builds use a unique temporary directory under `Saved/ReleaseTools/luals-temp/` and restore TMP/TEMP on exit. Bootstrap and main analyzer builds/tests have separate exit-code checks; either failure blocks the analyzer stage.
 
@@ -44,11 +46,11 @@ DAP session tests use OS-assigned loopback ports and nonblocking game-thread pol
 
 Read `Saved/ReleaseTests/<timestamp>/release-summary.md` or `release-summary.json`. Stages report `passed`, `failed` or `blocked`; any failure or blocked dependency returns nonzero. An in-progress summary has `complete=false`. Each external stage has a default 60-minute timeout, adjustable with `-TimeoutMinutes`.
 
-Backend outputs include `editor/<backend>/`, `game/`, packaged Development/Shipping archives and logs. The actual process exports `metadata/manifest.json` with backend, feature flags, Editor/cooked state and full leaf test paths. `ValidateRelease.py` compares this against UE's `index.json`. Empty, missing, duplicate, skipped, unknown, error-bearing and wrong-backend results fail. Editor source suites must also be registered. Historical display-name/count baselines no longer decide release completeness.
+Backend outputs include `editor/<backend>/`, `game/`, binary metadata and logs. The actual process exports `metadata/manifest.json` with backend, feature flags, Editor/cooked state and full leaf test paths. `ValidateRelease.py` compares this against UE's `index.json`. Empty, missing, duplicate, skipped, unknown, error-bearing and wrong-backend results fail. Editor source suites must also be registered. Historical display-name/count baselines no longer decide release completeness.
 
-The Editor evidence gate requires all four Showcase PNGs and encoded clips. Cooked reports also collect newly generated screenshots and encode clips; dedicated servers are archived under `packages/Server/`. Network evidence requires Server/Client1/Client2 logs, backend/role identity, matching RPCIds, distinct PIDs, open connections and matching server endpoints. DedicatedServer schema 2 additionally requires a shared server-generated SessionId, two distinct owners, two rounds of Lua HP observations and exact per-peer RPC logs. Standalone or declaration-only historical reports cannot pass. A peer-report helper's no-op does not prove transmission.
+The Editor evidence gate requires all four Showcase PNGs and encoded clips. Cooked reports also collect newly generated screenshots and encode clips. Network evidence requires Server/Client1/Client2 logs, backend/role identity, matching RPCIds, distinct PIDs, open connections and matching server endpoints. DedicatedServer schema 2 additionally requires a shared server-generated SessionId, two distinct owners, two rounds of Lua HP observations and exact per-peer RPC logs. Standalone or declaration-only historical reports cannot pass. A peer-report helper's no-op does not prove transmission.
 
-Editor diagnostics use the current Editor executable for all peers by default, avoiding stale Game binaries. Release explicitly selects its current Server/Game archives through environment variables. Clients never spawn the test actors or assign ownership locally.
+Editor diagnostics use the current Editor executable for all peers by default, avoiding stale Game binaries. Release explicitly selects its current staged Server/Game through environment variables. Clients never spawn the test actors or assign ownership locally.
 
 Performance requires `Tools/baseline/perf-lua.json` and `perf-luau.json`, matching backend, engine, machine, case inventory and iteration counts, with a 25% regression limit. Current references come from the independent `FullFix-Complete-11` diagnostic run, documented in the baseline README. They are not pre-fix measurements and cannot establish a performance improvement from these fixes. Missing comparable references fail the gate; the runner never promotes its own measurements automatically. External performance claims still require [controlled acceptance](Performance_Parity_slua.md).
 
@@ -89,6 +91,6 @@ Register new `UnLuaNova.*` suites in the test plugin's `Private/Specs` or `Priva
 
 This entry covers the defined Win64 matrix, not every unfinished product requirement or 100% code coverage. Feature-off combinations, other platforms/devices, Shipping runtime smoke, Iris/push-model modes and external benchmark adapters remain [audit work](Benchmark_Review.md). License scope and third-party notices also require separate maintenance.
 
-Validation status: `FullFix-Release-22` passed on 2026-10-25, with 33/33 stages and 2478/2478 UE test executions, zero failures and skips. This includes the new C++ regressions, both Game/Server archives and both Shipping packages. All 34 Python tool tests and PowerShell support checks passed. Static analysis reported zero errors, retaining 298 Lua warnings and seven Luau warnings. See the [complete regression record](Regression_20261024.md) for evidence and limits. The last built binaries belong to Luau.
+Validation status: Release22's 33/33 stages and 2478/2478 executions describe the historical matrix; its disconnected DedicatedServer case cannot establish current networking acceptance. The replacement real DS/two-client scenario passed in all four carriers. `ConnectedNet-Release-26` failed performance, Issue434 and media checks and was interrupted; the complete rerun is `ConnectedNet-Release-27`. All 40 Python tool tests and PowerShell support checks passed. See the [complete regression record](Regression_20261024.md) for raw outcomes and current acceptance status.
 
 Type-check summaries retain every warning and the raw `analyzer_exit`. The final `exit` follows error-level diagnostics: warnings alone do not block, while type errors, abnormal analyzer exits and missing results fail.

@@ -14,11 +14,11 @@ Release / Win64 / Lua + Luau (no operations performed):
   2. Initialize pinned submodules; prepare isolated Python tools and MSVC environment.
   3. Repository audit, Python and PowerShell tooling regressions; build both analyzers.
   4. Per backend: enable features; archive old bindings; build Editor/generator; regenerate; rebuild.
-  5. Build/cook/archive Development game and Dedicated Server targets.
+  5. Build/cook/stage Development game and Dedicated Server targets in the default directories.
   6. Full Editor automation including Slow, connected cooked peers, screenshots and benchmark.
   7. Fresh declaration export and mandatory backend type checking.
   8. Full applicable cooked Development automation with runtime manifest verification.
-  9. Build/cook/archive Shipping game (packaging gate, not Shipping runtime certification).
+  9. Build/cook/stage Shipping game (packaging gate, not Shipping runtime certification).
  10. Validate manifests, memory leak evidence, peer evidence, media and performance baseline.
  11. Restore original config/environment; write release-summary.json and release-summary.md.
 Missing/skipped evidence, timeouts, failed/blocked stages and absent performance baselines fail.
@@ -115,12 +115,18 @@ function Run-Script([string] $Script, [string[]] $Arguments, [string] $Label) {
 function Build-Target([string] $Target, [string] $Label) {
     Run $BuildBat @($Target, 'Win64', 'Development', "-Project=$ProjectPath", '-WaitMutex') $Label
 }
-function Package-Game([string] $Configuration, [string] $Destination, [string] $Label) {
+function Record-Binary([string] $Exe, [string] $Name) {
+    $File = Get-Item -LiteralPath $Exe
+    [ordered]@{ path = $File.FullName; bytes = $File.Length;
+        sha256 = (Get-FileHash -LiteralPath $Exe -Algorithm SHA256).Hash;
+        backend = $B; recorded_utc = [DateTime]::UtcNow.ToString('o') } |
+        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $BackendDir "metadata/$Name.json") -Encoding UTF8
+}
+function Package-Game([string] $Configuration, [string] $Label) {
     Run $Uat @('BuildCookRun', "-project=$ProjectPath", '-noP4', '-unattended', '-utf8output',
         '-platform=Win64', "-clientconfig=$Configuration", "-target=$ProjectName", '-build', '-skipbuildeditor', '-cook',
-        '-stage', '-pak', '-iostore', '-package', '-archive', "-archivedirectory=$Destination",
-        "-stagingdirectory=$Destination-stage") $Label
-    Get-ReleaseGameExe $Destination $ProjectName $Configuration | Out-Null
+        '-stage', '-pak', '-iostore', '-package') $Label
+    Record-Binary (Get-ReleaseGameExe $DevStage $ProjectName $Configuration) "binary-$Configuration"
 }
 
 try {
@@ -214,8 +220,8 @@ try {
         $BackendDir = Join-Path $OutputDir $Lower
         $EditorDir = Join-Path $BackendDir "editor/$Lower"
         $GameDir = Join-Path $BackendDir 'game'
-        $DevArchive = Join-Path $BackendDir 'packages/Development'
-        $ServerArchive = Join-Path $BackendDir 'packages/Server'
+        $DevStage = Join-Path $RepoRoot 'Saved/StagedBuilds/Windows'
+        $ServerStage = Join-Path $RepoRoot 'Saved/StagedBuilds/WindowsServer'
         New-Item -ItemType Directory -Path $EditorDir, $GameDir -Force | Out-Null
         Invoke-Stage "$B-config" {
             Set-ReleaseIniValue $IniPath '[/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]' 'LuaBackend' $B
@@ -238,24 +244,24 @@ try {
             Build-Target ($ProjectName + 'Editor') "$B-rebuild-bindings"
             Build-Target 'ShaderCompileWorker' "$B-shader-worker-build"
         } @("$B-editor-build")
-        Invoke-Stage "$B-package-development" { Package-Game 'Development' $DevArchive "$B-package-development" } @("$B-static-bindings")
+        Invoke-Stage "$B-package-development" { Package-Game 'Development' "$B-package-development" } @("$B-static-bindings")
         Invoke-Stage "$B-server-build" { Build-Target ($ProjectName + 'Server') "$B-server-build" } @("$B-static-bindings")
         Invoke-Stage "$B-package-server" {
             Run $Uat @('BuildCookRun', "-project=$ProjectPath", '-noP4', '-unattended', '-utf8output',
                 '-server', '-noclient', '-serverplatform=Win64', '-serverconfig=Development',
-                "-target=$($ProjectName)Server", '-build', '-skipbuildeditor', '-cook', '-stage', '-pak', '-iostore', '-package',
-                '-archive', "-archivedirectory=$ServerArchive", "-stagingdirectory=$ServerArchive-stage") "$B-package-server"
-            $env:UNLUANOVA_TEST_SERVER_EXE = Get-ReleaseGameExe $ServerArchive ($ProjectName + 'Server') 'Development'
+                "-target=$($ProjectName)Server", '-build', '-skipbuildeditor', '-cook', '-stage', '-pak', '-iostore', '-package') "$B-package-server"
+            $env:UNLUANOVA_TEST_SERVER_EXE = Get-ReleaseGameExe $ServerStage ($ProjectName + 'Server') 'Development'
+            Record-Binary $env:UNLUANOVA_TEST_SERVER_EXE 'binary-Server'
         } @("$B-server-build")
         Invoke-Stage "$B-editor-tests" {
-            $env:UNLUANOVA_TEST_PEER_EXE = Get-ReleaseGameExe $DevArchive $ProjectName 'Development'
+            $env:UNLUANOVA_TEST_PEER_EXE = Get-ReleaseGameExe $DevStage $ProjectName 'Development'
             $env:UNLUANOVA_TEST_NET_ROOT = Join-Path $EditorDir 'net'
             $env:UNLUANOVA_TEST_MANIFEST = Join-Path $EditorDir 'metadata/manifest.json'
             $script:EditorStarted = [DateTime]::UtcNow
             $env:UNLUANOVA_RECORD_FRAMES = '30'
             try {
                 Run-Script 'RunTests.ps1' @('-Profile', 'Development', '-ReleaseManaged', '-EnginePath', $EnginePath,
-                    '-ProjectPath', $ProjectPath, '-Backend', $B, '-Carrier', 'Editor', '-SkipBuild',
+                    '-ProjectPath', $ProjectPath, '-Backend', $B, '-Carrier', 'Editor', '-SkipBuild', '-RenderOffScreen',
                     '-OutputDir', (Join-Path $BackendDir 'editor'), '-TimeoutMinutes', "$TimeoutMinutes") "$B-editor-tests"
             } finally { Stop-ReleasePeers $env:UNLUANOVA_TEST_NET_ROOT $EditorStarted }
         } @("$B-package-development", "$B-package-server")
@@ -295,13 +301,13 @@ try {
             Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'ValidateRelease.py'), '--run', $EditorDir, '--backend', $B, '--carrier', 'editor') "$B-editor-evidence"
         } @('tool-environment')
         Invoke-Stage "$B-game-tests" {
-            $Exe = Get-ReleaseGameExe $DevArchive $ProjectName 'Development'
+            $Exe = Get-ReleaseGameExe $DevStage $ProjectName 'Development'
             $env:UNLUANOVA_TEST_PEER_EXE = $Exe
             $env:UNLUANOVA_TEST_NET_ROOT = Join-Path $GameDir 'net'
             $env:UNLUANOVA_TEST_MANIFEST = Join-Path $GameDir 'metadata/manifest.json'
             $GameStarted = [DateTime]::UtcNow
             try {
-                Run $Exe @('/UnLuaNovaTestSuite/Tests/Misc/Empty', '-game', '-unattended', '-NoSplash', '-nosound', '-stdout',
+                Run $Exe @('/UnLuaNovaTestSuite/Tests/Misc/Empty', '-game', '-unattended', '-NoSplash', '-nosound', '-stdout', '-RenderOffScreen',
                     '-ExecCmds=UnLuaNovaTest.ExportManifest, Automation RunTests UnLuaNova; Quit',
                     "-ReportExportPath=$GameDir", "-abslog=$GameDir/Game.log") "$B-game-tests"
             } finally {
@@ -326,7 +332,7 @@ try {
             }
         } @('tool-environment')
         Invoke-Stage "$B-package-shipping" {
-            Package-Game 'Shipping' (Join-Path $BackendDir 'packages/Shipping') "$B-package-shipping"
+            Package-Game 'Shipping' "$B-package-shipping"
         } @("$B-static-bindings")
     }
 } catch {

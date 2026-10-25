@@ -78,10 +78,10 @@ end
 |---|---|---|
 | UnLuaNova.API.Net | 声明拒绝/幂等、flags、还原、排序、schema 指纹、实际桶编组的 int64 边界 | 双后端 Editor 已通过；不验证实际传输 |
 | UnLuaNova.API.Net.ClientServer | PIE 中 RPC / 字段传输 | 单进程共享类状态 |
-| UnLuaNova.API.Net.DedicatedServer | DS + 两个独立客户端、仅服务端生成两个 Actor 和设置 Owner、两轮 Server/Client/Multicast RPC 与 Lua HP 同步 | 新场景待运行；Release22 及以前仅为未连接的声明/ID 对照，不构成此项证据 |
+| UnLuaNova.API.Net.DedicatedServer | DS + 两个独立客户端、仅服务端生成两个 Actor 和设置 Owner、两轮 Server/Client/Multicast RPC 与 Lua HP 同步 | Release26 四个载体已通过此项；完整轮次仍未通过。Release22 及以前仅为未连接的声明/ID 对照 |
 | UnLuaNova.Slow.Net.Multicast | server + 两个连接的 client | 双后端 Editor 完整诊断轮已通过；Fast 层排除 |
 
-以上执行状态对应 `FullFix-Complete-11`，打包环境与完整发布矩阵的最终结论见 [回归验证记录](Regression_20261024.md)。
+API.Net、ClientServer、Multicast 的历史诊断见 `FullFix-Complete-11`；替换后的 DedicatedServer 及完整发布矩阵结论见 [回归验证记录](Regression_20261024.md)。
 
 新 DedicatedServer 场景的 SessionId 和每个 Actor 的随机 challenge 仅由服务端生成，经 Actor 复制到客户端。客户端不得本地生成测试 Actor 或设置 Owner；两个客户端分别从自己的 Actor 发出 Server RPC，服务端处理函数修改 Lua HP，再发送定向 Client RPC 和广播。两客户端分别经 Server RPC 确认第一轮的两个 Actor 均验证完成，服务端再经 Client RPC 允许第二轮开始；这样慢客户端不会因较快客户端提前改值而错过第一轮。Client1 固定延后至少 5 秒检查第一轮，原始等待时长进入门禁。严格比较逐端调用日志，非 Owner 不得收到 Client RPC。JSON 文件只用于结果和结束同步，不传递测试输入。
 

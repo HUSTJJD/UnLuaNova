@@ -76,6 +76,7 @@ param(
     # headless 的）不录，日志里会说明。
     [string[]] $RecordWindow = @(),
     [switch] $NullRHI,
+    [switch] $RenderOffScreen,
     [switch] $Sound,
     [switch] $Publish,
     [switch] $NoReport,
@@ -1345,6 +1346,7 @@ function Get-TestArgs {
     # drops the tests that need a viewport, so the run is a different (smaller) suite rather
     # than the same one done faster. -NullRHI is opt-in for that reason.
     if ($NullRHI) { $A += "-NullRHI" }
+    if ($RenderOffScreen) { $A += "-RenderOffScreen" }
     # Audio is the other way round: off unless asked for. Opening a map ends the previous
     # test's PIE session, which tears an audio device down, and a device that is slow to
     # stop takes the editor's main thread with it - a run once froze inside
@@ -1366,6 +1368,9 @@ if ($NullRHI -and -not $NoScreenshots) {
     Write-Host "               -NullRHI: no viewport, so no picture will come out of this run." -ForegroundColor Yellow
 }
 Write-Host "Audio        : $(if ($Sound) { 'on (-Sound)' } else { 'off (-nosound)' })"
+if ($RenderOffScreen) {
+    Write-Host 'Rendering    : offscreen RHI; test screenshots/clips enabled, desktop recording disabled.'
+}
 
 if ($DryRun)
 {
@@ -1502,7 +1507,7 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         # exits, and by then there is nothing left to record. Handing the recorder the live
         # process is what makes "from the first second to the last" possible.
         $EditorProcessName = [System.IO.Path]::GetFileNameWithoutExtension($RunExe)
-        $WantSessionVideo = -not $NoVideo -and -not $NoSessionVideo -and -not $NullRHI
+        $WantSessionVideo = -not $NoVideo -and -not $NoSessionVideo -and -not $NullRHI -and -not $RenderOffScreen
         $Recording = $null
         # 本轮开始时间：联网 peer 的产物（topology / 报告 / 日志）都按它区分"这轮的"和
         # "以前留下的" —— 那个目录不会自己清理，不区分就会一直翻旧账。

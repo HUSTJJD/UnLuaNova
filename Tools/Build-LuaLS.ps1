@@ -86,6 +86,17 @@ Prompt）里重跑本脚本 —— 普通 PowerShell 里没有 MSVC 的环境变
 }
 
 # --- 构建 -------------------------------------------------------------------
+# Initialize the upstream relative-library fixture once, after its configuration handler.
+# Keep its definition/path assertions intact and fail if the pinned source no longer matches.
+$FixturePatch = Join-Path $PSScriptRoot 'patches/luals-relative-library-initialize.patch'
+& git -C $SubDir apply --reverse --check --quiet $FixturePatch 2>$null
+if ($LASTEXITCODE -ne 0) {
+    & git -C $SubDir apply --check $FixturePatch
+    if ($LASTEXITCODE -ne 0) { throw 'LuaLS relative-library fixture patch does not match the source.' }
+    & git -C $SubDir apply $FixturePatch
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to apply the LuaLS relative-library fixture patch.' }
+}
+Write-Host 'LuaLS test fixture: relative-library initializes once after registering configuration.'
 $PreviousTmp = $env:TMP
 $PreviousTemp = $env:TEMP
 $BuildTemp = Join-Path $RepoRoot ('Saved/ReleaseTools/luals-temp/' + [guid]::NewGuid().ToString('N'))
