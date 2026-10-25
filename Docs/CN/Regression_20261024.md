@@ -7,6 +7,28 @@ description: "静态绑定崩溃、双后端兼容和完整测试验证记录"
 
 ## 验收状态
 
+**2026-10-25 联网覆盖更正：Release22 的 DedicatedServer 仅比较未连接进程的声明，客户端报告为 `NetMode=0`、`Connected=false`。原通过结果不能证明独立 DS/client 的双向 RPC 与变量同步。现已增加真实 DS + 两客户端、两 Actor、两轮同步及 Owner 隔离断言；下方 Release22 数字仅为旧矩阵的历史结果。**
+
+### 当前联网补充验证
+
+`ConnectedNet-Release-24` 已完成但未通过：Lua Editor 624/625，唯一失败为 `VM.Call` 0.0331382814 微秒/操作，超过未修改基线的 25% 上限 0.0328324968；Lua cooked 599/599、Luau Editor 640/640 通过。三组已完成载体的真实 DS/双客户端证据均通过独立校验。Luau cooked 在 `lua.profiler` 开关用例发生访问违规，未导出完整结果，因此不能声明四组全部通过。
+
+Luau profiler 崩溃来自 `lua_getinfo("np")` 未填充 `what/source/linedefined` 却读取这些字段。修正为初始化 `lua_Debug` 并请求 `"snp"`，新增回归检查实际聚合报告中的函数名、源文件、定义行号，避免仅“不崩溃”漏掉无效采样。另观察到整场录屏使用 69 个线程、5 秒消耗约 6.95 秒 CPU；将滤镜/编码线程限制为 1/2 并降低优先级，以减少测试工具干扰。这不证明录屏是性能超限的唯一原因；性能基线、工作量、采样规则和阈值均未调整。下一完整复验目录为 `ConnectedNet-Release-25`。
+
+`ConnectedNet-Release-25` 在 LuaLS 自身的 `load-relative-library` 断言失败后中止，保留为未完成、未通过；日志显示客户端配置尚未完成加载就查询定义。随后独立重建又遇到上游 bee 的 `subprocess.test_stdio_1` 输出断言失败。分离执行两套官方测试后均通过（bee 110 成功、0 失败、2 项上游固定跳过，LuaLS 单元测试成功），证据在 `Saved/TestReports/LuaLS-25-recheck/`；未修改第三方源码或断言，仍需将构建测试时序不稳定视为限制。完整复验继续使用 `ConnectedNet-Release-26`。
+
+`Saved/TestReports/ConnectedNet-23-positive/` 的 Luau Editor 诊断已编译并通过 2/2 项（驱动场景及 peer helper），当时的独立 `validate_connected_session` 校验通过。三个进程共享服务器生成的 `96F15EF240E754734C323F9F16C95773` 会话，服务器 PID 69700、客户端 PID 18712/17216，两客户端连接 `127.0.0.1:7777`。Actor 1 的 HP 两轮为 149602、149612，Actor 2 为 149702、149712；两客户端均记录一致值，定向 RPC 只在各自 Owner 执行，广播在两客户端执行。此诊断早于新增屏障门禁，不能替代当前验收。
+
+旧测试的两个问题已分别处理：DedicatedServer 替换为真实联机断言；Editor 默认 peer 不再优先选择遗留 Game 程序，而使用当前 Editor 可执行文件。Release 仍显式使用本轮打包的 Server/Game。测试仅在服务端生成 Actor、设置 Owner 和随机挑战值；客户端从复制结果构造请求，报告文件不提供游戏输入。新增严格门禁拒绝旧 schema、Standalone、不同会话/PID/服务端地址、复制缺失和 RPC 路由错误。39 项 Python 工具测试通过。
+
+三个真实进程故障反例均按预期失败，证据分别在 `Saved/TestReports/ConnectedNet-23-SkipServerRpc/`、`ConnectedNet-23-SkipClientRpc/`、`ConnectedNet-23-SkipReplication/`。每轮三个进程均连接且观察到两个 Actor；禁用 Server RPC 时服务器调用日志为空、HP 为 100；禁用 Client RPC 时第一轮 HP 和 multicast 已到达但定向回调缺失；禁用组件复制时双向 RPC 和 multicast 已到达但客户端 HP 仍为 100。每轮 UE 驱动场景明确失败、退出非零，`negative-summary.json` 记录预期失败验证。这些故障运行不计入通过矩阵。
+
+`Saved/ReleaseTests/ConnectedNet-Release-23/` 在 Lua Editor 驱动的新打包进程中发现测试轮次竞争：Client2 已观察第一轮并发起第二轮，Client1 尚未观察第一轮，因 HP 被新值覆盖而超时。服务器两客户端均已连接，原始 RPC 日志与 HP 值保留了这个过程。这是状态复制可能合并中间值下的测试时序错误，不能通过延长超时解决。该轮已中止，保留 `complete=false`、`passed=false`，不能作为完整验收。
+
+修正后，两个客户端先通过重复发送同一个第一轮值作为确认（不会改变 HP），服务器收到全部确认后才通过定向 RPC 允许第二轮开始。Client1 主动延后至少 5 秒检查第一轮，门禁要求原始等待时长和完整确认/许可日志。工具回归为 40 项通过；新 Lua 正例与故障反例使用 `Saved/TestReports/ConnectedNet-24-*`，随后完整复验使用 `Saved/ReleaseTests/ConnectedNet-Release-24/`。
+
+### Release22 历史结果
+
 2026-10-25 完整运行 `FullFix-Release-22` 已通过：`release-summary.json` 为 `complete=true`、`passed=true`，33/33 个阶段通过，进程退出码 0。四组 UE 自动化合计 **2478/2478 项通过，0 失败、0 跳过**。下表均来自同一次完整运行，不拼接历史诊断结果。
 
 | 后端 | Editor | cooked Development |
@@ -20,7 +42,7 @@ description: "静态绑定崩溃、双后端兼容和完整测试验证记录"
 
 运行时间为北京时间 2026-10-25 08:07:51 至 09:06:45。两后端 Development Game/Server 构建、打包、归档及 Shipping 打包均通过；四组严格证据门禁全部通过。已发布 [Lua Editor 完整报告](../test-lua-report.md) 和 [Luau Editor 完整报告](../test-luau-report.md)，cooked 完整报告保留在本地运行目录。
 
-## 最终证据
+## Release22 历史证据
 
 | 检查 | Release22 结果 |
 |---|---|

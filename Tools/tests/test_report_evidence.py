@@ -5,10 +5,28 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from GenerateTestReport import load_benchmark, render_memory, load_tests as load_report_tests, render
+from GenerateTestReport import load_benchmark, render_memory, load_tests as load_report_tests, render, load_net_sessions, render_net_sessions
 
 
 class ReportEvidenceTests(unittest.TestCase):
+    def test_network_report_exposes_disconnected_and_raw_delivery_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            directory = root / "net/DedicatedServer"
+            directory.mkdir(parents=True)
+            (directory / "topology.json").write_text(json.dumps(dict(session="DedicatedServer",
+                peers=[dict(label="Client1", role="Client", pid=123)])))
+            path = directory / "Client1.json"
+            path.write_text(json.dumps(dict(NetMode=0, Connected=False)))
+            report = "\n".join(render_net_sessions(load_net_sessions(root)))
+            self.assertIn("| Client1 | 123 | 0 | False | missing | missing |", report)
+            self.assertIn("schema 2", report)
+            path.write_text(json.dumps(dict(SchemaVersion=2, NetMode=3, Connected=True,
+                Complete=True, SessionId="session", Observations=[dict(Round=1, Actors=[
+                    dict(ActorId=1, Owned=True, Challenge=1234, HP=1235, CallLog="FromServer:1236|ToAll:1237|")])])))
+            report = "\n".join(render_net_sessions(load_net_sessions(root)))
+            self.assertIn("| Client1 | 1 | 1 | True | 1234 | 1235 | FromServer:1236&#124;ToAll:1237&#124; |", report)
+
     def test_full_paths_identify_cases_and_skips_prevent_all_passed_verdict(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

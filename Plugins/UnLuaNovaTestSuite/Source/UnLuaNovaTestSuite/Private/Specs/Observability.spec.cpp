@@ -95,6 +95,32 @@ void FObservabilitySpec::Define()
         });
     });
 
+    It(TEXT("Profiler records function source and definition line"), EAsyncExecution::TaskGraphMainThread, [this]()
+    {
+        auto& Profiler = UnLuaNova::FLuaProfiler::Get();
+        const bool bWasAggregating = Profiler.IsAggregateEnabled();
+        Profiler.ResetAggregate();
+        Profiler.SetAggregateEnabled(true);
+        Profiler.SetEnabled(true);
+
+        const bool bRan = Env->DoString(TEXT(
+            "local function ProfiledMetadataProbe()\n"
+            "    local sum = 0\n"
+            "    for i = 1, 100 do sum = sum + i end\n"
+            "    return sum\n"
+            "end\n"
+            "local result = ProfiledMetadataProbe()\n"
+            "assert(result == 5050)\n"), TEXT("ProfilerMetadata.lua"));
+        Profiler.SetEnabled(false);
+        const FString Report = Profiler.BuildReport();
+        TestTrue(TEXT("Profiled script completed"), bRan);
+        TestTrue(TEXT("Report contains actual function/source/line metadata"),
+            Report.Contains(TEXT("ProfiledMetadataProbe,ProfilerMetadata,1,")));
+        TestTrue(TEXT("At least one function was aggregated"), Profiler.NumAggregatedFunctions() > 0);
+        Profiler.SetAggregateEnabled(bWasAggregating);
+        Profiler.ResetAggregate();
+    });
+
     Describe(TEXT("内存统计"), [this]()
     {
         It(TEXT("开启后统计分配次数与字节数"), EAsyncExecution::TaskGraphMainThread, [this]()

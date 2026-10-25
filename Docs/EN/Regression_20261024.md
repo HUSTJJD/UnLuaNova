@@ -7,6 +7,28 @@ description: "Static binding crash, backend compatibility and release validation
 
 ## Acceptance Status
 
+**Networking coverage correction, 2026-10-25: Release22's DedicatedServer case only compared disconnected declarations. Its client reported `NetMode=0`, `Connected=false`. That passing result does not establish bidirectional RPCs or field replication between independent DS/client processes. A connected DS/two-client, two-actor, two-round scenario with owner isolation assertions has now been added. Release22 totals below describe the historical matrix only.**
+
+### Current Networking Validation
+
+`ConnectedNet-Release-24` completed but did not pass: Lua Editor passed 624/625, with `VM.Call` at 0.0331382814 us/op exceeding the unchanged 25% ceiling of 0.0328324968. Lua cooked passed 599/599 and Luau Editor 640/640. All three completed carriers passed independent checks of the real DS/two-client evidence. Luau cooked crashed during the `lua.profiler` toggle case before exporting complete results, so this is not a four-carrier acceptance run.
+
+The Luau profiler read `what/source/linedefined` after requesting only `lua_getinfo("np")`, which leaves those fields uninitialized. The fix initializes `lua_Debug` and requests `"snp"`; a new regression checks the actual function name, source file and definition line in the aggregate report, rather than only survival. Session recording was also observed using 69 threads and about 6.95 CPU seconds over five seconds. Filter/encoder threads are now limited to 1/2 with lower process priority to reduce measurement interference. This does not establish recording as the sole cause of the performance failure. Baselines, workload, sampling rules and thresholds remain unchanged. The next complete rerun is `ConnectedNet-Release-25`.
+
+`ConnectedNet-Release-25` was interrupted after LuaLS's own `load-relative-library` assertion failed; it remains incomplete and failed. The log shows the definition query preceding completion of client configuration loading. An isolated rebuild then failed upstream bee's `subprocess.test_stdio_1` output assertion. Running both official test suites separately passed (bee: 110 successes, zero failures, two upstream fixed skips; LuaLS unit tests: success). Evidence is in `Saved/TestReports/LuaLS-25-recheck/`. Third-party sources and assertions were not modified; build-test timing instability remains a limitation. The complete rerun continues as `ConnectedNet-Release-26`.
+
+The Luau Editor diagnostic in `Saved/TestReports/ConnectedNet-23-positive/` compiled and passed 2/2 cases (the driver scenario and peer helper), plus the independent `validate_connected_session` checks at that time. Server PID 69700 and client PIDs 18712/17216 share server-generated session `96F15EF240E754734C323F9F16C95773`; both clients connect to `127.0.0.1:7777`. Both observed actor 1 HP values 149602 then 149612, and actor 2 values 149702 then 149712. Targeted RPCs reached only each actor's owner; multicast reached both clients. This predates the round-barrier gate and is not current acceptance evidence.
+
+DedicatedServer now asserts actual connected transport. Default Editor peers use the current Editor executable instead of a leftover Game binary; Release still explicitly selects its current Server/Game archives. Only the server spawns actors and assigns ownership/challenges. Clients construct requests from replicated state; report files do not supply gameplay inputs. The strict gate rejects old schemas, standalone peers, mismatched sessions/PIDs/endpoints, missing replication and incorrect RPC routing. All 39 Python tool tests passed.
+
+All three real-process fault controls failed as expected: `Saved/TestReports/ConnectedNet-23-SkipServerRpc/`, `ConnectedNet-23-SkipClientRpc/` and `ConnectedNet-23-SkipReplication/`. All peers connected and observed two actors. Suppressing Server RPC left the server call log empty and HP at 100. Suppressing Client RPC preserved first-round HP and multicast delivery but removed targeted callbacks. Disabling component replication preserved bidirectional RPC/multicast delivery while client HP remained 100. Each driver case failed with a nonzero exit; `negative-summary.json` records verification of the expected failure. These controls are not passing acceptance runs.
+
+`Saved/ReleaseTests/ConnectedNet-Release-23/` exposed a test-round race in Lua packaged peers driven by Editor: Client2 observed round one and sent round two before Client1 observed round one, replacing HP before the slower client checked it. Both clients were connected, and raw HP/RPC evidence preserves the sequence. This is a test-ordering error under state replication that may coalesce intermediate values, not a reason to increase timeouts. The run was interrupted and remains `complete=false`, `passed=false`; it is not acceptance evidence.
+
+Both clients now acknowledge round one by repeating its same value without changing HP. Only after both acknowledgements does the server authorize round two through targeted RPCs. Client1 deliberately delays its first-round check by at least five seconds; the gate requires its measured delay and exact acknowledgement/authorization logs. All 40 tool tests passed. Updated Lua positive/fault diagnostics use `Saved/TestReports/ConnectedNet-24-*`; the subsequent complete rerun uses `Saved/ReleaseTests/ConnectedNet-Release-24/`.
+
+### Historical Release22 Results
+
 The complete `FullFix-Release-22` run passed on 2026-10-25: `release-summary.json` records `complete=true`, `passed=true`, all 33 stages passed, and process exit code 0. The four UE automation runs passed **2478/2478 test executions with zero failures and skips**. All entries below come from this single complete run.
 
 | Backend | Editor | Cooked Development |
@@ -20,7 +42,7 @@ Environment: Windows 11, Win64, Unreal Engine 5.8.3 source build, Lua 5.5 and Lu
 
 The run lasted from 00:07:51 to 01:06:45 UTC on 2026-10-25. Development Game/Server builds, packages and archives, Shipping packages, and all four strict evidence gates passed. Published reports are available for [Lua Editor](../test-lua-report.md) and [Luau Editor](../test-luau-report.md); complete cooked reports remain in the local run directory.
 
-## Final Evidence
+## Historical Release22 Evidence
 
 | Check | Release22 result |
 |---|---|

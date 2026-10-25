@@ -212,6 +212,111 @@ def validate_performance(actual, baseline, backend, require_samples=False):
     return errors
 
 
+def validate_connected_session(run, backend):
+    directory = run / "net/DedicatedServer"
+    topology = read_json(directory / "topology.json")
+    labels = ("Server", "Client1", "Client2")
+    peers = topology.get("peers", [])
+    errors = []
+    if Counter(p.get("label") for p in peers) != Counter(labels):
+        errors.append("DedicatedServer requires one server and two connected clients")
+    reports = {label: read_json(directory / f"{label}.json") for label in labels}
+    server = reports["Server"]
+    session_id = server.get("SessionId", "")
+    if len(session_id) != 32 or any(c not in "0123456789abcdefABCDEF" for c in session_id):
+        errors.append("Missing server-generated session identity")
+    reference = server.get("Rpcs", [])
+    if {r.get("Name") for r in reference} != {"FromClient", "FromServer", "ToAll"} or any(
+            not r.get("RpcId") for r in reference):
+        errors.append("Missing connected RPC declarations")
+    seeds = {a.get("ActorId"): a.get("Challenge") for a in server.get("Actors", [])}
+    if set(seeds) != {1, 2} or any(type(seed) is not int or not 1000 <= seed <= 1002000 for seed in seeds.values()):
+        return errors + ["Invalid server actor challenges"]
+    if len(set(seeds.values())) != 2:
+        errors.append("Actor challenges must differ")
+
+    def check_actors(actors, label, owner, rounds, ack=False):
+        if Counter(a.get("ActorId") for a in actors) != Counter([1, 2]):
+            errors.append(f"Missing/duplicate replicated actors: {label}")
+        for actor in actors:
+            actor_id = actor.get("ActorId")
+            if actor_id not in seeds:
+                continue
+            seed = seeds[actor_id]
+            is_server = label == "Server"
+            is_owner = actor_id == owner
+            expected = ""
+            for phase in range(rounds):
+                value = seed + phase * 10
+                if phase == 1:
+                    if is_server:
+                        expected += f"FromClient:{seed + 1}|"
+                    elif is_owner:
+                        expected += f"FromServer:{seed + 4}|"
+                if is_server:
+                    expected += f"FromClient:{value + 1}|"
+                elif is_owner:
+                    expected += f"FromServer:{value + 2}|"
+                expected += f"ToAll:{value + 3}|"
+            if ack:
+                expected += f"FromClient:{seed + 11}|"
+            if actor.get("SessionId") != session_id or actor.get("Challenge") != seed:
+                errors.append(f"Actor is not from the same server session: {label}/{actor_id}")
+            if actor.get("Authority") is not is_server or actor.get("Owned") is not is_owner:
+                errors.append(f"Incorrect actor authority/ownership: {label}/{actor_id}")
+            if actor.get("HpReadable") is not True or actor.get("HP") != seed + (rounds - 1) * 10 + 1:
+                errors.append(f"Lua HP replication missing: {label}/{actor_id}/round{rounds}")
+            if actor.get("CallLog") != expected or actor.get("CallCount") != expected.count("|"):
+                errors.append(f"RPC delivery or owner isolation failed: {label}/{actor_id}/round{rounds}")
+
+    owners, pids = [], []
+    server_peer = next((p for p in peers if p.get("label") == "Server"), {})
+    for label, data in reports.items():
+        is_server = label == "Server"
+        peer = next((p for p in peers if p.get("label") == label), {})
+        if data.get("SchemaVersion") != 2 or data.get("Complete") is not True or data.get("Fault") != "":
+            errors.append(f"Incomplete/fault-injected connected scenario: {label}")
+        if data.get("Role") != label or data.get("Backend") != backend or data.get("SessionId") != session_id:
+            errors.append(f"Connected session identity mismatch: {label}")
+        if data.get("NetMode") != (1 if is_server else 3) or data.get("Connected") is not True:
+            errors.append(f"Peer is not connected to gameplay: {label}")
+        if data.get("WorldPackage") != "/UnLuaNovaTestSuite/Tests/Misc/Empty":
+            errors.append(f"Wrong gameplay map: {label}")
+        pid = data.get("ProcessId")
+        pids.append(pid)
+        if type(pid) is not int or pid <= 0 or pid != peer.get("pid"):
+            errors.append(f"Report PID differs from launched peer: {label}")
+        if data.get("Rpcs") != reference:
+            errors.append(f"Connected RPC declarations differ: {label}")
+        owner = data.get("OwnedActorId")
+        delay = data.get("FirstRoundObservationMs")
+        if label == "Client1" and (type(delay) not in (int, float) or not math.isfinite(delay) or delay < 5000):
+            errors.append("Client1 must exercise the delayed first-round observation")
+        if is_server:
+            if data.get("Clients") != 2 or owner != 0:
+                errors.append("Server must have two open player connections")
+        else:
+            owners.append(owner)
+            expected_address = f"127.0.0.1:{server_peer.get('port')}"
+            if peer.get("connect_to") != "127.0.0.1" or data.get("ServerAddress") != expected_address:
+                errors.append(f"Client did not connect to the declared server endpoint: {label}")
+        check_actors(data.get("Actors", []), label, owner, 2, ack=is_server)
+        observations = data.get("Observations", [])
+        if [o.get("Round") for o in observations] != [1, 2]:
+            errors.append(f"Two sequential replication rounds required: {label}")
+        for observation in observations:
+            if observation.get("Round") in (1, 2):
+                check_actors(observation.get("Actors", []), label, owner, observation["Round"])
+        log = directory / "logs" / f"{label}.log"
+        if not log.is_file() or log.stat().st_size == 0:
+            errors.append(f"Missing connected peer log: {label}")
+    if Counter(owners) != Counter([1, 2]):
+        errors.append("Clients must own different server-spawned actors")
+    if len(set(pids)) != 3:
+        errors.append("Connected peers must be three distinct processes")
+    return errors
+
+
 def validate_network(run, backend):
     errors = []
     directory = run / "net/Multicast"
@@ -239,6 +344,7 @@ def validate_network(run, backend):
         log = directory / "logs" / f"{label}.log"
         if not log.is_file() or log.stat().st_size == 0:
             errors.append(f"Missing peer log: {label}")
+    errors.extend(validate_connected_session(run, backend))
     return errors
 
 

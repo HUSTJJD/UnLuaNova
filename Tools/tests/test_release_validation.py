@@ -217,10 +217,122 @@ class ReleaseValidationTests(unittest.TestCase):
             (memory / "vm_cycles.json").unlink()
             self.assertTrue(gate.validate_memory(run, "Lua", "editor"))
 
+    def connected_evidence(self, run):
+        directory = run / "net/DedicatedServer"
+        (directory / "logs").mkdir(parents=True)
+        labels = ("Server", "Client1", "Client2")
+        session = "0123456789abcdef0123456789abcdef"
+        peers = [dict(label=label, pid=100 + index, port=7777 + index,
+                      connect_to="" if index == 0 else "127.0.0.1") for index, label in enumerate(labels)]
+        (directory / "topology.json").write_text(json.dumps(dict(peers=peers)))
+        for index, label in enumerate(labels):
+            def actors(rounds, ack=False):
+                result = []
+                for actor_id, seed in ((1, 1234), (2, 1334)):
+                    calls = []
+                    for phase in range(rounds):
+                        value = seed + phase * 10
+                        if phase == 1:
+                            if index == 0:
+                                calls.append(f"FromClient:{seed + 1}")
+                            elif index == actor_id:
+                                calls.append(f"FromServer:{seed + 4}")
+                        if index == 0:
+                            calls.append(f"FromClient:{value + 1}")
+                        elif index == actor_id:
+                            calls.append(f"FromServer:{value + 2}")
+                        calls.append(f"ToAll:{value + 3}")
+                    if ack:
+                        calls.append(f"FromClient:{seed + 11}")
+                    result.append(dict(ActorId=actor_id, Challenge=seed, SessionId=session,
+                                       Authority=index == 0, Owned=index == actor_id,
+                                       HP=seed + (rounds - 1) * 10 + 1, HpReadable=True,
+                                       CallLog="|".join(calls) + "|", CallCount=len(calls)))
+                return result
+            data = dict(SchemaVersion=2, Complete=True, Fault="", Role=label, Backend="Lua",
+                        SessionId=session, ProcessId=100 + index, NetMode=1 if index == 0 else 3,
+                        Connected=True, Clients=2 if index == 0 else 0, OwnedActorId=index,
+                        FirstRoundObservationMs=5000,
+                        WorldPackage="/UnLuaNovaTestSuite/Tests/Misc/Empty", ServerAddress="127.0.0.1:7777",
+                        Rpcs=[dict(Name=name, RpcId=i + 1) for i, name in enumerate(("FromClient", "FromServer", "ToAll"))],
+                        Actors=actors(2, ack=index == 0),
+                        Observations=[dict(Round=phase, Actors=actors(phase)) for phase in (1, 2)])
+            (directory / f"{label}.json").write_text(json.dumps(data))
+            (directory / "logs" / f"{label}.log").write_text("connected peer log")
+        return directory
+
+    def test_connected_network_rejects_disconnected_or_different_sessions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            net = self.connected_evidence(run)
+            self.assertEqual(gate.validate_connected_session(run, "Lua"), [])
+            path = net / "Client2.json"
+            original = json.loads(path.read_text())
+            for change in (dict(Connected=False), dict(NetMode=0), dict(SessionId="f" * 32),
+                           dict(ProcessId=101), dict(ServerAddress="127.0.0.1:9999"),
+                           dict(OwnedActorId=1), dict(Complete=False), dict(Observations=[])):
+                with self.subTest(change=change):
+                    path.write_text(json.dumps(dict(original, **change)))
+                    self.assertTrue(gate.validate_connected_session(run, "Lua"))
+
+    def test_connected_network_requires_replication_and_rpc_delivery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            net = self.connected_evidence(run)
+            path = net / "Client1.json"
+            original = json.loads(path.read_text())
+            for field, value in (("HP", 100), ("CallLog", ""), ("Challenge", 9999),
+                                 ("SessionId", "f" * 32), ("Authority", True), ("CallCount", 0)):
+                with self.subTest(field=field):
+                    data = copy.deepcopy(original)
+                    data["Actors"][0][field] = value
+                    path.write_text(json.dumps(data))
+                    self.assertTrue(gate.validate_connected_session(run, "Lua"))
+            data = copy.deepcopy(original)
+            data["Observations"][0]["Actors"][1]["HP"] = 100
+            path.write_text(json.dumps(data))
+            self.assertTrue(gate.validate_connected_session(run, "Lua"))
+
+    def test_connected_network_requires_round_barrier(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            net = self.connected_evidence(run)
+            path = net / "Client1.json"
+            data = json.loads(path.read_text())
+            original = copy.deepcopy(data)
+            data["Actors"][0]["CallLog"] = data["Actors"][0]["CallLog"].replace("FromServer:1238|", "")
+            data["Actors"][0]["CallCount"] -= 1
+            path.write_text(json.dumps(data))
+            self.assertTrue(gate.validate_connected_session(run, "Lua"))
+            for delay in (None, 4999, float("nan")):
+                original["FirstRoundObservationMs"] = delay
+                path.write_text(json.dumps(original))
+                self.assertTrue(gate.validate_connected_session(run, "Lua"))
+
+    def test_connected_network_rejects_client_rpc_leaking_to_non_owner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            net = self.connected_evidence(run)
+            path = net / "Client1.json"
+            data = json.loads(path.read_text())
+            data["Actors"][1]["CallLog"] += "FromServer:1336|"
+            data["Actors"][1]["CallCount"] += 1
+            path.write_text(json.dumps(data))
+            self.assertTrue(gate.validate_connected_session(run, "Lua"))
+
+    def test_connected_network_rejects_old_declaration_only_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            net = self.connected_evidence(run)
+            for label in ("Server", "Client1", "Client2"):
+                (net / f"{label}.json").write_text(json.dumps(dict(Role=label, Backend="Lua", Rpcs=[])))
+            self.assertTrue(gate.validate_connected_session(run, "Lua"))
+
     def test_network_requires_connected_matching_peers(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
             net = run / "net/Multicast"
+            self.connected_evidence(run)
             (net / "logs").mkdir(parents=True)
             labels = ["Server", "Client1", "Client2"]
             (net / "topology.json").write_text(json.dumps({"peers": [{"label": n} for n in labels]}))

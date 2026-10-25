@@ -60,6 +60,8 @@ void AUnLuaNovaTestNetActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(AUnLuaNovaTestNetActor, EngineReplicatedInt);
+    DOREPLIFETIME(AUnLuaNovaTestNetActor, NetTestSessionId);
+    DOREPLIFETIME(AUnLuaNovaTestNetActor, NetTestActorId);
 }
 
 int32 UUnLuaNovaTestStub::TestForIssue407(TArray<int32> Array)

@@ -19,10 +19,10 @@
 //
 //   - LuaNetClientServerTest proves a multicast runs on the server and on its PIE client,
 //     but both peers share a process, a UClass and a net driver.
-//   - LuaNetDedicatedServerTest runs two real processes but never connects them, because
-//     what it compares - the RPC ids - does not need a connection.
+//   - LuaNetDedicatedServerTest now connects a DS and two clients, checking ownership,
+//     bidirectional RPCs and two rounds of Lua field replication on two actors.
 //
-// What is left uncovered is therefore exactly the thing a multicast is for: that one call on
+// This focused broadcast test checks that one call on
 // the server lands in Lua on *every* client, where each client has its own process, its own
 // UClass and its own Lua state. That is this test: one dedicated server peer plus two client
 // peers, all `-game`, connected over localhost. The server waits until both clients are

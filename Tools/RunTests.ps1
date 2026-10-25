@@ -806,8 +806,8 @@ function Start-GdigrabRecording {
     # frames than it keeps), and it forces even dimensions, because yuv420p has no odd width
     # and an editor window is whatever size it was last dragged to.
     $Args = "-hide_banner -loglevel error -y -f gdigrab -framerate $Fps -draw_mouse 0$Crop " +
-            "-i `"$Source`" -vf `"scale=2*trunc(min(1920\,iw)/2):-2`" " +
-            "-c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart " +
+            "-i `"$Source`" -filter_threads 1 -vf `"scale=2*trunc(min(1920\,iw)/2):-2`" " +
+            "-c:v libx264 -threads 2 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart " +
             "`"$OutFile`""
 
     $Psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -821,6 +821,9 @@ function Start-GdigrabRecording {
 
     $Proc = [System.Diagnostics.Process]::Start($Psi)
     if (-not $Proc) { return $null }
+    # Recording must not compete at normal priority with the benchmark it observes.
+    try { $Proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::BelowNormal }
+    catch { Write-Warning "Could not lower recording priority: $($_.Exception.Message)" }
 
     Write-Host "Record    : $What -> $OutFile"
     return [pscustomobject]@{ Process = $Proc; OutFile = $OutFile; Started = (Get-Date) }

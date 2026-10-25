@@ -165,6 +165,13 @@ public:
     UPROPERTY(Replicated)
     int32 EngineReplicatedInt = 0;
 
+    // Set only by the dedicated server; clients learn session/actor identity over replication.
+    UPROPERTY(Replicated)
+    FString NetTestSessionId;
+
+    UPROPERTY(Replicated)
+    int32 NetTestActorId = 0;
+
     /**
      * "<RpcName>:<Arg>|" per handler invocation, appended by the Lua side.
      *

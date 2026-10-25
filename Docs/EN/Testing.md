@@ -23,7 +23,7 @@ The default `Release` profile orchestrates the current **Win64** matrix. Operato
 | Editor | Archive old static binding source, build Editor/generator, regenerate and rebuild the generated code |
 | Development | Build/cook/package/archive separate Game and Dedicated Server targets |
 | Editor automation | All registered UnLuaNova tests, including Slow, lifetime, extensions, showcase media and benchmarks |
-| Connected peers | Launch the current backend's cooked Server and Game executables by role, retaining topology, reports and logs; verify multicast reaches two clients |
+| Connected peers | Use this backend's cooked Server/Game archives for one DS and two clients; verify two server-spawned actors, two rounds of Lua field replication, bidirectional RPCs, owner-targeted delivery and multicast with raw per-peer observations |
 | Types | Back up old generated declarations, export fresh declarations, require successful backend type checks |
 | Cooked automation | Run all tests registered for the Development game's actual UE context |
 | Memory | Require `UnLuaNova.Memory` evidence in both backend/carrier combinations: VM allocation balance, resource release and warmed heap growth |
@@ -46,7 +46,9 @@ Read `Saved/ReleaseTests/<timestamp>/release-summary.md` or `release-summary.jso
 
 Backend outputs include `editor/<backend>/`, `game/`, packaged Development/Shipping archives and logs. The actual process exports `metadata/manifest.json` with backend, feature flags, Editor/cooked state and full leaf test paths. `ValidateRelease.py` compares this against UE's `index.json`. Empty, missing, duplicate, skipped, unknown, error-bearing and wrong-backend results fail. Editor source suites must also be registered. Historical display-name/count baselines no longer decide release completeness.
 
-The Editor evidence gate requires all four Showcase PNGs and encoded clips. Cooked reports also collect newly generated screenshots and encode clips; dedicated servers are archived under `packages/Server/`. Connected network evidence must contain Server/Client1/Client2 logs, backend/role identity, matching RPCIds and actual multicast reception. A peer-report helper's no-op does not prove transmission.
+The Editor evidence gate requires all four Showcase PNGs and encoded clips. Cooked reports also collect newly generated screenshots and encode clips; dedicated servers are archived under `packages/Server/`. Network evidence requires Server/Client1/Client2 logs, backend/role identity, matching RPCIds, distinct PIDs, open connections and matching server endpoints. DedicatedServer schema 2 additionally requires a shared server-generated SessionId, two distinct owners, two rounds of Lua HP observations and exact per-peer RPC logs. Standalone or declaration-only historical reports cannot pass. A peer-report helper's no-op does not prove transmission.
+
+Editor diagnostics use the current Editor executable for all peers by default, avoiding stale Game binaries. Release explicitly selects its current Server/Game archives through environment variables. Clients never spawn the test actors or assign ownership locally.
 
 Performance requires `Tools/baseline/perf-lua.json` and `perf-luau.json`, matching backend, engine, machine, case inventory and iteration counts, with a 25% regression limit. Current references come from the independent `FullFix-Complete-11` diagnostic run, documented in the baseline README. They are not pre-fix measurements and cannot establish a performance improvement from these fixes. Missing comparable references fail the gate; the runner never promotes its own measurements automatically. External performance claims still require [controlled acceptance](Performance_Parity_slua.md).
 

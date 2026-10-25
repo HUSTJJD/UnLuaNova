@@ -1036,12 +1036,17 @@ def load_net_sessions(reports_dir: Path) -> list:
         peers = []
         for peer in data.get("peers") or []:
             label = peer.get("label") or "?"
+            try:
+                observed = json.loads((topology.parent / f"{label}.json").read_bytes())
+            except (OSError, ValueError):
+                observed = {}
             peers.append(
                 {
                     "label": label,
                     "role": peer.get("role") or "?",
                     "headless": bool(peer.get("headless")),
                     "pid": peer.get("pid") or 0,
+                    "observed": observed,
                     # topology 里的 log 是**那台机器**的绝对路径，报告不能引用它：拷到别人
                     # 机器上就是死链。归档里的位置是固定的，用相对路径重写一遍。
                     "log": f"net/{session}/logs/{label}.log",
@@ -1072,7 +1077,7 @@ def render_net_sessions(sessions, published=False) -> list:
         lines.append("| peer | 角色 | 窗口 | 报告 | 日志 |")
         lines.append("|:--|:--|:--|:--|:--|")
         for peer in entry["peers"]:
-            window = "headless（不录）" if peer["headless"] else "有（见上面的整场录屏）"
+            window = "headless（不录）" if peer["headless"] else "有窗口（录屏是否成功见媒体结果）"
             if published:
                 # 发布页只带页面与图片/视频，日志不跟着走。给一个点不开的链接比不给更糟。
                 report = f"`{peer['report']}`"
@@ -1084,6 +1089,32 @@ def render_net_sessions(sessions, published=False) -> list:
                 f"| {peer['label']} | {peer['role']} | {window} | {report} | {log} |"
             )
         lines.append("")
+
+        lines.extend(["| peer | PID | NetMode | Connected | SessionId | Complete | 第一轮观测等待 ms |",
+                      "|---|---:|---:|---|---|---|---:|"])
+        for peer in entry["peers"]:
+            data = peer.get("observed", {})
+            lines.append(f"| {peer['label']} | {data.get('ProcessId', peer['pid'])} | "
+                         f"{data.get('NetMode', 'missing')} | {data.get('Connected', 'missing')} | "
+                         f"{data.get('SessionId', 'missing')} | {data.get('Complete', 'missing')} | "
+                         f"{data.get('FirstRoundObservationMs', 'missing')} |")
+        lines.append("")
+        if entry["session"] == "DedicatedServer":
+            if any(p.get("observed", {}).get("SchemaVersion") != 2 for p in entry["peers"]):
+                lines.extend(["此报告缺少连接场景 schema 2 证据，不能证明 DS/client 双向 RPC 或字段同步。", ""])
+            else:
+                lines.extend(["逐端原始观测：HP 从 Lua 表读取；调用日志是本端非复制字段。完整判定以严格证据门禁为准。", "",
+                              "| peer | 轮次 | Actor | Owner | Challenge | Lua HP | 本端 RPC 日志 |",
+                              "|---|---:|---:|---|---:|---:|---|"])
+                for peer in entry["peers"]:
+                    data = peer.get("observed", {})
+                    samples = list(data.get("Observations", [])) + [dict(Round="final", Actors=data.get("Actors", []))]
+                    for sample in samples:
+                        for actor in sample.get("Actors", []):
+                            calls = str(actor.get("CallLog", "missing")).replace("|", "&#124;")
+                            lines.append(f"| {peer['label']} | {sample.get('Round')} | {actor.get('ActorId')} | "
+                                         f"{actor.get('Owned')} | {actor.get('Challenge')} | {actor.get('HP')} | {calls} |")
+                lines.append("")
 
     if published:
         lines.append(

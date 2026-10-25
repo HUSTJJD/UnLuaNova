@@ -22,6 +22,7 @@
 #include "Dom/JsonObject.h"
 #include "Engine/Engine.h"
 #include "Engine/NetDriver.h"
+#include "Engine/NetConnection.h"
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformProcess.h"
@@ -134,6 +135,11 @@ namespace UnLuaNovaTestSuite
         }
         const FString Override = FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_TEST_PEER_EXE"));
         if (!Override.IsEmpty()) return Override;
+#if WITH_EDITOR
+        // Match the driver's freshly built module. A leftover Game binary may use a
+        // different backend or RPC layout; packaged runs must select their archive explicitly.
+        return FPlatformProcess::ExecutablePath();
+#else
 #if PLATFORM_WINDOWS
         const FString ExeName = FString(FApp::GetProjectName()) + TEXT(".exe");
 #else
@@ -148,6 +154,7 @@ namespace UnLuaNovaTestSuite
         // Fallback: this process's own binary. -game on the editor executable still starts a
         // standalone game, so the topology is correct either way - just slower to come up.
         return FPlatformProcess::ExecutablePath();
+#endif
     }
 
     int32 FNetSession::GetServerPort() const
@@ -317,6 +324,10 @@ namespace UnLuaNovaTestSuite
             Entry->SetStringField(TEXT("label"), Peer.Spec.Label);
             Entry->SetStringField(TEXT("exe"), ResolvePeerExe(Peer.Spec.Role));
             Entry->SetStringField(TEXT("role"), Peer.Spec.Role == ENetPeerRole::Server ? TEXT("Server") : TEXT("Client"));
+            Entry->SetNumberField(TEXT("port"), Peer.Spec.Port);
+            Entry->SetStringField(TEXT("connect_to"), Peer.Spec.ConnectTo);
+            Entry->SetStringField(TEXT("map"), Peer.Spec.MapName);
+            Entry->SetStringField(TEXT("arguments"), BuildPeerCommandLine(Peer.Spec));
             Entry->SetBoolField(TEXT("headless"), Peer.Spec.bHeadless);
             Entry->SetNumberField(TEXT("pid"), (double)Peer.Pid);
             Entry->SetStringField(TEXT("log"), LogPath(Peer.Spec.Label));
@@ -415,6 +426,7 @@ namespace UnLuaNovaTestSuite
 
         // Recorded so a mismatch can be told apart from "the wrong process answered".
         Root->SetStringField(TEXT("Role"), GetNetRole());
+        Root->SetNumberField(TEXT("ProcessId"), FPlatformProcess::GetCurrentProcessId());
         Root->SetStringField(TEXT("Backend"), UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU ? TEXT("Luau") : TEXT("Lua"));
         return Root;
     }
@@ -431,7 +443,8 @@ namespace UnLuaNovaTestSuite
 
         const ENetMode Mode = World->GetNetMode();
         Report.SetNumberField(TEXT("NetMode"), (double)Mode);
-        Report.SetBoolField(TEXT("Connected"), Mode != NM_Standalone);
+        Report.SetBoolField(TEXT("Connected"), false);
+        Report.SetStringField(TEXT("WorldPackage"), World->GetOutermost()->GetName());
 
         int32 Clients = 0;
         if (UNetDriver* Driver = World->GetNetDriver())
@@ -440,7 +453,17 @@ namespace UnLuaNovaTestSuite
             // single ServerConnection is what is open, and counting *clients* there is 0.
             if (Driver->IsServer())
             {
-                Clients = Driver->ClientConnections.Num();
+                for (const UNetConnection* Connection : Driver->ClientConnections)
+                {
+                    if (Connection && Connection->GetConnectionState() == USOCK_Open && Connection->PlayerController)
+                        ++Clients;
+                }
+                Report.SetBoolField(TEXT("Connected"), Clients > 0);
+            }
+            else if (Driver->ServerConnection)
+            {
+                Report.SetBoolField(TEXT("Connected"), Driver->ServerConnection->GetConnectionState() == USOCK_Open);
+                Report.SetStringField(TEXT("ServerAddress"), Driver->ServerConnection->LowLevelGetRemoteAddress(true));
             }
         }
         Report.SetNumberField(TEXT("Clients"), (double)Clients);

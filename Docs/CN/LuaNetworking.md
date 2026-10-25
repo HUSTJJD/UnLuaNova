@@ -78,11 +78,15 @@ end
 |---|---|---|
 | UnLuaNova.API.Net | 声明拒绝/幂等、flags、还原、排序、schema 指纹、实际桶编组的 int64 边界 | 双后端 Editor 已通过；不验证实际传输 |
 | UnLuaNova.API.Net.ClientServer | PIE 中 RPC / 字段传输 | 单进程共享类状态 |
-| UnLuaNova.API.Net.DedicatedServer | 独立进程声明结果/ID 对照 | 不是相互连接的传输测试 |
+| UnLuaNova.API.Net.DedicatedServer | DS + 两个独立客户端、仅服务端生成两个 Actor 和设置 Owner、两轮 Server/Client/Multicast RPC 与 Lua HP 同步 | 新场景待运行；Release22 及以前仅为未连接的声明/ID 对照，不构成此项证据 |
 | UnLuaNova.Slow.Net.Multicast | server + 两个连接的 client | 双后端 Editor 完整诊断轮已通过；Fast 层排除 |
 
 以上执行状态对应 `FullFix-Complete-11`，打包环境与完整发布矩阵的最终结论见 [回归验证记录](Regression_20261024.md)。
 
-需要补充 owner/非 owner、多 actor 混合条件、int64 边界、晚加入、断线重连、dormancy/relevancy、丢包及 legacy/Iris/push model 的打包矩阵。存在测试源码不等于测试已通过。
+新 DedicatedServer 场景的 SessionId 和每个 Actor 的随机 challenge 仅由服务端生成，经 Actor 复制到客户端。客户端不得本地生成测试 Actor 或设置 Owner；两个客户端分别从自己的 Actor 发出 Server RPC，服务端处理函数修改 Lua HP，再发送定向 Client RPC 和广播。两客户端分别经 Server RPC 确认第一轮的两个 Actor 均验证完成，服务端再经 Client RPC 允许第二轮开始；这样慢客户端不会因较快客户端提前改值而错过第一轮。Client1 固定延后至少 5 秒检查第一轮，原始等待时长进入门禁。严格比较逐端调用日志，非 Owner 不得收到 Client RPC。JSON 文件只用于结果和结束同步，不传递测试输入。
+
+`ValidateRelease.py` 要求相同会话、真实连接、三个不同 PID、两个不同 Owner、两轮原始观测及准确的 RPC 参数/执行次数。仅编号一致或 Standalone 报告不能通过。开发诊断支持 `-UnLuaNovaNetFault=SkipServerRpc|SkipClientRpc|SkipReplication`，用于验证断开相应路径时确实失败；故障运行不得用于验收。
+
+仍需要补充非 Owner 发起非法 Server RPC 的拒绝、多 actor 混合条件、int64 边界、晚加入、断线重连、dormancy/relevancy、丢包及 legacy/Iris/push model 的打包矩阵。存在测试源码不等于测试已通过。
 
 [测试架构](Testing_Architecture.md) · [对象绑定](LuaDrivenObjects.md) · [能力矩阵](../feature-matrix.md)

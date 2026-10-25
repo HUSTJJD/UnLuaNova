@@ -519,8 +519,9 @@ namespace UnLuaNova
             return;
         }
 
-        lua_Debug Ar;
-        if (!UNLUANOVA_GETINFO(L, 0, "np", &Ar) || !IsLuaFunction(&Ar))
+        lua_Debug Ar{};
+        // Luau only fills what/source/linedefined when 's' is requested.
+        if (!UNLUANOVA_GETINFO(L, 0, "snp", &Ar) || !IsLuaFunction(&Ar))
         {
             return;
         }

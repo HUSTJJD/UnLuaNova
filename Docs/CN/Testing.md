@@ -23,7 +23,7 @@ description: "单入口 release 验证、证据与失败判定"
 | Editor | 备份移出旧静态绑定源码，构建 Editor/生成器，重新生成并再次构建，确保本轮生成代码参与编译 |
 | Development | 构建、cook、打包并分别归档 Game 和 Dedicated Server target |
 | Editor 全量测试 | 全部 `UnLuaNova` 注册用例，包括 Slow、VM/绑定/生命周期、扩展、示例截图/视频及性能用例 |
-| 跨进程联网 | 使用本轮同后端 cooked Server/Game 程序分别启动服务器和客户端；保留拓扑、报告、日志，验证两客户端真实收到 multicast |
+| 跨进程联网 | 本轮同后端 cooked Server/Game 组成一个 DS 和两个客户端；验证两个服务端生成 Actor 的两轮 Lua 字段同步、双向 RPC、Owner 定向投递及 multicast，保留逐端原始观测 |
 | 静态类型 | 备份旧生成声明，重新导出；LuaLS 和 luau-lsp 必须实际执行，不能静默跳过 |
 | Cooked 全量测试 | 在 Development 包中执行 UE 当前游戏上下文可运行的全部注册用例 |
 | 内存 | 两个后端的 Editor 与 cooked Development 均执行 `UnLuaNova.Memory`，逐块核对 VM 释放、资源释放和预热后堆增长；报告缺失或残留超标失败 |
@@ -46,7 +46,9 @@ DAP 会话测试使用系统分配的回环端口，由游戏线程逐帧处理�
 
 每个后端保留 `editor/<backend>/`、`game/`、`packages/Development/`、`packages/Shipping/` 和日志。`metadata/manifest.json` 来自实际进程，记录编译后端、能力开关、Editor/cooked 状态及完整测试路径。`ValidateRelease.py` 逐项核对 UE `index.json`，零用例、漏跑、重复、跳过、未知状态、错误信息、错误后端和未注册源码 suite 都不能通过。测试数量和名称基线不再决定 release 完整性。
 
-Editor 证据门禁要求四个 Showcase 的 PNG 和编码视频。cooked 报告也自动收集本轮新生成的截图并编码视频；独立服务器归档在 `packages/Server/`。网络要求 Server/Client1/Client2 的日志、角色、后端、RPCId 和真实传输证据；单独运行报告 helper 的空操作不算联网通过。
+Editor 证据门禁要求四个 Showcase 的 PNG 和编码视频。cooked 报告也自动收集本轮新生成的截图并编码视频；独立服务器归档在 `packages/Server/`。网络要求 Server/Client1/Client2 的日志、角色、后端、RPCId、不同 PID、实际打开的连接及相同服务器地址。DedicatedServer schema 2 还要求相同服务端生成的 SessionId、两个不同 Owner、两轮 Lua HP 与准确的逐端 RPC 日志；Standalone 或只有声明编号一致的旧报告不能通过。单独运行报告 helper 的空操作不算联网通过。
+
+Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混入旧 Game 二进制；Release 通过环境变量显式指定本轮归档的 Server/Game。客户端不在本地生成测试 Actor 或设置 Owner。
 
 性能门禁要求 `Tools/baseline/perf-lua.json`、`perf-luau.json`，核对后端、引擎、机器、case 与迭代次数，并拒绝超过 25% 的回退。当前参考值来自独立的 `FullFix-Complete-11` 诊断轮，来源见基线目录 README；它们不是修复前基线，不能证明修复带来了性能提升。缺少可比参考值时门禁失败，**不会自动将待测结果提升为基线**。对外性能结论仍须遵守 [性能验收](Performance_Parity_slua.md)。
 
