@@ -18,9 +18,9 @@
 // committed, so a generator that stopped emitting anything would leave the registry empty and
 // the fast call path dead, with the suite still green.
 //
-// Output goes to a scratch directory - never to Source/<Module>/Generated, which is where it
-// would land by default and where it would become real, compiled code with test-shaped
-// contents.
+// Output goes to a scratch directory - never to <UnLuaNova>/Source/UnLuaNova/Generated, which
+// is where it would land by default and where it would become real, compiled code with
+// test-shaped contents.
 
 #include "UnLuaNovaBase.h"
 #include "UnLuaNovaTemplate.h"

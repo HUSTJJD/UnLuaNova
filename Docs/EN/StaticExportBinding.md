@@ -40,12 +40,21 @@ Produced by a Commandlet at build time:
 UnrealEditor-Cmd.exe "<ProjectDir>/<Project>.uproject" -run=UnLuaNovaStaticBindingGenerator -unattended -NoSplash
 ```
 
-The generated code lands in `Source/<ProjectModule>/Generated/` - inside the module directory,
-because that is the only place UBT compiles it. A generated file written anywhere else is not
-compiled at all, and the reflection cost you meant to save is still being paid.
+The generated code lands in **UnLuaNova's own module directory**
+`<UnLuaNova>/Source/UnLuaNova/Generated/` - inside a module directory, because that is the
+only place UBT compiles it. A generated file written anywhere else is not compiled at all,
+and the reflection cost you meant to save is still being paid.
 
-This is a build-time step, not a runtime switch: rerun it when the set of types changes and
-commit the result.
+It deliberately does *not* default to the host project's `Source/<ProjectModule>/`: the project
+name is not necessarily the main module directory (the Lyra host is named `LyraStarterGame`
+while its main module lives in `Source/LyraGame`), so guessing from the project name can drop
+the file into a directory with no `.Build.cs` that UBT never looks at.
+
+This is a build-time step, not a runtime switch: rerun it when the set of types changes. The
+output is **generated code and is git-ignored** - it depends on `StaticBindingSelection` and on
+the host project's type set, so committing it into the plugin repository would leak across
+projects. Teams and CI rely on the automatic generation at editor startup, or run the
+Commandlet explicitly.
 
 ### Type selection (opt-out)
 

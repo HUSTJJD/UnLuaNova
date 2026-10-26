@@ -123,8 +123,16 @@ It is C++ - rebuild once for it to take effect; until then the reflective path s
 **注意第二步**：产物是 `.cpp`，写完盘还要 UBT 编一次才进二进制。所以自动生成之后
 thunk **本次启动还不生效**，要下次编译之后。日志里直接写了这句，不用猜。
 
-产物落在 `Source/<工程模块>/Generated/`（在模块目录内才会被 UBT 编译）——
-把生成物放在别处等于没有它。生成完之后**把产物一起提交**，团队其他人和 CI 就都不用再生成。
+产物落在 **UnLuaNova 插件自己的模块目录** `<UnLuaNova>/Source/UnLuaNova/Generated/`
+（只有落在模块目录内才会被 UBT 编译）—— 把生成物放在别处等于没有它。
+
+默认不给宿主工程的 `Source/<工程模块>/`：工程名并不等于主模块目录名
+（宿主 `LyraStarterGame` 的主模块目录是 `Source/LyraGame`），按工程名推会把产物写进一个
+没有 `*.Build.cs` 的目录，UBT 永远看不到它 —— 生成了等于没生成。
+
+产物是**生成物，不入库**（已在插件的 `.gitignore` 里）：它的内容取决于
+`StaticBindingSelection` 与宿主工程的类型集合，提交进插件仓库会跨工程互相污染。
+团队与 CI 靠编辑器启动时的自动生成，或显式跑一次 Commandlet。
 
 ### 关于那一次重编译
 
@@ -147,7 +155,7 @@ UnrealEditor-Cmd.exe "<工程目录>/<工程>.uproject" -run=UnLuaNovaStaticBind
 
 | 参数 | 作用 |
 |:---|:---|
-| `-OutputDir=<路径>` | 产物目录，默认 `Source/<工程模块>/Generated` |
+| `-OutputDir=<路径>` | 产物目录，默认 `<UnLuaNova>/Source/UnLuaNova/Generated` |
 | `-Selection=ExportedReflected\|Modules\|All` | 生成范围，默认 `ExportedReflected` |
 | `-Modules=/Script/Engine,/Script/UMG` | 收窄到指定包，逗号分隔；仅 `-Selection=Modules` 时生效 |
 

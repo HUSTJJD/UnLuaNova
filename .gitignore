@@ -39,3 +39,8 @@ Plugins/UnLuaNova/Source/UnLuaNovaDefaultParamCollectorUbtPlugin/obj
 /_site/
 __pycache__
 site
+
+# 静态绑定产物（UnLuaNovaStaticBindingGenerator 在构建期 / 编辑器启动时生成）：
+# 内容取决于 StaticBindingSelection 与宿主工程的类型集合，提交会跨工程互相污染。
+# 默认落在插件自己的模块目录 —— 只有落在模块目录里才会被 UBT 编译。
+Plugins/UnLuaNova/Source/UnLuaNova/Generated/
