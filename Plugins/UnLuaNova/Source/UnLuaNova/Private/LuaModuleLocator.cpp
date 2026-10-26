@@ -20,6 +20,11 @@
 
 FString ULuaModuleLocator::Locate(const UObject* Object)
 {
+    if (!Object)
+    {
+        return "";
+    }
+
     const UObject* CDO;
     if (Object->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
     {
@@ -28,7 +33,21 @@ FString ULuaModuleLocator::Locate(const UObject* Object)
     else
     {
         const auto Class = Cast<UClass>(Object);
-        CDO = Class ? Class->GetDefaultObject() : Object->GetClass()->GetDefaultObject();
+        const UClass* ObjectClass = Class ? Class : Object->GetClass();
+        if (!ObjectClass)
+        {
+            return "";
+        }
+
+        CDO = ObjectClass->GetDefaultObject();
+    }
+
+    // GetDefaultObject() 不保证非空：还在加载中、还没走完构造的类（异步加载会成批喂进来
+    // 这种对象）就没有 CDO。以前直接往下走，于是一处空指针崩溃。
+    // 拿不到 CDO 就当"不是脚本绑定目标"，跳过。
+    if (!CDO)
+    {
+        return "";
     }
 
     if (CDO->HasAnyFlags(RF_NeedInitialization))
