@@ -685,8 +685,13 @@ namespace UnLuaNova
 
     bool FLuaEnv::TryBind(UObject* Object)
     {
+        // 异步加载 flush 会把成批对象塞进来（OnAsyncLoadingFlushUpdate），
+        // 这里不能假设 Object 一定有效 —— 空指针/待销毁的直接跳过。
+        if (!IsValid(Object))
+            return false;
+
         const auto Class = Object->IsA<UClass>() ? static_cast<UClass*>(Object) : Object->GetClass();
-        if (Class->HasAnyClassFlags(CLASS_NewerVersionExists))
+        if (!Class || Class->HasAnyClassFlags(CLASS_NewerVersionExists))
         {
             // filter out recompiled objects
             return false;

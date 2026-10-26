@@ -71,7 +71,15 @@ FString ULuaModuleLocator_ByBinding::Locate(const UObject* Object)
     if (!FromInterface.IsEmpty())
         return FromInterface;
 
+    // Super 已经挡掉了空 Object；这里再挡一次，因为下面要直接解引用。
+    // TryBind 在异步加载 flush 时会成批喂对象进来，防御性判空比崩溃划算。
+    if (!Object)
+        return FString();
+
     const UClass* Class = Object->IsA<UClass>() ? static_cast<const UClass*>(Object) : Object->GetClass();
+    if (!Class)
+        return FString();
+
     const FName Key = Class->GetFName();
     if (const FString* Cached = Cache.Find(Key))
         return *Cached;
