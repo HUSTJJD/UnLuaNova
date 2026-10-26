@@ -139,7 +139,14 @@ public:
     UPROPERTY(config, EditAnywhere, Category = "Build")
     TArray<FString> StaticBindingModules;
 
-    /** 产物目录。留空 = Source/<工程模块>/Generated —— 只有落在模块目录里才会被 UBT 编译。 */
+    /**
+     * 产物目录。留空 = UnLuaNova 插件自己的模块目录（<UnLuaNova>/Source/UnLuaNova/Generated）
+     * —— 只有落在模块目录里才会被 UBT 编译。
+     *
+     * 默认不给宿主工程目录：工程名并不等于主模块目录名（宿主 LyraStarterGame 的主模块是
+     * Source/LyraGame），按工程名推会把产物写进没有 Build.cs 的目录，UBT 永远看不到它。
+     * 插件自己的模块一定存在、且本来就依赖 UnLuaNova，产物放这儿必然被编译。
+     */
     UPROPERTY(config, EditAnywhere, Category = "Build")
     FString StaticBindingOutputDir;
 

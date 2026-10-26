@@ -16,6 +16,7 @@
 #include "Misc/Paths.h"
 #include "Misc/Parse.h"
 #include "HAL/PlatformFilemanager.h"
+#include "Interfaces/IPluginManager.h"
 
 namespace
 {
@@ -358,10 +359,28 @@ namespace UnLuaNova
 
 	FString GetDefaultStaticBindingOutputDir()
 	{
-		// Land inside the project's main module so the file is actually compiled. Putting
-		// it anywhere else means UBT never sees it, and a binding table that is not
-		// compiled buys nothing at all.
-		return FPaths::Combine(FPaths::ProjectDir(), TEXT("Source"), FApp::GetProjectName(), TEXT("Generated"));
+		// The output belongs to UnLuaNova itself: <UnLuaNova>/Source/UnLuaNova/Generated.
+		//
+		// It used to be <Project>/Source/<ProjectName>/Generated, which assumes the project
+		// name is also the main module directory. That is false often enough to be a trap:
+		// the Lyra host is named LyraStarterGame but its main module lives in Source/LyraGame,
+		// so the file landed in a directory with no .Build.cs and UBT never compiled it -
+		// a binding table that is not compiled buys nothing at all.
+		//
+		// The plugin's own module directory always exists and always depends on UnLuaNova,
+		// so whatever lands there is compiled for sure, and the host source tree stays clean.
+		if (const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("UnLuaNova")))
+		{
+			return FPaths::Combine(Plugin->GetBaseDir(), TEXT("Source"), TEXT("UnLuaNova"), TEXT("Generated"));
+		}
+
+		// Unreachable in practice (the generator ships inside that very plugin), but a silent
+		// fallback to a directory UBT ignores is exactly the bug being fixed here, so say so.
+		const FString Fallback = FPaths::Combine(FPaths::ProjectDir(), TEXT("Source"), FApp::GetProjectName(), TEXT("Generated"));
+		UE_LOG(LogTemp, Warning,
+			TEXT("[StaticBindingGen] UnLuaNova plugin not found; falling back to %s, which is not a module directory - set StaticBindingOutputDir explicitly."),
+			*Fallback);
+		return Fallback;
 	}
 
 	FStaticBindingGenerateResult GenerateStaticBindings(const FStaticBindingGenerateOptions& Options)
