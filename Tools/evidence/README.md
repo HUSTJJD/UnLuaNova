@@ -81,8 +81,11 @@ python Tools/RecordEvidence.py --report Saved\ReleaseTests\baseline\luau\game `
 - `Tools/RunNetMatrix.ps1` 产出的 `net/scenarios/<Name>/` 与 `net/variants/<Name>/DedicatedServer/`
   是第三套产物，同样**不是** automation evidence。它们由
   `python Tools/ValidateRelease.py --net-matrix --run <dir> --backend <B> --carrier game`
-  单独判定，结果写 `metadata/net-matrix-gate.json`。该门禁 fail-closed：缺 `topology.json`、
-  缺 peer 日志、PID 与拓扑不一致、伪造的 Iris / push-model 标志、场景从未运行，都会失败。
+  单独判定，结果写 `metadata/net-matrix-gate.json`。当前矩阵是 **8 份场景拓扑 + 4 份变体拓扑**
+  （Legacy / PushOff / Iris / Cooked）。该门禁 fail-closed：缺 `topology.json`、缺 peer 日志、
+  PID 与拓扑不一致、伪造的 Iris / push-model / Cooked 标志、跨 peer `RepSchemaVersion` 不一致或
+  与 `VariantRepSchemaVersion` 不可区分、缺 Generic 字段 / UStruct 参数、`NetStats.OutTotalBytes` 为零、
+  场景从未运行，都会失败。
   它不改写 `Tools/evidence/index.json`，也不改变 `verification` 字段。
 - 一份证据只描述**一个后端 + 一个载体**；`--carrier` 只接受 `Editor` / `Game`，它只是元数据标签，
   不改变读哪个文件、也不做 cooked 校验。双后端要两份。

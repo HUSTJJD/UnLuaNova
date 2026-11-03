@@ -10,8 +10,10 @@
 // KIND, either express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-// Four connected scenarios the original DedicatedServer test deliberately did not cover:
-// a client that joins late, a client whose process is replaced, dormancy, and relevancy.
+// Eight connected scenarios the original DedicatedServer test deliberately did not cover:
+// a client that joins late (and the reverse join order), a client whose process is replaced,
+// dormancy, relevancy, packet loss / reordering, a UNetConnection-level reconnect that keeps
+// the same process, and cross-peer declaration fingerprint comparison.
 //
 // These are opt-in. A normal automation run skips them (returning success with an info line)
 // because each one launches three real processes; the release pipeline enables them from a
@@ -25,6 +27,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Engine/Engine.h"
 #include "Engine/NetConnection.h"
 #include "Engine/NetDriver.h"
 #include "Engine/World.h"
@@ -84,6 +87,8 @@ namespace UnLuaNovaTestSuite
             : Test(InTest), Role(GetNetRole()), Scenario(ScenarioName())
         {
             bServer = Role == TEXT("Server");
+            FParse::Value(FCommandLine::Get(), TEXT("-UnLuaNovaNetPktLoss="), PacketLossPct);
+            FParse::Value(FCommandLine::Get(), TEXT("-UnLuaNovaNetReconnectUrl="), ReconnectUrl);
         }
 
         virtual bool Update() override
@@ -96,7 +101,42 @@ namespace UnLuaNovaTestSuite
             UWorld* World = GetRunWorld();
             if (!World || !World->GetNetDriver())
                 return false;
+            if (!bPhaseInitialised)
+            {
+                bPhaseInitialised = true;
+                ApplyEmulation(World);
+            }
+            // A connection-level reconnect has to be noticed while there is NO open server
+            // connection - UpdateClient() deliberately returns early in that state - so this
+            // hook runs before it and only on the client whose connection the server closes.
+            if (!bServer && Scenario == TEXT("SeamlessReconnect") && Role == TEXT("Client1"))
+                HandleConnectionLevelReconnect(World);
             return bServer ? UpdateServer(World) : UpdateClient(World);
+        }
+
+        void ApplyEmulation(UWorld* World)
+        {
+            if (Scenario != TEXT("PacketLoss") || !GEngine || PacketLossPct <= 0)
+                return;
+            // Real engine emulation (NetEmulationHelper), applied to every peer's NetDriver.
+            // Reliable RPCs and property replication must still converge with packets dropped,
+            // duplicated and reordered; the report exports the requested loss percentage and
+            // the connection's real lost-packet counters.
+            GEngine->Exec(World, *FString::Printf(TEXT("NetEmulation.PktLoss %d"), PacketLossPct));
+            GEngine->Exec(World, TEXT("NetEmulation.PktOrder 1"));
+            GEngine->Exec(World, TEXT("NetEmulation.PktLag 60"));
+        }
+
+        void HandleConnectionLevelReconnect(UWorld* World)
+        {
+            UNetDriver* Driver = World->GetNetDriver();
+            const bool bOpen = Driver && Driver->ServerConnection
+                && Driver->ServerConnection->GetConnectionState() == USOCK_Open;
+            if (bOpen || bReopenRequested || ReconnectUrl.IsEmpty() || !GEngine)
+                return;
+            bReopenRequested = true;
+            ++ConnectionLevelReconnectCount;
+            GEngine->Exec(World, *FString::Printf(TEXT("open %s"), *ReconnectUrl));
         }
 
     private:
@@ -145,6 +185,13 @@ namespace UnLuaNovaTestSuite
             Data->SetNumberField(TEXT("DormancyAfterValue"), DormancyAfterValue);
             Data->SetBoolField(TEXT("DormancySuppressed"), bDormancySuppressed);
             Data->SetBoolField(TEXT("DormancyResumed"), bDormancyResumed);
+            // The flag is forwarded to every peer, but only PacketLoss applies NetEmulation;
+            // do not let the other scenarios report an emulation they never enabled.
+            Data->SetNumberField(TEXT("PacketLossPct"),
+                Scenario == TEXT("PacketLoss") ? PacketLossPct : 0);
+            Data->SetNumberField(TEXT("FinalValue"), FinalValue);
+            Data->SetNumberField(TEXT("ConnectionLevelReconnectCount"), ConnectionLevelReconnectCount);
+            Data->SetStringField(TEXT("ClosedConnectionAddress"), ClosedConnectionAddress);
             Data->SetNumberField(TEXT("OwnedActorId"), OwnedActorId);
             Data->SetArrayField(TEXT("Actors"), ActorReports());
             TArray<TSharedPtr<FJsonValue>> Ids;
@@ -196,7 +243,8 @@ namespace UnLuaNovaTestSuite
 
             if (Actors.Num() != 2)
             {
-                const int32 Required = Scenario == TEXT("LateJoin") ? 1 : 2;
+                const bool bStaggeredJoin = Scenario == TEXT("LateJoin") || Scenario == TEXT("JoinOrderSwap");
+                const int32 Required = bStaggeredJoin ? 1 : 2;
                 if (Clients < Required)
                     return false;
                 SpawnActors(World, Driver);
@@ -206,7 +254,7 @@ namespace UnLuaNovaTestSuite
                 if (!Actor.IsValid())
                     return Fail(TEXT("server lost a scenario actor"));
 
-            if (Scenario == TEXT("LateJoin"))
+            if (Scenario == TEXT("LateJoin") || Scenario == TEXT("JoinOrderSwap"))
             {
                 if (Clients < 2)
                     return false;
@@ -216,6 +264,72 @@ namespace UnLuaNovaTestSuite
             {
                 // A real process replacement drops and then restores one connection.
                 if (ConnectionDrops == 0 || Clients < 2)
+                    return false;
+                ClientsFinal = Clients;
+            }
+            else if (Scenario == TEXT("SeamlessReconnect"))
+            {
+                // Connection-level reconnect: the process is NOT replaced. The server closes
+                // one UNetConnection and the same process reopens the URL. A gate checks
+                // launch_count == 1, first_pid == pid and a non-zero reconnect count, so this
+                // cannot be satisfied by the process-level RestartPeer scenario.
+                if (!bClosedConnection)
+                {
+                    for (UNetConnection* Connection : Driver->ClientConnections)
+                    {
+                        if (!Connection || Connection->GetConnectionState() != USOCK_Open)
+                            continue;
+                        ClosedConnectionAddress = Connection->LowLevelGetRemoteAddress(true);
+                        Connection->Close();
+                        bClosedConnection = true;
+                        break;
+                    }
+                    if (!bClosedConnection)
+                        return false;
+                    PhaseAt = FPlatformTime::Seconds();
+                    return false;
+                }
+                if (FPlatformTime::Seconds() - PhaseAt < 3.0)
+                    return false;
+                if (ConnectionDrops == 0 || Clients < 2)
+                    return false;
+                ClientsFinal = Clients;
+            }
+            else if (Scenario == TEXT("PacketLoss"))
+            {
+                // Two consecutive single-field updates under real packet loss / reordering.
+                // The last value must still reach both clients; the report also carries the
+                // engine's own lost-packet and byte counters for the Iris comparison.
+                if (PhaseAt == 0.0)
+                {
+                    Actors[0]->EngineReplicatedInt = Seed + 501;
+                    Actors[0]->ForceNetUpdate();
+                    WriteMarker(TEXT("LossPhase1"), (double)(Seed + 501));
+                    PhaseAt = FPlatformTime::Seconds();
+                    return false;
+                }
+                if (FPlatformTime::Seconds() - PhaseAt < 3.0)
+                    return false;
+                if (FlushedValue == 0)
+                {
+                    FlushedValue = Seed + 777;
+                    Actors[0]->EngineReplicatedInt = FlushedValue;
+                    Actors[0]->ForceNetUpdate();
+                    WriteMarker(TEXT("LossFinal"), (double)FlushedValue);
+                    PhaseAt = FPlatformTime::Seconds();
+                    return false;
+                }
+                if (FPlatformTime::Seconds() - PhaseAt < 4.0)
+                    return false;
+                ClientsFinal = Clients;
+            }
+            else if (Scenario == TEXT("SchemaMismatch"))
+            {
+                // No injected fault: every peer exports the fingerprint of the declaration it
+                // actually bound (RepSchemaVersion) plus a deliberately different one. The
+                // gate compares them across peers and requires the fingerprints to differ,
+                // which is the connected form of the schema-mismatch check.
+                if (Clients < 2)
                     return false;
                 ClientsFinal = Clients;
             }
@@ -299,7 +413,7 @@ namespace UnLuaNovaTestSuite
             for (auto* Actor : Found)
                 VisibleActorIds.Add(Actor->NetTestActorId);
 
-            if (Scenario == TEXT("LateJoin"))
+            if (Scenario == TEXT("LateJoin") || Scenario == TEXT("JoinOrderSwap"))
             {
                 double SpawnClients = 0.0;
                 if (!ReadMarker(TEXT("Spawn"), SpawnClients))
@@ -341,7 +455,26 @@ namespace UnLuaNovaTestSuite
                 if (FPlatformTime::Seconds() - PhaseAt < 2.0)
                     return false;
             }
-            else if (Scenario == TEXT("Reconnect"))
+            else if (Scenario == TEXT("PacketLoss"))
+            {
+                double Final = 0.0;
+                if (!ReadMarker(TEXT("LossFinal"), Final))
+                    return false;
+                FinalValue = Found.Num() > 0 ? Found[0]->EngineReplicatedInt : -1;
+                // Wait for reliable replication to converge; do not publish a report that
+                // claims success before the last value actually arrived.
+                if (double(FinalValue) != Final)
+                    return false;
+            }
+            else if (Scenario == TEXT("SeamlessReconnect"))
+            {
+                double SpawnClients = 0.0;
+                if (!ReadMarker(TEXT("Spawn"), SpawnClients))
+                    return false;
+                if (Role == TEXT("Client1") && ConnectionLevelReconnectCount == 0)
+                    return false;
+            }
+            else if (Scenario == TEXT("Reconnect") || Scenario == TEXT("SchemaMismatch"))
             {
                 double SpawnClients = 0.0;
                 if (!ReadMarker(TEXT("Spawn"), SpawnClients))
@@ -364,6 +497,9 @@ namespace UnLuaNovaTestSuite
         bool bDormancySuppressed = false;
         bool bDormancyResumed = false;
         bool bRelevancyRestricted = false;
+        bool bPhaseInitialised = false;
+        bool bClosedConnection = false;
+        bool bReopenRequested = false;
         double StartedAt = 0.0;
         double PhaseAt = 0.0;
         int32 Seed = 0;
@@ -377,6 +513,11 @@ namespace UnLuaNovaTestSuite
         int32 DormancyBeforeValue = -1;
         int32 DormancyAfterValue = -1;
         int32 OwnedActorId = 0;
+        int32 PacketLossPct = 0;
+        int32 FinalValue = -1;
+        int32 ConnectionLevelReconnectCount = 0;
+        FString ReconnectUrl;
+        FString ClosedConnectionAddress;
         TArray<int32> VisibleActorIds;
         TArray<TWeakObjectPtr<AUnLuaNovaTestNetActor>> Actors;
     };
@@ -548,5 +689,96 @@ BEGIN_TESTSUITE(FNetRelevancyScenarioTest,
         return true;
     }
 END_TESTSUITE(FNetRelevancyScenarioTest)
+
+BEGIN_TESTSUITE(FNetJoinOrderSwapScenarioTest,
+    TEXT("UnLuaNova.Slow.Net.Scenarios.JoinOrderSwap Client1 joins last instead of Client2"))
+    bool FNetJoinOrderSwapScenarioTest::RunTest(const FString& Parameters)
+    {
+        using namespace UnLuaNovaTestSuite;
+        if (!ScenariosEnabled())
+        {
+            AddInfo(TEXT("Opt-in: pass -UnLuaNovaNetScenarios to run connected scenarios."));
+            return true;
+        }
+        // Same staggered spawn as LateJoin, with the launch order deliberately reversed.
+        // The gate requires Client1's launch_serial to be the larger one.
+        TSharedRef<FNetSession> Session = MakeScenarioSession(TEXT("JoinOrderSwap"), TEXT("JoinOrderSwap"));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetLaunchPeersCommand(Session, *this, TEXT("Server")));
+        ADD_LATENT_AUTOMATION_COMMAND(FUnLuaNovaTestCommand_WaitSeconds(8.0f));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetLaunchPeersCommand(Session, *this, TEXT("Client2")));
+        ADD_LATENT_AUTOMATION_COMMAND(FUnLuaNovaTestCommand_WaitSeconds(8.0f));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetLaunchPeersCommand(Session, *this, TEXT("Client1")));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetWaitForReportsCommand(Session, *this, 210.0));
+        ADD_LATENT_AUTOMATION_COMMAND(FScenarioCompareCommand(*this, Session));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetTerminatePeersCommand(Session));
+        return true;
+    }
+END_TESTSUITE(FNetJoinOrderSwapScenarioTest)
+
+BEGIN_TESTSUITE(FNetPacketLossScenarioTest,
+    TEXT("UnLuaNova.Slow.Net.Scenarios.PacketLoss Reliable replication converges under packet loss"))
+    bool FNetPacketLossScenarioTest::RunTest(const FString& Parameters)
+    {
+        using namespace UnLuaNovaTestSuite;
+        if (!ScenariosEnabled())
+        {
+            AddInfo(TEXT("Opt-in: pass -UnLuaNovaNetScenarios to run connected scenarios."));
+            return true;
+        }
+        // -UnLuaNovaNetPktLoss=25 is supplied by RunNetMatrix.ps1 on every peer command line.
+        TSharedRef<FNetSession> Session = MakeScenarioSession(TEXT("PacketLoss"), TEXT("PacketLoss"));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetLaunchPeersCommand(Session, *this, TEXT("Server")));
+        ADD_LATENT_AUTOMATION_COMMAND(FUnLuaNovaTestCommand_WaitSeconds(10.0f));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetLaunchPeersCommand(Session, *this));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetWaitForReportsCommand(Session, *this, 210.0));
+        ADD_LATENT_AUTOMATION_COMMAND(FScenarioCompareCommand(*this, Session));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetTerminatePeersCommand(Session));
+        return true;
+    }
+END_TESTSUITE(FNetPacketLossScenarioTest)
+
+BEGIN_TESTSUITE(FNetSeamlessReconnectScenarioTest,
+    TEXT("UnLuaNova.Slow.Net.Scenarios.SeamlessReconnect One UNetConnection is closed and reopened in-process"))
+    bool FNetSeamlessReconnectScenarioTest::RunTest(const FString& Parameters)
+    {
+        using namespace UnLuaNovaTestSuite;
+        if (!ScenariosEnabled())
+        {
+            AddInfo(TEXT("Opt-in: pass -UnLuaNovaNetScenarios to run connected scenarios."));
+            return true;
+        }
+        // Deliberately no FRestartPeerCommand: the process must stay the same. The server
+        // closes a UNetConnection and the same client process reopens the URL it was given.
+        TSharedRef<FNetSession> Session = MakeScenarioSession(TEXT("SeamlessReconnect"), TEXT("SeamlessReconnect"));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetLaunchPeersCommand(Session, *this, TEXT("Server")));
+        ADD_LATENT_AUTOMATION_COMMAND(FUnLuaNovaTestCommand_WaitSeconds(10.0f));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetLaunchPeersCommand(Session, *this));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetWaitForReportsCommand(Session, *this, 210.0));
+        ADD_LATENT_AUTOMATION_COMMAND(FScenarioCompareCommand(*this, Session));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetTerminatePeersCommand(Session));
+        return true;
+    }
+END_TESTSUITE(FNetSeamlessReconnectScenarioTest)
+
+BEGIN_TESTSUITE(FNetSchemaMismatchScenarioTest,
+    TEXT("UnLuaNova.Slow.Net.Scenarios.SchemaMismatch Every peer exports the declaration it bound"))
+    bool FNetSchemaMismatchScenarioTest::RunTest(const FString& Parameters)
+    {
+        using namespace UnLuaNovaTestSuite;
+        if (!ScenariosEnabled())
+        {
+            AddInfo(TEXT("Opt-in: pass -UnLuaNovaNetScenarios to run connected scenarios."));
+            return true;
+        }
+        TSharedRef<FNetSession> Session = MakeScenarioSession(TEXT("SchemaMismatch"), TEXT("SchemaMismatch"));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetLaunchPeersCommand(Session, *this, TEXT("Server")));
+        ADD_LATENT_AUTOMATION_COMMAND(FUnLuaNovaTestCommand_WaitSeconds(10.0f));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetLaunchPeersCommand(Session, *this));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetWaitForReportsCommand(Session, *this, 210.0));
+        ADD_LATENT_AUTOMATION_COMMAND(FScenarioCompareCommand(*this, Session));
+        ADD_LATENT_AUTOMATION_COMMAND(FNetTerminatePeersCommand(Session));
+        return true;
+    }
+END_TESTSUITE(FNetSchemaMismatchScenarioTest)
 
 #endif

@@ -255,9 +255,19 @@ class ReleaseValidationTests(unittest.TestCase):
                         Connected=True, Clients=2 if index == 0 else 0, OwnedActorId=index,
                         FirstRoundObservationMs=5000,
                         WorldPackage="/UnLuaNovaTestSuite/Tests/Misc/Empty", ServerAddress="127.0.0.1:7777",
-                        Rpcs=[dict(Name=name, RpcId=i + 1) for i, name in enumerate(("FromClient", "FromServer", "ToAll"))],
-                        Props=[dict(Name="HP", Type=1, Condition=0),
-                               dict(Name="OwnerSecret", Type=1, Condition=2)],
+                        Rpcs=[
+                            dict(Name="FromClient", RpcId=1, Params=[dict(Name="Value", Type="IntProperty")]),
+                            dict(Name="FromServer", RpcId=2, Params=[dict(Name="Value", Type="IntProperty")]),
+                            dict(Name="ToAll", RpcId=3, Params=[dict(Name="Value", Type="IntProperty")]),
+                            dict(Name="SendPayload", RpcId=4,
+                                 Params=[dict(Name="Payload", Type="Struct:/Script/CoreUObject.Vector")]),
+                        ],
+                        Props=[dict(Name="HP", Type=1, Condition=0, TypeSpec=""),
+                               dict(Name="OwnerSecret", Type=1, Condition=2, TypeSpec=""),
+                               dict(Name="Inventory", Type=11, Condition=0, TypeSpec="Array:Int")],
+                        RepSchemaVersion=12345, VariantRepSchemaVersion=54321,
+                        NetStats=dict(OutTotalBytes=4096, InTotalBytes=2048, LostPackets=0),
+                        Cooked=False,
                         NonOwnerRpcAttempted=index != 0,
                         NonOwnerRpcToken=f"FromClient:7000{index}|" if index else "",
                         Actors=actors(2, ack=index == 0),
@@ -415,31 +425,54 @@ class ReleaseValidationTests(unittest.TestCase):
         for name in gate.NET_SCENARIOS:
             directory = run / "net/scenarios" / name
             (directory / "logs").mkdir(parents=True)
+            swapped = name == "JoinOrderSwap"
+            staggered = name in ("LateJoin", "JoinOrderSwap")
             peers = [
                 dict(label="Server", pid=100, launch_serial=1, launch_count=1, first_pid=100),
-                dict(label="Client1", pid=101, launch_serial=2,
+                dict(label="Client1", pid=101, launch_serial=3 if swapped else 2,
                      launch_count=2 if name == "Reconnect" else 1,
                      first_pid=201 if name == "Reconnect" else 101),
-                dict(label="Client2", pid=102,
-                     launch_serial=3 if name == "LateJoin" else 2,
+                dict(label="Client2", pid=102, launch_serial=2 if swapped else 3,
                      launch_count=1, first_pid=102),
             ]
             (directory / "topology.json").write_text(json.dumps(
                 dict(scenario=name, variant=variant, peers=peers)))
+            rpcs = [
+                dict(Name="FromClient", RpcId=1, Params=[dict(Name="Value", Type="IntProperty")]),
+                dict(Name="FromServer", RpcId=2, Params=[dict(Name="Value", Type="IntProperty")]),
+                dict(Name="ToAll", RpcId=3, Params=[dict(Name="Value", Type="IntProperty")]),
+                dict(Name="SendPayload", RpcId=4,
+                     Params=[dict(Name="Payload", Type="Struct:/Script/CoreUObject.Vector")]),
+            ]
+            props = [dict(Name="HP", Type=1, Condition=0, TypeSpec=""),
+                     dict(Name="OwnerSecret", Type=1, Condition=2, TypeSpec=""),
+                     dict(Name="Inventory", Type=11, Condition=0, TypeSpec="Array:Int")]
+            final_value = 1888 if name == "Dormancy" else (1777 if name == "PacketLoss" else 0)
             for index, label in enumerate(labels):
                 data = dict(Complete=True, Scenario=name, SessionId=session, Variant=variant,
                             Backend="Lua", ProcessId=100 + index,
                             IrisEnabled=variant == "Iris", PushModelEnabled=variant != "PushOff",
-                            ClientsAtSpawn=1 if name == "LateJoin" else 2, ClientsFinal=2,
-                            ConnectionDrops=1 if name == "Reconnect" else 0,
+                            Cooked=variant == "Cooked",
+                            NetStats=dict(OutTotalBytes=4096, InTotalBytes=2048, LostPackets=0),
+                            RepSchemaVersion=12345, VariantRepSchemaVersion=54321,
+                            Rpcs=rpcs, Props=props,
+                            ClientsAtSpawn=1 if staggered else 2, ClientsFinal=2,
+                            ConnectionDrops=1 if name in ("Reconnect", "SeamlessReconnect") else 0,
                             DormantValue=1777 if name == "Dormancy" else 0,
-                            FlushedValue=1888 if name == "Dormancy" else 0,
+                            FlushedValue=final_value,
                             DormancyFlushed=name == "Dormancy",
                             RelevancyRestrictedActor=2 if name == "Relevancy" else 0,
-                            JoinedAfterSpawn=(label == "Client2" and name == "LateJoin"),
+                            JoinedAfterSpawn=(label == "Client1" and swapped)
+                                             or (label == "Client2" and name == "LateJoin"),
                             DormancySuppressed=name == "Dormancy" and label != "Server",
                             DormancyResumed=name == "Dormancy" and label != "Server",
                             DormancyAfterValue=1888 if name == "Dormancy" else -1,
+                            PacketLossPct=25 if name == "PacketLoss" else 0,
+                            FinalValue=final_value if name == "PacketLoss" else -1,
+                            ConnectionLevelReconnectCount=1
+                                if name == "SeamlessReconnect" and label == "Client1" else 0,
+                            ClosedConnectionAddress="127.0.0.1:5555"
+                                if name == "SeamlessReconnect" and label == "Server" else "",
                             VisibleActorIds=[1] if name == "Relevancy" and label == "Client1" else [1, 2])
                 (directory / f"{label}.json").write_text(json.dumps(data))
                 (directory / "logs" / f"{label}.log").write_text("scenario peer log")
@@ -452,11 +485,13 @@ class ReleaseValidationTests(unittest.TestCase):
             directory = self.connected_evidence(run, f"net/variants/{name}/DedicatedServer")
             topology = json.loads((directory / "topology.json").read_text())
             topology["variant"] = name
+            if spec["cooked"]:
+                topology["exe"] = "Saved/StagedBuilds/WindowsServer/UnLuaNovaDemo/Binaries/Win64/DemoServer.exe"
             (directory / "topology.json").write_text(json.dumps(topology))
             for label in ("Server", "Client1", "Client2"):
                 path = directory / f"{label}.json"
                 data = json.loads(path.read_text())
-                data.update(Variant=name, IrisEnabled=spec["iris"],
+                data.update(Variant=name, IrisEnabled=spec["iris"], Cooked=spec["cooked"],
                             PushModelEnabled=False if spec["push"] is False else True)
                 path.write_text(json.dumps(data))
 
@@ -549,6 +584,109 @@ class ReleaseValidationTests(unittest.TestCase):
                     path.write_text(json.dumps(data))
             manifest = run / "metadata/net-variants.json"
             manifest.write_text(json.dumps(dict(variants=["Legacy"])))
+            self.assertTrue(gate.validate_net_variants(run, "Lua"))
+
+    def test_cross_peer_schema_mismatch_is_rejected_everywhere(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            self.scenario_evidence(run)
+            self.variant_evidence(run)
+            self.assertEqual(gate.validate_net_matrix(run, "Lua"), [])
+            path = run / "net/scenarios/SchemaMismatch/Client2.json"
+            data = json.loads(path.read_text())
+            data["RepSchemaVersion"] = 999
+            path.write_text(json.dumps(data))
+            self.assertTrue(any("cross-peer declaration mismatch" in e for e in
+                                gate.validate_net_scenario(run, "SchemaMismatch", "Lua")))
+            data["RepSchemaVersion"] = 12345
+            data["VariantRepSchemaVersion"] = 12345
+            path.write_text(json.dumps(data))
+            self.assertTrue(gate.validate_net_scenario(run, "SchemaMismatch", "Lua"))
+            # The same invariant holds in the ordinary connected gate.
+            connected = run / "net/DedicatedServer"
+            self.connected_evidence(run)
+            data = json.loads((connected / "Client1.json").read_text())
+            data["RepSchemaVersion"] = 999
+            (connected / "Client1.json").write_text(json.dumps(data))
+            self.assertTrue(any("Cross-peer declaration mismatch" in e for e in
+                                gate.validate_connected_session(run, "Lua")))
+
+    def test_connected_session_requires_generic_field_and_ustruct_rpc_param(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            connected = self.connected_evidence(run)
+            self.assertEqual(gate.validate_connected_session(run, "Lua"), [])
+            path = connected / "Server.json"
+            data = json.loads(path.read_text())
+            data["Props"] = [p for p in data["Props"] if not p.get("TypeSpec")]
+            path.write_text(json.dumps(data))
+            self.assertTrue(any("Generic replicated field" in e for e in
+                                gate.validate_connected_session(run, "Lua")))
+            # Restore the full declaration list, then remove only the UStruct RPC.
+            data = json.loads((connected / "Client1.json").read_text())
+            data["Rpcs"] = [r for r in data["Rpcs"] if r["Name"] != "SendPayload"]
+            path.write_text(json.dumps(data))
+            self.assertTrue(any("Missing connected RPC declarations" in e for e in
+                                gate.validate_connected_session(run, "Lua")))
+
+    def test_join_order_swap_and_packet_loss_require_distinct_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            self.scenario_evidence(run)
+            self.assertEqual(gate.validate_net_scenario(run, "JoinOrderSwap", "Lua"), [])
+            self.assertEqual(gate.validate_net_scenario(run, "PacketLoss", "Lua"), [])
+            topology = run / "net/scenarios/JoinOrderSwap/topology.json"
+            data = json.loads(topology.read_text())
+            data["peers"][1]["launch_serial"] = 2
+            data["peers"][2]["launch_serial"] = 3
+            topology.write_text(json.dumps(data))
+            self.assertTrue(any("launch order was not actually swapped" in e for e in
+                                gate.validate_net_scenario(run, "JoinOrderSwap", "Lua")))
+            path = run / "net/scenarios/PacketLoss/Client2.json"
+            data = json.loads(path.read_text())
+            data["FinalValue"] = 0
+            path.write_text(json.dumps(data))
+            self.assertTrue(any("did not converge" in e for e in
+                                gate.validate_net_scenario(run, "PacketLoss", "Lua")))
+
+    def test_seamless_reconnect_is_not_a_process_replacement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            self.scenario_evidence(run)
+            self.assertEqual(gate.validate_net_scenario(run, "SeamlessReconnect", "Lua"), [])
+            topology = run / "net/scenarios/SeamlessReconnect/topology.json"
+            data = json.loads(topology.read_text())
+            data["peers"][1]["launch_count"] = 2
+            data["peers"][1]["first_pid"] = 201
+            topology.write_text(json.dumps(data))
+            self.assertTrue(any("process replacement" in e for e in
+                                gate.validate_net_scenario(run, "SeamlessReconnect", "Lua")))
+            data["peers"][1]["launch_count"] = 1
+            data["peers"][1]["first_pid"] = 101
+            topology.write_text(json.dumps(data))
+            path = run / "net/scenarios/SeamlessReconnect/Client1.json"
+            report = json.loads(path.read_text())
+            report["ConnectionLevelReconnectCount"] = 0
+            path.write_text(json.dumps(report))
+            self.assertTrue(gate.validate_net_scenario(run, "SeamlessReconnect", "Lua"))
+
+    def test_cooked_variant_requires_staged_binary_and_compiled_flag(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            self.variant_evidence(run)
+            self.assertEqual(gate.validate_net_variants(run, "Lua"), [])
+            topology = run / "net/variants/Cooked/DedicatedServer/topology.json"
+            data = json.loads(topology.read_text())
+            data["exe"] = "Binaries/Win64/UnLuaNovaDemoEditor.exe"
+            topology.write_text(json.dumps(data))
+            self.assertTrue(any("staged/cooked binary" in e for e in
+                                gate.validate_net_variants(run, "Lua")))
+            data["exe"] = "Saved/StagedBuilds/WindowsServer/Demo/Binaries/Win64/DemoServer.exe"
+            topology.write_text(json.dumps(data))
+            path = run / "net/variants/Cooked/DedicatedServer/Client1.json"
+            report = json.loads(path.read_text())
+            report["Cooked"] = False
+            path.write_text(json.dumps(report))
             self.assertTrue(gate.validate_net_variants(run, "Lua"))
 
 

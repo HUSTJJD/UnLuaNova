@@ -718,6 +718,88 @@ void FNetSpec::Define()
         });
     });
 
+    Describe(TEXT("多 Env 声明顺序与对象失效"), [this]()
+    {
+        It(TEXT("先关先声明的 Env，另一 Env 的 schema 仍然在"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UClass* Class = Bound->GetClass();
+            const auto Before = UnLuaNova::ComputeSchemaVersion(
+                UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class));
+
+            TSharedPtr<UnLuaNova::FLuaEnv> Second = MakeShared<UnLuaNova::FLuaEnv>();
+            Second->AddBuiltInLoader(SpecNetModuleName, SpecNetModuleLoader);
+            UObject* SecondBound = NewObject<AUnLuaBenchmarkProxy>();
+            SecondBound->AddToRoot();
+            Second->GetManager()->Bind(SecondBound, SpecNetModuleName);
+            TEST_EQUAL(UnLuaNova::ComputeSchemaVersion(
+                UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class)), Before);
+
+            // This used to delete the only entry even though Second was still using it.
+            UnLuaNova::FUnLuaNovaNet::Cleanup(Env.Get());
+            TEST_EQUAL(UnLuaNova::ComputeSchemaVersion(
+                UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class)), Before);
+
+            UnLuaNova::FUnLuaNovaNet::Cleanup(Second.Get());
+            TEST_EQUAL(UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class).Num(), 0);
+            SecondBound->RemoveFromRoot();
+            Second.Reset();
+        });
+
+        It(TEXT("反过来先关后声明的 Env，schema 也仍然在"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UClass* Class = Bound->GetClass();
+            const auto Before = UnLuaNova::ComputeSchemaVersion(
+                UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class));
+
+            TSharedPtr<UnLuaNova::FLuaEnv> Second = MakeShared<UnLuaNova::FLuaEnv>();
+            Second->AddBuiltInLoader(SpecNetModuleName, SpecNetModuleLoader);
+            UObject* SecondBound = NewObject<AUnLuaBenchmarkProxy>();
+            SecondBound->AddToRoot();
+            Second->GetManager()->Bind(SecondBound, SpecNetModuleName);
+
+            UnLuaNova::FUnLuaNovaNet::Cleanup(Second.Get());
+            TEST_EQUAL(UnLuaNova::ComputeSchemaVersion(
+                UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class)), Before);
+
+            UnLuaNova::FUnLuaNovaNet::Cleanup(Env.Get());
+            TEST_EQUAL(UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class).Num(), 0);
+            SecondBound->RemoveFromRoot();
+            Second.Reset();
+        });
+
+        It(TEXT("Object 弱引用失效后不会把野指针写回 Lua"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Component = NewObject<UUnLuaNovaReplicationComponent>();
+            Component->Objects.SetNum(1);
+            UObject* Target = NewObject<UUnLuaNovaReplicationComponent>();
+            Target->AddToRoot();
+
+            UnLuaNova::FLuaNetSlot Slot;
+            Slot.Name = TEXT("Target");
+            Slot.Bucket = UnLuaNova::ELuaNetBucket::Object;
+            Slot.Type = UnLuaNova::ELuaNetParamType::Object;
+
+            lua_newtable(L);
+            const int32 Table = lua_absindex(L, -1);
+            UnLuaNova::PushUObject(L, Target);
+            lua_setfield(L, Table, "Target");
+            TEST_TRUE(Component->SyncSlot(L, Table, Slot));
+
+            // A reference whose object has gone (GC / level teardown) must never be pushed
+            // back as a stale UObject. Objects is a TArray<TObjectPtr<UObject>>, which has no
+            // Reset(): assigning nullptr is the empty state ApplySlot writes back as Lua nil,
+            // without forcing a real garbage collection inside a unit case.
+            Component->Objects[0] = nullptr;
+            lua_pushnil(L);
+            lua_setfield(L, Table, "Target");
+            Component->ApplySlot(L, Table, Slot);
+            lua_getfield(L, Table, "Target");
+            TEST_TRUE(lua_isnil(L, -1));
+            lua_pop(L, 2);
+            Target->RemoveFromRoot();
+        });
+    });
+
     Describe(TEXT("Reliability"), [this]()
     {
         It(TEXT("Reliable 在三种 RPC 上都被采纳，省略时默认不可靠"), EAsyncExecution::TaskGraphMainThread, [this]()

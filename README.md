@@ -151,11 +151,13 @@ RPC 的 `UFunction` 本来就是运行时构造的，可以直接挂 `FStructPro
 
 > [!WARNING]
 > 仍是**实验特性**。0→1 差异和硬边界必须一起看：① owner / 非 owner 的联机验收、非 Owner
-> Server RPC 拒绝断言**尚未执行**，单进程用例只能证明分组与下标；② 晚加入 / 进程级重连 /
-> dormancy / relevancy 的场景源码与门禁已补，但**一个都没跑过**；③ Legacy / PushOff / Iris
-> 变体的启动开关与 `ValidateRelease.py --net-matrix` 门禁已补，同样**没有执行证据**。
+> Server RPC 拒绝断言**尚未执行**，单进程用例只能证明分组与下标；② **八类**连接场景（晚加入、
+> 进程级重连、dormancy、relevancy、加入顺序互换、丢包/乱序、`UNetConnection` 级重连、跨 peer
+> 声明差异）的源码与门禁已补，但**一个都没跑过**；③ Legacy / PushOff / Iris / Cooked
+> 四个变体的真实引擎开关、staged 二进制、连接字节统计与 `--net-matrix` 门禁已补，同样**没有执行证据**。
 > 上述都用 `Tools/RunNetMatrix.ps1` 跑真实 DS 才算数；存在源码不等于测试通过。
-> 另外：丢包、seamless travel / `UNetConnection` 级重连、跨 peer 声明差异、cooked 载体仍未覆盖。
+> 源码层面已无待实现项；剩下的唯一工作是执行。引擎级 seamless travel（`ServerTravel`）不在范围内，
+> 这里交付的是 `UNetConnection` 关闭 + 同进程重连，两者是不同路径。
 > `release-status` 仍是 `not-passed`，只能由一次真实通过的 Release 改写。
 > 逐项状态见 [能力矩阵](Docs/feature-matrix.md)，用法见 [Lua 声明式网络（实验）](Docs/CN/LuaNetworking.md)。
 
@@ -214,7 +216,7 @@ RPC 的 `UFunction` 本来就是运行时构造的，可以直接挂 `FStructPro
 | **FUnLua** | 对象引用树、属性失效、实例绑定设计扎实 | 许可文件在固定提交中缺失（核实前不引用其源码） |
 | **UE-AngelScript** | 静态类型、VSCode LSP、断点单步 | **需要源码引擎分支**，无运营期热更 |
 | **Verse / 蓝图** | 官方、零集成 | 不能运营期热更，迭代受限于发版 |
-| **UnLuaNova** | 不 fork 引擎 + 双后端 + 热更 + 可观测 + 可验收 + MIT + 声明式网络（实验） | 网络的 owner / 非 owner 联机验收、四类连接场景与 Iris 变体均已补源码与门禁但尚未执行，见下表 |
+| **UnLuaNova** | 不 fork 引擎 + 双后端 + 热更 + 可观测 + 可验收 + MIT + 声明式网络（实验） | 网络的 owner / 非 owner 联机验收、八类连接场景与四个交付变体均已补源码与门禁但尚未执行，见下表 |
 
 **一句话边界**：能接受**源码引擎分支**、只做主机/PC 单机、不需要运营期热更 → UE-AngelScript 体验更完整。
 **不能 fork 引擎 / 要热更 / 团队会 Lua** → UnLuaNova 是现实解。
@@ -305,7 +307,7 @@ Development / Server / Shipping 三种打包。
 
 | 领域 | 边界 |
 |---|---|
-| **声明式网络（实验）** | 条件支持 `None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` / `SimulatedOnly` / `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`，每种条件一个存储组；`Custom` / `Dynamic` / `Never` / `NetGroup` 与 Replay 系列等无存储组的条件被**显式拒绝**并打 Error，不静默降级。`UStruct` / 容器用类型规格走 RPC 动态 FProperty 与复制 Generic 桶。**待执行**：owner / 非 owner 联机验收、非 Owner RPC 拒绝、晚加入 / 进程级重连 / dormancy / relevancy 四类场景、Legacy / PushOff / Iris 变体（源码与 `--net-matrix` 门禁已补，需重建并跑真实 DS）；**未覆盖**：丢包、seamless travel 级重连、跨 peer 声明差异、cooked 载体 |
+| **声明式网络（实验）** | 条件支持 `None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` / `SimulatedOnly` / `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`，每种条件一个存储组；`Custom` / `Dynamic` / `Never` / `NetGroup` 与 Replay 系列等无存储组的条件被**显式拒绝**并打 Error，不静默降级。`UStruct` / 容器用类型规格走 RPC 动态 FProperty 与复制 Generic 桶；声明报告按真实 FProperty 导出参数规格，并逐端导出 `RepSchemaVersion` 做跨 peer 一致性检查。已补场景：加入顺序互换、丢包/乱序（`NetEmulation`）、`UNetConnection` 级重连、跨 peer 声明差异；已补变体：Cooked（staged 二进制）与真实连接字节/丢包统计。**待执行**：owner / 非 owner 联机验收、非 Owner RPC 拒绝、八类场景、四个变体（源码与 `--net-matrix` 门禁已补，需重建并跑真实 DS）；**未覆盖**：引擎级 seamless travel（`ServerTravel`）、热重载与权限检查 |
 | **生成 thunk** | 最终派发仍经由 `UObject::ProcessEvent`（静态绑定省掉的是反射查找与参数编组）。已提交自比基线与 25% 回退门禁，**尚无与 slua-unreal / FUnLua 的同机对照** |
 | **Luau 原生编译** | 需显式开启：`lua.codegen.enabled=1`（默认 0），可用 `lua.codegen.modules` 限定模块；只对切换后加载的 chunk 生效，且仅 Luau + x64/arm64 |
 | **平台与引擎版本** | 已验证 UE **5.8.3 / Win64**。其他引擎版本、Linux / Mac / iOS / Android、主机平台需各自验收 |

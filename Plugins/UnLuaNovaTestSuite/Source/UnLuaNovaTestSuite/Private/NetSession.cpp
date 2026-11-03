@@ -37,6 +37,7 @@
 #include "UObject/UnrealType.h"
 #include "UnLuaNovaNet.h"
 #include "UnLuaNovaNetDecl.h"
+#include "UnLuaNovaNetPayload.h"
 
 namespace UnLuaNovaTestSuite
 {
@@ -181,6 +182,7 @@ namespace UnLuaNovaTestSuite
             ? TEXT("UNLUANOVA_TEST_SERVER_EXE") : TEXT("UNLUANOVA_TEST_PEER_EXE");
         const bool bPackagedPeer = !FPlatformMisc::GetEnvironmentVariable(OverrideName).IsEmpty();
         FString Args = bPackagedPeer ? FString() : FString::Printf(TEXT("\"%s\" "), *FPaths::GetProjectFilePath());
+        FString ReconnectUrl;
 
         if (Spec.Role == ENetPeerRole::Server)
         {
@@ -197,6 +199,7 @@ namespace UnLuaNovaTestSuite
             {
                 Address = FString::Printf(TEXT("%s:%d"), *Address, GetServerPort());
             }
+            ReconnectUrl = Address;
             Args += FString::Printf(TEXT("%s "), *Address);
         }
         else
@@ -220,6 +223,19 @@ namespace UnLuaNovaTestSuite
         Args += FString::Printf(TEXT("-UnLuaNovaNetRole=%s -UnLuaNovaNetSession=%s "), *Spec.Label, *Name);
         if (!Scenario.IsEmpty())
             Args += FString::Printf(TEXT("-UnLuaNovaNetScenario=%s "), *Scenario);
+        // Only the SeamlessReconnect client needs it, but giving every connected client the
+        // exact URL it dialled costs nothing and keeps the reopen honest (no guessed port).
+        if (!ReconnectUrl.IsEmpty())
+            Args += FString::Printf(TEXT("-UnLuaNovaNetReconnectUrl=%s "), *ReconnectUrl);
+        // Peer processes run the *report* automation test, whose RunTest gate checks
+        // -UnLuaNovaNetScenarios. Without forwarding the flag from the driving process every
+        // peer would skip itself and no scenario report would ever appear. The packet-loss
+        // percentage has to reach the peers too: NetEmulation is applied inside each peer.
+        if (FParse::Param(FCommandLine::Get(), TEXT("UnLuaNovaNetScenarios")))
+            Args += TEXT("-UnLuaNovaNetScenarios ");
+        int32 PktLoss = 0;
+        if (FParse::Value(FCommandLine::Get(), TEXT("-UnLuaNovaNetPktLoss="), PktLoss) && PktLoss > 0)
+            Args += FString::Printf(TEXT("-UnLuaNovaNetPktLoss=%d "), PktLoss);
         const FString DeliveryVariant = EffectiveNetVariant(Variant);
         if (!DeliveryVariant.IsEmpty())
         {
@@ -442,6 +458,28 @@ namespace UnLuaNovaTestSuite
         return FJsonSerializer::Deserialize(Reader, Out) && Out.IsValid();
     }
 
+    /**
+     * Describe an RPC parameter by looking at the FProperty that was actually linked into the
+     * runtime UFunction - not at the Lua declaration. A UStruct / container RPC parameter is
+     * only real if CreateParam produced the corresponding FStructProperty / FArrayProperty;
+     * this is what makes the peer report evidence of that, instead of an echo of the script.
+     */
+    FString DescribeNetProperty(const FProperty* Property, int32 Depth = 0)
+    {
+        if (!Property || Depth > 8)
+            return TEXT("Invalid");
+        if (const FStructProperty* StructProperty = CastField<FStructProperty>(Property))
+            return FString::Printf(TEXT("Struct:%s"), *StructProperty->Struct->GetPathName());
+        if (const FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Property))
+            return FString::Printf(TEXT("Array:%s"), *DescribeNetProperty(ArrayProperty->Inner, Depth + 1));
+        if (const FSetProperty* SetProperty = CastField<FSetProperty>(Property))
+            return FString::Printf(TEXT("Set:%s"), *DescribeNetProperty(SetProperty->ElementProp, Depth + 1));
+        if (const FMapProperty* MapProperty = CastField<FMapProperty>(Property))
+            return FString::Printf(TEXT("Map:%s:%s"), *DescribeNetProperty(MapProperty->KeyProp, Depth + 1),
+                *DescribeNetProperty(MapProperty->ValueProp, Depth + 1));
+        return Property->GetClass()->GetName();
+    }
+
     TSharedRef<FJsonObject> BuildNetDeclarationReport()
     {
         TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
@@ -464,6 +502,23 @@ namespace UnLuaNovaTestSuite
             // here, which is the failure being hunted, so it is reported and not skipped.
             Entry->SetNumberField(TEXT("RpcId"), (double)Function->RPCId);
             Entry->SetBoolField(TEXT("Reliable"), Function->HasAnyFunctionFlags(FUNC_NetReliable));
+            TArray<TSharedPtr<FJsonValue>> Params;
+            // UStruct::ChildProperties is an FField chain, not an FProperty chain. Walk the
+            // fields and cast the ones that are properties; the increment used to assign an
+            // FField* straight to const FProperty* and did not compile on UE5.
+            for (const FField* ParamField = Function->ChildProperties; ParamField; ParamField = ParamField->Next)
+            {
+                const FProperty* Param = CastField<FProperty>(ParamField);
+                if (!Param)
+                {
+                    continue;
+                }
+                TSharedRef<FJsonObject> P = MakeShared<FJsonObject>();
+                P->SetStringField(TEXT("Name"), Param->GetName());
+                P->SetStringField(TEXT("Type"), DescribeNetProperty(Param));
+                Params.Add(MakeShared<FJsonValueObject>(P));
+            }
+            Entry->SetArrayField(TEXT("Params"), Params);
             Rpcs.Add(MakeShared<FJsonValueObject>(Entry));
         }
 
@@ -476,15 +531,33 @@ namespace UnLuaNovaTestSuite
         TArray<TSharedPtr<FJsonValue>> Props;
         // Both live in namespace UnLuaNova, and this file is in UnLuaNovaTestSuite -
         // unqualified they are simply not found.
-        for (const UnLuaNova::FLuaRepDecl& Decl : UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class))
+        const TArray<UnLuaNova::FLuaRepDecl>& Decls = UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class);
+        for (const UnLuaNova::FLuaRepDecl& Decl : Decls)
         {
             TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
             Entry->SetStringField(TEXT("Name"), Decl.Name.ToString());
             Entry->SetNumberField(TEXT("Type"), (double)Decl.Type);
             Entry->SetNumberField(TEXT("Condition"), (double)Decl.Condition);
+            Entry->SetStringField(TEXT("TypeSpec"), Decl.TypeSpec);
             Props.Add(MakeShared<FJsonValueObject>(Entry));
         }
         Root->SetArrayField(TEXT("Props"), Props);
+
+        // Every peer exports the fingerprint of the declaration list it actually bound. The
+        // release gate compares them, which is the connected half of "cross-peer schema
+        // mismatch": a disagreeing peer is rejected instead of decoding into the wrong slot.
+        Root->SetNumberField(TEXT("RepSchemaVersion"),
+            (double)UnLuaNova::ComputeSchemaVersion(Decls));
+        // A deliberately different list proves the fingerprint can tell two schemas apart.
+        // Without this, "all peers report the same version" could also mean "the version is
+        // a constant". The gate requires RepSchemaVersion != VariantRepSchemaVersion.
+        TArray<UnLuaNova::FLuaRepDecl> Variant = Decls;
+        UnLuaNova::FLuaRepDecl Probe;
+        Probe.Name = FName(TEXT("__schema_probe"));
+        Probe.Type = UnLuaNova::ELuaNetParamType::Int;
+        Variant.Add(Probe);
+        Root->SetNumberField(TEXT("VariantRepSchemaVersion"),
+            (double)UnLuaNova::ComputeSchemaVersion(Variant));
 
         // Recorded so a mismatch can be told apart from "the wrong process answered".
         Root->SetStringField(TEXT("Role"), GetNetRole());
@@ -510,6 +583,13 @@ namespace UnLuaNovaTestSuite
         if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Net.IsPushModelEnabled")))
             bPushModel = CVar->GetInt() != 0;
         Report.SetBoolField(TEXT("PushModelEnabled"), bPushModel);
+        // Compile-time, not a claim: a packaged/cooked binary is built with WITH_EDITOR=0.
+        // The Cooked variant gate uses this instead of trusting a directory name.
+#if WITH_EDITOR
+        Report.SetBoolField(TEXT("Cooked"), false);
+#else
+        Report.SetBoolField(TEXT("Cooked"), true);
+#endif
 #if (defined(WITH_PUSH_MODEL) && WITH_PUSH_MODEL) || (defined(UE_ENABLE_PUSH_MODEL) && UE_ENABLE_PUSH_MODEL)
         Report.SetBoolField(TEXT("PushModelCompiledIn"), true);
 #else
@@ -532,6 +612,29 @@ namespace UnLuaNovaTestSuite
         int32 Clients = 0;
         if (UNetDriver* Driver = World->GetNetDriver())
         {
+            // Real per-connection counters, not a synthetic "delta cost". The Iris / push-model
+            // comparison is a measurement over these totals; a gate can require them to be
+            // present and non-zero, but it cannot assert a compression win that was never run.
+            double OutTotalBytes = 0.0, InTotalBytes = 0.0, LostPackets = 0.0;
+            auto Accumulate = [&](const UNetConnection* Connection)
+            {
+                if (!Connection)
+                    return;
+                OutTotalBytes += Connection->OutTotalBytes;
+                InTotalBytes += Connection->InTotalBytes;
+                LostPackets += Connection->InPacketsLost + Connection->OutPacketsLost;
+            };
+            if (Driver->IsServer())
+                for (const UNetConnection* Connection : Driver->ClientConnections)
+                    Accumulate(Connection);
+            else
+                Accumulate(Driver->ServerConnection);
+            TSharedRef<FJsonObject> Stats = MakeShared<FJsonObject>();
+            Stats->SetNumberField(TEXT("OutTotalBytes"), OutTotalBytes);
+            Stats->SetNumberField(TEXT("InTotalBytes"), InTotalBytes);
+            Stats->SetNumberField(TEXT("LostPackets"), LostPackets);
+            Report.SetObjectField(TEXT("NetStats"), Stats);
+
             // ClientConnections only exists on the server side of a driver; on a client the
             // single ServerConnection is what is open, and counting *clients* there is 0.
             if (Driver->IsServer())

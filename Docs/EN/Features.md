@@ -10,6 +10,6 @@ The [capability matrix](../feature-matrix.md) is the authoritative inventory. Im
 | Luau | Syntax, libraries, vector, buffer, debug primitives, optional CodeGen | External type checker; experimental libraries follow flags |
 | Tools | DAP, profiling, memory/coroutine diagnostics, declarations | CI and packaged validation remain incomplete |
 | Runtime | Event, OOP, Timer, HotReload | Timer lifetime and shared upvalue semantics remain open |
-| Network | RPC, typed replication buckets, per-condition replication groups, `UStruct`/container type specs | Experimental; eight conditions have their own storage group and unit cases, unsupported conditions are rejected; declarations are owned per Env; connected owner/non-owner acceptance, late join/process-level reconnect, dormancy/relevancy scenarios and the Legacy/PushOff/Iris variants all have **source and gates but no execution run** |
+| Network | RPC, typed replication buckets, per-condition replication groups, `UStruct`/container type specs | Experimental; eight conditions have their own storage group and unit cases, unsupported conditions are rejected; multi-Env schemas use joint ownership; connected owner/non-owner acceptance, **eight** connected scenarios (including join-order swap, packet loss, `UNetConnection`-level reconnect and cross-peer schema mismatch) and the Legacy/PushOff/Iris/**Cooked** variants all have **source and gates but no execution run**; no source-level TODO remains |
 
 See [findings](Benchmark_Review.md), [Luau](Luau.md) and [runtime modules](StdLib.md).

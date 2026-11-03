@@ -58,13 +58,16 @@ Luau Editor 641, Luau cooked 615.
 ## Boundaries this run does not close
 
 These are scope statements, not pending conclusions: the per-condition storage layout (eight
-conditions) is delivered and covered by unit cases, and arbitrary `UStruct` / containers are
-delivered via dynamic RPC FProperties and a replicated Generic bucket. Declarative networking
-stays experimental because connected owner / non-owner acceptance, the non-owner RPC rejection
-assertion, the late join / process-level reconnect / dormancy / relevancy scenarios and the
-Legacy / PushOff / Iris variants all have source and gates but **none has been executed**;
-third-party notices are still being completed; non-Win64 platforms, cooked carriers and a
-same-machine comparison against slua-unreal / FUnLua each need their own acceptance run.
+conditions) is delivered and covered by unit cases, arbitrary `UStruct` / containers are
+delivered via dynamic RPC FProperties and a replicated Generic bucket with FProperty-derived
+parameter specs and per-peer declaration fingerprints, and multi-Env joint ownership plus weak
+object invalidation have unit cases. Declarative networking stays experimental because
+connected owner / non-owner acceptance, the non-owner RPC rejection assertion, all **eight**
+connected scenarios and the Legacy / PushOff / Iris / **Cooked** variants have source and gates
+but **none has been executed**; no source-level networking TODO remains. Third-party notices are
+still being completed; non-Win64 platforms, engine-level seamless travel, hot reload,
+authorization checks and a same-machine comparison against slua-unreal / FUnLua each need their
+own acceptance run.
 
 Acceptance method and gates: [Testing](Testing.md). Diagnostic history:
 [2026-10-24 regression record](Regression_20261024.md).

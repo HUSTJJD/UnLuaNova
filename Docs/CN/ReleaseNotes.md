@@ -51,10 +51,12 @@ Luau cooked 615。
 ## 本轮没有关闭的边界
 
 这些是范围声明，不是待补的结论：条件复制的按条件分组布局已交付并有单测（8 种条件），
-任意 `UStruct` / 容器也已由 RPC 动态 FProperty 与复制 Generic 桶交付；但仍属实验特性——
-owner / 非 owner 联机验收、非 Owner RPC 拒绝、晚加入 / 进程级重连 / dormancy / relevancy
-四类场景、Legacy / PushOff / Iris 变体的场景源码与门禁均已补齐，**但都尚未执行**；
-第三方 notice 仍在补齐；非 Win64 平台、cooked 载体、以及与 slua-unreal / FUnLua 的
-同机对照都需要各自独立的验收运行。
+任意 `UStruct` / 容器也已由 RPC 动态 FProperty 与复制 Generic 桶交付，并按真实 FProperty 导出
+参数规格、逐端导出声明指纹；多 Env 按共同 owner 释放、弱对象失效不写回野指针均有单测。但仍属实验特性——
+owner / 非 owner 联机验收、非 Owner RPC 拒绝、**八类**连接场景（含加入顺序互换、丢包/乱序、
+`UNetConnection` 级重连、跨 peer 声明差异）与 Legacy / PushOff / Iris / **Cooked** 四变体的
+场景源码与门禁均已补齐，**但都尚未执行**；源码层面已无网络待实现项。
+第三方 notice 仍在补齐；非 Win64 平台、引擎级 seamless travel、热重载与权限检查、
+以及与 slua-unreal / FUnLua 的同机对照都需要各自独立的验收运行。
 
 验收方法与门禁见 [测试](Testing.md)，诊断历史见 [2026-10-24 回归记录](Regression_20261024.md)。

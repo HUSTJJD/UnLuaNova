@@ -38,7 +38,7 @@ executed test paths; an old inventory cannot substitute for that check.
 
 `lua.json` / `luau.json` are recorded **execution** inventories, so they were deliberately not
 hand-edited when the opt-in network scenarios were added. `LuaNetNetScenariosTest.cpp`
-registers five new automation names (`UnLuaNova.API.Net.Scenarios.Report` and four
+registers nine new automation names (`UnLuaNova.API.Net.Scenarios.Report` and eight
 `UnLuaNova.Slow.Net.Scenarios.*` drivers). Until a full run is recorded with `-UpdateBaseline`,
 `-FailOnDrift` will report them as new; the default mode only warns. Adding names to these
 files by hand would claim tests that have not run, which is exactly what the drift check exists

@@ -58,9 +58,11 @@
 .EXAMPLE
     .\Tools\RunTests.ps1 -Profile Development -NetMatrix -Backend Lua -SkipBuild
 .PARAMETER NetMatrix
-    Development-only opt-in for the connected delivery matrix (late join, reconnect, dormancy,
-    relevancy and Legacy / PushOff / Iris). Each cell launches three real processes and is judged
-    by ValidateRelease.py --net-matrix; it is not part of the normal test or Release matrix.
+    Development-only opt-in for the connected delivery matrix: eight scenarios (late join,
+    process-level reconnect, dormancy, relevancy, join-order swap, packet loss,
+    UNetConnection-level reconnect, cross-peer schema mismatch) and Legacy / PushOff / Iris /
+    Cooked variants. Each cell launches three real processes and is judged by
+    ValidateRelease.py --net-matrix; it is not part of the normal test or Release matrix.
 #>
 
 [CmdletBinding()]
@@ -121,7 +123,7 @@ param(
     [switch] $FailOnDrift,
     # 人工确认后跑一次：把这一轮的用例清单写成新的基线并提交。
     [switch] $UpdateBaseline,
-    # Opt-in connected delivery matrix (Legacy/PushOff/Iris + four connected scenarios).
+    # Opt-in connected delivery matrix (Legacy/PushOff/Iris/Cooked + eight connected scenarios).
     # It launches three real processes per cell, so it is never part of a normal test run.
     [switch] $NetMatrix,
     [switch] $DryRun

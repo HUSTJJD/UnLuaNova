@@ -15,7 +15,9 @@ outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
   `COND_NetGroup` and the Replay* family are rejected at declaration time instead of being
   silently downgraded to `COND_None`. The obsolete component-wide `Condition` now only warns.
 - A subclass with no declaration of its own inherits the parent class's schema, and
-  `FUnLuaNovaNet::Cleanup(Env)` no longer removes orphan entries owned by no Env.
+  `FUnLuaNovaNet::Cleanup(Env)` releases a schema by joint ownership (see below) instead of
+  attributing it to whichever environment happened to shut down first. Orphan entries with no
+  owner remain process-wide state that only `Cleanup(nullptr)` drops.
 - Unit cases added for condition groups, reliable/unreliable RPC flags, scalar and Object
   bucket round-trips, schema-mismatch refusal and parent-class schema lookup.
 - Evidence provenance: `RecordEvidence.py` now takes `--commit` / `--source` so importing a
@@ -34,23 +36,38 @@ outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
   `Map:<key>:<value>`) are validated at bind time and folded into `SchemaVersion`. `UObject`
   references keep the dedicated Object bucket. Unit cases cover parsing, nesting, rejection and
   Lua <-> payload round-trips.
-- Four opt-in connected scenarios in `LuaNetNetScenariosTest.cpp`: late join (spawn marker plus
-  topology launch order), process-level reconnect (`FNetSession::RestartPeer`, distinct PID and
-  `launch_count`, server-observed drop/recovery), dormancy (suppression then `FlushNetDormancy`)
-  and relevancy (owner-only visibility). `FNetSession` now records `launch_serial`, `first_pid`,
+- Eight opt-in connected scenarios in `LuaNetNetScenariosTest.cpp`: late join, process-level
+  reconnect (`FNetSession::RestartPeer`), dormancy, relevancy, join-order swap, packet loss /
+  reordering (real `NetEmulation.PktLoss/PktOrder/PktLag`), `UNetConnection`-level reconnect
+  (`Connection->Close()` plus an in-process reopen through `-UnLuaNovaNetReconnectUrl`), and
+  cross-peer declaration fingerprints. `FNetSession` forwards the scenario flag, packet-loss
+  percentage and exact reconnect URL to every peer, and records `launch_serial`, `first_pid`,
   `launch_count`, scenario and delivery variant in `topology.json`.
-- Legacy / PushOff / Iris delivery matrix: `Tools/RunNetMatrix.ps1` (also
+- Legacy / PushOff / Iris / Cooked delivery matrix: `Tools/RunNetMatrix.ps1` (also
   `RunTests.ps1 -Profile Development -NetMatrix`) and `RunTests.ps1 -ExtraArgs` pass real engine
-  switches to every peer; `AppendWorldFacts` reads the resulting Iris / push-model cvar state
-  back into each report. `ValidateRelease.py --net-matrix` is a separate fail-closed gate for
-  four scenario topologies plus three variant topologies.
-- 58 Python tooling tests pass, including the new scenario and variant gate cases.
-- These are **source and unit-case changes only**. None of the connected assertions, scenarios or
-  variants has been **executed** - they require a rebuild and real DS runs. Packet loss, seamless
-  travel / `UNetConnection`-level reconnect, cross-peer declaration mismatch, cooked carriers and
-  Iris element-level deltas remain unimplemented. `release-status` stays `not-passed` and the
-  three Networking capability groups stay `experimental`; see the
-  [acceptance checklist](Docs/CN/LuaNetworking.md).
+  switches to every peer; the Cooked cell points the peer executables at staged
+  `Windows` / `WindowsServer` binaries. `AppendWorldFacts` reads back Iris / push-model cvar
+  state, compile-time `WITH_EDITOR`, and real `UNetConnection` byte / lost-packet counters.
+  `BuildNetDeclarationReport()` exports each RPC parameter's spec from the **actual FProperty**,
+  each field's `TypeSpec`, `RepSchemaVersion` and a deliberately different
+  `VariantRepSchemaVersion`, so `ValidateRelease.py --net-matrix` can reject a cross-peer
+  declaration mismatch instead of decoding into the wrong slot.
+- `NetActor.lua` now declares a real `Inventory` (`Array:Int`) field and a `SendPayload` RPC with
+  a `Struct:/Script/CoreUObject.Vector` parameter, giving the connected gate something to prove
+  about generic types without changing the strict `CallLog` comparison.
+- `FUnLuaNovaNet` schemas now use a **joint owner set**: identical declarations bound by several
+  environments are released only when the last closes, in any order. Closing the first owner
+  previously wiped a schema another Env still used. Two reverse-order unit cases and a weak
+  `UObject` invalidation case were added.
+- 58 Python tooling tests passed in the previous change. Five more gate cases (cross-peer schema,
+  generic field / UStruct parameter, join-order swap + packet loss, connection-level reconnect,
+  cooked variant) were added here and have **not** been run.
+- These are **source and unit-case changes only**. None of the connected assertions, eight
+  scenarios or four variants has been **executed** - they require a rebuild and real DS runs.
+  There is no remaining source-level networking TODO; engine-level seamless travel
+  (`ServerTravel`), hot reload and authorization checks remain explicitly out of scope rather
+  than silently claimed. `release-status` stays `not-passed` and the three Networking capability
+  groups stay `experimental`; see the [acceptance checklist](Docs/CN/LuaNetworking.md).
 
 ## Current release status: not passed
 

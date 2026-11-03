@@ -110,14 +110,14 @@ Partial runs explicitly select `Development` and are not release evidence:
 
 ### Connected network matrix (separate opt-in)
 
-The four connected scenarios and the Legacy / PushOff / Iris variants each launch three real processes, so they are not part of the ordinary test matrix or the 33 normal Release stages:
+Eight connected scenarios (late join, process-level reconnect, dormancy, relevancy, join-order swap, packet loss / reordering, `UNetConnection`-level reconnect, cross-peer declaration mismatch) and the Legacy / PushOff / Iris / Cooked variants each launch three real processes, so they are not part of the ordinary test matrix or the 33 normal Release stages:
 
 ```powershell
 .\Tools\RunTests.ps1 -Profile Development -NetMatrix -Backend Lua -SkipBuild
 python Tools\ValidateRelease.py --net-matrix --run Saved\ReleaseTests\net-matrix\Lua --backend Lua --carrier game
 ```
 
-`Tools/RunNetMatrix.ps1` is the underlying script. `-ExtraArgs` puts `-UnLuaNovaNetScenarios` and the variant's real engine switch (`-UseIrisReplication=1` or a push-model cvar ini override) on the process command line; `FNetSession` forwards `UNLUANOVA_TEST_NET_VARIANT` to every peer, and `AppendWorldFacts` reads the resulting cvar state back into the report, so renaming a directory cannot impersonate a variant. Artifacts land in `net/scenarios/<Name>/` and `net/variants/<Name>/DedicatedServer/`, judged into `metadata/net-matrix-gate.json`. This is **not** UE automation evidence and does not touch `Tools/evidence/index.json`. The gate fails closed on a missing topology, a missing peer log, a PID mismatch, a faked Iris/push-model flag or a scenario that never ran. **At present these scenarios and variants have source and gates only, with no execution evidence.**
+`Tools/RunNetMatrix.ps1` is the underlying script. `-ExtraArgs` puts `-UnLuaNovaNetScenarios`, `-UnLuaNovaNetPktLoss=25` and the variant's real engine switch (`-UseIrisReplication=1` or a push-model cvar ini override) on the process command line; `FNetSession` forwards the scenario flag, loss percentage, exact reconnect URL and `UNLUANOVA_TEST_NET_VARIANT` to every peer. The Cooked variant points the peer executables at staged `Windows` / `WindowsServer` binaries. `AppendWorldFacts` reads cvar state, `WITH_EDITOR` and `UNetConnection` counters back, while `BuildNetDeclarationReport()` exports FProperty-derived parameter specs and `RepSchemaVersion` / `VariantRepSchemaVersion`, so neither a renamed directory nor a disagreeing declaration can pass. Artifacts land in `net/scenarios/<Name>/` and `net/variants/<Name>/DedicatedServer/`, judged into `metadata/net-matrix-gate.json`. This is **not** UE automation evidence and does not touch `Tools/evidence/index.json`. The gate fails closed on a missing topology, a missing peer log, a PID mismatch, a faked Iris/push-model/Cooked flag, a mismatched or non-discriminating declaration fingerprint, a missing Generic field / UStruct parameter, zero connection byte counters or a scenario that never ran. **At present all eight scenarios and four variants have source and gates only, with no execution evidence.**
 
 Preview the default plan without writing config, installing tools, compiling or launching UE:
 

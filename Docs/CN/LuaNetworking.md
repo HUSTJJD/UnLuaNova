@@ -77,7 +77,9 @@ end
 
 也支持 `M.ReplicatedProps` 静态表。Actor 及组件的复制、所有权和网络生命周期必须正确配置。源码按 11 种内置类型分桶，另有第 12 个共享 `Generic` 桶承载类型规格字段，**字段下标在 (类型, 条件) 内按声明顺序分配**——不同条件的字段各从 0 开始。SchemaVersion 指纹包含字段名、顺序、类型、类型规格和条件，用于检测声明差异；32 位指纹不是网络安全校验或完整版本协商。
 
-属性声明要求连续数组、唯一且非 None 的 FName、已知类型或合法类型规格；`Condition` 可省略（等于 `None`）或写上面列出的任一条件名。字段下标在**（类型, 条件）**内计数：两个 OwnerOnly 的 String 和一个无条件的 String 各自从下标 0 开始，因为它们落在不同组。首次空声明有效；缓存中的类 schema 不允许改写，完全相同的重复声明幂等。校验失败不会部分注册，也不会替换此前有效 schema。更改字段布局需要完整网络/环境重建，不能依靠热重载。全局声明缓存按 Env 归属关闭：`Cleanup(Env)` 只移除该 Env 声明的条目与类已失效的条目，无主条目由进程级清理负责，关闭一个 Env 不会再抹掉另一个 Env 的 schema；多 Env 同类的声明与销毁顺序仍需运行验收。
+属性声明要求连续数组、唯一且非 None 的 FName、已知类型或合法类型规格；`Condition` 可省略（等于 `None`）或写上面列出的任一条件名。字段下标在**（类型, 条件）**内计数：两个 OwnerOnly 的 String 和一个无条件的 String 各自从下标 0 开始，因为它们落在不同组。首次空声明有效；缓存中的类 schema 不允许改写，完全相同的重复声明幂等。校验失败不会部分注册，也不会替换此前有效 schema。更改字段布局需要完整网络/环境重建，不能依靠热重载。全局声明缓存按**共同 owner 集合**释放：多个 Env 绑定同一份完全相同的声明时，各自登记为共同 owner，
+`Cleanup(Env)` 只从集合中移除自己，最后一个关闭的 Env 才删除该 schema，任意关闭顺序都不会抹掉仍在用的
+声明；无主条目仍由进程级 `Cleanup(nullptr)` 负责。两个反向顺序已有单测，联机执行仍待补。
 
 `UpdateMode=Polled` 默认每 0.1 秒读取 Lua 字段；`Explicit` 需要调用 `MarkFieldDirty`。还提供 `MarkAllFieldsDirty`、`FlushNetUpdate`、`OnRep_<Name>` 和 `OnReplicatedProps(Names)`。显式模式漏标不会发送改动，Flush 请求也不是同帧抵达保证。
 
@@ -86,11 +88,12 @@ end
 - 组件上的 `Condition` 属性已废弃：它只用于识别旧资产，非 None 时打一条 Warning 并忽略，**不再禁用复制**；逐字段条件在 `GetLifetimeReplicatedProps` 里声明。
 - 条件组的脏标记粒度是"整组"而不是"每个类型"：一个条件组是一个 UPROPERTY，改组内任一字段会重发整组。无条件字段仍走组件上按类型拆分的数组，保持按类型脏标记。**owner / 非 owner 的联机验收仍是 P0**（断言源码与门禁已补、尚未执行）——单进程用例只能证明分组与下标，证明不了"非属主确实没收到"。
 - int32/int64 读取拒绝小数、NaN、无穷、越界和数字字符串，失败保留旧值。Luau 在 ±2^53 内推入 number，范围外推入原生 integer64；脚本在 number 中已发生的舍入无法恢复，超出精确范围的值应来自 integer64/C++，不能以浮点字面量替代。
-- 数学类型要求对应 userdata，Object 不提供任意子类约束；对象解析、失效仍必须验收。晚加入已有场景源码与门禁，但尚未执行。
+- 数学类型要求对应 userdata，Object 不提供任意子类约束；对象解析与弱引用失效已有单测，
+  对象跨连接失效的联机观测仍属于上面"尚未执行"的部分。晚加入已有场景源码与门禁，但尚未执行。
 - 类型规格字段走文本 payload，不是引擎的逐属性 delta；它证明的是"能声明、能往返、两端不会误解码"，不是带宽或压缩收益。`UObject` 引用不在规格语法内。
-- 带类型的 UPROPERTY 和 push-model 宏存在，不等于已证明 Iris、逐元素 delta、压缩收益或运行时回退语义。Legacy / PushOff / Iris 三个变体的启动开关与门禁已补源码，但没有任何一个变体跑过。
+- 带类型的 UPROPERTY 和 push-model 宏存在，不等于已证明 Iris、逐元素 delta、压缩收益或运行时回退语义。Legacy / PushOff / Iris / Cooked 四个变体的启动开关、真实连接字节/丢包计数与门禁已补源码，但没有任何一个变体跑过，也不宣称压缩收益。
 - 条件组的脏标记粒度是"整组"而非"每个类型"：一个组是一个 UPROPERTY，组内任一字段变化都会重发整组；无条件字段仍保持按类型脏标记。
-- 热重载、重复声明、**跨 peer** 的 schema 差异与权限检查仍需独立验收；单进程已覆盖继承查找、重复声明幂等与 schema 不匹配时不写 Lua 字段。
+- 热重载与权限检查仍需独立验收；单进程已覆盖继承查找、重复声明幂等、多 Env 任意顺序销毁、弱对象失效与 schema 不匹配时不写 Lua 字段，**跨 peer** 声明差异已由 `RepSchemaVersion` 报告导出与门禁覆盖（尚未执行）。
 
 ## 已有测试入口
 
@@ -100,7 +103,7 @@ end
 | UnLuaNova.API.Net.ClientServer | PIE 中 RPC / 字段传输 | 单进程共享类状态 |
 | UnLuaNova.API.Net.DedicatedServer | DS + 两个独立客户端、仅服务端生成两个 Actor 和设置 Owner、两轮 Server/Client/Multicast RPC 与 Lua HP 同步 | Release28 四个载体及完整 33 阶段均通过，含原始会话/PID/HP/逐端日志校验；Release22 及以前仅为未连接的声明/ID 对照 |
 | UnLuaNova.Slow.Net.Multicast | server + 两个连接的 client | 双后端 Editor 完整诊断轮已通过；Fast 层排除 |
-| UnLuaNova.Slow.Net.Scenarios.{LateJoin,Reconnect,Dormancy,Relevancy} | 四类连接场景各起 Server + Client1 + Client2 | 需 `-UnLuaNovaNetScenarios` 显式开启；源码与门禁已补、尚未执行 |
+| UnLuaNova.Slow.Net.Scenarios.{LateJoin,Reconnect,Dormancy,Relevancy,JoinOrderSwap,PacketLoss,SeamlessReconnect,SchemaMismatch} | 八类连接场景各起 Server + Client1 + Client2 | 需 `-UnLuaNovaNetScenarios` 显式开启；源码与门禁已补、尚未执行 |
 | UnLuaNova.API.Net.Scenarios.Report | 上述场景的 peer 侧报告 | 只由场景驱动拉起，不单独跑 |
 
 API.Net、ClientServer、Multicast 的历史诊断见 `FullFix-Complete-11`；替换后的 DedicatedServer 及完整发布矩阵结论见 [回归验证记录](Regression_20261024.md)。
@@ -113,17 +116,35 @@ API.Net、ClientServer、Multicast 的历史诊断见 `FullFix-Complete-11`；�
 
 - 非 Owner 发起 Server RPC 的联机断言（`NetActor.lua` / `LuaNetDedicatedServerTest.cpp` 用唯一 token 发起一次非属主调用，`ValidateRelease.py` 要求"尝试确实发生"且 token 不出现在任何 peer 的 `CallLog`）。
 - 混合条件字段（`HP` 无条件 + `OwnerSecret` 为 `OwnerOnly`，逐端导出可见性由门禁断言）。
-- 任意 `UStruct` / 容器：RPC 参数动态 FProperty、复制字段 Generic 桶的规范化文本 payload，以及解析 / 嵌套 / 往返单测。单测源码已补，但未执行。
-- 四类连接场景（`LuaNetNetScenariosTest.cpp`）：晚加入（服务端在只有 1 个客户端时就生成 Actor 并写 `Spawn` marker，拓扑里 Client2 的 `launch_serial` 必须更晚）、进程级重连（`RestartPeer` 终止并替换 Client1，拓扑要求 `launch_count=2` 且 `first_pid != pid`，服务端要观测到连接掉落后恢复）、dormancy（休眠期客户端看不到改动，`FlushNetDormancy` 后收到新值）、relevancy（owner-only Actor 对非属主不可见）。
-- `Tools/RunNetMatrix.ps1` + `ValidateRelease.py --net-matrix`：Legacy / PushOff / Iris 三个变体，每个变体把真实引擎开关（`-UseIrisReplication=1` 或 push-model cvar 的 ini 覆盖）传给所有 peer，再由 `AppendWorldFacts` 从 cvar 把状态读回报告，门禁拒绝"改个目录名就冒充变体"。
+- 任意 `UStruct` / 容器：RPC 参数动态 FProperty、复制字段 Generic 桶的规范化文本 payload，以及解析 / 嵌套 / 往返单测。`NetActor.lua` 里另加了一个真实的 `Inventory`（`Array:Int`）字段和一个带
+  `Struct:/Script/CoreUObject.Vector` 参数的 `SendPayload` RPC；声明报告按**真实 FProperty**导出参数规格，
+  门禁要求三端都有 Generic 字段与 UStruct 参数。注册成功本身就是断言——`CreateParam` 失败的话这个 RPC
+  根本不会出现。单测源码已补，但未执行。
+- 跨 peer 声明一致性：每份 peer 报告导出实际绑定的 `RepSchemaVersion` 和一份故意不同的
+  `VariantRepSchemaVersion`；门禁要求三端前者相同、后者与前者不同，否则"全都相等"可能只是因为指纹是常数。
+- 八类连接场景（`LuaNetNetScenariosTest.cpp`）：晚加入、进程级重连、dormancy、relevancy、
+  **加入顺序互换**（Client2 先连、Client1 后连，拓扑 `launch_serial` 必须反过来）、
+  **丢包与乱序**（`NetEmulation.PktLoss/PktOrder/PktLag` 真实引擎模拟，reliable 复制必须收敛到最终值）、
+  **`UNetConnection` 级重连**（服务端 `Connection->Close()`，同一进程用 `-UnLuaNovaNetReconnectUrl` 重开 URL；
+  门禁要求 `launch_count=1` 且 `first_pid == pid`，与进程级重连明确区分）、
+  **跨 peer 声明差异**（三端导出声明指纹并互相比对）。
+- `Tools/RunNetMatrix.ps1` + `ValidateRelease.py --net-matrix`：Legacy / PushOff / Iris / **Cooked**
+  四个变体。前三者传真实引擎开关（`-UseIrisReplication=1` 或 push-model cvar 的 ini 覆盖）；
+  Cooked 把 `UNLUANOVA_TEST_PEER_EXE` / `_SERVER_EXE` 指向 staged `Windows` / `WindowsServer` 二进制，
+  报告用编译期 `WITH_EDITOR` 回读。`AppendWorldFacts` 还导出 `UNetConnection` 的真实字节数、丢包数与
+  cooked / Iris / push-model 状态，Iris 逐元素 delta 可从这些报告做变体间对比（**不宣称压缩收益**）。
+- 多 Env 声明/销毁顺序：`FUnLuaNovaNet` 改为按**共同 owner 集合**释放——多个 Env 绑定同一份声明时，
+  最后一个关闭才删除，任意关闭顺序都不会抹掉仍在用的 schema；已补两个反向顺序的单测。
+- 对象失效：弱 `UObject` 引用失效后不会把野指针写回 Lua，已补单测。
 
 **以上全部必须重新构建并跑真实 DS 才算证据——存在测试源码不等于测试已通过。** 入口是
 `Tools/RunTests.ps1 -Profile Development -NetMatrix`（底层脚本 `Tools/RunNetMatrix.ps1`）。
 每格都会起三个真实进程，因此它不进普通测试矩阵，也不进常规 Release 阶段。
 
-**仍待实现 / 尚未覆盖**：丢包与乱序、seamless travel 与 `UNetConnection` 级重连（当前只做进程级替换）、
-跨 peer 声明不一致、cooked 载体上的场景、Iris 下的逐元素 delta 与压缩收益、以及所有变体的真实执行。
-int64 边界、标量 / Object 桶往返、schema 不匹配与继承查找已有单测。
+**源码层面已无待实现项**。剩下的全部是执行：八类场景与四个变体一个都没跑过；
+`release-status` 仍是 `not-passed`，`NET-*` 仍是 `experimental`，`verification` 未手改。
+seamless travel（`ServerTravel` / `TravelType`）本身不在实现范围内——这里交付的是
+`UNetConnection` 级关闭 + 进程内重连，两者是不同的引擎路径，文档不把它们混为一谈。
 
 ## 什么时候才能摘掉"实验"标签
 
@@ -138,8 +159,10 @@ int64 边界、标量 / Object 桶往返、schema 不匹配与继承查找已有
    token 未在任何 peer 执行、`OwnerOnly` 字段只对属主可见。
 3. 用 `RecordEvidence.py --commit <该轮提交>` 把该轮 Editor / Game automation 报告归集进
    `Tools/evidence/`，且记录不带 `historical`。
-4. `ValidateRelease.py --net-matrix` 全绿：四份场景拓扑 + 三份变体拓扑，每份都有三个真实
-   peer 报告、非空日志、与拓扑一致的 PID，变体还要有从 cvar 读回的真实 Iris / push-model 状态。
+4. `ValidateRelease.py --net-matrix` 全绿：八份场景拓扑 + 四份变体拓扑，每份都有三个真实
+   peer 报告、非空日志、与拓扑一致的 PID、一致且可区分的声明指纹、Generic 字段 / UStruct 参数与
+   非零连接字节计数；变体还要有从 cvar 读回的真实 Iris / push-model 状态，Cooked 还要有 staged 二进制路径
+   与 `WITH_EDITOR` 编译期标志。
 5. `release-status` marker 由该轮 Release 结果更新。**当前是 `not-passed`**（Luau Editor 性能门禁
    超 25%），只能由一次真实通过的 Release 运行改写，不能靠编辑文档。
 

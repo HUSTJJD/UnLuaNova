@@ -73,11 +73,12 @@ namespace UnLuaNova
         static const TArray<FLuaRepDecl>& GetReplicatedProps(const UClass* Class);
 
         /**
-         * Drop the declarations 'Env' made, plus any whose class has already gone.
-         * Called from UUnLuaNovaManager::Cleanup(), which runs once per environment: the
-         * table is keyed by UClass because replication is, but a declaration belongs to the
-         * environment that read it off its own module, so closing one environment must not
-         * wipe a schema another one is still replicating with.
+         * Release 'Env' from every declaration it bound, plus any whose class has already
+         * gone. Called from UUnLuaNovaManager::Cleanup(), which runs once per environment:
+         * the table is keyed by UClass because replication is, but a declaration is jointly
+         * owned by all environments that bound the identical list. It is removed only when
+         * the last of them closes, so declaration/teardown ORDER cannot wipe a live schema.
+         * An entry with no owners at all is process-wide state only Cleanup(nullptr) drops.
          *
          * Pass nullptr for a full reset (engine shutdown).
          */
@@ -86,7 +87,15 @@ namespace UnLuaNova
     private:
         struct FRepPropsEntry
         {
-            FLuaEnv* Env = nullptr;                 // owning environment, null = unowned
+            FLuaEnv* Env = nullptr;                 // first declaring environment, null = unowned
+            /**
+             * Every environment that bound this same (identical) declaration list. A schema
+             * is released only when ALL of them have closed, in any order. Tracking just the
+             * first owner meant that closing Env A dropped a schema Env B was still using -
+             * the declaration/destruction order bug in the multi-Env matrix.
+             * An empty set means process-wide state that only Cleanup(nullptr) may drop.
+             */
+            TSet<FLuaEnv*> Owners;
             TArray<FLuaRepDecl> Decls;
         };
 

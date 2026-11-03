@@ -554,7 +554,8 @@ namespace UnLuaNova
         lua_pop(L, 1); // the list
 
         // Existing components already use this layout. Rebinding cannot mutate it.
-        if (const auto* Existing = RepProps.Find(Class))
+        FLuaEnv* const DeclaringEnv = FLuaEnv::FindEnv(L);
+        if (FRepPropsEntry* Existing = RepProps.Find(Class))
         {
             if (Existing->Decls.Num() != Decls.Num())
                 return Reject(TEXT("Class schema is immutable until network teardown."));
@@ -564,13 +565,17 @@ namespace UnLuaNova
                     || Existing->Decls[Index].TypeSpec != Decls[Index].TypeSpec)
                     return Reject(TEXT("Class schema is immutable until network teardown."));
 
-            // An identical schema keeps its original owner: the environment that declared it
-            // first is the one whose teardown has to release it.
+            // Re-binding an identical schema in another environment adds a joint owner. The
+            // schema survives until every owner has closed, whichever one closes first.
+            if (DeclaringEnv)
+                Existing->Owners.Add(DeclaringEnv);
             return true;
         }
 
         FRepPropsEntry Entry;
-        Entry.Env = FLuaEnv::FindEnv(L);
+        Entry.Env = DeclaringEnv;
+        if (DeclaringEnv)
+            Entry.Owners.Add(DeclaringEnv);
         Entry.Decls = MoveTemp(Decls);
         RepProps.Add(Class, MoveTemp(Entry));
         return true;
@@ -610,12 +615,15 @@ namespace UnLuaNova
 
         for (auto It = RepProps.CreateIterator(); It; ++It)
         {
-            const FRepPropsEntry& Entry = It->Value;
-            // 'Env' owns it, or the class is already gone and the entry can only be dead
-            // weight. An entry with no owning Env is process-wide state, not this Env's:
-            // only Cleanup(nullptr) may drop it. Attributing one to whichever Env happens
-            // to shut down first is what used to wipe another Env's schema.
-            if (Entry.Env == Env || !It->Key.IsValid())
+            FRepPropsEntry& Entry = It->Value;
+            // An entry that never had an owner is process-wide state: only Cleanup(nullptr)
+            // may drop it. Attributing it to whichever Env happens to shut down first is
+            // what used to wipe another environment's schema.
+            const bool bWasClaimed = Entry.Owners.Num() > 0;
+            Entry.Owners.Remove(Env);
+            // Order-independent joint ownership: the last environment to close releases the
+            // declaration. Dead classes are always safe to drop.
+            if (!It->Key.IsValid() || (bWasClaimed && Entry.Owners.Num() == 0))
                 It.RemoveCurrent();
         }
     }

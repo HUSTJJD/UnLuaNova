@@ -41,9 +41,11 @@ UE 5.8.3 源码引擎 / Win64 / Visual Studio 2026 18.10）：
 **这仍不是与 slua-unreal / FUnLua 的同机对照**，跨项目速度结论尚未建立。
 
 本轮没有覆盖的范围（范围声明，不是遗漏）：非 Win64 平台、条件复制的**联机验收**
-（owner / 非 owner、晚加入 / 进程级重连、dormancy / relevancy）、Legacy / PushOff / Iris
-变体的真实执行、第三方 notice 清单，以及与 slua-unreal / FUnLua 的同机对照。按条件分组布局
-（8 种条件）、任意 `UStruct` / 容器类型规格、四类连接场景源码和变体开关与门禁**已交付但尚未执行**，
+（owner / 非 owner 及全部八类连接场景）、Legacy / PushOff / Iris / Cooked
+四个变体的真实执行、第三方 notice 清单，以及与 slua-unreal / FUnLua 的同机对照。按条件分组布局
+（8 种条件）、任意 `UStruct` / 容器类型规格、八类连接场景源码、四变体开关、跨 peer 声明指纹、
+多 Env 任意顺序销毁与对象失效单测**已交付但尚未执行**，源码层面已无网络待实现项；
+引擎级 seamless travel、热重载与权限检查明确不在范围内，
 见 [Lua 声明式网络（实验）](CN/LuaNetworking.md)。
 诊断历史与更早轮次见 [回归报告](CN/Regression_20261024.md)。
 

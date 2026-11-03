@@ -17,14 +17,24 @@
 --   OwnerSecret          a second field in the SAME declaration list, marked OwnerOnly. Only the
 --                        owning connection may receive it; a non-owner must still see nil. The
 --                        C++ driver reads it back on each peer as a connected-peer assertion.
+--   Inventory            a Generic-bucket field declared with a type spec ("Array:Int"), not a
+--                        builtin type. The declaration report exports its TypeSpec and the
+--                        whole-list SchemaVersion on every peer, so a mismatched declaration
+--                        cannot silently decode the wrong payload.
+--   SendPayload          an RPC whose parameter is a UScriptStruct spec. It is deliberately never
+--                        called in this scenario: if CreateParam failed to build the runtime
+--                        FStructProperty, the RPC would not be registered at all and would be
+--                        absent from the peer declaration report. Registration is the assertion;
+--                        Lua-side marshalling is covered by unit cases, not by CallLog.
 --
--- All three RPCs are declared Reliable. An unreliable RPC may be dropped, and a test that
--- fails because a packet was dropped says nothing about whether the mechanism works.
+-- All three transport RPCs are declared Reliable. An unreliable RPC may be dropped, and a test
+-- that fails because a packet was dropped says nothing about whether the mechanism works.
 
 local M = UnLuaNova.Class()
 
 M.ServerRPC = {
     FromClient = { Reliable = true, Params = { "Int" } },
+    SendPayload = { Reliable = true, Params = { "Struct:/Script/CoreUObject.Vector" } },
 }
 
 M.ClientRPC = {
@@ -42,11 +52,15 @@ function M:GetLifetimeReplicatedProps()
         -- field: it must land in its own storage group, and only the owning connection may
         -- receive it. The C++ driver reads OwnerSecret back on every peer to prove that.
         { Name = "OwnerSecret", Type = "Int", Condition = "OwnerOnly" },
+        -- A type spec, not one of the eleven builtins: this field travels in the shared
+        -- Generic bucket as a canonical self-describing payload.
+        { Name = "Inventory", Type = "Array:Int" },
     }
 end
 
 function M:Initialize()
     self.HP = 100
+    self.Inventory = { 11, 22, 33 }
     -- OwnerSecret is intentionally NOT initialised on clients. A non-owner seeing nil here
     -- is the evidence that a conditional field was never delivered to that connection.
 end
@@ -74,6 +88,12 @@ end
 -- Runs on the server and on every client.
 function M:ToAll(Value)
     Record(self, "ToAll", Value)
+end
+
+-- Never invoked by the connected scenario: its presence in the registered RPC list proves
+-- that a runtime-built UFunction can own a FStructProperty. Keeping it out of CallLog means
+-- the strict per-peer call-log comparison stays about transport, not about marshalling.
+function M:SendPayload(Payload)
 end
 
 return M

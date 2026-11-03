@@ -166,12 +166,15 @@ Object bucket because a text payload cannot carry a NetGUID.
 > Still **experimental**. The 0-to-1 difference and the hard limits belong together: (1) connected
 > owner / non-owner acceptance and the non-owner Server RPC rejection assertion are **not
 > executed** - single-process cases prove grouping and indices, not that a non-owner received
-> nothing; (2) late join / process-level reconnect / dormancy / relevancy have scenario source
-> and gates, but **none has been run**; (3) the Legacy / PushOff / Iris launch switches and the
-> `ValidateRelease.py --net-matrix` gate are delivered, again **with no execution evidence**.
+> nothing; (2) **eight** connected scenarios (late join, process-level reconnect, dormancy,
+> relevancy, join-order swap, packet loss / reordering, `UNetConnection`-level reconnect and
+> cross-peer declaration mismatch) have source and gates, but **none has been run**; (3) the
+> Legacy / PushOff / Iris / Cooked variants' real engine switches, staged binaries, connection
+> byte counters and the `--net-matrix` gate are delivered, again **with no execution evidence**.
 > All of them require real DS runs through `Tools/RunNetMatrix.ps1`; source existing is not a
-> test passing. Packet loss, seamless travel / `UNetConnection`-level reconnect, cross-peer
-> declaration mismatch and cooked carriers remain uncovered. `release-status` is still
+> test passing. There is no remaining source-level TODO - execution is the only outstanding
+> work. Engine-level seamless travel (`ServerTravel`) is out of scope: what is delivered is a
+> `UNetConnection` close plus an in-process reopen, a different path. `release-status` is still
 > `not-passed` and can only change through a genuinely passing Release run. See the
 > [capability matrix](Docs/feature-matrix.md) and
 > [Lua-declared networking (experimental)](Docs/EN/LuaNetworking.md).
@@ -234,7 +237,7 @@ means**; both backends use identical iteration counts.
 | **FUnLua** | Solid object-reference tree, property invalidation, per-instance binding design | Its license file is missing at the pinned commit, so its source is not referenced until verified |
 | **UE-AngelScript** | Static types, VSCode LSP, breakpoints as a first-class citizen | **Requires a source engine fork**; no runtime hot updates |
 | **Verse / Blueprint** | Official, zero integration | No runtime hot updates; iteration is bound to releases |
-| **UnLuaNova** | No engine fork + two backends + hot updates + observability + acceptance + MIT + declarative networking (experimental) | Connected owner/non-owner acceptance, the four connected scenarios and the Iris variants have source and gates but no execution run, see the limits table |
+| **UnLuaNova** | No engine fork + two backends + hot updates + observability + acceptance + MIT + declarative networking (experimental) | Connected owner/non-owner acceptance, the eight connected scenarios and four delivery variants have source and gates but no execution run, see the limits table |
 
 **One-line boundary**: if you can accept a **source engine fork**, target PC/console single-player and do
 not need runtime updates, UE-AngelScript is the more complete experience. If you **cannot fork the
@@ -332,7 +335,7 @@ Clear beats flattering. The following are known gaps — a statement of scope, n
 
 | Area | Limit |
 |---|---|
-| **Declarative networking (experimental)** | Conditions supported: `None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` / `SimulatedOnly` / `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`, each with its own storage group. `Custom` / `Dynamic` / `Never` / `NetGroup` and the Replay* family - every condition with no storage group - are **rejected loudly** (an Error log, no silent downgrade). `UStruct` / containers use type specs via dynamic RPC FProperties and the replicated Generic bucket. **Awaiting execution**: connected owner / non-owner acceptance, the non-owner RPC rejection assertion, late join / process-level reconnect / dormancy / relevancy scenarios, and Legacy / PushOff / Iris variants (source and the `--net-matrix` gate are in place, a rebuild plus real DS runs are still required); **not covered**: packet loss, seamless-travel reconnect, cross-peer declaration mismatch and cooked carriers |
+| **Declarative networking (experimental)** | Conditions supported: `None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` / `SimulatedOnly` / `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`, each with its own storage group. `Custom` / `Dynamic` / `Never` / `NetGroup` and the Replay* family - every condition with no storage group - are **rejected loudly** (an Error log, no silent downgrade). `UStruct` / containers use type specs via dynamic RPC FProperties and the replicated Generic bucket; the declaration report derives parameter specs from the real FProperty and exports `RepSchemaVersion` per peer for a cross-peer identity check. Also delivered: join-order swap, packet loss / reordering (`NetEmulation`), `UNetConnection`-level reconnect, cross-peer declaration mismatch, a Cooked variant using staged binaries, and real connection byte / loss counters. **Awaiting execution**: connected owner / non-owner acceptance, the non-owner RPC rejection assertion, all eight scenarios and all four variants (source and the `--net-matrix` gate are in place, a rebuild plus real DS runs are still required); **not covered**: engine-level seamless travel (`ServerTravel`), hot reload and authorization checks |
 | **Generated thunks** | Final dispatch still goes through `UObject::ProcessEvent` — static binding removes the runtime reflection lookup and marshalling, not the dispatch. A self-baseline and a 25% regression gate are committed; **no same-machine comparison against slua-unreal / FUnLua yet** |
 | **Luau native codegen** | Opt-in: `lua.codegen.enabled=1` (default 0), narrow it with `lua.codegen.modules`. Applies only to chunks loaded after the switch, and only on Luau + x64/arm64 |
 | **Engine versions and platforms** | Verified on UE **5.8.3 / Win64**. Other engine versions, Linux / Mac / iOS / Android and consoles need their own acceptance |

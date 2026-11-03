@@ -109,22 +109,27 @@ Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混
 
 ### 联网矩阵（独立 opt-in）
 
-四类连接场景与 Legacy / PushOff / Iris 变体各起三个真实进程，不进普通测试矩阵，也不属于
-常规 Release 的 33 个阶段：
+八类连接场景（晚加入、进程级重连、dormancy、relevancy、加入顺序互换、丢包/乱序、
+`UNetConnection` 级重连、跨 peer 声明差异）与 Legacy / PushOff / Iris / Cooked
+四个变体各起三个真实进程，不进普通测试矩阵，也不属于常规 Release 的 33 个阶段：
 
 ```powershell
 .\Tools\RunTests.ps1 -Profile Development -NetMatrix -Backend Lua -SkipBuild
 python Tools\ValidateRelease.py --net-matrix --run Saved\ReleaseTests\net-matrix\Lua --backend Lua --carrier game
 ```
 
-底层脚本是 `Tools/RunNetMatrix.ps1`；`-ExtraArgs` 用于把 `-UnLuaNovaNetScenarios` 和变体的
-真实引擎开关（`-UseIrisReplication=1` 或 push-model cvar 的 ini 覆盖）传到进程命令行，
-`UNLUANOVA_TEST_NET_VARIANT` 由 `FNetSession` 再传给每个 peer。`AppendWorldFacts` 从 cvar
-读回状态写进报告，因此改目录名冒充不了变体。产物落在
+底层脚本是 `Tools/RunNetMatrix.ps1`；`-ExtraArgs` 把 `-UnLuaNovaNetScenarios`、
+`-UnLuaNovaNetPktLoss=25` 和变体的真实引擎开关（`-UseIrisReplication=1` 或 push-model cvar 的
+ini 覆盖）传到进程命令行，`FNetSession` 再把场景开关、丢包率、精确重连 URL 与
+`UNLUANOVA_TEST_NET_VARIANT` 转发给每个 peer。Cooked 变体把 peer 可执行文件指向 staged
+`Windows` / `WindowsServer` 二进制。`AppendWorldFacts` 从 cvar、`WITH_EDITOR` 与 `UNetConnection`
+读回状态写进报告，`BuildNetDeclarationReport()` 导出真实 FProperty 参数规格与
+`RepSchemaVersion` / `VariantRepSchemaVersion`，因此改目录名冒充不了变体、声明不一致也混不过去。产物落在
 `net/scenarios/<Name>/` 与 `net/variants/<Name>/DedicatedServer/`，由 `metadata/net-matrix-gate.json`
 判定；它**不是** UE automation evidence，也不写 `Tools/evidence/index.json`。
-该门禁 fail-closed：缺拓扑、缺 peer 日志、PID 不符、伪造 Iris/push-model 标志、场景没跑，都会失败。
-**当前这些场景与变体只有源码和门禁，没有执行证据。**
+该门禁 fail-closed：缺拓扑、缺 peer 日志、PID 不符、伪造 Iris/push-model/Cooked 标志、
+声明指纹不一致或不可区分、缺 Generic 字段 / UStruct 参数、连接字节计数为零、场景没跑，都会失败。
+**当前八类场景与四个变体只有源码和门禁，没有执行证据。**
 
 只看默认计划、不修改配置、不安装工具、不启动编译或 UE：
 

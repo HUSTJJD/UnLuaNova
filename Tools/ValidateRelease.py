@@ -228,9 +228,15 @@ def validate_connected_session(run, backend, directory=None):
     if len(session_id) != 32 or any(c not in "0123456789abcdefABCDEF" for c in session_id):
         errors.append("Missing server-generated session identity")
     reference = server.get("Rpcs", [])
-    if {r.get("Name") for r in reference} != {"FromClient", "FromServer", "ToAll"} or any(
+    # SendPayload carries a UScriptStruct parameter. It is never called by the scenario:
+    # its presence in the registered RPC list is itself the proof that CreateParam built a
+    # real FStructProperty on the runtime UFunction.
+    if {r.get("Name") for r in reference} != {"FromClient", "FromServer", "ToAll", "SendPayload"} or any(
             not r.get("RpcId") for r in reference):
         errors.append("Missing connected RPC declarations")
+    if not any(str(p.get("Type", "")).startswith(("Struct:", "Array:", "Set:", "Map:"))
+               for r in reference for p in r.get("Params", [])):
+        errors.append("No UStruct/container RPC parameter was registered on the connected peers")
     seeds = {a.get("ActorId"): a.get("Challenge") for a in server.get("Actors", [])}
     if set(seeds) != {1, 2} or any(type(seed) is not int or not 1000 <= seed <= 1002000 for seed in seeds.values()):
         return errors + ["Invalid server actor challenges"]
@@ -318,6 +324,16 @@ def validate_connected_session(run, backend, directory=None):
     props = server.get("Props", [])
     if not any(p.get("Name") == "OwnerSecret" and p.get("Condition") == 2 for p in props):
         errors.append("OwnerOnly field missing from connected declaration report")
+    if not any(p.get("TypeSpec") for p in props):
+        errors.append("Generic replicated field with a type spec missing from connected declaration report")
+    # Connected cross-peer schema check: every peer exports the fingerprint of the list it
+    # actually bound. A disagreeing peer must fail here rather than decode into wrong slots.
+    versions = {label: data.get("RepSchemaVersion") for label, data in reports.items()}
+    if any(not isinstance(v, int) for v in versions.values()) or len(set(versions.values())) != 1:
+        errors.append("Cross-peer declaration mismatch in connected session")
+    for label, data in reports.items():
+        if data.get("VariantRepSchemaVersion") == data.get("RepSchemaVersion"):
+            errors.append(f"Declaration fingerprint is not discriminating: {label}")
     for label, data in reports.items():
         owner = data.get("OwnedActorId")
         for actor in data.get("Actors", []):
@@ -357,15 +373,19 @@ def validate_connected_session(run, backend, directory=None):
     return errors
 
 
-# The four connected scenarios and the delivery variants are separate gates: a normal
+# The eight connected scenarios and the delivery variants are separate gates: a normal
 # automation run does not launch three extra process triples, and a missing scenario must not
 # be silently counted as a pass by the ordinary network check. The dedicated net-matrix stage
 # calls these explicitly and fails closed on absent topology/reports.
-NET_SCENARIOS = ("LateJoin", "Reconnect", "Dormancy", "Relevancy")
+NET_SCENARIOS = (
+    "LateJoin", "Reconnect", "Dormancy", "Relevancy",
+    "JoinOrderSwap", "PacketLoss", "SeamlessReconnect", "SchemaMismatch",
+)
 NET_VARIANTS = {
-    "Legacy": {"iris": False, "push": None},
-    "PushOff": {"iris": False, "push": False},
-    "Iris": {"iris": True, "push": None},
+    "Legacy": {"iris": False, "push": None, "cooked": False},
+    "PushOff": {"iris": False, "push": False, "cooked": False},
+    "Iris": {"iris": True, "push": None, "cooked": False},
+    "Cooked": {"iris": False, "push": None, "cooked": True},
 }
 
 
@@ -404,6 +424,33 @@ def validate_net_scenario(run, name, backend):
         if not log.is_file() or log.stat().st_size == 0:
             errors.append(f"{name}: missing peer log: {label}")
 
+        # Cross-peer declaration identity, checked in EVERY scenario. Every peer exports the
+        # fingerprint of the declaration list it actually bound, so a disagreeing peer is
+        # rejected here instead of decoding a Generic payload into the wrong slot. The
+        # deliberately-different VariantRepSchemaVersion proves the fingerprint is not a
+        # constant that would make "all equal" vacuous.
+        version = data.get("RepSchemaVersion")
+        probe = data.get("VariantRepSchemaVersion")
+        if not isinstance(version, int) or version != server.get("RepSchemaVersion"):
+            errors.append(f"{name}: cross-peer declaration mismatch: {label}")
+        if not isinstance(probe, int) or probe == version:
+            errors.append(f"{name}: declaration fingerprint cannot distinguish schemas: {label}")
+        if data.get("Cooked") is not (variant == "Cooked"):
+            errors.append(f"{name}: cooked binary flag does not match the variant: {label}")
+        stats = data.get("NetStats", {})
+        if not isinstance(stats, dict) or stats.get("OutTotalBytes", 0) <= 0:
+            errors.append(f"{name}: no real connection byte counters: {label}")
+
+    # The connected form of arbitrary-UStruct/container acceptance: the Generic field's
+    # TypeSpec and the runtime-built FStructProperty parameter must both be visible in the
+    # declaration report. A peer that failed to build the property has no such RPC at all.
+    if not any(p.get("TypeSpec") for p in server.get("Props", [])):
+        errors.append(f"{name}: no Generic replicated field with a type spec")
+    spec_params = [p for r in server.get("Rpcs", []) for p in r.get("Params", [])
+                   if str(p.get("Type", "")).startswith(("Struct:", "Array:", "Set:", "Map:"))]
+    if not spec_params:
+        errors.append(f"{name}: no UStruct/container RPC parameter was registered")
+
     if name == "LateJoin":
         if server.get("ClientsAtSpawn") != 1 or server.get("ClientsFinal") != 2:
             errors.append("LateJoin: actors must exist before the second client connects")
@@ -434,6 +481,47 @@ def validate_net_scenario(run, name, backend):
             errors.append("Relevancy: non-owner still sees the owner-only actor")
         if 2 not in reports["Client2"].get("VisibleActorIds", []):
             errors.append("Relevancy: owner cannot see the owner-only actor")
+    elif name == "JoinOrderSwap":
+        if server.get("ClientsAtSpawn") != 1 or server.get("ClientsFinal") != 2:
+            errors.append("JoinOrderSwap: staggered spawn was not exercised")
+        if reports["Client1"].get("JoinedAfterSpawn") is not True:
+            errors.append("JoinOrderSwap: the later client did not observe pre-existing state")
+        if not (by_label["Client1"].get("launch_serial", 0) > by_label["Client2"].get("launch_serial", 0)):
+            errors.append("JoinOrderSwap: launch order was not actually swapped")
+    elif name == "PacketLoss":
+        if server.get("PacketLossPct", 0) <= 0 or any(
+                r.get("PacketLossPct") != server.get("PacketLossPct") for r in reports.values()):
+            errors.append("PacketLoss: packet emulation was not requested on every peer")
+        final = server.get("FlushedValue", 0)
+        if final == 0:
+            errors.append("PacketLoss: no final field update was published")
+        for label in ("Client1", "Client2"):
+            if reports[label].get("FinalValue") != final:
+                errors.append(f"PacketLoss: replication did not converge on {label}")
+    elif name == "SeamlessReconnect":
+        client1 = by_label["Client1"]
+        # The process must NOT have been replaced: this is a UNetConnection-level reconnect,
+        # which is a different scenario from RestartPeer.
+        if client1.get("launch_count") != 1 or client1.get("first_pid") != client1.get("pid"):
+            errors.append("SeamlessReconnect: a process replacement is not a connection-level reconnect")
+        if reports["Client1"].get("ConnectionLevelReconnectCount", 0) < 1:
+            errors.append("SeamlessReconnect: Client1 never reopened its connection in-process")
+        if any(reports[label].get("ConnectionLevelReconnectCount", 0) != 0
+               for label in ("Server", "Client2")):
+            errors.append("SeamlessReconnect: an unexpected peer also reconnected")
+        if server.get("ConnectionDrops", 0) < 1 or server.get("ClientsFinal") != 2:
+            errors.append("SeamlessReconnect: server did not observe a close and recovery")
+        if not server.get("ClosedConnectionAddress"):
+            errors.append("SeamlessReconnect: no closed connection was identified")
+    elif name == "SchemaMismatch":
+        # The generic cross-peer checks above are the assertion. Additionally require a mixed
+        # declaration list so a trivially empty schema cannot stand in for the real one.
+        props = server.get("Props", [])
+        if not any(p.get("Condition") == 2 for p in props) or not any(p.get("TypeSpec") for p in props):
+            errors.append("SchemaMismatch: declaration list lacks the mixed conditional/Generic fields")
+        for label, data in reports.items():
+            if data.get("Props") != props or data.get("Rpcs") != server.get("Rpcs"):
+                errors.append(f"SchemaMismatch: declaration export differs on {label}")
     else:
         errors.append(f"{name}: unknown scenario")
     return errors
@@ -468,8 +556,21 @@ def validate_net_variants(run, backend):
                 errors.append(f"net-variant:{name}: topology variant mismatch")
             if Counter(p.get("label") for p in topology.get("peers", [])) != Counter(labels):
                 errors.append(f"net-variant:{name}: three connected peers required")
+            # Cooked is a real packaged binary, not a renamed directory: the topology records
+            # the executable each peer launched, and the report records WITH_EDITOR at build
+            # time. Both must agree with the manifest.
+            if spec["cooked"]:
+                exe = str(topology.get("exe", ""))
+                if not any(marker in exe.replace("\\", "/")
+                           for marker in ("StagedBuilds", "WindowsServer", "/Windows/")):
+                    errors.append(f"net-variant:{name}: topology does not point at a staged/cooked binary")
             for label in labels:
                 data = read_json(directory / f"{label}.json")
+                if data.get("Cooked") is not spec["cooked"]:
+                    errors.append(f"net-variant:{name}: cooked binary flag mismatch: {label}")
+                stats = data.get("NetStats", {})
+                if not isinstance(stats, dict) or stats.get("OutTotalBytes", 0) <= 0:
+                    errors.append(f"net-variant:{name}: no real connection byte counters: {label}")
                 if data.get("Variant") != name:
                     errors.append(f"net-variant:{name}: variant provenance mismatch: {label}")
                 if data.get("IrisEnabled") is not spec["iris"]:
