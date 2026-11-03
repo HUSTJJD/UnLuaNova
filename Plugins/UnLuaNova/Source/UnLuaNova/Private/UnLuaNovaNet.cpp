@@ -19,6 +19,7 @@
 #include "LuaFunction.h"
 #include "LuaOverridesClass.h"
 #include "UnLuaNovaBase.h"
+#include "UnLuaNovaNetPayload.h"
 #include "UObject/UnrealType.h"
 #include <initializer_list>
 
@@ -503,8 +504,12 @@ namespace UnLuaNova
             if (ConditionType != LUA_TNIL && (ConditionType != LUA_TSTRING
                 || !ParseLifetimeCondition(ConditionText, Decl.Condition)))
                 return Reject(TEXT("Unknown or malformed replication condition."));
-            if (Decl.Condition != COND_None)
-                return Reject(TEXT("Conditional fields require a stable class layout; only None is currently supported."));
+            // A condition is only accepted if there is storage registered with that condition.
+            // Anything else is rejected here rather than downgraded to None: silently sending
+            // an owner-only value to everyone is worse than refusing to replicate the field.
+            ELuaNetConditionGroup Group = ELuaNetConditionGroup::None;
+            if (!ConditionToGroup(Decl.Condition, Group))
+                return Reject(TEXT("Unsupported replication condition. COND_Custom and COND_Dynamic are refused by the engine on subobjects, and the Replay* conditions are not decided here."));
 
             Decls.Add(Decl);
             lua_pop(L, 1); // the entry
@@ -540,8 +545,20 @@ namespace UnLuaNova
         if (!Class)
             return Empty;
 
-        if (const auto* Found = RepProps.Find(Class))
-            return Found->Decls;
+        // A blueprint subclass usually has no Lua module of its own; the declaration lives on
+        // the native parent it was bound to. Walk the class chain so such a subclass still
+        // replicates its parent's fields instead of silently replicating nothing.
+        //
+        // The first class with a declaration wins. This is deliberately *replacement*, not
+        // concatenation: the wire layout is derived from the declaration list on both peers,
+        // so merging parent and child lists would change the indices of every field and would
+        // need a new schema-negotiation protocol. A subclass that wants a different layout
+        // declares its own complete list.
+        for (const UClass* Current = Class; Current; Current = Current->GetSuperClass())
+        {
+            if (const auto* Found = RepProps.Find(Current))
+                return Found->Decls;
+        }
 
         return Empty;
     }

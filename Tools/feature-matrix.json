@@ -386,8 +386,8 @@
       "examples": [
         "Content/Script/Tests/Net/NetActor.lua"
       ],
-      "gap": "Sorted registration and whole-RPC parameter validation implemented; inheritance, class/net caches, security and cooked acceptance incomplete.",
-      "acceptance": "Connected DS + 2 clients, ownership rejection, reliable/unreliable, reconnect and schema mismatch.",
+      "gap": "Sorted registration, whole-RPC parameter validation, reliable/unreliable flags on all three kinds, and parent-class schema lookup delivered. The engine already rejects a non-owner Server RPC on the server (UNetDriver::ShouldCallRemoteFunction requires RepFlags.bNetOwner), but that path has no connected-peer assertion yet. Reconnect, cooked acceptance and cross-peer schema mismatch remain incomplete.",
+      "acceptance": "Connected DS + 2 clients with an explicit non-owner Server RPC rejection assertion, reconnect, cross-peer schema mismatch and cooked carriers. Reliable/unreliable and declaration syntax are covered by unit cases.",
       "upstream": [
         "slua"
       ],
@@ -410,8 +410,8 @@
       "examples": [
         "Content/Script/Tests/Net/NetActor.lua"
       ],
-      "gap": "Fixed None layout; non-None/malformed declarations rejected atomically and cached schemas immutable. Full conditional layouts and multi-Env cache cleanup remain incomplete.",
-      "acceptance": "Fix layout design; test mixed conditions/types across actors, owner/nonowner, late join and dormancy.",
+      "gap": "One storage group per supported condition (None/InitialOnly/OwnerOnly/SkipOwner/SimulatedOnly/AutonomousOnly/SimulatedOrPhysics/InitialOrOwner); malformed and unsupported declarations (Custom/Dynamic/Replay*) are rejected atomically and cached schemas stay immutable. Connected owner/non-owner acceptance, late join, dormancy and multi-Env cache cleanup remain incomplete.",
+      "acceptance": "The per-condition layout is delivered. Remaining: connected owner/non-owner assertion, mixed conditions/types across actors, late join and dormancy.",
       "upstream": [
         "slua"
       ],
@@ -431,8 +431,8 @@
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp"
       ],
       "examples": [],
-      "gap": "Strict int32/int64 conversion and real bucket round-trip regression sources added, unexecuted. No arbitrary struct/container support or Iris/push acceptance evidence.",
-      "acceptance": "Exact integer boundaries, object resolution, legacy/Iris/push combinations and packaged peers.",
+      "gap": "Strict int32/int64 conversion, scalar and Object bucket round-trips, and per-condition storage covered by unit cases. Arbitrary UStruct / container fields are a scope boundary rather than a TODO: a replicated UPROPERTY cannot be conjured onto a class at runtime, which is why fields live in typed arrays. Iris/push and packaged-peer acceptance still need evidence.",
+      "acceptance": "Legacy / Iris / push-model combinations and packaged peers. Exact integer boundaries and Object resolution are covered by unit cases.",
       "upstream": [
         "slua"
       ],

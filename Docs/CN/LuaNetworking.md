@@ -1,6 +1,12 @@
 # Lua 声明式网络（实验）
 
-当前源码支持声明 RPC 和有限类型的复制字段。**条件复制暂不支持，非 None 条件整份拒绝**；int64 已接入精确编组和输入校验，等待双后端编译、运行验证。本页不作为生产或 Iris 兼容保证。风险与验收统一见 [审计 NET-01 / NET-02](Benchmark_Review.md)。
+当前源码支持声明 RPC 和带条件的复制字段。
+
+**可用的条件**：`None`、`InitialOnly`、`OwnerOnly`、`SkipOwner`、`SimulatedOnly`、`AutonomousOnly`、`SimulatedOrPhysics`、`InitialOrOwner`。每种条件有独立的存储组，字段落进哪个组就按哪个条件发送。
+
+**被拒绝的条件**：`Custom` / `Dynamic`（引擎不支持子对象上的自定义条件）与 Replay 系列（`ReplayOrOwner`、`ReplayOnly`、`SkipReplay` 等）。它们在声明时报错并整份拒绝，**不会降级成 None**——把一个 OwnerOnly 的值悄悄发给所有连接比拒绝复制更糟。
+
+int64 已接入精确编组和输入校验。本页不作为生产或 Iris 兼容保证。风险与验收统一见 [审计 NET-01 / NET-02](Benchmark_Review.md)。
 
 ## RPC 声明
 
@@ -60,13 +66,14 @@ end
 
 也支持 `M.ReplicatedProps` 静态表。Actor 及组件的复制、所有权和网络生命周期必须正确配置。源码按 11 种类型分桶，字段顺序决定桶下标。SchemaVersion 指纹包含字段名、顺序、类型和条件，用于检测声明差异；32 位指纹不是网络安全校验或完整版本协商。
 
-属性声明要求连续数组、唯一且非 None 的 FName、已知类型，条件只能省略或写 `"None"`。首次空声明有效；缓存中的类 schema 不允许改写，完全相同的重复声明幂等。校验失败不会部分注册，也不会替换此前有效 schema。更改字段布局需要完整网络/环境重建，不能依靠热重载。现有全局声明缓存的多 Env 清理归属仍需完善。
+属性声明要求连续数组、唯一且非 None 的 FName、已知类型；`Condition` 可省略（等于 `None`）或写上面列出的任一条件名。字段下标在**（类型, 条件）**内计数：两个 OwnerOnly 的 String 和一个无条件的 String 各自从下标 0 开始，因为它们落在不同组。首次空声明有效；缓存中的类 schema 不允许改写，完全相同的重复声明幂等。校验失败不会部分注册，也不会替换此前有效 schema。更改字段布局需要完整网络/环境重建，不能依靠热重载。现有全局声明缓存的多 Env 清理归属仍需完善。
 
 `UpdateMode=Polled` 默认每 0.1 秒读取 Lua 字段；`Explicit` 需要调用 `MarkFieldDirty`。还提供 `MarkAllFieldsDirty`、`FlushNetUpdate`、`OnRep_<Name>` 和 `OnReplicatedProps(Names)`。显式模式漏标不会发送改动，Flush 请求也不是同帧抵达保证。
 
 ## 必须知道的限制
 
-- 组件复制布局固定为 None，不再从实例 owner 推导；OwnerOnly 等声明被拒绝。旧资产的组件 `Condition` 非 None 时，BeginPlay 禁用其复制。完整的逐字段条件布局及 owner/非 owner 联机验收仍是 P0。
+- 组件上的 `Condition` 属性已废弃：它只用于识别旧资产，非 None 时打一条 Warning 并忽略，**不再禁用复制**；逐字段条件在 `GetLifetimeReplicatedProps` 里声明。
+- 条件组的脏标记粒度是"整组"而不是"每个类型"：一个条件组是一个 UPROPERTY，改组内任一字段会重发整组。无条件字段仍走组件上按类型拆分的数组，保持按类型脏标记。**owner / 非 owner 的联机验收仍是 P0**——单进程用例只能证明分组与下标，证明不了"非属主确实没收到"。
 - int32/int64 读取拒绝小数、NaN、无穷、越界和数字字符串，失败保留旧值。Luau 在 ±2^53 内推入 number，范围外推入原生 integer64；脚本在 number 中已发生的舍入无法恢复，超出精确范围的值应来自 integer64/C++，不能以浮点字面量替代。
 - 数学类型要求对应 userdata，Object 不提供任意子类约束；对象解析、失效和晚加入必须验收。
 - 带类型的 UPROPERTY 和 push-model 宏存在，不等于已证明 Iris、逐元素 delta、压缩收益或运行时回退语义。

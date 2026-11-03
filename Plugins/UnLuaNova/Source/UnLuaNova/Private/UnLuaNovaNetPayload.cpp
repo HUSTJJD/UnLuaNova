@@ -38,20 +38,75 @@ namespace UnLuaNova
         return ELuaNetBucket::Int;
     }
 
+    bool ConditionToGroup(const uint8 Condition, ELuaNetConditionGroup& OutGroup)
+    {
+        switch (Condition)
+        {
+        case COND_None:                OutGroup = ELuaNetConditionGroup::None;               return true;
+        case COND_InitialOnly:         OutGroup = ELuaNetConditionGroup::InitialOnly;        return true;
+        case COND_OwnerOnly:           OutGroup = ELuaNetConditionGroup::OwnerOnly;          return true;
+        case COND_SkipOwner:           OutGroup = ELuaNetConditionGroup::SkipOwner;          return true;
+        case COND_SimulatedOnly:       OutGroup = ELuaNetConditionGroup::SimulatedOnly;      return true;
+        case COND_AutonomousOnly:      OutGroup = ELuaNetConditionGroup::AutonomousOnly;     return true;
+        case COND_SimulatedOrPhysics:  OutGroup = ELuaNetConditionGroup::SimulatedOrPhysics; return true;
+        case COND_InitialOrOwner:      OutGroup = ELuaNetConditionGroup::InitialOrOwner;     return true;
+        default:                       return false;
+        }
+    }
+
+    uint8 GroupToCondition(const ELuaNetConditionGroup Group)
+    {
+        switch (Group)
+        {
+        case ELuaNetConditionGroup::None:               return COND_None;
+        case ELuaNetConditionGroup::InitialOnly:        return COND_InitialOnly;
+        case ELuaNetConditionGroup::OwnerOnly:          return COND_OwnerOnly;
+        case ELuaNetConditionGroup::SkipOwner:          return COND_SkipOwner;
+        case ELuaNetConditionGroup::SimulatedOnly:      return COND_SimulatedOnly;
+        case ELuaNetConditionGroup::AutonomousOnly:     return COND_AutonomousOnly;
+        case ELuaNetConditionGroup::SimulatedOrPhysics: return COND_SimulatedOrPhysics;
+        case ELuaNetConditionGroup::InitialOrOwner:     return COND_InitialOrOwner;
+        }
+
+        return COND_None;
+    }
+
+    const TCHAR* GroupName(const ELuaNetConditionGroup Group)
+    {
+        switch (Group)
+        {
+        case ELuaNetConditionGroup::None:               return TEXT("None");
+        case ELuaNetConditionGroup::InitialOnly:        return TEXT("InitialOnly");
+        case ELuaNetConditionGroup::OwnerOnly:          return TEXT("OwnerOnly");
+        case ELuaNetConditionGroup::SkipOwner:          return TEXT("SkipOwner");
+        case ELuaNetConditionGroup::SimulatedOnly:      return TEXT("SimulatedOnly");
+        case ELuaNetConditionGroup::AutonomousOnly:     return TEXT("AutonomousOnly");
+        case ELuaNetConditionGroup::SimulatedOrPhysics: return TEXT("SimulatedOrPhysics");
+        case ELuaNetConditionGroup::InitialOrOwner:     return TEXT("InitialOrOwner");
+        }
+
+        return TEXT("Unknown");
+    }
+
     void BuildSlots(const TArray<FLuaRepDecl>& Decls, TArray<FLuaNetSlot>& OutSlots)
     {
-        int32 Next[int32(ELuaNetBucket::Max)];
+        int32 Next[int32(ELuaNetConditionGroup::Max)][int32(ELuaNetBucket::Max)];
         FMemory::Memzero(Next);
 
         OutSlots.Reset(Decls.Num());
         for (const FLuaRepDecl& Decl : Decls)
         {
+            ELuaNetConditionGroup Group = ELuaNetConditionGroup::None;
+            if (!ConditionToGroup(Decl.Condition, Group))
+                continue;
+
             FLuaNetSlot Slot;
             Slot.Name = Decl.Name;
             Slot.Type = Decl.Type;
             Slot.Condition = Decl.Condition;
+            Slot.Group = Group;
             Slot.Bucket = BucketForType(Decl.Type);
-            Slot.Index = Next[int32(Slot.Bucket)]++;
+            Slot.Index = Next[int32(Group)][int32(Slot.Bucket)]++;
             OutSlots.Add(Slot);
         }
     }
@@ -65,6 +120,19 @@ namespace UnLuaNova
             if (Slot.Bucket >= ELuaNetBucket::Max)
                 continue;
             ++OutCounts[int32(Slot.Bucket)];
+        }
+    }
+
+    void CountSlotsByGroup(const TArray<FLuaNetSlot>& Slots,
+        int32 (&OutCounts)[int32(ELuaNetConditionGroup::Max)][int32(ELuaNetBucket::Max)])
+    {
+        FMemory::Memzero(OutCounts, sizeof(OutCounts));
+
+        for (const FLuaNetSlot& Slot : Slots)
+        {
+            if (Slot.Group >= ELuaNetConditionGroup::Max || Slot.Bucket >= ELuaNetBucket::Max)
+                continue;
+            ++OutCounts[int32(Slot.Group)][int32(Slot.Bucket)];
         }
     }
 

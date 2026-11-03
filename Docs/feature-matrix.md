@@ -248,9 +248,9 @@ Evidence: `2026-11-02-editor-luau` Luau/Editor: 19/19 passed, 0 failed; `2026-11
 - Tests: [LuaNet.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp), [LuaNetMulticastTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetMulticastTest.cpp)
 - Examples: [NetActor.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Net/NetActor.lua)
 
-Boundary: Sorted registration and whole-RPC parameter validation implemented; inheritance, class/net caches, security and cooked acceptance incomplete.
+Boundary: Sorted registration, whole-RPC parameter validation, reliable/unreliable flags on all three kinds, and parent-class schema lookup delivered. The engine already rejects a non-owner Server RPC on the server (UNetDriver::ShouldCallRemoteFunction requires RepFlags.bNetOwner), but that path has no connected-peer assertion yet. Reconnect, cooked acceptance and cross-peer schema mismatch remain incomplete.
 
-Acceptance: Connected DS + 2 clients, ownership rejection, reliable/unreliable, reconnect and schema mismatch.
+Acceptance: Connected DS + 2 clients with an explicit non-owner Server RPC rejection assertion, reconnect, cross-peer schema mismatch and cooked carriers. Reliable/unreliable and declaration syntax are covered by unit cases.
 
 ### NET-PROPS: Property conditions and schemas
 
@@ -262,9 +262,9 @@ Evidence: `2026-11-02-editor-luau` Luau/Editor: 20/20 passed, 0 failed; `2026-11
 - Tests: [LuaNet.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp), [LuaNetClientServerTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetClientServerTest.cpp)
 - Examples: [NetActor.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Net/NetActor.lua)
 
-Boundary: Fixed None layout; non-None/malformed declarations rejected atomically and cached schemas immutable. Full conditional layouts and multi-Env cache cleanup remain incomplete.
+Boundary: One storage group per supported condition (None/InitialOnly/OwnerOnly/SkipOwner/SimulatedOnly/AutonomousOnly/SimulatedOrPhysics/InitialOrOwner); malformed and unsupported declarations (Custom/Dynamic/Replay*) are rejected atomically and cached schemas stay immutable. Connected owner/non-owner acceptance, late join, dormancy and multi-Env cache cleanup remain incomplete.
 
-Acceptance: Fix layout design; test mixed conditions/types across actors, owner/nonowner, late join and dormancy.
+Acceptance: The per-condition layout is delivered. Remaining: connected owner/non-owner assertion, mixed conditions/types across actors, late join and dormancy.
 
 ### NET-TYPES: Replication types, int64 and Iris/push model
 
@@ -276,9 +276,9 @@ Evidence: `2026-11-02-editor-luau` Luau/Editor: 19/19 passed, 0 failed; `2026-11
 - Tests: [LuaNet.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp)
 - Examples: Missing dedicated evidence.
 
-Boundary: Strict int32/int64 conversion and real bucket round-trip regression sources added, unexecuted. No arbitrary struct/container support or Iris/push acceptance evidence.
+Boundary: Strict int32/int64 conversion, scalar and Object bucket round-trips, and per-condition storage covered by unit cases. Arbitrary UStruct / container fields are a scope boundary rather than a TODO: a replicated UPROPERTY cannot be conjured onto a class at runtime, which is why fields live in typed arrays. Iris/push and packaged-peer acceptance still need evidence.
 
-Acceptance: Exact integer boundaries, object resolution, legacy/Iris/push combinations and packaged peers.
+Acceptance: Legacy / Iris / push-model combinations and packaged peers. Exact integer boundaries and Object resolution are covered by unit cases.
 
 ## Luau
 

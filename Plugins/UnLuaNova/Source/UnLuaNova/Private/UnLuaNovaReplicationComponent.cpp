@@ -40,6 +40,21 @@
     #define UNLUANOVA_PUSH_MODEL 0
 #endif
 
+/**
+ * Register one conditional group with the condition it serves.
+ *
+ * A macro rather than seven copies because the only thing that differs is the property and
+ * its condition, and getting one of them wrong is exactly the kind of silent mistake this
+ * layout is meant to make impossible. UHT never sees this: it lives in a function body.
+ */
+#define UNLUANOVA_REGISTER_GROUP(PropertyName, ConditionValue) \
+    { \
+        FDoRepLifetimeParams GroupParams; \
+        GroupParams.Condition = (ConditionValue); \
+        GroupParams.bIsPushBased = (UNLUANOVA_PUSH_MODEL != 0); \
+        DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, PropertyName, GroupParams); \
+    }
+
 namespace
 {
     /** Puts the Lua table bound to Owner on the stack, and takes it off again. */
@@ -379,6 +394,17 @@ void UUnLuaNovaReplicationComponent::GetLifetimeReplicatedProps(TArray<FLifetime
     // to be there before the data is interpreted, so it is allowed to be polled.
     FDoRepLifetimeParams MetaParams;
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, SchemaVersion, MetaParams);
+
+    // Conditional groups. One registration each, with the condition the group exists for:
+    // UE decides per property, from this registration, and caches it per class - so a Lua
+    // field's condition can only ever be the condition of the property it is stored in.
+    UNLUANOVA_REGISTER_GROUP(GroupInitialOnly, COND_InitialOnly);
+    UNLUANOVA_REGISTER_GROUP(GroupOwnerOnly, COND_OwnerOnly);
+    UNLUANOVA_REGISTER_GROUP(GroupSkipOwner, COND_SkipOwner);
+    UNLUANOVA_REGISTER_GROUP(GroupSimulatedOnly, COND_SimulatedOnly);
+    UNLUANOVA_REGISTER_GROUP(GroupAutonomousOnly, COND_AutonomousOnly);
+    UNLUANOVA_REGISTER_GROUP(GroupSimulatedOrPhysics, COND_SimulatedOrPhysics);
+    UNLUANOVA_REGISTER_GROUP(GroupInitialOrOwner, COND_InitialOrOwner);
 }
 
 void UUnLuaNovaReplicationComponent::BeginPlay()
@@ -389,13 +415,15 @@ void UUnLuaNovaReplicationComponent::BeginPlay()
     if (!Owner)
         return;
 
+    // The component-wide Condition predates per-field conditions and only ever meant "give up".
+    // It is kept so an old asset says something instead of silently changing behaviour, but a
+    // field that wants a condition now declares one and this no longer disables anything.
     if (Condition != COND_None)
     {
-        UE_LOG(LogUnLuaNova, Error, TEXT("Lua replication on '%s' is disabled: instance conditions are unsupported."),
+        UE_LOG(LogUnLuaNova, Warning,
+            TEXT("Lua replication on '%s': component-wide Condition is obsolete and ignored; ")
+            TEXT("declare Condition per field in GetLifetimeReplicatedProps instead."),
             *GetNameSafe(Owner));
-        SetComponentTickEnabled(false);
-        SetIsReplicated(false);
-        return;
     }
 
     const TArray<UnLuaNova::FLuaRepDecl>& Decls = UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Owner->GetClass());
@@ -410,20 +438,28 @@ void UUnLuaNovaReplicationComponent::BeginPlay()
     bDeclared = true;
     UnLuaNova::BuildSlots(Decls, Slots);
 
-    int32 Counts[int32(UnLuaNova::ELuaNetBucket::Max)];
-    UnLuaNova::CountSlots(Slots, Counts);
+    int32 Counts[int32(UnLuaNova::ELuaNetConditionGroup::Max)][int32(UnLuaNova::ELuaNetBucket::Max)];
+    UnLuaNova::CountSlotsByGroup(Slots, Counts);
 
-    Bools.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Bool)]);
-    Ints.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Int)]);
-    Int64s.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Int64)]);
-    Floats.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Float)]);
-    Doubles.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Double)]);
-    Strings.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::String)]);
-    Names.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Name)]);
-    Vectors.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Vector)]);
-    Rotators.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Rotator)]);
-    Transforms.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Transform)]);
-    Objects.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Object)]);
+    // Unconditional fields keep the per-type arrays, so push model stays per-type for them.
+    const int32* Unconditional = Counts[int32(UnLuaNova::ELuaNetConditionGroup::None)];
+    Bools.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Bool)]);
+    Ints.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Int)]);
+    Int64s.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Int64)]);
+    Floats.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Float)]);
+    Doubles.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Double)]);
+    Strings.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::String)]);
+    Names.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Name)]);
+    Vectors.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Vector)]);
+    Rotators.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Rotator)]);
+    Transforms.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Transform)]);
+    Objects.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Object)]);
+
+    for (int32 Group = 1; Group < int32(UnLuaNova::ELuaNetConditionGroup::Max); ++Group)
+    {
+        if (FLuaNetBuckets* Storage = GroupStorage(UnLuaNova::ELuaNetConditionGroup(Group)))
+            Storage->SetNum(Counts[Group]);
+    }
 
     LocalSchemaVersion = UnLuaNova::ComputeSchemaVersion(Decls);
 
@@ -449,6 +485,10 @@ void UUnLuaNovaReplicationComponent::BeginPlay()
         // module was not bound yet at BeginPlay there is no second chance in Explicit mode.
         for (int32 Index = 0; Index < int32(UnLuaNova::ELuaNetBucket::Max); ++Index)
             MarkBucketDirty(UnLuaNova::ELuaNetBucket(Index));
+
+        // Same reason, per group: a group nobody dirties is a group nobody ever receives.
+        for (int32 Group = 1; Group < int32(UnLuaNova::ELuaNetConditionGroup::Max); ++Group)
+            MarkGroupDirty(UnLuaNova::ELuaNetConditionGroup(Group));
 
         FlushNetUpdate();
     }
@@ -566,8 +606,76 @@ void UUnLuaNovaReplicationComponent::MarkBucketDirty(UnLuaNova::ELuaNetBucket Bu
 #endif
 }
 
+void UUnLuaNovaReplicationComponent::MarkGroupDirty(UnLuaNova::ELuaNetConditionGroup Group)
+{
+#if UNLUANOVA_PUSH_MODEL
+    // A group is one property, so this is coarser than MarkBucketDirty by construction: any
+    // change inside the group re-sends the whole group. That is the price of a per-condition
+    // property, and it is why unconditional fields are not stored this way.
+    switch (Group)
+    {
+    case UnLuaNova::ELuaNetConditionGroup::InitialOnly:        MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, GroupInitialOnly, this);        break;
+    case UnLuaNova::ELuaNetConditionGroup::OwnerOnly:          MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, GroupOwnerOnly, this);          break;
+    case UnLuaNova::ELuaNetConditionGroup::SkipOwner:          MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, GroupSkipOwner, this);          break;
+    case UnLuaNova::ELuaNetConditionGroup::SimulatedOnly:      MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, GroupSimulatedOnly, this);      break;
+    case UnLuaNova::ELuaNetConditionGroup::AutonomousOnly:     MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, GroupAutonomousOnly, this);     break;
+    case UnLuaNova::ELuaNetConditionGroup::SimulatedOrPhysics: MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, GroupSimulatedOrPhysics, this); break;
+    case UnLuaNova::ELuaNetConditionGroup::InitialOrOwner:     MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, GroupInitialOrOwner, this);     break;
+    default: break;
+    }
+#endif
+}
+
+FLuaNetBuckets* UUnLuaNovaReplicationComponent::GroupStorage(UnLuaNova::ELuaNetConditionGroup Group)
+{
+    switch (Group)
+    {
+    case UnLuaNova::ELuaNetConditionGroup::InitialOnly:        return &GroupInitialOnly;
+    case UnLuaNova::ELuaNetConditionGroup::OwnerOnly:          return &GroupOwnerOnly;
+    case UnLuaNova::ELuaNetConditionGroup::SkipOwner:          return &GroupSkipOwner;
+    case UnLuaNova::ELuaNetConditionGroup::SimulatedOnly:      return &GroupSimulatedOnly;
+    case UnLuaNova::ELuaNetConditionGroup::AutonomousOnly:     return &GroupAutonomousOnly;
+    case UnLuaNova::ELuaNetConditionGroup::SimulatedOrPhysics: return &GroupSimulatedOrPhysics;
+    case UnLuaNova::ELuaNetConditionGroup::InitialOrOwner:     return &GroupInitialOrOwner;
+    default:                                                  return nullptr;
+    }
+}
+
+bool UUnLuaNovaReplicationComponent::ResolveStorage(const UnLuaNova::FLuaNetSlot& Slot, FLuaNetBucketView& OutView)
+{
+    if (Slot.Group == UnLuaNova::ELuaNetConditionGroup::None)
+    {
+        FLuaNetBucketView View;
+        View.Bools = &Bools;
+        View.Ints = &Ints;
+        View.Int64s = &Int64s;
+        View.Floats = &Floats;
+        View.Doubles = &Doubles;
+        View.Strings = &Strings;
+        View.Names = &Names;
+        View.Vectors = &Vectors;
+        View.Rotators = &Rotators;
+        View.Transforms = &Transforms;
+        View.Objects = &Objects;
+        OutView = View;
+        return OutView.IsValid();
+    }
+
+    if (FLuaNetBuckets* Group = GroupStorage(Slot.Group))
+    {
+        OutView = FLuaNetBucketView::From(*Group);
+        return OutView.IsValid();
+    }
+
+    return false;
+}
+
 bool UUnLuaNovaReplicationComponent::SyncSlot(lua_State* L, int32 TableIdx, const UnLuaNova::FLuaNetSlot& Slot)
 {
+    FLuaNetBucketView View;
+    if (!ResolveStorage(Slot, View))
+        return false;
+
     const FTCHARToUTF8 Key(*Slot.Name.ToString());
 
     switch (Slot.Bucket)
@@ -575,89 +683,91 @@ bool UUnLuaNovaReplicationComponent::SyncSlot(lua_State* L, int32 TableIdx, cons
     case UnLuaNova::ELuaNetBucket::Bool:
     {
         uint8 Value;
-        if (!TryRead(L, TableIdx, Key.Get(), Value) || !Bools.IsValidIndex(Slot.Index) || Same(Bools[Slot.Index], Value))
+        if (!TryRead(L, TableIdx, Key.Get(), Value) || !View.Bools->IsValidIndex(Slot.Index) || Same((*View.Bools)[Slot.Index], Value))
             return false;
-        Bools[Slot.Index] = Value;
+        (*View.Bools)[Slot.Index] = Value;
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Int:
     {
         int32 Value;
-        if (!TryRead(L, TableIdx, Key.Get(), Value) || !Ints.IsValidIndex(Slot.Index) || Same(Ints[Slot.Index], Value))
+        if (!TryRead(L, TableIdx, Key.Get(), Value) || !View.Ints->IsValidIndex(Slot.Index) || Same((*View.Ints)[Slot.Index], Value))
             return false;
-        Ints[Slot.Index] = Value;
+        (*View.Ints)[Slot.Index] = Value;
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Int64:
     {
         int64 Value;
-        if (!TryRead(L, TableIdx, Key.Get(), Value) || !Int64s.IsValidIndex(Slot.Index) || Same(Int64s[Slot.Index], Value))
+        if (!TryRead(L, TableIdx, Key.Get(), Value) || !View.Int64s->IsValidIndex(Slot.Index) || Same((*View.Int64s)[Slot.Index], Value))
             return false;
-        Int64s[Slot.Index] = Value;
+        (*View.Int64s)[Slot.Index] = Value;
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Float:
     {
         float Value;
-        if (!TryRead(L, TableIdx, Key.Get(), Value) || !Floats.IsValidIndex(Slot.Index) || Same(Floats[Slot.Index], Value))
+        if (!TryRead(L, TableIdx, Key.Get(), Value) || !View.Floats->IsValidIndex(Slot.Index) || Same((*View.Floats)[Slot.Index], Value))
             return false;
-        Floats[Slot.Index] = Value;
+        (*View.Floats)[Slot.Index] = Value;
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Double:
     {
         double Value;
-        if (!TryRead(L, TableIdx, Key.Get(), Value) || !Doubles.IsValidIndex(Slot.Index) || Same(Doubles[Slot.Index], Value))
+        if (!TryRead(L, TableIdx, Key.Get(), Value) || !View.Doubles->IsValidIndex(Slot.Index) || Same((*View.Doubles)[Slot.Index], Value))
             return false;
-        Doubles[Slot.Index] = Value;
+        (*View.Doubles)[Slot.Index] = Value;
         return true;
     }
     case UnLuaNova::ELuaNetBucket::String:
     {
         FString Value;
-        if (!TryRead(L, TableIdx, Key.Get(), Value) || !Strings.IsValidIndex(Slot.Index) || Same(Strings[Slot.Index], Value))
+        if (!TryRead(L, TableIdx, Key.Get(), Value) || !View.Strings->IsValidIndex(Slot.Index) || Same((*View.Strings)[Slot.Index], Value))
             return false;
-        Strings[Slot.Index] = MoveTemp(Value);
+        (*View.Strings)[Slot.Index] = MoveTemp(Value);
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Name:
     {
         FName Value;
-        if (!TryRead(L, TableIdx, Key.Get(), Value) || !Names.IsValidIndex(Slot.Index) || Same(Names[Slot.Index], Value))
+        if (!TryRead(L, TableIdx, Key.Get(), Value) || !View.Names->IsValidIndex(Slot.Index) || Same((*View.Names)[Slot.Index], Value))
             return false;
-        Names[Slot.Index] = Value;
+        (*View.Names)[Slot.Index] = Value;
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Vector:
     {
         FVector Value;
-        if (!TryRead(L, TableIdx, Key.Get(), Value) || !Vectors.IsValidIndex(Slot.Index) || Same(Vectors[Slot.Index], Value))
+        if (!TryRead(L, TableIdx, Key.Get(), Value) || !View.Vectors->IsValidIndex(Slot.Index) || Same((*View.Vectors)[Slot.Index], Value))
             return false;
-        Vectors[Slot.Index] = Value;
+        (*View.Vectors)[Slot.Index] = Value;
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Rotator:
     {
         FRotator Value;
-        if (!TryRead(L, TableIdx, Key.Get(), Value) || !Rotators.IsValidIndex(Slot.Index) || Same(Rotators[Slot.Index], Value))
+        if (!TryRead(L, TableIdx, Key.Get(), Value) || !View.Rotators->IsValidIndex(Slot.Index) || Same((*View.Rotators)[Slot.Index], Value))
             return false;
-        Rotators[Slot.Index] = Value;
+        (*View.Rotators)[Slot.Index] = Value;
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Transform:
     {
         FTransform Value;
-        if (!TryRead(L, TableIdx, Key.Get(), Value) || !Transforms.IsValidIndex(Slot.Index) || Same(Transforms[Slot.Index], Value))
+        if (!TryRead(L, TableIdx, Key.Get(), Value) || !View.Transforms->IsValidIndex(Slot.Index) || Same((*View.Transforms)[Slot.Index], Value))
             return false;
-        Transforms[Slot.Index] = Value;
+        (*View.Transforms)[Slot.Index] = Value;
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Object:
     {
         UObject* Value = nullptr;
-        if (!TryRead(L, TableIdx, Key.Get(), Value) || !Objects.IsValidIndex(Slot.Index) || Same(Objects[Slot.Index], Value))
+        if (!TryRead(L, TableIdx, Key.Get(), Value)
+            || !View.Objects->IsValidIndex(Slot.Index)
+            || Same((*View.Objects)[Slot.Index].Get(), Value))
             return false;
-        Objects[Slot.Index] = Value;
+        (*View.Objects)[Slot.Index] = Value;
         return true;
     }
     default:
@@ -676,7 +786,7 @@ bool UUnLuaNovaReplicationComponent::PullSlot(int32 SlotIndex)
 
     if (SyncSlot(Table.L, Table.TableIdx, Slots[SlotIndex]))
     {
-        MarkBucketDirty(Slots[SlotIndex].Bucket);
+        MarkSlotDirty(Slots[SlotIndex]);
         return true;
     }
 
@@ -689,20 +799,41 @@ void UUnLuaNovaReplicationComponent::PullAllSlots()
     if (!Table.bOk)
         return;
 
-    bool bDirty[int32(UnLuaNova::ELuaNetBucket::Max)];
-    FMemory::Memzero(bDirty);
+    bool bDirtyBucket[int32(UnLuaNova::ELuaNetBucket::Max)];
+    bool bDirtyGroup[int32(UnLuaNova::ELuaNetConditionGroup::Max)];
+    FMemory::Memzero(bDirtyBucket);
+    FMemory::Memzero(bDirtyGroup);
 
     for (const UnLuaNova::FLuaNetSlot& Slot : Slots)
     {
-        if (SyncSlot(Table.L, Table.TableIdx, Slot))
-            bDirty[int32(Slot.Bucket)] = true;
+        if (!SyncSlot(Table.L, Table.TableIdx, Slot))
+            continue;
+
+        if (Slot.Group == UnLuaNova::ELuaNetConditionGroup::None)
+            bDirtyBucket[int32(Slot.Bucket)] = true;
+        else
+            bDirtyGroup[int32(Slot.Group)] = true;
     }
 
     for (int32 Index = 0; Index < int32(UnLuaNova::ELuaNetBucket::Max); ++Index)
     {
-        if (bDirty[Index])
+        if (bDirtyBucket[Index])
             MarkBucketDirty(UnLuaNova::ELuaNetBucket(Index));
     }
+
+    for (int32 Group = 1; Group < int32(UnLuaNova::ELuaNetConditionGroup::Max); ++Group)
+    {
+        if (bDirtyGroup[Group])
+            MarkGroupDirty(UnLuaNova::ELuaNetConditionGroup(Group));
+    }
+}
+
+void UUnLuaNovaReplicationComponent::MarkSlotDirty(const UnLuaNova::FLuaNetSlot& Slot)
+{
+    if (Slot.Group == UnLuaNova::ELuaNetConditionGroup::None)
+        MarkBucketDirty(Slot.Bucket);
+    else
+        MarkGroupDirty(Slot.Group);
 }
 
 void UUnLuaNovaReplicationComponent::OnRep_SchemaVersion()
@@ -728,6 +859,18 @@ void UUnLuaNovaReplicationComponent::OnRep_SchemaVersion()
 
 void UUnLuaNovaReplicationComponent::PushBucket(UnLuaNova::ELuaNetBucket Bucket)
 {
+    PushSlots(UnLuaNova::ELuaNetConditionGroup::None, &Bucket);
+}
+
+void UUnLuaNovaReplicationComponent::PushGroup(UnLuaNova::ELuaNetConditionGroup Group)
+{
+    // nullptr means "every bucket": a group arrives as one property, so its RepNotify cannot
+    // know which type changed and has to push all of them.
+    PushSlots(Group, nullptr);
+}
+
+void UUnLuaNovaReplicationComponent::PushSlots(UnLuaNova::ELuaNetConditionGroup Group, const UnLuaNova::ELuaNetBucket* Bucket)
+{
     if (!bDeclared)
         return;
 
@@ -747,7 +890,9 @@ void UUnLuaNovaReplicationComponent::PushBucket(UnLuaNova::ELuaNetBucket Bucket)
     TArray<FName> Changed;
     for (const UnLuaNova::FLuaNetSlot& Slot : Slots)
     {
-        if (Slot.Bucket != Bucket)
+        if (Slot.Group != Group)
+            continue;
+        if (Bucket && Slot.Bucket != *Bucket)
             continue;
 
         if (!ApplySlot(Table.L, Table.TableIdx, Slot))
@@ -796,118 +941,123 @@ void UUnLuaNovaReplicationComponent::PushBucket(UnLuaNova::ELuaNetBucket Bucket)
 
 bool UUnLuaNovaReplicationComponent::ApplySlot(lua_State* L, int32 TableIdx, const UnLuaNova::FLuaNetSlot& Slot)
 {
+    FLuaNetBucketView View;
+    if (!ResolveStorage(Slot, View))
+        return false;
+
     const FTCHARToUTF8 Key(*Slot.Name.ToString());
 
     switch (Slot.Bucket)
     {
     case UnLuaNova::ELuaNetBucket::Bool:
     {
-        if (!Bools.IsValidIndex(Slot.Index))
+        if (!View.Bools->IsValidIndex(Slot.Index))
             return false;
         uint8 Old;
-        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, Bools[Slot.Index]))
+        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, (*View.Bools)[Slot.Index]))
             return false;
-        WriteField(L, TableIdx, Key.Get(), Bools[Slot.Index]);
+        WriteField(L, TableIdx, Key.Get(), (*View.Bools)[Slot.Index]);
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Int:
     {
-        if (!Ints.IsValidIndex(Slot.Index))
+        if (!View.Ints->IsValidIndex(Slot.Index))
             return false;
         int32 Old;
-        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, Ints[Slot.Index]))
+        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, (*View.Ints)[Slot.Index]))
             return false;
-        WriteField(L, TableIdx, Key.Get(), Ints[Slot.Index]);
+        WriteField(L, TableIdx, Key.Get(), (*View.Ints)[Slot.Index]);
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Int64:
     {
-        if (!Int64s.IsValidIndex(Slot.Index))
+        if (!View.Int64s->IsValidIndex(Slot.Index))
             return false;
         int64 Old;
-        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, Int64s[Slot.Index]))
+        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, (*View.Int64s)[Slot.Index]))
             return false;
-        WriteField(L, TableIdx, Key.Get(), Int64s[Slot.Index]);
+        WriteField(L, TableIdx, Key.Get(), (*View.Int64s)[Slot.Index]);
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Float:
     {
-        if (!Floats.IsValidIndex(Slot.Index))
+        if (!View.Floats->IsValidIndex(Slot.Index))
             return false;
         float Old;
-        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, Floats[Slot.Index]))
+        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, (*View.Floats)[Slot.Index]))
             return false;
-        WriteField(L, TableIdx, Key.Get(), Floats[Slot.Index]);
+        WriteField(L, TableIdx, Key.Get(), (*View.Floats)[Slot.Index]);
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Double:
     {
-        if (!Doubles.IsValidIndex(Slot.Index))
+        if (!View.Doubles->IsValidIndex(Slot.Index))
             return false;
         double Old;
-        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, Doubles[Slot.Index]))
+        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, (*View.Doubles)[Slot.Index]))
             return false;
-        WriteField(L, TableIdx, Key.Get(), Doubles[Slot.Index]);
+        WriteField(L, TableIdx, Key.Get(), (*View.Doubles)[Slot.Index]);
         return true;
     }
     case UnLuaNova::ELuaNetBucket::String:
     {
-        if (!Strings.IsValidIndex(Slot.Index))
+        if (!View.Strings->IsValidIndex(Slot.Index))
             return false;
         FString Old;
-        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, Strings[Slot.Index]))
+        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, (*View.Strings)[Slot.Index]))
             return false;
-        WriteField(L, TableIdx, Key.Get(), Strings[Slot.Index]);
+        WriteField(L, TableIdx, Key.Get(), (*View.Strings)[Slot.Index]);
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Name:
     {
-        if (!Names.IsValidIndex(Slot.Index))
+        if (!View.Names->IsValidIndex(Slot.Index))
             return false;
         FName Old;
-        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, Names[Slot.Index]))
+        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, (*View.Names)[Slot.Index]))
             return false;
-        WriteField(L, TableIdx, Key.Get(), Names[Slot.Index]);
+        WriteField(L, TableIdx, Key.Get(), (*View.Names)[Slot.Index]);
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Vector:
     {
-        if (!Vectors.IsValidIndex(Slot.Index))
+        if (!View.Vectors->IsValidIndex(Slot.Index))
             return false;
         FVector Old;
-        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, Vectors[Slot.Index]))
+        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, (*View.Vectors)[Slot.Index]))
             return false;
-        WriteField(L, TableIdx, Key.Get(), Vectors[Slot.Index]);
+        WriteField(L, TableIdx, Key.Get(), (*View.Vectors)[Slot.Index]);
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Rotator:
     {
-        if (!Rotators.IsValidIndex(Slot.Index))
+        if (!View.Rotators->IsValidIndex(Slot.Index))
             return false;
         FRotator Old;
-        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, Rotators[Slot.Index]))
+        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, (*View.Rotators)[Slot.Index]))
             return false;
-        WriteField(L, TableIdx, Key.Get(), Rotators[Slot.Index]);
+        WriteField(L, TableIdx, Key.Get(), (*View.Rotators)[Slot.Index]);
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Transform:
     {
-        if (!Transforms.IsValidIndex(Slot.Index))
+        if (!View.Transforms->IsValidIndex(Slot.Index))
             return false;
         FTransform Old;
-        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, Transforms[Slot.Index]))
+        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, (*View.Transforms)[Slot.Index]))
             return false;
-        WriteField(L, TableIdx, Key.Get(), Transforms[Slot.Index]);
+        WriteField(L, TableIdx, Key.Get(), (*View.Transforms)[Slot.Index]);
         return true;
     }
     case UnLuaNova::ELuaNetBucket::Object:
     {
-        if (!Objects.IsValidIndex(Slot.Index))
+        if (!View.Objects->IsValidIndex(Slot.Index))
             return false;
         UObject* Old = nullptr;
-        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, Objects[Slot.Index]))
+        UObject* const Current = (*View.Objects)[Slot.Index].Get();
+        if (TryRead(L, TableIdx, Key.Get(), Old) && Same(Old, Current))
             return false;
-        WriteField(L, TableIdx, Key.Get(), Objects[Slot.Index]);
+        WriteField(L, TableIdx, Key.Get(), Current);
         return true;
     }
     default:
@@ -926,3 +1076,11 @@ void UUnLuaNovaReplicationComponent::OnRep_Vectors()    { PushBucket(UnLuaNova::
 void UUnLuaNovaReplicationComponent::OnRep_Rotators()   { PushBucket(UnLuaNova::ELuaNetBucket::Rotator); }
 void UUnLuaNovaReplicationComponent::OnRep_Transforms() { PushBucket(UnLuaNova::ELuaNetBucket::Transform); }
 void UUnLuaNovaReplicationComponent::OnRep_Objects()    { PushBucket(UnLuaNova::ELuaNetBucket::Object); }
+
+void UUnLuaNovaReplicationComponent::OnRep_GroupInitialOnly()        { PushGroup(UnLuaNova::ELuaNetConditionGroup::InitialOnly); }
+void UUnLuaNovaReplicationComponent::OnRep_GroupOwnerOnly()          { PushGroup(UnLuaNova::ELuaNetConditionGroup::OwnerOnly); }
+void UUnLuaNovaReplicationComponent::OnRep_GroupSkipOwner()          { PushGroup(UnLuaNova::ELuaNetConditionGroup::SkipOwner); }
+void UUnLuaNovaReplicationComponent::OnRep_GroupSimulatedOnly()      { PushGroup(UnLuaNova::ELuaNetConditionGroup::SimulatedOnly); }
+void UUnLuaNovaReplicationComponent::OnRep_GroupAutonomousOnly()     { PushGroup(UnLuaNova::ELuaNetConditionGroup::AutonomousOnly); }
+void UUnLuaNovaReplicationComponent::OnRep_GroupSimulatedOrPhysics() { PushGroup(UnLuaNova::ELuaNetConditionGroup::SimulatedOrPhysics); }
+void UUnLuaNovaReplicationComponent::OnRep_GroupInitialOrOwner()     { PushGroup(UnLuaNova::ELuaNetConditionGroup::InitialOrOwner); }

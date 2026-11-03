@@ -115,6 +115,48 @@ in the [capability matrix](Docs/feature-matrix.md).
 
 ---
 
+## 🧪 Declarative networking: RPCs declared by Lua (experimental)
+
+In UnLua, Lua can **only re-implement RPCs the engine already declared** -
+`ULuaFunction::IsOverridable()` explicitly excludes functions carrying `FUNC_Net`.
+UnLuaNova lets a script declare its own Server / Client / Multicast RPCs and replicated fields.
+This is one of the few capabilities in this project that **upstream UnLua does not have at all**
+(the three networking groups list only `slua` as their upstream reference in the capability matrix),
+rather than an improvement to something that already existed.
+
+```lua
+local M = UnLuaNova.Class()
+
+M.ServerRPC    = { RequestDamage = { Reliable = true, Params = { "Int", "String" } } }
+M.ClientRPC    = { ShowDamage = true }
+M.MulticastRPC = { Explode = true }
+
+function M:GetLifetimeReplicatedProps()
+    return {
+        { Name = "HP",     Type = "Float" },
+        { Name = "Secret", Type = "String", Condition = "OwnerOnly" },
+    }
+end
+```
+
+Replicated fields support eight conditions (`None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` /
+`SimulatedOnly` / `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`), each with its own
+storage group: UE decides whether to send a property from **the condition it was registered with**,
+and that registration is cached per class and cannot depend on a script value.
+`COND_Custom` / `COND_Dynamic` (the engine refuses custom conditions on subobjects) and the
+Replay* family are rejected with an Error and **never silently downgraded to `None`**.
+
+> [!WARNING]
+> Still **experimental**. Read the three hard limits first: (1) connected owner / non-owner
+> acceptance is not done - single-process cases prove grouping and indices, not that a non-owner
+> received nothing; (2) late join / reconnect / dormancy / relevancy are uncovered; (3) the
+> Iris / push-model packaging matrix is unverified. Replicated fields are limited to eleven
+> built-in types - a UPROPERTY cannot be conjured onto a UClass at runtime, which is the
+> architectural boundary of a pure plugin. See the [capability matrix](Docs/feature-matrix.md)
+> and [Lua-declared networking (experimental)](Docs/EN/LuaNetworking.md).
+
+---
+
 ## ⚡ Performance: measured
 
 Both backends, same machine, same build. Raw data is committed in
@@ -264,7 +306,7 @@ Clear beats flattering. The following are known gaps — a statement of scope, n
 
 | Area | Limit |
 |---|---|
-| **Declarative networking (experimental)** | `COND_None` only. Any non-None condition is **rejected loudly** (an Error log, no silent downgrade). Late join / reconnect, Iris / push model, illegal-RPC rejection, relevancy and dormancy are not covered |
+| **Declarative networking (experimental)** | Conditions supported: `None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` / `SimulatedOnly` / `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`, each with its own storage group. `COND_Custom` / `COND_Dynamic` (the engine refuses custom conditions on subobjects) and the Replay* family are **rejected loudly** (an Error log, no silent downgrade). Not covered: connected owner / non-owner acceptance, late join / reconnect, Iris / push model, illegal-RPC rejection, relevancy and dormancy |
 | **Generated thunks** | Final dispatch still goes through `UObject::ProcessEvent` — static binding removes the runtime reflection lookup and marshalling, not the dispatch. A self-baseline and a 25% regression gate are committed; **no same-machine comparison against slua-unreal / FUnLua yet** |
 | **Luau native codegen** | Opt-in: `lua.codegen.enabled=1` (default 0), narrow it with `lua.codegen.modules`. Applies only to chunks loaded after the switch, and only on Luau + x64/arm64 |
 | **Engine versions and platforms** | Verified on UE **5.8.3 / Win64**. Other engine versions, Linux / Mac / iOS / Android and consoles need their own acceptance |

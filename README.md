@@ -111,6 +111,40 @@ Lua 轮覆盖 33 项 / 626 用例，全部通过）。逐项明细见 [能力矩
 
 ---
 
+## 🧪 声明式网络：让 Lua 自己声明 RPC（实验）
+
+UnLua 里 Lua **只能重写引擎已经声明的 RPC**——`ULuaFunction::IsOverridable()` 明确排除带 `FUNC_Net` 的函数。
+UnLuaNova 让脚本自己声明 Server / Client / Multicast RPC 与复制字段。这是本项目里少有的、
+**上游 UnLua 完全没有**的能力，而不是对既有能力的改良（能力矩阵中这三项的 `upstream` 只有 slua）。
+
+```lua
+local M = UnLuaNova.Class()
+
+M.ServerRPC    = { RequestDamage = { Reliable = true, Params = { "Int", "String" } } }
+M.ClientRPC    = { ShowDamage = true }
+M.MulticastRPC = { Explode = true }
+
+function M:GetLifetimeReplicatedProps()
+    return {
+        { Name = "HP",     Type = "Float" },
+        { Name = "Secret", Type = "String", Condition = "OwnerOnly" },
+    }
+end
+```
+
+复制字段支持 8 种条件（`None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` / `SimulatedOnly` /
+`AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`），每种条件有独立存储组：UE 按**属性注册时的条件**
+决定发不发，而该注册按类缓存、不能由脚本值决定。`COND_Custom` / `COND_Dynamic`（引擎不支持子对象）与
+Replay* 系列被显式拒绝并打 Error，**不会静默降级成 `None`**。
+
+> [!WARNING]
+> 仍是**实验特性**，三条硬边界先读：① owner / 非 owner 的联机验收尚未完成，单进程用例只能证明分组与下标；
+> ② 晚加入 / 断线重连 / dormancy / relevancy 未覆盖；③ Iris / push model 的打包矩阵未验收。
+> 复制字段限定 11 种内建类型——运行时无法把 UPROPERTY 凭空加到 UClass 上，这是纯插件方案的架构边界。
+> 逐项状态见 [能力矩阵](Docs/feature-matrix.md)，用法见 [Lua 声明式网络（实验）](Docs/CN/LuaNetworking.md)。
+
+---
+
 ## ⚡ 性能：实测数据
 
 同一台机器、同一个构建、两个后端互相跑。原始数据已提交在 [`Tools/baseline/perf-lua.json`](Tools/baseline/perf-lua.json) 与 [`perf-luau.json`](Tools/baseline/perf-luau.json)，
@@ -251,7 +285,7 @@ Development / Server / Shipping 三种打包。
 
 | 领域 | 边界 |
 |---|---|
-| **声明式网络（实验）** | 只支持 `COND_None`；非 None 的条件声明会被**显式拒绝**并打 Error，不会静默降级。晚加入 / 重连、Iris / push model、非法 RPC 拒绝、relevancy / dormancy 未覆盖 |
+| **声明式网络（实验）** | 条件支持 `None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` / `SimulatedOnly` / `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`，每种条件一个存储组；`COND_Custom` / `COND_Dynamic`（引擎不支持子对象）与 Replay 系列被**显式拒绝**并打 Error，不静默降级。未覆盖：owner / 非 owner 的联机验收、晚加入 / 重连、Iris / push model、非法 RPC 拒绝、relevancy / dormancy |
 | **生成 thunk** | 最终派发仍经由 `UObject::ProcessEvent`（静态绑定省掉的是反射查找与参数编组）。已提交自比基线与 25% 回退门禁，**尚无与 slua-unreal / FUnLua 的同机对照** |
 | **Luau 原生编译** | 需显式开启：`lua.codegen.enabled=1`（默认 0），可用 `lua.codegen.modules` 限定模块；只对切换后加载的 chunk 生效，且仅 Luau + x64/arm64 |
 | **平台与引擎版本** | 已验证 UE **5.8.3 / Win64**。其他引擎版本、Linux / Mac / iOS / Android、主机平台需各自验收 |

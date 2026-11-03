@@ -1,6 +1,12 @@
 # Lua-declared Networking (Experimental)
 
-RPC and typed replicated fields exist in source. **Non-None conditions reject the entire declaration** until conditional layouts are implemented. Exact int64 conversion and validation are implemented and executed on both backends, including real connected-peer runs; extreme values across transports and mismatched schemas remain specialised gaps. This is not a production/Iris compatibility guarantee. See [NET-01 / NET-02](Benchmark_Review.md).
+RPC and typed replicated fields exist in source, including per-field replication conditions.
+
+**Supported conditions**: `None`, `InitialOnly`, `OwnerOnly`, `SkipOwner`, `SimulatedOnly`, `AutonomousOnly`, `SimulatedOrPhysics`, `InitialOrOwner`. Each one has its own storage group; a field is sent under the condition of the property it lives in.
+
+**Rejected conditions**: `Custom` / `Dynamic` (the engine refuses custom conditions on subobjects) and the Replay* family. They fail the whole declaration with an Error and are **not downgraded to None** - silently sending an owner-only value to every connection would be worse than refusing it.
+
+Exact int64 conversion and validation run on both backends. Connected owner / non-owner acceptance, late join / reconnect and Iris compatibility remain open; this is not a production guarantee. See [NET-01 / NET-02](Benchmark_Review.md).
 
 ```lua
 local M = UnLuaNova.Class()
@@ -24,7 +30,7 @@ Add UUnLuaNovaReplicationComponent and configure actor/component replication and
 
 RPC names are sorted within each kind. Inheritance, existing functions, net caches, reload and cooked ID consistency still require acceptance. Replication uses eleven typed arrays; declaration order selects indices. Schema fingerprints include names, order, types and conditions, but a 32-bit fingerprint is not a security mechanism or full version negotiation.
 
-Property declarations require dense arrays, unique non-None FNames, known types and omitted/None conditions. Empty first declarations are valid. Cached class schemas are immutable; identical redeclarations succeed, invalid or changed declarations preserve the existing schema without partial registration. Schema changes require a full network/environment restart. Ownership of global declaration-cache cleanup across multiple Envs still needs work.
+Property declarations require dense arrays, unique non-None FNames and known types; `Condition` may be omitted (`None`) or name any of the supported conditions. Indices are counted within **(type, condition)**: two OwnerOnly Strings and one unconditional String each start at index 0 of their own group's String array. Empty first declarations are valid. Cached class schemas are immutable; identical redeclarations succeed, invalid or changed declarations preserve the existing schema without partial registration. Schema changes require a full network/environment restart. Ownership of global declaration-cache cleanup across multiple Envs still needs work.
 
 ## Bind Before Connecting
 
@@ -39,7 +45,8 @@ Configured classes bind when Lua activates and are checked again after engine in
 
 ## Limits
 
-- Component layouts now use fixed None conditions, independent of instance owners. OwnerOnly and other conditional declarations are rejected. Old assets with a non-None component Condition disable replication at BeginPlay. Full conditional layouts remain P0 work.
+- The component-wide `Condition` property is obsolete: a non-None value logs a Warning and is ignored, it no longer disables replication. Declare conditions per field in `GetLifetimeReplicatedProps`.
+- A conditional group is dirtied as a whole rather than per type, because a group is one UPROPERTY. Unconditional fields still use per-type dirty tracking. **Connected owner / non-owner acceptance remains P0** - single-process cases prove grouping and indices, not that a non-owner really received nothing.
 - int32/int64 reject fractions, NaN, infinities, overflow and numeric strings, preserving the old value. Luau emits numbers within +/-2^53 and native integer64 outside it. Already-rounded floating point values cannot be recovered; use integer64/C++ for larger exact values.
 - Math values require matching userdata; object resolution and lifetime need tests.
 - Typed UPROPERTY and push-model macros do not prove Iris compatibility, element-level deltas, compression or runtime fallback.

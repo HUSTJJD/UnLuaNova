@@ -345,8 +345,14 @@ void FNetSpec::Define()
         {
             auto* Class = Bound->GetClass();
             const uint32 Before = UnLuaNova::ComputeSchemaVersion(UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class));
+            // OwnerOnly is deliberately not in this list any more: it is a supported condition
+            // now and has storage of its own. What stays rejected is a condition that has no
+            // storage - the engine refuses Custom/Dynamic on subobjects, and replay visibility
+            // is not something this layer decides.
             for (const char* Script : {
-                "return {ReplicatedProps={{Name='Private',Type='String',Condition='OwnerOnly'}}}",
+                "return {ReplicatedProps={{Name='Private',Type='String',Condition='Custom'}}}",
+                "return {ReplicatedProps={{Name='Private',Type='String',Condition='ReplayOnly'}}}",
+                "return {ReplicatedProps={{Name='Private',Type='String',Condition='SkipReplay'}}}",
                 "return {ReplicatedProps={{Name='HP',Type='Float',Condition='Typo'}}}",
                 "return {ReplicatedProps={{Name='HP',Type='Float',Condition=7}}}",
                 "return {ReplicatedProps={{Name='HP',Type='Float',Conditions='OwnerOnly'}}}",
@@ -499,6 +505,272 @@ void FNetSpec::Define()
             // A reordering is a different layout: the index inside a bucket is the position
             // in the declaration list, so swapping two fields would swap their values.
             TEST_TRUE(Make(TEXT("HP"), TEXT("Gold")) != Make(TEXT("Gold"), TEXT("HP")));
+        });
+    });
+
+    Describe(TEXT("条件复制"), [this]()
+    {
+        It(TEXT("支持的条件被接受，落进各自的组并各自从下标 0 开始"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Class = Bound->GetClass();
+            UnLuaNova::FUnLuaNovaNet::Cleanup(Env.Get());
+
+            TEST_TRUE(UnLuaNova::RunChunk(L,
+                "return {ReplicatedProps={"
+                "{Name='Secret',Type='String',Condition='OwnerOnly'},"
+                "{Name='Public',Type='String',Condition='None'}}}"));
+            TEST_TRUE(UnLuaNova::FUnLuaNovaNet::DeclareReplicatedProps(L, -1, Class));
+
+            const TArray<UnLuaNova::FLuaRepDecl>& Decls = UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Class);
+            TEST_EQUAL(Decls.Num(), 2);
+            if (Decls.Num() != 2)
+                return;
+            TEST_EQUAL((int32)Decls[0].Condition, (int32)COND_OwnerOnly);
+            TEST_EQUAL((int32)Decls[1].Condition, (int32)COND_None);
+
+            TArray<UnLuaNova::FLuaNetSlot> Slots;
+            UnLuaNova::BuildSlots(Decls, Slots);
+            TEST_EQUAL(Slots.Num(), 2);
+            if (Slots.Num() != 2)
+                return;
+
+            // Two Strings, one per group, so both start at index 0 of their own group's array.
+            // Sharing one array would put the second at index 1 and - far worse - send the
+            // owner-only value on a property that reaches every connection.
+            TEST_TRUE(Slots[0].Group == UnLuaNova::ELuaNetConditionGroup::OwnerOnly);
+            TEST_EQUAL(Slots[0].Index, 0);
+            TEST_TRUE(Slots[1].Group == UnLuaNova::ELuaNetConditionGroup::None);
+            TEST_EQUAL(Slots[1].Index, 0);
+
+            int32 Counts[int32(UnLuaNova::ELuaNetConditionGroup::Max)][int32(UnLuaNova::ELuaNetBucket::Max)];
+            UnLuaNova::CountSlotsByGroup(Slots, Counts);
+            TEST_EQUAL(Counts[int32(UnLuaNova::ELuaNetConditionGroup::OwnerOnly)][int32(UnLuaNova::ELuaNetBucket::String)], 1);
+            TEST_EQUAL(Counts[int32(UnLuaNova::ELuaNetConditionGroup::None)][int32(UnLuaNova::ELuaNetBucket::String)], 1);
+            lua_pop(L, 1);
+        });
+
+        It(TEXT("条件字段只写它自己那组的存储"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Component = NewObject<UUnLuaNovaReplicationComponent>();
+            Component->GroupOwnerOnly.Strings.SetNum(1);
+
+            UnLuaNova::FLuaNetSlot Slot;
+            Slot.Name = TEXT("Secret");
+            Slot.Bucket = UnLuaNova::ELuaNetBucket::String;
+            Slot.Type = UnLuaNova::ELuaNetParamType::String;
+            Slot.Condition = COND_OwnerOnly;
+            Slot.Group = UnLuaNova::ELuaNetConditionGroup::OwnerOnly;
+
+            TEST_TRUE(UnLuaNova::RunChunk(L, "return {Secret='owner-only'}"));
+            const int32 Table = lua_absindex(L, -1);
+            TEST_TRUE(Component->SyncSlot(L, Table, Slot));
+            TEST_EQUAL(Component->GroupOwnerOnly.Strings[0], FString(TEXT("owner-only")));
+
+            // Nothing about an owner-only field may reach the unconditional arrays, which are
+            // registered COND_None and therefore sent to everyone.
+            TEST_EQUAL(Component->Strings.Num(), 0);
+
+            Component->GroupOwnerOnly.Strings[0] = TEXT("from the wire");
+            lua_pushnil(L);
+            lua_setfield(L, Table, "Secret");
+            TEST_TRUE(Component->ApplySlot(L, Table, Slot));
+            lua_getfield(L, Table, "Secret");
+            TEST_EQUAL(FString(UTF8_TO_TCHAR(lua_tostring(L, -1))), FString(TEXT("from the wire")));
+            lua_pop(L, 2);
+        });
+
+        It(TEXT("没有存储的条件在声明时就被拒绝，而不是降级成 None"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::ELuaNetConditionGroup Group = UnLuaNova::ELuaNetConditionGroup::None;
+
+            TEST_TRUE(UnLuaNova::ConditionToGroup(COND_OwnerOnly, Group));
+            TEST_TRUE(Group == UnLuaNova::ELuaNetConditionGroup::OwnerOnly);
+            TEST_EQUAL((int32)UnLuaNova::GroupToCondition(UnLuaNova::ELuaNetConditionGroup::OwnerOnly), (int32)COND_OwnerOnly);
+
+            // Custom is refused by the engine on subobjects and the Replay* family is not
+            // decided here, so neither may quietly become COND_None.
+            TEST_FALSE(UnLuaNova::ConditionToGroup(COND_Custom, Group));
+            TEST_FALSE(UnLuaNova::ConditionToGroup(COND_ReplayOnly, Group));
+            TEST_FALSE(UnLuaNova::ConditionToGroup(COND_SkipReplay, Group));
+        });
+    });
+
+    Describe(TEXT("Reliability"), [this]()
+    {
+        It(TEXT("Reliable 在三种 RPC 上都被采纳，省略时默认不可靠"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Class = Bound->GetClass();
+
+            TEST_TRUE(UnLuaNova::RunChunk(L,
+                "return {ServerRPC={Given={Reliable=true}, Plain=true},"
+                "ClientRPC={Notify={Reliable=true}},"
+                "MulticastRPC={Boom={Reliable=true}}}"));
+            UnLuaNova::FUnLuaNovaNet::DeclareRPCs(L, -1, Class);
+
+            for (const TCHAR* Name : { TEXT("Given"), TEXT("Notify"), TEXT("Boom") })
+            {
+                UFunction* Function = FindOwn(Class, Name);
+                TEST_TRUE(Function != nullptr);
+                if (!Function)
+                    continue;
+                TEST_TRUE(Function->HasAnyFunctionFlags(FUNC_NetReliable));
+            }
+
+            // `Plain = true` is the shorthand and must stay unreliable, matching UFUNCTION(Server).
+            UFunction* Plain = FindOwn(Class, TEXT("Plain"));
+            TEST_TRUE(Plain != nullptr);
+            if (Plain)
+                TEST_FALSE(Plain->HasAnyFunctionFlags(FUNC_NetReliable));
+
+            lua_pop(L, 1);
+        });
+    });
+
+    Describe(TEXT("存储往返与边界"), [this]()
+    {
+        It(TEXT("object 字段在 Lua 与线值之间往返，缺失表示没有对象"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Component = NewObject<UUnLuaNovaReplicationComponent>();
+            Component->Objects.SetNum(1);
+
+            UObject* Target = NewObject<UObject>();
+            Target->AddToRoot();
+
+            UnLuaNova::FLuaNetSlot Slot;
+            Slot.Name = TEXT("Target");
+            Slot.Bucket = UnLuaNova::ELuaNetBucket::Object;
+            Slot.Type = UnLuaNova::ELuaNetParamType::Object;
+
+            lua_newtable(L);
+            const int32 Table = lua_absindex(L, -1);
+
+            UnLuaNova::PushUObject(L, Target);
+            lua_setfield(L, Table, "Target");
+            TEST_TRUE(Component->SyncSlot(L, Table, Slot));
+            TEST_TRUE(Component->Objects[0].Get() == Target);
+
+            // A missing Lua field is a legitimate "no object", not a read failure - but it
+            // must not be reported as a change when the wire value is already null.
+            lua_pushnil(L);
+            lua_setfield(L, Table, "Target");
+            Component->Objects[0] = nullptr;
+            TEST_FALSE(Component->SyncSlot(L, Table, Slot));
+            TEST_TRUE(Component->Objects[0].Get() == nullptr);
+
+            Component->Objects[0] = Target;
+            TEST_TRUE(Component->ApplySlot(L, Table, Slot));
+            lua_getfield(L, Table, "Target");
+            TEST_TRUE(UnLuaNova::GetUObject(L, -1) == Target);
+            lua_pop(L, 2);
+
+            Target->RemoveFromRoot();
+        });
+
+        It(TEXT("标量桶在 Lua 与线值之间双向往返"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Component = NewObject<UUnLuaNovaReplicationComponent>();
+            Component->Bools.SetNum(1);
+            Component->Ints.SetNum(1);
+            Component->Int64s.SetNum(1);
+            Component->Floats.SetNum(1);
+            Component->Doubles.SetNum(1);
+            Component->Strings.SetNum(1);
+            Component->Names.SetNum(1);
+
+            struct FCase { const TCHAR* Name; UnLuaNova::ELuaNetBucket Bucket; UnLuaNova::ELuaNetParamType Type; };
+            const FCase Cases[] =
+            {
+                { TEXT("B"), UnLuaNova::ELuaNetBucket::Bool,   UnLuaNova::ELuaNetParamType::Bool },
+                { TEXT("I"), UnLuaNova::ELuaNetBucket::Int,    UnLuaNova::ELuaNetParamType::Int },
+                { TEXT("L"), UnLuaNova::ELuaNetBucket::Int64,  UnLuaNova::ELuaNetParamType::Int64 },
+                { TEXT("F"), UnLuaNova::ELuaNetBucket::Float,  UnLuaNova::ELuaNetParamType::Float },
+                { TEXT("D"), UnLuaNova::ELuaNetBucket::Double, UnLuaNova::ELuaNetParamType::Double },
+                { TEXT("S"), UnLuaNova::ELuaNetBucket::String, UnLuaNova::ELuaNetParamType::String },
+                { TEXT("N"), UnLuaNova::ELuaNetBucket::Name,   UnLuaNova::ELuaNetParamType::Name },
+            };
+
+            TEST_TRUE(UnLuaNova::RunChunk(L, "return {B=true,I=7,L=123456789,F=1.5,D=2.25,S='hi',N='Tag'}"));
+            const int32 Table = lua_absindex(L, -1);
+
+            auto MakeSlot = [](const FCase& Case)
+            {
+                UnLuaNova::FLuaNetSlot Slot;
+                Slot.Name = Case.Name;
+                Slot.Bucket = Case.Bucket;
+                Slot.Type = Case.Type;
+                return Slot;
+            };
+
+            for (const FCase& Case : Cases)
+                TEST_TRUE(Component->SyncSlot(L, Table, MakeSlot(Case)));
+
+            TEST_EQUAL(Component->Bools[0], uint8(1));
+            TEST_EQUAL(Component->Ints[0], int32(7));
+            TEST_EQUAL(Component->Int64s[0], int64(123456789));
+            TEST_EQUAL(Component->Floats[0], 1.5f);
+            TEST_EQUAL(Component->Doubles[0], 2.25);
+            TEST_EQUAL(Component->Strings[0], FString(TEXT("hi")));
+            TEST_EQUAL(Component->Names[0].ToString(), FString(TEXT("Tag")));
+
+            // Erase the Lua side; ApplySlot has to put the wire values back.
+            for (const FCase& Case : Cases)
+            {
+                const FTCHARToUTF8 Key(Case.Name);
+                lua_pushnil(L);
+                lua_setfield(L, Table, Key.Get());
+            }
+            for (const FCase& Case : Cases)
+                TEST_TRUE(Component->ApplySlot(L, Table, MakeSlot(Case)));
+
+            lua_getfield(L, Table, "I");
+            TEST_EQUAL(lua_tointeger(L, -1), lua_Integer(7));
+            lua_pop(L, 1);
+            lua_getfield(L, Table, "S");
+            TEST_EQUAL(FString(UTF8_TO_TCHAR(lua_tostring(L, -1))), FString(TEXT("hi")));
+            lua_pop(L, 2);
+        });
+
+        It(TEXT("schema 不匹配时不写 Lua 字段，且只报一次"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto* Component = NewObject<UUnLuaNovaReplicationComponent>();
+            Component->bDeclared = true;
+            Component->LocalSchemaVersion = 0xA;
+            Component->SchemaVersion = 0xB;
+            Component->Ints.SetNum(1);
+            Component->Ints[0] = 123;
+
+            UnLuaNova::FLuaNetSlot Slot;
+            Slot.Name = TEXT("HP");
+            Slot.Bucket = UnLuaNova::ELuaNetBucket::Int;
+            Slot.Type = UnLuaNova::ELuaNetParamType::Int;
+            Component->Slots.Add(Slot);
+
+            TEST_TRUE(UnLuaNova::RunChunk(L, "return {HP=1}"));
+            const int32 Table = lua_absindex(L, -1);
+            AddExpectedError(TEXT("received replicated fields laid out for a different declaration"), EAutomationExpectedErrorFlags::Contains, 1);
+
+            Component->PushBucket(UnLuaNova::ELuaNetBucket::Int);
+
+            lua_getfield(L, Table, "HP");
+            TEST_EQUAL(lua_tointeger(L, -1), lua_Integer(1));
+            lua_pop(L, 2);
+            TEST_TRUE(Component->bSchemaMismatchReported);
+        });
+
+        It(TEXT("子类没有自己的声明时沿用父类的 schema"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::FUnLuaNovaNet::Cleanup(nullptr);
+            TEST_TRUE(UnLuaNova::RunChunk(L, "return {ReplicatedProps={{Name='Inherited',Type='Int'}}}"));
+            TEST_TRUE(UnLuaNova::FUnLuaNovaNet::DeclareReplicatedProps(L, -1, UObject::StaticClass()));
+
+            const TArray<UnLuaNova::FLuaRepDecl>& Decls =
+                UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Bound->GetClass());
+            TEST_EQUAL(Decls.Num(), 1);
+            if (Decls.Num() == 1)
+                TEST_TRUE(Decls[0].Name == FName(TEXT("Inherited")));
+
+            lua_pop(L, 1);
+            UnLuaNova::FUnLuaNovaNet::Cleanup(nullptr);
         });
     });
 }

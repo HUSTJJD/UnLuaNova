@@ -17,6 +17,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Engine/EngineBaseTypes.h"
+#include "UnLuaNovaNetBuckets.h"
 #include "UnLuaNovaNetPayload.h"
 #include "UnLuaNovaReplicationComponent.generated.h"
 
@@ -71,8 +72,14 @@ enum class ELuaNetUpdateMode : uint8
  * - **push model**: every bucket is registered `bIsPushBased` and is dirtied individually,
  *   so changing a Float does not make the replication system look at the actor's Strings.
  *   A change that nobody marks dirty is simply not sent - which is why UpdateMode =
- *   Explicit is the mode that actually pays off.
- * - **Conditions**: only None is accepted until a stable per-condition layout is provided.
+ *   Explicit is the mode that actually pays off. This per-type granularity applies to
+ *   unconditional fields; a conditional group is a single property and is dirtied as a whole.
+ * - **Conditions**: None, InitialOnly, OwnerOnly, SkipOwner, SimulatedOnly, AutonomousOnly,
+ *   SimulatedOrPhysics and InitialOrOwner are supported. Each has its own storage group
+ *   (see UnLuaNovaNetBuckets.h) because UE decides what to send from the property's own
+ *   registration, which is cached per class and cannot depend on a script value.
+ *   COND_Custom / COND_Dynamic are rejected: the engine refuses them on subobjects, and this
+ *   is a component. The Replay* family is rejected too - replay visibility is not decided here.
  *   Legacy, Iris and push-model delivery still require connected-peer acceptance tests.
  */
 UCLASS(ClassGroup = (UnLuaNova), meta = (BlueprintSpawnableComponent))
@@ -131,6 +138,16 @@ protected:
     UFUNCTION() void OnRep_Transforms();
     UFUNCTION() void OnRep_Objects();
     UFUNCTION() void OnRep_SchemaVersion();
+
+    // One RepNotify per conditional group. A group arrives as one property, so its notify
+    // pushes every bucket in it rather than a single type.
+    UFUNCTION() void OnRep_GroupInitialOnly();
+    UFUNCTION() void OnRep_GroupOwnerOnly();
+    UFUNCTION() void OnRep_GroupSkipOwner();
+    UFUNCTION() void OnRep_GroupSimulatedOnly();
+    UFUNCTION() void OnRep_GroupAutonomousOnly();
+    UFUNCTION() void OnRep_GroupSimulatedOrPhysics();
+    UFUNCTION() void OnRep_GroupInitialOrOwner();
 
 private:
     friend class FNetSpec;
@@ -191,12 +208,56 @@ private:
     TArray<FTransform> Transforms;
 
     UPROPERTY(ReplicatedUsing = OnRep_Objects)
-    TArray<UObject*> Objects;
+    TArray<TObjectPtr<UObject>> Objects;
+
+    // --- conditional groups ------------------------------------------------
+    //
+    // One group per supported condition. These are structs rather than more arrays so that a
+    // condition costs one property registration, one dirty flag and one RepNotify while still
+    // serialising natively (Object references included). Unconditional fields stay on the
+    // arrays above, where push model keeps its per-type granularity.
+
+    UPROPERTY(ReplicatedUsing = OnRep_GroupInitialOnly)
+    FLuaNetBuckets GroupInitialOnly;
+
+    UPROPERTY(ReplicatedUsing = OnRep_GroupOwnerOnly)
+    FLuaNetBuckets GroupOwnerOnly;
+
+    UPROPERTY(ReplicatedUsing = OnRep_GroupSkipOwner)
+    FLuaNetBuckets GroupSkipOwner;
+
+    UPROPERTY(ReplicatedUsing = OnRep_GroupSimulatedOnly)
+    FLuaNetBuckets GroupSimulatedOnly;
+
+    UPROPERTY(ReplicatedUsing = OnRep_GroupAutonomousOnly)
+    FLuaNetBuckets GroupAutonomousOnly;
+
+    UPROPERTY(ReplicatedUsing = OnRep_GroupSimulatedOrPhysics)
+    FLuaNetBuckets GroupSimulatedOrPhysics;
+
+    UPROPERTY(ReplicatedUsing = OnRep_GroupInitialOrOwner)
+    FLuaNetBuckets GroupInitialOrOwner;
 
     // --- internals ---------------------------------------------------------
 
-    /** Mark one bucket dirty for push model. No-op when push model is not compiled in. */
+    /** Storage for one conditional group. Returns null for Group::None, which uses the arrays above. */
+    FLuaNetBuckets* GroupStorage(UnLuaNova::ELuaNetConditionGroup Group);
+
+    /**
+     * Where a slot's value lives: the unconditional arrays, or its condition's group.
+     *
+     * @return false when the slot carries a condition this component has no storage for.
+     */
+    bool ResolveStorage(const UnLuaNova::FLuaNetSlot& Slot, FLuaNetBucketView& OutView);
+
+    /** Mark one unconditional bucket dirty for push model. No-op when push model is compiled out. */
     void MarkBucketDirty(UnLuaNova::ELuaNetBucket Bucket);
+
+    /** Mark one whole conditional group dirty. No-op for Group::None and when compiled out. */
+    void MarkGroupDirty(UnLuaNova::ELuaNetConditionGroup Group);
+
+    /** Dirty whatever a slot lives in: its bucket for unconditional fields, its group otherwise. */
+    void MarkSlotDirty(const UnLuaNova::FLuaNetSlot& Slot);
 
     /** Read one declared field out of the Lua table; true when the wire value changed. */
     bool SyncSlot(lua_State* L, int32 TableIdx, const UnLuaNova::FLuaNetSlot& Slot);
@@ -204,8 +265,14 @@ private:
     bool PullSlot(int32 SlotIndex);
     void PullAllSlots();
 
-    /** Write one bucket's fields into the Lua table and fire the per-field RepNotifies. */
+    /** Write one unconditional bucket's fields into the Lua table and fire the RepNotifies. */
     void PushBucket(UnLuaNova::ELuaNetBucket Bucket);
+
+    /** Write every bucket of one conditional group into the Lua table and fire the RepNotifies. */
+    void PushGroup(UnLuaNova::ELuaNetConditionGroup Group);
+
+    /** Shared push path. Bucket == nullptr means every bucket of the group. */
+    void PushSlots(UnLuaNova::ELuaNetConditionGroup Group, const UnLuaNova::ELuaNetBucket* Bucket);
 
     /** Write one received value into the Lua table; true when it differed. */
     bool ApplySlot(lua_State* L, int32 TableIdx, const UnLuaNova::FLuaNetSlot& Slot);
