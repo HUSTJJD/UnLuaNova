@@ -1,6 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLuaNova available.
-//
-// Copyright (C) 2019 Tencent. All rights reserved.
+// Copyright (c) 2026 UnLuaNova contributors
 //
 // Licensed under the MIT License (the "License");
 // you may not use this file except in compliance with the License. You may obtain a copy of the License at
@@ -54,6 +52,26 @@ namespace UnLuaNovaTestSuite
         if (bValid) Value = static_cast<int32>(lua_tointeger(L, -1));
         lua_settop(L, Top);
         return bValid;
+    }
+
+    /**
+     * Read the OwnerOnly field back out of the Lua table. -1 means the field is absent, which
+     * is exactly what a non-owning connection must report: an OwnerOnly value that never
+     * arrived is a passing result, not a missing one.
+     */
+    static int32 ReadConnectedSecret(AUnLuaNovaTestNetActor* Actor)
+    {
+        UnLuaNova::FLuaEnv* Env = IUnLuaNovaModule::Get().GetEnv(Actor);
+        if (!Env) return -1;
+        lua_State* L = Env->GetMainState();
+        const int32 Ref = Env->GetObjectRegistry()->GetBoundRef(Actor);
+        if (Ref == LUA_NOREF) return -1;
+        const int32 Top = lua_gettop(L);
+        lua_rawgeti(L, LUA_REGISTRYINDEX, Ref);
+        lua_getfield(L, -1, "OwnerSecret");
+        const int32 Value = lua_isnumber(L, -1) ? static_cast<int32>(lua_tointeger(L, -1)) : -1;
+        lua_settop(L, Top);
+        return Value;
     }
 
     static FString ExpectedConnectedLog(int32 Seed, int32 Rounds, bool bServer, bool bOwner, bool bAck = false)
@@ -167,6 +185,7 @@ namespace UnLuaNovaTestSuite
             Data->SetNumberField(TEXT("Challenge"), Actor->EngineReplicatedInt);
             Data->SetNumberField(TEXT("HP"), Hp);
             Data->SetBoolField(TEXT("HpReadable"), bHpRead);
+            Data->SetNumberField(TEXT("OwnerSecret"), ReadConnectedSecret(Actor));
             Data->SetBoolField(TEXT("Authority"), Actor->HasAuthority());
             Data->SetBoolField(TEXT("Owned"), Actor->NetTestActorId == OwnedActorId);
             Data->SetStringField(TEXT("CallLog"), Actor->CallLog);
@@ -206,6 +225,8 @@ namespace UnLuaNovaTestSuite
             Data->SetArrayField(TEXT("Observations"), Observations);
             Data->SetStringField(TEXT("Fault"), Fault);
             Data->SetNumberField(TEXT("FirstRoundObservationMs"), FirstRoundObservationMs);
+            Data->SetBoolField(TEXT("NonOwnerRpcAttempted"), bNonOwnerRpcAttempted);
+            Data->SetStringField(TEXT("NonOwnerRpcToken"), NonOwnerRpcToken);
             return Data;
         }
 
@@ -278,8 +299,27 @@ namespace UnLuaNovaTestSuite
                 if (!bRequestSent)
                 {
                     for (const auto& Actor : Actors)
-                        if (Actor->NetTestActorId == OwnedActorId && Fault != TEXT("SkipServerRpc"))
+                    {
+                        if (Fault == TEXT("SkipServerRpc"))
+                            continue;
+
+                        if (Actor->NetTestActorId == OwnedActorId)
+                        {
                             InvokeRpc(Actor.Get(), TEXT("FromClient"), Actor->EngineReplicatedInt + Phase * 10 + 1);
+                        }
+                        else if (Phase == 0)
+                        {
+                            // A Server RPC from a client that does not own this actor must be
+                            // dropped by the server: UNetDriver::ShouldCallRemoteFunction requires
+                            // RepFlags.bNetOwner. Use a value far outside every legitimate round
+                            // token, so the exact CallLog assertions below (and the release gate)
+                            // prove it never executed rather than merely never being attempted.
+                            const int32 RejectedValue = Actor->EngineReplicatedInt + 7000000;
+                            InvokeRpc(Actor.Get(), TEXT("FromClient"), RejectedValue);
+                            bNonOwnerRpcAttempted = true;
+                            NonOwnerRpcToken = ConnectedRpcToken(TEXT("FromClient"), RejectedValue);
+                        }
+                    }
                     bRequestSent = true;
                     if (Phase == 0) FirstRequestAt = FPlatformTime::Seconds();
                 }
@@ -321,6 +361,8 @@ namespace UnLuaNovaTestSuite
         bool bRequestSent = false;
         bool bReportWritten = false;
         bool bSecondRoundReleased = false;
+        bool bNonOwnerRpcAttempted = false;
+        FString NonOwnerRpcToken;
         double StartedAt = 0.0;
         double FirstRequestAt = 0.0;
         double FirstRoundObservationMs = 0.0;

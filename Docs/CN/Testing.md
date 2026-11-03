@@ -107,6 +107,25 @@ Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混
 
 `-SkipBuild`、`-BuildOnly`、`-NullRHI`、`-NoReport`、单后端和自定义 filter 均限 Development。release 拒绝这些降低覆盖范围的选项。旧的 nightly build 注册器也使用 Development，仅检查编译，不代表 release 验收。
 
+### 联网矩阵（独立 opt-in）
+
+四类连接场景与 Legacy / PushOff / Iris 变体各起三个真实进程，不进普通测试矩阵，也不属于
+常规 Release 的 33 个阶段：
+
+```powershell
+.\Tools\RunTests.ps1 -Profile Development -NetMatrix -Backend Lua -SkipBuild
+python Tools\ValidateRelease.py --net-matrix --run Saved\ReleaseTests\net-matrix\Lua --backend Lua --carrier game
+```
+
+底层脚本是 `Tools/RunNetMatrix.ps1`；`-ExtraArgs` 用于把 `-UnLuaNovaNetScenarios` 和变体的
+真实引擎开关（`-UseIrisReplication=1` 或 push-model cvar 的 ini 覆盖）传到进程命令行，
+`UNLUANOVA_TEST_NET_VARIANT` 由 `FNetSession` 再传给每个 peer。`AppendWorldFacts` 从 cvar
+读回状态写进报告，因此改目录名冒充不了变体。产物落在
+`net/scenarios/<Name>/` 与 `net/variants/<Name>/DedicatedServer/`，由 `metadata/net-matrix-gate.json`
+判定；它**不是** UE automation evidence，也不写 `Tools/evidence/index.json`。
+该门禁 fail-closed：缺拓扑、缺 peer 日志、PID 不符、伪造 Iris/push-model 标志、场景没跑，都会失败。
+**当前这些场景与变体只有源码和门禁，没有执行证据。**
+
 只看默认计划、不修改配置、不安装工具、不启动编译或 UE：
 
 ```powershell
@@ -133,10 +152,10 @@ Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混
 
 验证状态（只对应 2026-11-03 基线轮：`-Baseline`、`Saved/ReleaseTests/baseline`、commit `347bb8c5`）：33/33 阶段通过、2482/2482 次 UE 执行、0 失败、0 跳过 —— Lua Editor 626、Lua cooked 600、Luau Editor 641、Luau cooked 615；四组真实 DS + 双客户端（DedicatedServer 与 Multicast）及证据门禁均通过，两个后端 Development / Server / Shipping 打包成功。41 项 Python 工具测试与 PowerShell 支持检查通过。静态检查零错误，保留 Lua 298 条、Luau 7 条警告（都是分析器对 `package.path` 式 require 的已知限制，不影响加载）。LuaLS 与 luau-lsp 都是直接用子模块构建出的可执行文件，构建过程不修改子模块源码；LuaLS 的 bee 依赖仍有两项上游固定跳过。Release22 的旧 DedicatedServer 不构成传输证据；历史失败与验收边界见下方回归记录。
 
-最近一次常规验证（`Saved/ReleaseTests/test`）`complete=true`、`passed=false`：Luau Editor 的
-`UnLuaNova.Perf.Benchmark` 有 5 项超过 25% 门禁，`Luau-editor-tests` 失败、
-`Luau-editor-evidence` 被阻塞，其余阶段通过或复用缓存。两轮之间产品源码零改动，运行清单与
-进程优先级一致，属测量环境干扰待复核；基线不替换、门禁不放宽。**当前发布状态以最新一轮为准：
-未通过。**
+**当前发布状态：未通过**（以 `Saved/ReleaseTests/test/release-summary.json` 为准）。
+后续多轮常规验证中：Luau Editor 的性能回退已排除为代码回归（源码零改动、清单与优先级一致，
+重跑 641/641 且门禁通过）；UBT 全局锁冲突 / 编译进程被外部中断曾使打包与构建阶段失败；
+当前工作树未提交的 Net 源码改动使 2 个 `UnLuaNova.API.Net.*` 用例失败。基线不替换、
+门禁不放宽；发布前需冻结工作树、同步能力矩阵，并在无并发构建环境重跑完整 Release。
 
 历史修复过程与诊断记录见 [2026-10-24 回归记录](Regression_20261024.md)。静态检查保留所有警告和分析器原始 `analyzer_exit`；最终 `exit` 依据错误级诊断判定。仅警告不阻断，类型错误、异常退出和缺少结果均失败。

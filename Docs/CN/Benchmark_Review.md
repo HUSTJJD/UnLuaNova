@@ -23,7 +23,7 @@ Luau 0.744 与当前 pin 的公开 VM 头文件一致，但 18 个 VM 实现文�
 
 | ID / 优先级 | 源码事实与影响 | 下一步及通过条件 |
 |---|---|---|
-| NET-01 / P0 | 已移除实例推导条件，固定 None 布局；非 None 声明整份拒绝，旧组件条件禁用复制。**复制声明已按 Env 归属**（2026-11-02 修）：`FUnLuaNovaNet::Cleanup(Env)` 只清该 Env 声明的及类已失效的条目，关闭一个 Env 不再抹掉其他 Env 的 schema。完整条件复制仍缺失 | 设计按类型与条件稳定分组的类布局；两个 actor、owner/非 owner、混合条件、加入顺序互换、晚加入、relevancy、dormancy；分别验 legacy/Iris/push model；多 Env 同类的声明与销毁顺序需运行验收 |
+| NET-01 / P0 | **条件布局已交付**：8 种条件各有独立存储组，`(条件组, 类型桶, 下标)` 由声明推导；不支持的 Custom/Dynamic/Never/NetGroup/Replay* 显式拒绝且不降级成 None，单测覆盖分组、下标、读写与拒绝路径。旧组件级 `Condition` 只报警告、不再禁用复制；`Cleanup(Env)` 只清该 Env 声明的及类已失效的条目，无主条目归进程级清理。任意 `UStruct` / 容器已由 RPC 动态 FProperty 与复制 Generic 桶交付（此前"架构边界"的判断是错的），规格参与 `SchemaVersion`，单测覆盖解析 / 嵌套 / 往返 | 剩余全部是**联机验收且尚未执行**：owner/非 owner 可见性、混合条件与非 Owner RPC 拒绝的断言源码及 `ValidateRelease.py` 门禁已补；晚加入 / 进程级重连 / relevancy / dormancy 四类场景源码与 `--net-matrix` 门禁已补（`Tools/RunNetMatrix.ps1`）；Legacy / PushOff / Iris 变体开关与 cvar 回读已补。这些都需要重建 + 真实 DS 才算证据。**仍未实现**：加入顺序互换、丢包、seamless travel 级重连、多 Env 同类的声明与销毁顺序、cooked 载体、Iris 逐元素 delta |
 | NET-02 / P0（专项未验收） | 复制桶已使用严格 int32/int64 转换；未知条件、稀疏数组、重名、坏类型拒绝，缓存 schema 禁止改写；RPC 错误参数不再缩短签名 | 已补实际桶读写的 ±2^31、±2^53、int64 极值和坏输入用例；仍需双后端及真实传输运行、schema 不匹配验收 |
 | LIFE-01 / P0（专项未验收） | Timer 回调归属 Env 主状态；Env/World teardown 清理，显式 World、跨 Env 句柄隔离、暂停剩余时间与重入保护已实现 | 新增 coroutine GC、两种销毁顺序、多 World、跨 Env、重入取消回归；仍需世界暂停/时间膨胀、多 PIE 和打包运行 |
 | LIFE-02 / P0（已修，专项未验收） | 手动引用代理和已知智能指针分配点已接 Luau native dtor；旧代理不能释放新代理的引用，未构造或已释放 payload 跳过析构。**UScriptStruct 拷贝已补终结器**（2026-11-02 修）：此前 `ClassRegistry.cpp` 的 `__gc` 没做 `UNLUANOVA_HAS_GC_METAMETHOD` 保护，Luau 上 `TM_GC` 不存在，结构体拷贝永不 `DestroyStruct`；现由 `NewScriptStructUserdata()` 把类型指针存进块内并挂 native dtor | 双后端强制 Lua GC + UE GC + Env close 用例已补；继续逐分配点审查 owner / borrowed / manual ref，不在 VM dtor 操作 Lua 栈；结构体数组与 DataTable 行拷贝需专项内存验收 |
@@ -101,13 +101,14 @@ Luau 0.744 与当前 pin 的公开 VM 头文件一致，但 18 个 VM 实现文�
 并包含 `UnLuaNova.Perf` 与 `UnLuaNova.Net.*` 段。
 
 **因此该轮能关闭的是"改完没跑"这一层**：上面标了修复的 LIFE-02、NET-01 已进入执行证据。
-**不能关闭的是各行的专项缺口** —— 条件复制、多 PIE / 世界暂停、Iris / push model、结构体数组与
-DataTable 行拷贝的内存专项，以及跨项目同机对照，仍需要各自的用例与运行。它们仍是范围声明，
-不是"跑过了但没写"。
+**不能关闭的是各行的专项缺口** —— 条件复制的**联机验收**（布局与单测已交付）、多 PIE / 世界暂停、
+Iris / push model、结构体数组与 DataTable 行拷贝的内存专项，以及跨项目同机对照，
+仍需要各自的用例与运行。它们仍是范围声明，不是"跑过了但没写"。
 
-## 最近一次常规验证（未通过）
+## 最近常规验证（未通过）
 
-`Saved/ReleaseTests/test`（2026-11-03 15:23 本地结束）`complete=true`、`passed=false`：
-Luau Editor 5 项性能超过 25% 门禁，`Luau-editor-tests` 失败、`Luau-editor-evidence` 被阻塞。
-两轮之间产品源码零改动，运行清单与进程优先级一致，属测量环境干扰待复核；基线不替换、
-门禁不放宽。当前发布状态以最新一轮为准，见[版本说明](ReleaseNotes.md)。
+`Saved/ReleaseTests/test` 的多轮重跑未通过：性能回退已排除为代码回归（重跑 Luau Editor
+641/641 且门禁通过，参考基线未替换）；UBT 全局锁冲突与编译进程被外部中断曾使打包 / 构建
+阶段失败并连锁阻塞证据阶段；当前工作树未提交的 Net 源码改动使 2 个 `UnLuaNova.API.Net.*`
+用例失败，属需要关闭的真实回归。发布前需冻结工作树、同步能力矩阵，并在无并发 UE 构建的
+环境重跑完整 Release。当前状态见[版本说明](ReleaseNotes.md)。

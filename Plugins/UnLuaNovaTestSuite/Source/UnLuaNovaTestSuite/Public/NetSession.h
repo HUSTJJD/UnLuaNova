@@ -1,6 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLuaNova available.
-// 
-// Copyright (C) 2019 Tencent. All rights reserved.
+// Copyright (c) 2026 UnLuaNova contributors
 //
 // Licensed under the MIT License (the "License"); 
 // you may not use this file except in compliance with the License. You may obtain a copy of the License at
@@ -99,6 +97,12 @@ namespace UnLuaNovaTestSuite
         FProcHandle Handle;
         uint32 Pid = 0;
         bool bLaunched = false;
+        /** >1 after a reconnect: the process was replaced, the label/Spec stayed the same. */
+        int32 LaunchCount = 0;
+        /** PID of the first launch, kept so a reconnect cannot reuse the same process id. */
+        uint32 FirstPid = 0;
+        /** Monotonic within the driving process: proves one peer really started after another. */
+        int32 LaunchSerial = 0;
     };
 
     /**
@@ -118,6 +122,16 @@ namespace UnLuaNovaTestSuite
         const TArray<FNetPeerRun>& GetPeers() const { return Peers; }
         const FString& GetName() const { return Name; }
         const FString& GetMapName() const { return MapName; }
+
+        /**
+         * Scenario and delivery variant are part of the topology, not private knowledge of
+         * the driving test: the release gate reads topology.json to decide which report
+         * fields a run owes. A peer also receives both on its command line.
+         */
+        void SetScenario(const FString& InScenario) { Scenario = InScenario; }
+        void SetVariant(const FString& InVariant) { Variant = InVariant; }
+        const FString& GetScenario() const { return Scenario; }
+        const FString& GetVariant() const { return Variant; }
 
         FString GetDir() const;
         FString GetLogDir() const;
@@ -148,6 +162,16 @@ namespace UnLuaNovaTestSuite
          */
         bool LaunchPending(FAutomationTestBase& Test, const FString& OnlyLabel = FString());
 
+        /**
+         * Process-level reconnect: terminate one peer, discard its report and start it again
+         * with the same label, port and report test. This is deliberately NOT seamless travel
+         * or UNetConnection::Close - those are separate engine-level scenarios.
+         */
+        bool RestartPeer(FAutomationTestBase& Test, const FString& Label);
+
+        /** Remove one peer's published report before relaunching it. */
+        void DeleteReport(const FString& Label) const;
+
         /** True when launching a peer failed - the wait for reports then stops instead of hanging. */
         bool HasLaunchFailure() const { return bLaunchFailed; }
 
@@ -165,7 +189,10 @@ namespace UnLuaNovaTestSuite
     private:
         FString Name;
         FString MapName;
+        FString Scenario;
+        FString Variant;
         TArray<FNetPeerRun> Peers;
+        int32 NextLaunchSerial = 1;
         bool bLaunchFailed = false;
     };
 
@@ -208,6 +235,21 @@ namespace UnLuaNovaTestSuite
         TSharedRef<FNetSession> Session;
         FAutomationTestBase& Test;
         FString OnlyLabel;
+    };
+
+    /** Restarts one peer as part of a reconnect scenario. */
+    class FRestartPeerCommand : public IAutomationLatentCommand
+    {
+    public:
+        FRestartPeerCommand(TSharedRef<FNetSession> InSession, FAutomationTestBase& InTest, FString InLabel)
+            : Session(InSession), Test(InTest), Label(MoveTemp(InLabel)) {}
+
+        virtual bool Update() override;
+
+    private:
+        TSharedRef<FNetSession> Session;
+        FAutomationTestBase& Test;
+        FString Label;
     };
 
     /** Waits until every peer has written its report. */

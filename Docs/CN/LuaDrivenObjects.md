@@ -109,7 +109,7 @@ if (Call.IsValid())
 
 ## 网络与实例绑定边界
 
-声明式 RPC 和复制属性已有实验实现，见 [网络 API](LuaNetworking.md)。普通覆写和声明 RPC 是不同路径，不能只从 IsOverridable 的一个分支推导全部网络能力。当前条件复制、int64、schema 及打包验证仍有阻塞。
+声明式 RPC 和复制属性已有实验实现，见 [网络 API](LuaNetworking.md)。普通覆写和声明 RPC 是不同路径，不能只从 IsOverridable 的一个分支推导全部网络能力。条件分组布局、类型往返与继承查找已有单测；当前阻塞在 owner/非 owner 联机验收、跨 peer 的 schema 继承顺序与打包验证。
 
 可以绑定非蓝图对象不等于同一个 UClass 的不同实例可以独立绑定不同模块。`UnLuaNovaManager::Classes` 仍按类缓存，实例级隔离是 [路线图](Benchmark_Review.md) 中的 BIND-01。
 

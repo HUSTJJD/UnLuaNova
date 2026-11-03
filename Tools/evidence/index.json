@@ -38,5 +38,45 @@
     "carrier": "Editor",
     "engine": "unknown",
     "commit": "bff0fbe5f91a304207adce6f2cbf243fa7a70433"
+  },
+  {
+    "run_id": "2026-11-03-baseline-editor-lua",
+    "file": "2026-11-03-baseline-editor-lua.json",
+    "backend": "Lua",
+    "carrier": "Editor",
+    "engine": "5.8.3-0+UE5",
+    "commit": "347bb8c5",
+    "source": "Saved/ReleaseTests/baseline/lua/editor/lua",
+    "historical": true
+  },
+  {
+    "run_id": "2026-11-03-baseline-editor-luau",
+    "file": "2026-11-03-baseline-editor-luau.json",
+    "backend": "Luau",
+    "carrier": "Editor",
+    "engine": "5.8.3-0+UE5",
+    "commit": "347bb8c5",
+    "source": "Saved/ReleaseTests/baseline/luau/editor/luau",
+    "historical": true
+  },
+  {
+    "run_id": "2026-11-03-baseline-game-lua",
+    "file": "2026-11-03-baseline-game-lua.json",
+    "backend": "Lua",
+    "carrier": "Game",
+    "engine": "5.8.3-0+UE5",
+    "commit": "347bb8c5",
+    "source": "Saved/ReleaseTests/baseline/lua/game",
+    "historical": true
+  },
+  {
+    "run_id": "2026-11-03-baseline-game-luau",
+    "file": "2026-11-03-baseline-game-luau.json",
+    "backend": "Luau",
+    "carrier": "Game",
+    "engine": "5.8.3-0+UE5",
+    "commit": "347bb8c5",
+    "source": "Saved/ReleaseTests/baseline/luau/game",
+    "historical": true
   }
 ]

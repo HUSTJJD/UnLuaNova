@@ -15,6 +15,14 @@ The test -> capability path is derived, not hand-written:
 
 Usage:
     python Tools/RecordEvidence.py --report Saved\\MyRun --backend Luau --carrier Editor
+
+Importing a report produced by an older build MUST name that build explicitly, otherwise
+the record would claim today's HEAD as its provenance:
+    python Tools/RecordEvidence.py --report Saved\\ReleaseTests\\baseline\\lua\\game ^
+        --backend Lua --carrier Game --commit 347bb8c5 ^
+        --run-id 2026-11-03-baseline-game-lua
+Records from a different commit are flagged `historical`; `worktree_dirty` still describes
+the current tree, so it says nothing about that older run.
 """
 
 from __future__ import annotations
@@ -94,6 +102,12 @@ def main():
     parser.add_argument("--config", default="Development")
     parser.add_argument("--engine", default="unknown", help="e.g. 5.8.3-0+UE5")
     parser.add_argument("--run-id", default="")
+    parser.add_argument("--commit", default="",
+                        help="commit the recorded run was built from; defaults to current HEAD. "
+                             "REQUIRED when importing a historical report: attributing an old run "
+                             "to today's HEAD would be a false provenance claim.")
+    parser.add_argument("--source", default="",
+                        help="where the report came from; defaults to --report, made relative to the repo")
     args = parser.parse_args()
 
     index_path = os.path.join(args.report, "index.json")
@@ -164,10 +178,15 @@ def main():
         datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         args.carrier.lower(), args.backend.lower()))
 
+    head_commit = git("rev-parse", "HEAD")
+    source = args.source or os.path.relpath(os.path.abspath(args.report), REPO_ROOT).replace("\\", "/")
+
     evidence = {
         "schema": SCHEMA,
         "run_id": run_id,
-        "commit": git("rev-parse", "HEAD"),
+        "commit": args.commit or head_commit,
+        "historical": bool(args.commit) and args.commit[:8] != head_commit[:8],
+        "source": source,
         "worktree_dirty": bool(git("status", "--short")),
         "engine": args.engine,
         "platform": "Win64",
@@ -205,7 +224,8 @@ def main():
     index = [e for e in index if e.get("run_id") != run_id]
     index.append({"run_id": run_id, "file": "%s.json" % run_id,
                   "backend": args.backend, "carrier": args.carrier,
-                  "engine": args.engine, "commit": evidence["commit"]})
+                  "engine": args.engine, "commit": evidence["commit"],
+                  "source": source, "historical": evidence["historical"]})
     with io.open(index_file, "w", encoding="utf-8") as handle:
         handle.write(json.dumps(index, indent=2, ensure_ascii=False))
 

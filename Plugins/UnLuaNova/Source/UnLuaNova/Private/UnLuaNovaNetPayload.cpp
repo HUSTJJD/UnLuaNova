@@ -1,6 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLuaNova available.
-//
-// Copyright (C) 2019 Tencent. All rights reserved.
+// Copyright (c) 2026 UnLuaNova contributors
 //
 // Licensed under the MIT License (the "License");
 // you may obtain a copy of the License at
@@ -33,6 +31,7 @@ namespace UnLuaNova
         case ELuaNetParamType::Rotator:   return ELuaNetBucket::Rotator;
         case ELuaNetParamType::Transform: return ELuaNetBucket::Transform;
         case ELuaNetParamType::Object:    return ELuaNetBucket::Object;
+        case ELuaNetParamType::Generic:   return ELuaNetBucket::Generic;
         }
 
         return ELuaNetBucket::Int;
@@ -105,6 +104,7 @@ namespace UnLuaNova
             Slot.Type = Decl.Type;
             Slot.Condition = Decl.Condition;
             Slot.Group = Group;
+            Slot.TypeSpec = Decl.TypeSpec;
             Slot.Bucket = BucketForType(Decl.Type);
             Slot.Index = Next[int32(Group)][int32(Slot.Bucket)]++;
             OutSlots.Add(Slot);
@@ -144,7 +144,8 @@ namespace UnLuaNova
         Text.Reserve(Decls.Num() * 24);
 
         for (const FLuaRepDecl& Decl : Decls)
-            Text += FString::Printf(TEXT("%s:%d:%d;"), *Decl.Name.ToString(), int32(Decl.Type), int32(Decl.Condition));
+            Text += FString::Printf(TEXT("%s:%d:%d:%s;"), *Decl.Name.ToString(), int32(Decl.Type),
+                int32(Decl.Condition), *Decl.TypeSpec);
 
         const FTCHARToUTF8 Utf8(*Text);
         return FCrc::MemCrc32(Utf8.Get(), Utf8.Length());

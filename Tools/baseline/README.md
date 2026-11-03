@@ -35,3 +35,12 @@ record its provenance here, then verify in a later run with unchanged references
 The other JSON files in this directory track test inventories and classification, not
 performance. Release acceptance also compares the runtime manifest against actual
 executed test paths; an old inventory cannot substitute for that check.
+
+`lua.json` / `luau.json` are recorded **execution** inventories, so they were deliberately not
+hand-edited when the opt-in network scenarios were added. `LuaNetNetScenariosTest.cpp`
+registers five new automation names (`UnLuaNova.API.Net.Scenarios.Report` and four
+`UnLuaNova.Slow.Net.Scenarios.*` drivers). Until a full run is recorded with `-UpdateBaseline`,
+`-FailOnDrift` will report them as new; the default mode only warns. Adding names to these
+files by hand would claim tests that have not run, which is exactly what the drift check exists
+to catch. The connected matrix itself is produced separately by `Tools/RunNetMatrix.ps1` and is
+not part of the Editor/Game automation inventory.

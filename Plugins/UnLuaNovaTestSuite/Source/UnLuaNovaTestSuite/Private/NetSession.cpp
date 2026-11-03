@@ -1,6 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLuaNova available.
-// 
-// Copyright (C) 2019 Tencent. All rights reserved.
+// Copyright (c) 2026 UnLuaNova contributors
 //
 // Licensed under the MIT License (the "License"); 
 // you may not use this file except in compliance with the License. You may obtain a copy of the License at
@@ -25,6 +23,7 @@
 #include "Engine/NetConnection.h"
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
+#include "HAL/IConsoleManager.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformMisc.h"
 #include "HAL/PlatformTime.h"
@@ -169,6 +168,13 @@ namespace UnLuaNovaTestSuite
         return DefaultNetPort;
     }
 
+    static FString EffectiveNetVariant(const FString& SessionVariant)
+    {
+        if (!SessionVariant.IsEmpty())
+            return SessionVariant;
+        return FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_TEST_NET_VARIANT"));
+    }
+
     FString FNetSession::BuildPeerCommandLine(const FNetPeerSpec& Spec) const
     {
         const TCHAR* OverrideName = Spec.Role == ENetPeerRole::Server
@@ -212,6 +218,19 @@ namespace UnLuaNovaTestSuite
         // -ExecCmds straight off the command line.
         Args += FString::Printf(TEXT("-ExecCmds=\"Automation RunTests %s; Quit\" "), *Spec.ReportTestName);
         Args += FString::Printf(TEXT("-UnLuaNovaNetRole=%s -UnLuaNovaNetSession=%s "), *Spec.Label, *Name);
+        if (!Scenario.IsEmpty())
+            Args += FString::Printf(TEXT("-UnLuaNovaNetScenario=%s "), *Scenario);
+        const FString DeliveryVariant = EffectiveNetVariant(Variant);
+        if (!DeliveryVariant.IsEmpty())
+        {
+            Args += FString::Printf(TEXT("-UnLuaNovaNetVariant=%s "), *DeliveryVariant);
+            // The delivery flags are real engine switches, not labels: the peer report reads
+            // back the resulting cvar state, so a variant cannot pass by renaming itself.
+            if (DeliveryVariant == TEXT("Iris"))
+                Args += TEXT("-UseIrisReplication=1 ");
+            else if (DeliveryVariant == TEXT("PushOff"))
+                Args += TEXT("-ini:Engine:[ConsoleVariables]:Net.IsPushModelEnabled=0 ");
+        }
         // Its own log, next to the report: a headless server has no window to look at, so
         // "the peer never wrote a report" is only diagnosable from here.
         Args += FString::Printf(TEXT("-abslog=\"%s\" "), *LogPath(Spec.Label));
@@ -256,6 +275,10 @@ namespace UnLuaNovaTestSuite
             uint32 Pid = 0;
             Peer.Handle = FPlatformProcess::CreateProc(*Exe, *Args, false, false, false, &Pid, 0, nullptr, nullptr);
             Peer.Pid = Pid;
+            ++Peer.LaunchCount;
+            if (Peer.FirstPid == 0)
+                Peer.FirstPid = Pid;
+            Peer.LaunchSerial = NextLaunchSerial++;
 
             if (!Peer.Handle.IsValid())
             {
@@ -279,6 +302,36 @@ namespace UnLuaNovaTestSuite
         }
 
         return true;
+    }
+
+    void FNetSession::DeleteReport(const FString& Label) const
+    {
+        IFileManager::Get().Delete(*ReportPath(Label), false, true, true);
+    }
+
+    bool FNetSession::RestartPeer(FAutomationTestBase& Test, const FString& Label)
+    {
+        FNetPeerRun* Found = nullptr;
+        for (FNetPeerRun& Peer : Peers)
+            if (Peer.Spec.Label == Label) { Found = &Peer; break; }
+        if (!Found || !Found->bLaunched)
+        {
+            Test.AddError(TEXT("cannot restart a peer that was never launched: ") + Label);
+            return true;
+        }
+        if (Found->Handle.IsValid())
+        {
+            if (FPlatformProcess::IsProcRunning(Found->Handle))
+                FPlatformProcess::TerminateProc(Found->Handle, true);
+            FPlatformProcess::CloseProc(Found->Handle);
+        }
+        Found->Handle = FProcHandle();
+        Found->bLaunched = false;
+        Found->Pid = 0;
+        // A stale report from the first process would make AllReportsPresent() succeed
+        // before the replacement has connected: the reconnect has to be observable.
+        DeleteReport(Label);
+        return LaunchPending(Test, Label);
     }
 
     bool FNetSession::AllReportsPresent() const
@@ -320,6 +373,8 @@ namespace UnLuaNovaTestSuite
         Root->SetStringField(TEXT("session"), Name);
         Root->SetStringField(TEXT("exe"), ResolvePeerExe());
         Root->SetStringField(TEXT("dir"), GetDir());
+        Root->SetStringField(TEXT("scenario"), Scenario);
+        Root->SetStringField(TEXT("variant"), EffectiveNetVariant(Variant));
 
         TArray<TSharedPtr<FJsonValue>> PeersJson;
         for (const FNetPeerRun& Peer : Peers)
@@ -334,6 +389,9 @@ namespace UnLuaNovaTestSuite
             Entry->SetStringField(TEXT("arguments"), BuildPeerCommandLine(Peer.Spec));
             Entry->SetBoolField(TEXT("headless"), Peer.Spec.bHeadless);
             Entry->SetNumberField(TEXT("pid"), (double)Peer.Pid);
+            Entry->SetNumberField(TEXT("launch_count"), (double)Peer.LaunchCount);
+            Entry->SetNumberField(TEXT("first_pid"), (double)Peer.FirstPid);
+            Entry->SetNumberField(TEXT("launch_serial"), (double)Peer.LaunchSerial);
             Entry->SetStringField(TEXT("log"), LogPath(Peer.Spec.Label));
             PeersJson.Add(MakeShared<FJsonValueObject>(Entry));
         }
@@ -437,6 +495,27 @@ namespace UnLuaNovaTestSuite
 
     void AppendWorldFacts(UWorld* World, FJsonObject& Report)
     {
+        // Provenance for the delivery matrix: the gate reads these from every peer report,
+        // so a run cannot borrow a legacy report to stand in for an Iris/push-model variant.
+        FString Scenario, Variant;
+        FParse::Value(FCommandLine::Get(), TEXT("-UnLuaNovaNetScenario="), Scenario);
+        FParse::Value(FCommandLine::Get(), TEXT("-UnLuaNovaNetVariant="), Variant);
+        Report.SetStringField(TEXT("Scenario"), Scenario);
+        Report.SetStringField(TEXT("Variant"), Variant);
+        int32 IrisRequested = 0;
+        FParse::Value(FCommandLine::Get(), TEXT("-UseIrisReplication="), IrisRequested);
+        Report.SetBoolField(TEXT("IrisEnabled"), IrisRequested > 0);
+
+        bool bPushModel = false;
+        if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Net.IsPushModelEnabled")))
+            bPushModel = CVar->GetInt() != 0;
+        Report.SetBoolField(TEXT("PushModelEnabled"), bPushModel);
+#if (defined(WITH_PUSH_MODEL) && WITH_PUSH_MODEL) || (defined(UE_ENABLE_PUSH_MODEL) && UE_ENABLE_PUSH_MODEL)
+        Report.SetBoolField(TEXT("PushModelCompiledIn"), true);
+#else
+        Report.SetBoolField(TEXT("PushModelCompiledIn"), false);
+#endif
+
         if (!World)
         {
             Report.SetNumberField(TEXT("NetMode"), (double)NM_Standalone);
@@ -497,6 +576,11 @@ namespace UnLuaNovaTestSuite
     bool FNetLaunchPeersCommand::Update()
     {
         return Session->LaunchPending(Test, OnlyLabel);
+    }
+
+    bool FRestartPeerCommand::Update()
+    {
+        return Session->RestartPeer(Test, Label);
     }
 
     bool FNetWaitForReportsCommand::Update()

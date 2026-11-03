@@ -1,0 +1,354 @@
+{
+  "schema": "unluanova-evidence/1",
+  "run_id": "2026-11-03-baseline-game-luau",
+  "commit": "347bb8c5",
+  "historical": true,
+  "source": "Saved/ReleaseTests/baseline/luau/game",
+  "worktree_dirty": true,
+  "engine": "5.8.3-0+UE5",
+  "platform": "Win64",
+  "config": "Development",
+  "carrier": "Game",
+  "backend": "Luau",
+  "machine": "davidsjian-PC2",
+  "cpu": "AMD Ryzen 7 4700G with Radeon Graphics",
+  "report_created_on": "2026.11.03-03.53.16",
+  "report_totals": {
+    "succeeded": 605,
+    "succeeded_with_warnings": 10,
+    "failed": 0,
+    "not_run": 0
+  },
+  "totals": {
+    "tests": 615,
+    "passed": 615,
+    "failed": 0,
+    "not_run": 0
+  },
+  "capabilities": {
+    "BIND-TEMPLATE": {
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/UnLuaNovaEx.spec.cpp"
+      ]
+    },
+    "BIND-THUNK": {
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/StaticBinding.spec.cpp"
+      ]
+    },
+    "COMPAT-DEBUG": {
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp"
+      ]
+    },
+    "COMPAT-IO": {
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp"
+      ]
+    },
+    "COMPAT-LANGUAGE": {
+      "tests": 45,
+      "passed": 45,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp"
+      ]
+    },
+    "DEBUG-DAP": {
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DebugService.spec.cpp"
+      ]
+    },
+    "EXTENSIONS": {
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Extensions.spec.cpp"
+      ]
+    },
+    "LIFE-ENVS": {
+      "tests": 33,
+      "passed": 33,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaEnv.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Locators.spec.cpp"
+      ]
+    },
+    "LIFE-LATENT": {
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Latent.spec.cpp"
+      ]
+    },
+    "LIFE-MANUAL": {
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Lifetime.spec.cpp"
+      ]
+    },
+    "LUAU-BUFFER": {
+      "tests": 27,
+      "passed": 27,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp"
+      ]
+    },
+    "LUAU-CODEGEN": {
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp"
+      ]
+    },
+    "LUAU-GC": {
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaGcScheduler.spec.cpp"
+      ]
+    },
+    "LUAU-LIBS": {
+      "tests": 39,
+      "passed": 39,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp"
+      ]
+    },
+    "LUAU-REQUIRE": {
+      "tests": 26,
+      "passed": 26,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaEnv.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp"
+      ]
+    },
+    "LUAU-SANDBOX": {
+      "tests": 39,
+      "passed": 39,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp"
+      ]
+    },
+    "LUAU-SYNTAX": {
+      "tests": 39,
+      "passed": 39,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp"
+      ]
+    },
+    "LUAU-VECTOR": {
+      "tests": 53,
+      "passed": 53,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_FVector.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp"
+      ]
+    },
+    "NET-PROPS": {
+      "tests": 21,
+      "passed": 21,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetDedicatedServerTest.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp"
+      ]
+    },
+    "NET-RPC": {
+      "tests": 23,
+      "passed": 23,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetDedicatedServerTest.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetMulticastTest.cpp"
+      ]
+    },
+    "NET-TYPES": {
+      "tests": 21,
+      "passed": 21,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetDedicatedServerTest.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp"
+      ]
+    },
+    "PERFORMANCE": {
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Benchmark.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/BenchmarkParity.spec.cpp"
+      ]
+    },
+    "PROFILE": {
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Observability.spec.cpp"
+      ]
+    },
+    "QA-PROVENANCE": {
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaSpecs.spec.cpp"
+      ]
+    },
+    "RUNTIME-EVENT": {
+      "tests": 22,
+      "passed": 22,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp"
+      ]
+    },
+    "RUNTIME-OOP": {
+      "tests": 22,
+      "passed": 22,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp"
+      ]
+    },
+    "RUNTIME-RELOAD": {
+      "tests": 28,
+      "passed": 28,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp"
+      ]
+    },
+    "RUNTIME-TIMER": {
+      "tests": 31,
+      "passed": 31,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Timer.spec.cpp"
+      ]
+    },
+    "UE-CONTAINER": {
+      "tests": 82,
+      "passed": 82,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DanglingCheck.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_Array.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_Map.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_Set.spec.cpp"
+      ]
+    },
+    "UE-DELEGATE": {
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_MulticastDelegate.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_Delegate.spec.cpp"
+      ]
+    },
+    "UE-INPUT": {
+      "tests": 11,
+      "passed": 11,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Overrides.spec.cpp"
+      ]
+    },
+    "UE-OVERRIDE": {
+      "tests": 18,
+      "passed": 18,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaOverrider.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Overrides.spec.cpp"
+      ]
+    },
+    "UE-REFLECT": {
+      "tests": 29,
+      "passed": 29,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/UnLuaNovaBase.spec.cpp"
+      ]
+    },
+    "WATCHDOG": {
+      "tests": 11,
+      "passed": 11,
+      "failed": 0,
+      "not_run": 0,
+      "specs": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/ErrorHandling.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaDeadLoopCheck.spec.cpp"
+      ]
+    }
+  }
+}

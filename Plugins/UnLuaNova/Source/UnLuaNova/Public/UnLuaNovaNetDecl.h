@@ -1,6 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLuaNova available.
-//
-// Copyright (C) 2019 Tencent. All rights reserved.
+// Copyright (c) 2026 UnLuaNova contributors
 //
 // Licensed under the MIT License (the "License");
 // you may obtain a copy of the License at
@@ -47,6 +45,13 @@ namespace UnLuaNova
         Rotator,
         Transform,
         Object,
+        /**
+         * A type described by UnLuaNovaNetTypeSpec.h (arbitrary UStruct / container).
+         * Both RPC parameters and replicated fields use this one value; the concrete spec is
+         * carried in the declaration and folded into SchemaVersion, so two peers cannot
+         * disagree about what one generic slot contains.
+         */
+        Generic,
     };
 
     /** Which way a Lua-declared RPC travels. */
@@ -62,6 +67,8 @@ namespace UnLuaNova
     {
         FName Name;
         ELuaNetParamType Type = ELuaNetParamType::Int;
+        /** Normalised UnLuaNovaNetTypeSpec, only when Type == Generic. */
+        FString TypeSpec;
     };
 
     /** A Lua-declared RPC. */
@@ -80,6 +87,8 @@ namespace UnLuaNova
         ELuaNetParamType Type = ELuaNetParamType::Int;
         /** UE's own ELifetimeCondition, or COND_None. */
         uint8 Condition = 0;
+        /** Normalised UnLuaNovaNetTypeSpec, only when Type == Generic. */
+        FString TypeSpec;
     };
 
     /**
@@ -94,7 +103,8 @@ namespace UnLuaNova
      * Parse UE's lifetime condition by name - "None", "InitialOnly", "OwnerOnly",
      * "SkipOwner", "SimulatedOnly", "AutonomousOnly", "SimulatedOrPhysics",
      * "InitialOrOwner", "Custom", "ReplayOrOwner", "ReplayOnly", "SimulatedOnlyNoReplay",
-     * "SimulatedOrPhysicsNoReplay", "SkipReplay".
+     * "SimulatedOrPhysicsNoReplay", "SkipReplay", "Dynamic", "Never", "NetGroup".
+     * The last three parse but have no storage group, so declaring one is rejected.
      *
      * The values are UE's own ELifetimeCondition constants, which is why this takes a
      * uint8 rather than an enum of ours: there is no reason to invent a parallel enum for

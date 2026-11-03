@@ -103,11 +103,17 @@ flowchart LR
 当前状态：
 
 ```
-Repository audit passed: 40 capability groups; 35 have execution evidence from 5 recorded run(s).
+Repository audit passed: 40 capability groups; 35 have execution evidence from 9 recorded run(s).
 ```
 
-即 **40 项里 35 项有执行证据**（2026-11-03 Release 验证：Luau 轮覆盖 35 项 / 641 用例，
-Lua 轮覆盖 33 项 / 626 用例，全部通过）。逐项明细见 [能力矩阵](Docs/feature-matrix.md)。
+即 **40 项里 35 项有执行证据**。证据库现有 9 轮：5 轮 Editor 单进程用例，加上 2026-11-03 baseline 的
+4 轮（Lua / Luau × Editor / Game，626 / 641 / 600 / 615 用例全部通过）。
+
+这补上了网络能力的证据载体缺口：NET-RPC / NET-PROPS / NET-TYPES 现在都有 **Game 载体**的执行结果，
+且 DS 三进程用例 `LuaNetDedicatedServerTest.cpp` 已登记进能力矩阵、不再落到 unmapped。
+但要读清楚——这 4 轮来自 commit `347bb8c5` 的**改动前**构建，记录里带 `historical: true` 与 `source`，
+**不能证明当前工作树**；联网三进程会话的 `net/*.json` 也仍是 `ValidateRelease.py` 的独立门禁，
+不属于这里的 automation 证据。逐项明细见 [能力矩阵](Docs/feature-matrix.md)。
 
 ---
 
@@ -134,13 +140,23 @@ end
 
 复制字段支持 8 种条件（`None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` / `SimulatedOnly` /
 `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`），每种条件有独立存储组：UE 按**属性注册时的条件**
-决定发不发，而该注册按类缓存、不能由脚本值决定。`COND_Custom` / `COND_Dynamic`（引擎不支持子对象）与
-Replay* 系列被显式拒绝并打 Error，**不会静默降级成 `None`**。
+决定发不发，而该注册按类缓存、不能由脚本值决定。`Custom` / `Dynamic`（引擎不支持子对象）、
+`Never` / `NetGroup` 与 Replay* 系列等**无存储组的条件**被显式拒绝并打 Error，**不会静默降级成 `None`**。
+
+类型还能写成规格（`Struct:/Script/Engine.Vector`、`Array:<spec>`、`Set:<spec>`、`Map:<key>:<value>`）：
+RPC 的 `UFunction` 本来就是运行时构造的，可以直接挂 `FStructProperty` / `FArrayProperty` /
+`FSetProperty` / `FMapProperty`；复制字段则走共享 Generic 桶里的自描述文本 payload，规格参与
+`SchemaVersion`。**不需要**往 `UClass` 上动态加 `UPROPERTY`（此前把它判成架构边界是错的）。
+`UObject` 引用仍走专用 Object 桶，文本 payload 带不了 NetGUID。
 
 > [!WARNING]
-> 仍是**实验特性**，三条硬边界先读：① owner / 非 owner 的联机验收尚未完成，单进程用例只能证明分组与下标；
-> ② 晚加入 / 断线重连 / dormancy / relevancy 未覆盖；③ Iris / push model 的打包矩阵未验收。
-> 复制字段限定 11 种内建类型——运行时无法把 UPROPERTY 凭空加到 UClass 上，这是纯插件方案的架构边界。
+> 仍是**实验特性**。0→1 差异和硬边界必须一起看：① owner / 非 owner 的联机验收、非 Owner
+> Server RPC 拒绝断言**尚未执行**，单进程用例只能证明分组与下标；② 晚加入 / 进程级重连 /
+> dormancy / relevancy 的场景源码与门禁已补，但**一个都没跑过**；③ Legacy / PushOff / Iris
+> 变体的启动开关与 `ValidateRelease.py --net-matrix` 门禁已补，同样**没有执行证据**。
+> 上述都用 `Tools/RunNetMatrix.ps1` 跑真实 DS 才算数；存在源码不等于测试通过。
+> 另外：丢包、seamless travel / `UNetConnection` 级重连、跨 peer 声明差异、cooked 载体仍未覆盖。
+> `release-status` 仍是 `not-passed`，只能由一次真实通过的 Release 改写。
 > 逐项状态见 [能力矩阵](Docs/feature-matrix.md)，用法见 [Lua 声明式网络（实验）](Docs/CN/LuaNetworking.md)。
 
 ---
@@ -185,6 +201,7 @@ Replay* 系列被显式拒绝并打 Error，**不会静默降级成 `None`**。
 | ♻️ | **热更新** | 编辑器内 HotReload、PIE 内非结构性热载、运营期脚本下发 |
 | 🧪 | **测试随插件发布** | `UnLuaNovaTestSuite` 模块 + 一条命令，报告落在 `Saved/ReleaseTests/` |
 | 🧱 | **纯插件** | 不 fork 引擎；后端是编译期选择，运行时不共存 |
+| 🌐 | **声明式网络（实验）** | Lua 自己声明 RPC 与复制字段；8 种条件各有独立存储组，参数/字段支持 `UStruct` 与容器类型规格，边界见 [网络文档](Docs/CN/LuaNetworking.md) |
 
 ---
 
@@ -197,7 +214,7 @@ Replay* 系列被显式拒绝并打 Error，**不会静默降级成 `None`**。
 | **FUnLua** | 对象引用树、属性失效、实例绑定设计扎实 | 许可文件在固定提交中缺失（核实前不引用其源码） |
 | **UE-AngelScript** | 静态类型、VSCode LSP、断点单步 | **需要源码引擎分支**，无运营期热更 |
 | **Verse / 蓝图** | 官方、零集成 | 不能运营期热更，迭代受限于发版 |
-| **UnLuaNova** | 不 fork 引擎 + 双后端 + 热更 + 可观测 + 可验收 + MIT | 条件复制等仍受限制，见下表 |
+| **UnLuaNova** | 不 fork 引擎 + 双后端 + 热更 + 可观测 + 可验收 + MIT + 声明式网络（实验） | 网络的 owner / 非 owner 联机验收、四类连接场景与 Iris 变体均已补源码与门禁但尚未执行，见下表 |
 
 **一句话边界**：能接受**源码引擎分支**、只做主机/PC 单机、不需要运营期热更 → UE-AngelScript 体验更完整。
 **不能 fork 引擎 / 要热更 / 团队会 Lua** → UnLuaNova 是现实解。
@@ -250,8 +267,11 @@ python Tools/AuditRepository.py      # 不编译的仓库一致性检查
 
 这个项目把"能跑"和"验证过"分开写。**源码存在、用例存在、执行通过、目标平台验收是四种不同证据。**
 
-**当前发布状态：未通过**：最近一次常规验证（`Saved/ReleaseTests/test`）因 Luau Editor 5 项性能
-超过 25% 门禁而失败；见[版本说明](Docs/CN/ReleaseNotes.md)。
+**当前发布状态：未通过**（以 `Saved/ReleaseTests/test/release-summary.json` 为准）：
+性能回退已排除为代码回归（重跑 Luau Editor 641/641 且门禁通过），UBT 全局锁冲突 / 编译进程
+被外部中断曾使打包与构建阶段失败，当前工作树未提交的 Net 源码改动使 2 个
+`UnLuaNova.API.Net.*` 用例失败。基线不替换、门禁不放宽；需冻结工作树后重跑完整 Release。
+见[版本说明](Docs/CN/ReleaseNotes.md)。
 
 ### 基线轮（`.\Tools\RunTests.ps1 -Baseline`，2026-11-03，commit `347bb8c5`，UE 5.8.3 源码引擎 / Win64 / Visual Studio 2026 18.10）
 
@@ -285,7 +305,7 @@ Development / Server / Shipping 三种打包。
 
 | 领域 | 边界 |
 |---|---|
-| **声明式网络（实验）** | 条件支持 `None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` / `SimulatedOnly` / `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`，每种条件一个存储组；`COND_Custom` / `COND_Dynamic`（引擎不支持子对象）与 Replay 系列被**显式拒绝**并打 Error，不静默降级。未覆盖：owner / 非 owner 的联机验收、晚加入 / 重连、Iris / push model、非法 RPC 拒绝、relevancy / dormancy |
+| **声明式网络（实验）** | 条件支持 `None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` / `SimulatedOnly` / `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`，每种条件一个存储组；`Custom` / `Dynamic` / `Never` / `NetGroup` 与 Replay 系列等无存储组的条件被**显式拒绝**并打 Error，不静默降级。`UStruct` / 容器用类型规格走 RPC 动态 FProperty 与复制 Generic 桶。**待执行**：owner / 非 owner 联机验收、非 Owner RPC 拒绝、晚加入 / 进程级重连 / dormancy / relevancy 四类场景、Legacy / PushOff / Iris 变体（源码与 `--net-matrix` 门禁已补，需重建并跑真实 DS）；**未覆盖**：丢包、seamless travel 级重连、跨 peer 声明差异、cooked 载体 |
 | **生成 thunk** | 最终派发仍经由 `UObject::ProcessEvent`（静态绑定省掉的是反射查找与参数编组）。已提交自比基线与 25% 回退门禁，**尚无与 slua-unreal / FUnLua 的同机对照** |
 | **Luau 原生编译** | 需显式开启：`lua.codegen.enabled=1`（默认 0），可用 `lua.codegen.modules` 限定模块；只对切换后加载的 chunk 生效，且仅 Luau + x64/arm64 |
 | **平台与引擎版本** | 已验证 UE **5.8.3 / Win64**。其他引擎版本、Linux / Mac / iOS / Android、主机平台需各自验收 |

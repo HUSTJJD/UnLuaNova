@@ -1,6 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLuaNova available.
-//
-// Copyright (C) 2019 Tencent. All rights reserved.
+// Copyright (c) 2026 UnLuaNova contributors
 //
 // Licensed under the MIT License (the "License");
 // you may obtain a copy of the License at
@@ -46,9 +44,12 @@ namespace UnLuaNova
      * Only the conditions that can be honoured by a plain per-class registration are here.
      * COND_Custom and COND_Dynamic are deliberately absent: the engine rejects them on
      * subobjects outright (ActorReplication.cpp: "Custom netconditions do not work with
-     * SubObjects"), and Lua replication lives on a component. The Replay* family is absent
-     * because it describes replay visibility, which this layer has no say in and no test for.
-     * Asking for one of those is an error at declaration time, never a silent downgrade.
+     * SubObjects"), and Lua replication lives on a component. COND_Never / COND_NetGroup are
+     * absent for the same reason - neither describes a per-connection filter this layer can
+     * register. The Replay* family is absent because it describes replay visibility, which
+     * this layer has no say in and no test for. All of them are recognised by name so a typo
+     * and an unsupported condition produce different errors; asking for an unsupported one is
+     * an error at declaration time, never a silent downgrade.
      */
     enum class ELuaNetConditionGroup : uint8
     {
@@ -78,6 +79,12 @@ namespace UnLuaNova
         Rotator,
         Transform,
         Object,
+        /**
+         * One shared array for every declared UStruct / container field. UPROPERTYs are fixed
+         * at class link time, so an arbitrary type cannot get its own typed array; it gets a
+         * canonical text payload in this bucket instead (UnLuaNovaNetTypeSpec.h).
+         */
+        Generic,
 
         Max
     };
@@ -97,6 +104,8 @@ namespace UnLuaNova
         /** UE's own ELifetimeCondition, or COND_None. */
         uint8 Condition = 0;
         ELuaNetConditionGroup Group = ELuaNetConditionGroup::None;
+        /** Normalised type spec, only for Bucket == Generic. */
+        FString TypeSpec;
     };
 
     /** Which bucket a declared type belongs to. */

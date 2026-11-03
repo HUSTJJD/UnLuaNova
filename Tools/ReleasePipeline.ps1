@@ -36,6 +36,11 @@ Release / Win64 / Lua + Luau (no operations performed):
 Build stages are reused when their inputs did not change (Saved/ReleaseCache); test stages
 always run. Results land in Saved/ReleaseTests/test (or /baseline with -Baseline).
 Missing/skipped evidence, timeouts, failed/blocked stages and absent performance baselines fail.
+
+The connected delivery matrix (late join / reconnect / dormancy / relevancy and Legacy /
+PushOff / Iris) is NOT a Release stage: each cell launches three extra processes. Run it
+separately with .\Tools\RunTests.ps1 -Profile Development -NetMatrix and judge it with
+ValidateRelease.py --net-matrix.
 '@
     exit 0
 }

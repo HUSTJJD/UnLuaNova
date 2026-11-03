@@ -19,6 +19,13 @@ description: "静态绑定崩溃、双后端兼容和完整测试验证记录"
 
 ### Release28 完整验收
 
+> [!NOTE]
+> **证据留存更正（2026-11-03）**：`ConnectedNet-Release-28/` 目录及下表四组 SessionId 对应的原始
+> `net/*.json` 已不在当前工作树，本节是当时记录的**历史结论，现无法就地复核**。同结构的真实
+> DS 产物现存于 `Saved/ReleaseTests/baseline/`（2026-11-03 轮，四载体、SessionId 不同，
+> `complete=true / passed=true`），其 automation 报告已按 `commit 347bb8c5` 归集进
+> `Tools/evidence/`。要复核 Release28 本身只能重跑，不能从现存文件拼回。
+
 2026-10-25 的 `Saved/ReleaseTests/ConnectedNet-Release-28/` 完整通过：`release-summary.json` 为 `complete=true`、`passed=true`，**33/33 阶段通过、进程退出码 0**。运行时间为本地 19:22:41 至 20:17:28。以下结果来自同一轮完整矩阵，未拼接历史诊断。
 
 | 后端 | 载体 | 通过 / 总数 | 失败 | 跳过 | 本轮报告相对目录 |

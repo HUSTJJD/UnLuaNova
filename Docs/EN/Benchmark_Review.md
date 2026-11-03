@@ -13,7 +13,7 @@ slua-unreal: `7970ab72fd59118e1b3f86aac2d016828b54b748`; FUnLua: `7c5f6b5b452126
 
 | ID / Priority | Current issue | Required acceptance |
 |---|---|---|
-| NET-01 / P0 | Fixed None layout now rejects conditional declarations; old non-None component settings disable replication. **Replication declarations are now owned per Env** (fixed 2026-11-02): `FUnLuaNovaNet::Cleanup(Env)` drops only that Env's entries plus dead classes, so closing one Env no longer wipes another's schema. Full conditional replication is still missing | Stable conditional layout; multiple actors, owner/nonowner, mixed conditions, late join, dormancy; legacy/Iris/push model separately; multi-Env declaration and teardown order still needs execution |
+| NET-01 / P0 | **Conditional layout delivered**: eight conditions each have their own storage group, and `(group, type bucket, index)` is derived from the declaration. Unsupported Custom / Dynamic / Never / NetGroup / Replay* conditions are rejected, never downgraded to None; unit cases cover grouping, indices, reads/writes and rejection. The obsolete component-wide `Condition` only warns now; `Cleanup(Env)` drops that Env's entries plus dead classes, orphan entries belong to process-wide cleanup. Arbitrary `UStruct` / containers are now delivered via dynamic RPC FProperties and a replicated Generic bucket (the earlier "architecture boundary" call was wrong); specs are part of `SchemaVersion`, with unit cases for parsing, nesting and round-trips | Everything remaining is **connected acceptance that has not been executed**: owner/non-owner visibility, mixed conditions and the non-owner RPC rejection assertion exist in scenario source and the `ValidateRelease.py` gate; late join / process-level reconnect / relevancy / dormancy scenarios and the `--net-matrix` gate are delivered (`Tools/RunNetMatrix.ps1`); Legacy / PushOff / Iris switches and cvar read-back are delivered. All need a rebuild + real DS runs to count as evidence. **Still unimplemented**: join-order swaps, packet loss, seamless-travel reconnect, multi-Env declaration/teardown order, cooked carriers and Iris element-level deltas |
 | NET-02 / P0, specialised acceptance outstanding | Strict int32/int64 bucket conversion, atomic property validation, immutable cached schemas and whole-RPC parameter rejection implemented | Added real bucket round-trip/bad-input tests; run both backends and connected-peer/schema mismatch cases |
 | LIFE-01 / P0, specialised acceptance outstanding | Main-state callbacks, Env/World close cleanup, explicit World, isolated handles, remaining-delay pause and reentry protection implemented | Added coroutine GC, teardown-order, multi-World and cross-Env tests; world pause/time dilation, multi-PIE and packaged specialised acceptance outstanding |
 | LIFE-02 / P0, fixed, specialised acceptance outstanding | Manual proxies and known smart-pointer paths now use native destructors; obsolete proxies cannot release replacements; unconstructed/released payloads skip destruction. **UScriptStruct copies now get a finalizer** (fixed 2026-11-02): `ClassRegistry.cpp` registered `__gc` without an `UNLUANOVA_HAS_GC_METAMETHOD` guard, and Luau has no `TM_GC`, so struct copies never ran `DestroyStruct`. `NewScriptStructUserdata()` now stores the type pointer inside the block and attaches a native destructor | Added forced-GC/Env-close tests; finish allocation audit and run both collectors/backends; no Lua stack work in native destructors; struct arrays and DataTable row copies need dedicated memory acceptance |
@@ -78,16 +78,19 @@ performance gate, and Development / Server / Shipping packaging — including th
 `UnLuaNova.Perf` and `UnLuaNova.Net.*` segments.
 
 **What this run closes is the "fixed but never executed" layer**: the LIFE-02 and NET-01 fixes above
-now have execution evidence. **What it does not close is each row's specialised gap** — conditional
-replication, multi-PIE and world pause, Iris/push model, dedicated memory acceptance for struct
-arrays and DataTable row copies, and a cross-project same-machine comparison. Those remain scope
+now have execution evidence. **What it does not close is each row's specialised gap** — the
+connected acceptance for conditional replication (the layout and unit cases are delivered),
+multi-PIE and world pause, Iris/push model, dedicated memory acceptance for struct arrays and
+DataTable row copies, and a cross-project same-machine comparison. Those remain scope
 statements, not "executed but unrecorded".
 
-## Latest regular validation (not passed)
+## Latest regular validations (not passed)
 
-`Saved/ReleaseTests/test` (finished 2026-11-03 15:23 local time) reports `complete=true`,
-`passed=false`: five Luau Editor benchmark cases exceeded the 25% gate, `Luau-editor-tests` failed
-and `Luau-editor-evidence` was blocked. Product sources, manifests and process priority are
-unchanged between the runs, so measurement-environment interference is the leading explanation.
-The baseline is not replaced and the gate is not relaxed. The latest run decides current status;
-see [Current Version Status](ReleaseNotes.md).
+Re-runs recorded under `Saved/ReleaseTests/test` did not pass. The performance regression was
+ruled out as a code regression (a re-run passed Luau Editor 641/641 with the gate green and the
+reference baseline untouched); `ConflictingInstance` UBT mutex clashes and externally interrupted
+compiler processes failed packaging/build stages and blocked downstream evidence; and uncommitted
+Net source changes in the current worktree now fail two `UnLuaNova.API.Net.*` cases — a real
+regression to close, not a scope statement. Freeze the worktree, refresh the generated matrix and
+re-run the full Release pipeline without concurrent UE builds. See
+[Current Version Status](ReleaseNotes.md).

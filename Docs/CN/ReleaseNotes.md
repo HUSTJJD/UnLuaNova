@@ -8,15 +8,24 @@
 
 ## 当前发布状态：未通过
 
-最近一次常规 Release 验证（2026-11-03 15:23 本地结束，产物 `Saved/ReleaseTests/test`）：
-`complete=true`、`passed=false`。33 个阶段里 `Luau-editor-tests` 失败、`Luau-editor-evidence`
-被阻塞；Luau Editor 641 个用例中 1 个失败，其余三个载体 626 / 600 / 615 全通过。
+当前状态以 `Saved/ReleaseTests/test/release-summary.json` 为准；下面 33/33 的已验证结论只属于
+2026-11-03 基线轮。之后的多轮常规验证未通过，原因分三类，均已定位，不含"放宽门禁"：
 
-失败点是 `UnLuaNova.Perf.Benchmark`：Reflection、VM.Arithmetic、VM.Call、VM.TableGrow、
-VM.TableRead 分别比已提交参考基线慢 47.9%、46.7%、43.8%、51.6%、55.8%，均超过 25% 门禁。
-对比基线轮，产品源码（C++ / Lua / ini）零改动，运行清单、后端开关与进程优先级一致，
-5 组采样稳定，属测量环境干扰待复核，不是已确认的代码回归。基线不会被替换，门禁不会放宽；
-需在无并发负载的机器上重跑完整 Release 才能改回通过状态。
+1. **性能回退已排除为代码回归**：首次重跑的 Luau Editor 有 5 项超过 25% 门禁
+   （+43.8%~+55.8%），但两轮之间产品源码（C++ / Lua / ini）零改动，运行清单、后端开关与
+   进程优先级一致，5 组采样稳定；后续重跑中 Luau Editor 641/641 全过且性能门禁通过，
+   属测量环境干扰。参考基线未替换。
+2. **本机 UBT 编译进程被外部中断**：`ConflictingInstance`（全局互斥锁被孤儿 UBA/UBT 进程占用）
+   与编译子进程 `Exit -1` 曾使 `Lua-package-development`、`Lua-server-build`、
+   `Luau-package-development` 等阶段失败，并连锁阻塞测试与证据阶段。清理孤儿进程后这些阶段
+   可恢复通过；这不是产品代码问题，但要求重跑时机器无并发 UE 构建。
+3. **当前工作树存在未提交的 Net 源码改动**：`UnLuaNovaNet.cpp`、相关头文件与
+   `LuaNet.spec.cpp` 等有改动，Luau Editor 的 2 个 `UnLuaNova.API.Net.*` 用例因此失败。
+   这是需要开发侧关闭的真实回归，不能写成范围声明。
+
+**发布仍被阻断**：需先冻结工作树（提交或回滚 Net 改动）、同步能力矩阵，再在无并发构建的环境
+跑完整 `.\Tools\RunTests.ps1`，拿到 `complete=true`、`passed=true`、33/33、四个 release gate 全绿，
+才能把本页状态改回通过。诊断明细与各轮归档在 `Saved/ReleaseTests/` 下。
 
 ## 2026-11-03 基线轮（已验证）
 
@@ -41,8 +50,11 @@ Luau cooked 615。
 
 ## 本轮没有关闭的边界
 
-这些是范围声明，不是待补的结论：条件复制仍为实验特性，非 `None` 条件会被显式拒绝；
-第三方 notice 仍在补齐；非 Win64 平台、Iris / push model、以及与 slua-unreal / FUnLua 的
+这些是范围声明，不是待补的结论：条件复制的按条件分组布局已交付并有单测（8 种条件），
+任意 `UStruct` / 容器也已由 RPC 动态 FProperty 与复制 Generic 桶交付；但仍属实验特性——
+owner / 非 owner 联机验收、非 Owner RPC 拒绝、晚加入 / 进程级重连 / dormancy / relevancy
+四类场景、Legacy / PushOff / Iris 变体的场景源码与门禁均已补齐，**但都尚未执行**；
+第三方 notice 仍在补齐；非 Win64 平台、cooked 载体、以及与 slua-unreal / FUnLua 的
 同机对照都需要各自独立的验收运行。
 
 验收方法与门禁见 [测试](Testing.md)，诊断历史见 [2026-10-24 回归记录](Regression_20261024.md)。

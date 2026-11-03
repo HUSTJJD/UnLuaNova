@@ -1,6 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLuaNova available.
-//
-// Copyright (C) 2019 Tencent. All rights reserved.
+// Copyright (c) 2026 UnLuaNova contributors
 //
 // Licensed under the MIT License (the "License");
 // you may obtain a copy of the License at
@@ -76,6 +74,14 @@ struct FLuaNetBuckets
 	UPROPERTY()
 	TArray<TObjectPtr<UObject>> Objects;
 
+	/**
+	 * Canonical text payloads for arbitrary UStruct / container fields. A UPROPERTY cannot be
+	 * conjured onto this class at runtime, so all such fields share one replicated string
+	 * array; the declaration (covered by SchemaVersion) says how to decode each element.
+	 */
+	UPROPERTY()
+	TArray<FString> Generics;
+
 	/** Size every array to the matching bucket count; counts are indexed by ELuaNetBucket. */
 	void SetNum(const int32 (&Counts)[int32(UnLuaNova::ELuaNetBucket::Max)])
 	{
@@ -90,6 +96,7 @@ struct FLuaNetBuckets
 		Rotators.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Rotator)]);
 		Transforms.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Transform)]);
 		Objects.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Object)]);
+		Generics.SetNum(Counts[int32(UnLuaNova::ELuaNetBucket::Generic)]);
 	}
 };
 
@@ -113,6 +120,7 @@ struct FLuaNetBucketView
 	TArray<FRotator>* Rotators = nullptr;
 	TArray<FTransform>* Transforms = nullptr;
 	TArray<TObjectPtr<UObject>>* Objects = nullptr;
+	TArray<FString>* Generics = nullptr;
 
 	static FLuaNetBucketView From(FLuaNetBuckets& Buckets)
 	{
@@ -128,6 +136,7 @@ struct FLuaNetBucketView
 		View.Rotators = &Buckets.Rotators;
 		View.Transforms = &Buckets.Transforms;
 		View.Objects = &Buckets.Objects;
+		View.Generics = &Buckets.Generics;
 		return View;
 	}
 
@@ -135,6 +144,6 @@ struct FLuaNetBucketView
 	bool IsValid() const
 	{
 		return Bools && Ints && Int64s && Floats && Doubles && Strings && Names
-			&& Vectors && Rotators && Transforms && Objects;
+			&& Vectors && Rotators && Transforms && Objects && Generics;
 	}
 };

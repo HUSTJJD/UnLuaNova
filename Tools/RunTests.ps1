@@ -55,6 +55,12 @@
     .\Tools\RunTests.ps1 -Profile Development -Backend Luau -Filter UnLuaNova.API.Timer
 .EXAMPLE
     .\Tools\RunTests.ps1 -Profile Development -Backend Luau -BuildOnly
+.EXAMPLE
+    .\Tools\RunTests.ps1 -Profile Development -NetMatrix -Backend Lua -SkipBuild
+.PARAMETER NetMatrix
+    Development-only opt-in for the connected delivery matrix (late join, reconnect, dormancy,
+    relevancy and Legacy / PushOff / Iris). Each cell launches three real processes and is judged
+    by ValidateRelease.py --net-matrix; it is not part of the normal test or Release matrix.
 #>
 
 [CmdletBinding()]
@@ -80,6 +86,10 @@ param(
     [string] $Map = "",
     [string] $OutputDir = "",
     [string] $ExtraCommands = "",
+    # Raw engine command-line switches (for example -UnLuaNovaNetScenarios or
+    # -UseIrisReplication=1). Unlike ExtraCommands these are NOT console commands:
+    # they must be on the process command line before the engine starts up.
+    [string] $ExtraArgs = "",
     # 测试载体。Auto：按静态分类挑 —— filter 里没有需要视口/截图的用例就跑 -game，
     # 否则回编辑器。见上面的 .PARAMETER Carrier。
     [ValidateSet("Auto", "Editor", "Game")]
@@ -111,12 +121,24 @@ param(
     [switch] $FailOnDrift,
     # 人工确认后跑一次：把这一轮的用例清单写成新的基线并提交。
     [switch] $UpdateBaseline,
+    # Opt-in connected delivery matrix (Legacy/PushOff/Iris + four connected scenarios).
+    # It launches three real processes per cell, so it is never part of a normal test run.
+    [switch] $NetMatrix,
     [switch] $DryRun
 )
 
 $ErrorActionPreference = "Stop"
 
 # Dispatch before discovery, config writes or classification.
+if ($NetMatrix) {
+    if ($Profile -eq "Release") {
+        throw "-NetMatrix is a Development-only opt-in: use -Profile Development -NetMatrix. A normal Release must stay complete and must not be replaced by a partial connected matrix."
+    }
+    & (Join-Path $PSScriptRoot 'RunNetMatrix.ps1') -EnginePath $EnginePath -ProjectPath $ProjectPath `
+        -OutputDir $OutputDir -Backend $Backend -TimeoutMinutes $TimeoutMinutes `
+        -SkipBuild:$SkipBuild -DryRun:$DryRun
+    exit $LASTEXITCODE
+}
 if ($Profile -eq "Release") {
     $Allowed = @('Profile', 'EnginePath', 'ProjectPath', 'OutputDir', 'TimeoutMinutes', 'DryRun',
         'Baseline', 'NoCache', 'PruneLegacy')
@@ -968,6 +990,7 @@ function Get-TestArgs {
 
     $A = @($ProjectPath)
     if ($Map) { $A += $Map }
+    if ($ExtraArgs) { $A += ($ExtraArgs -split '\s+' | Where-Object { $_ }) }
     # -game: 用打包前的独立游戏进程跑，不起编辑器。少了编辑器启动与后台 tick，
     # 少了一整套编辑器模块 —— 也是唯一能验证"这些用例其实不依赖编辑器"的办法。
     if ($IsGameCarrier) { $A += "-game" }

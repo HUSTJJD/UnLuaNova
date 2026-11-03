@@ -217,8 +217,8 @@ class ReleaseValidationTests(unittest.TestCase):
             (memory / "vm_cycles.json").unlink()
             self.assertTrue(gate.validate_memory(run, "Lua", "editor"))
 
-    def connected_evidence(self, run):
-        directory = run / "net/DedicatedServer"
+    def connected_evidence(self, run, subpath="net/DedicatedServer"):
+        directory = run / subpath
         (directory / "logs").mkdir(parents=True)
         labels = ("Server", "Client1", "Client2")
         session = "0123456789abcdef0123456789abcdef"
@@ -247,6 +247,7 @@ class ReleaseValidationTests(unittest.TestCase):
                     result.append(dict(ActorId=actor_id, Challenge=seed, SessionId=session,
                                        Authority=index == 0, Owned=index == actor_id,
                                        HP=seed + (rounds - 1) * 10 + 1, HpReadable=True,
+                                       OwnerSecret=777 if index == 0 or index == actor_id else -1,
                                        CallLog="|".join(calls) + "|", CallCount=len(calls)))
                 return result
             data = dict(SchemaVersion=2, Complete=True, Fault="", Role=label, Backend="Lua",
@@ -255,6 +256,10 @@ class ReleaseValidationTests(unittest.TestCase):
                         FirstRoundObservationMs=5000,
                         WorldPackage="/UnLuaNovaTestSuite/Tests/Misc/Empty", ServerAddress="127.0.0.1:7777",
                         Rpcs=[dict(Name=name, RpcId=i + 1) for i, name in enumerate(("FromClient", "FromServer", "ToAll"))],
+                        Props=[dict(Name="HP", Type=1, Condition=0),
+                               dict(Name="OwnerSecret", Type=1, Condition=2)],
+                        NonOwnerRpcAttempted=index != 0,
+                        NonOwnerRpcToken=f"FromClient:7000{index}|" if index else "",
                         Actors=actors(2, ack=index == 0),
                         Observations=[dict(Round=phase, Actors=actors(phase)) for phase in (1, 2)])
             (directory / f"{label}.json").write_text(json.dumps(data))
@@ -320,6 +325,54 @@ class ReleaseValidationTests(unittest.TestCase):
             path.write_text(json.dumps(data))
             self.assertTrue(gate.validate_connected_session(run, "Lua"))
 
+    def test_connected_network_rejects_wrong_owner_only_visibility(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            net = self.connected_evidence(run)
+            self.assertEqual(gate.validate_connected_session(run, "Lua"), [])
+            path = net / "Client1.json"
+            data = json.loads(path.read_text())
+            data["Actors"][1]["OwnerSecret"] = 777  # Client1 does not own actor 2
+            path.write_text(json.dumps(data))
+            self.assertTrue(any("OwnerOnly field visibility failed" in e
+                               for e in gate.validate_connected_session(run, "Lua")))
+
+    def test_connected_network_requires_the_owner_only_declaration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            net = self.connected_evidence(run)
+            path = net / "Server.json"
+            data = json.loads(path.read_text())
+            data["Props"] = [dict(Name="HP", Type=1, Condition=0)]
+            path.write_text(json.dumps(data))
+            self.assertTrue(any("OwnerOnly field missing" in e
+                               for e in gate.validate_connected_session(run, "Lua")))
+
+    def test_connected_network_requires_the_non_owner_attempt_itself(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            net = self.connected_evidence(run)
+            self.assertEqual(gate.validate_connected_session(run, "Lua"), [])
+            path = net / "Client1.json"
+            original = json.loads(path.read_text())
+            for change in (dict(NonOwnerRpcAttempted=False), dict(NonOwnerRpcToken=""),
+                           dict(NonOwnerRpcToken=json.loads((net / "Client2.json").read_text())["NonOwnerRpcToken"])):
+                with self.subTest(change=change):
+                    path.write_text(json.dumps(dict(original, **change)))
+                    self.assertTrue(gate.validate_connected_session(run, "Lua"))
+
+    def test_connected_network_rejects_an_executed_non_owner_server_rpc(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            net = self.connected_evidence(run)
+            token = json.loads((net / "Client1.json").read_text())["NonOwnerRpcToken"]
+            server_path = net / "Server.json"
+            data = json.loads(server_path.read_text())
+            data["Actors"][0]["CallLog"] += token
+            server_path.write_text(json.dumps(data))
+            errors = gate.validate_connected_session(run, "Lua")
+            self.assertTrue(any("Non-owner Server RPC executed" in e for e in errors))
+
     def test_connected_network_rejects_old_declaration_only_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
@@ -354,6 +407,149 @@ class ReleaseValidationTests(unittest.TestCase):
             for name in ("Binding", "Override", "Container", "UMG"):
                 (run / f"screenshots/Showcase_{name}.png").write_bytes(b"image")
             self.assertEqual(gate.validate_media(run), [])
+
+
+    def scenario_evidence(self, run, variant=""):
+        session = "0123456789abcdef0123456789abcdef"
+        labels = ("Server", "Client1", "Client2")
+        for name in gate.NET_SCENARIOS:
+            directory = run / "net/scenarios" / name
+            (directory / "logs").mkdir(parents=True)
+            peers = [
+                dict(label="Server", pid=100, launch_serial=1, launch_count=1, first_pid=100),
+                dict(label="Client1", pid=101, launch_serial=2,
+                     launch_count=2 if name == "Reconnect" else 1,
+                     first_pid=201 if name == "Reconnect" else 101),
+                dict(label="Client2", pid=102,
+                     launch_serial=3 if name == "LateJoin" else 2,
+                     launch_count=1, first_pid=102),
+            ]
+            (directory / "topology.json").write_text(json.dumps(
+                dict(scenario=name, variant=variant, peers=peers)))
+            for index, label in enumerate(labels):
+                data = dict(Complete=True, Scenario=name, SessionId=session, Variant=variant,
+                            Backend="Lua", ProcessId=100 + index,
+                            IrisEnabled=variant == "Iris", PushModelEnabled=variant != "PushOff",
+                            ClientsAtSpawn=1 if name == "LateJoin" else 2, ClientsFinal=2,
+                            ConnectionDrops=1 if name == "Reconnect" else 0,
+                            DormantValue=1777 if name == "Dormancy" else 0,
+                            FlushedValue=1888 if name == "Dormancy" else 0,
+                            DormancyFlushed=name == "Dormancy",
+                            RelevancyRestrictedActor=2 if name == "Relevancy" else 0,
+                            JoinedAfterSpawn=(label == "Client2" and name == "LateJoin"),
+                            DormancySuppressed=name == "Dormancy" and label != "Server",
+                            DormancyResumed=name == "Dormancy" and label != "Server",
+                            DormancyAfterValue=1888 if name == "Dormancy" else -1,
+                            VisibleActorIds=[1] if name == "Relevancy" and label == "Client1" else [1, 2])
+                (directory / f"{label}.json").write_text(json.dumps(data))
+                (directory / "logs" / f"{label}.log").write_text("scenario peer log")
+
+    def variant_evidence(self, run):
+        (run / "metadata").mkdir(parents=True, exist_ok=True)
+        (run / "metadata/net-variants.json").write_text(
+            json.dumps(dict(variants=list(gate.NET_VARIANTS))))
+        for name, spec in gate.NET_VARIANTS.items():
+            directory = self.connected_evidence(run, f"net/variants/{name}/DedicatedServer")
+            topology = json.loads((directory / "topology.json").read_text())
+            topology["variant"] = name
+            (directory / "topology.json").write_text(json.dumps(topology))
+            for label in ("Server", "Client1", "Client2"):
+                path = directory / f"{label}.json"
+                data = json.loads(path.read_text())
+                data.update(Variant=name, IrisEnabled=spec["iris"],
+                            PushModelEnabled=False if spec["push"] is False else True)
+                path.write_text(json.dumps(data))
+
+    def test_net_matrix_passes_only_with_scenarios_and_delivery_variants(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            self.scenario_evidence(run)
+            self.assertTrue(gate.validate_net_matrix(run, "Lua"))
+            self.variant_evidence(run)
+            self.assertEqual(gate.validate_net_matrix(run, "Lua"), [])
+            self.assertEqual(gate.validate_net_scenarios(run, "Lua"), [])
+            self.assertEqual(gate.validate_net_variants(run, "Lua"), [])
+
+    def test_net_scenarios_fail_closed_on_missing_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            self.assertTrue(any("missing or invalid evidence" in e
+                                for e in gate.validate_net_scenarios(run, "Lua")))
+            self.scenario_evidence(run)
+            (run / "net/scenarios/Dormancy/Client1.json").unlink()
+            self.assertTrue(gate.validate_net_scenarios(run, "Lua"))
+
+    def test_late_join_requires_launch_order_and_preexisting_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            self.scenario_evidence(run)
+            path = run / "net/scenarios/LateJoin/topology.json"
+            topology = json.loads(path.read_text())
+            for change in (dict(),):
+                with self.subTest(change=change):
+                    topology["peers"][2]["launch_serial"] = 1
+                    path.write_text(json.dumps(topology))
+                    self.assertTrue(any("launch order" in e for e in
+                                        gate.validate_net_scenario(run, "LateJoin", "Lua")))
+            topology["peers"][2]["launch_serial"] = 3
+            path.write_text(json.dumps(topology))
+            report = run / "net/scenarios/LateJoin/Client2.json"
+            report.write_text(json.dumps(dict(json.loads(report.read_text()), JoinedAfterSpawn=False)))
+            self.assertTrue(gate.validate_net_scenario(run, "LateJoin", "Lua"))
+
+    def test_reconnect_requires_a_distinct_replacement_process(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            self.scenario_evidence(run)
+            path = run / "net/scenarios/Reconnect/topology.json"
+            topology = json.loads(path.read_text())
+            topology["peers"][1]["launch_count"] = 1
+            topology["peers"][1]["first_pid"] = 101
+            path.write_text(json.dumps(topology))
+            self.assertTrue(any("replacement process" in e for e in
+                                gate.validate_net_scenario(run, "Reconnect", "Lua")))
+
+    def test_dormancy_requires_suppression_then_recovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            self.scenario_evidence(run)
+            path = run / "net/scenarios/Dormancy/Client1.json"
+            data = json.loads(path.read_text())
+            data.update(DormancySuppressed=False, DormancyAfterValue=1777)
+            path.write_text(json.dumps(data))
+            self.assertTrue(gate.validate_net_scenario(run, "Dormancy", "Lua"))
+
+    def test_relevancy_requires_owner_only_visibility(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            self.scenario_evidence(run)
+            path = run / "net/scenarios/Relevancy/Client1.json"
+            data = json.loads(path.read_text())
+            data["VisibleActorIds"] = [1, 2]
+            path.write_text(json.dumps(data))
+            self.assertTrue(any("non-owner" in e for e in
+                                gate.validate_net_scenario(run, "Relevancy", "Lua")))
+
+    def test_net_variants_reject_faked_iris_or_push_model_flags(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            self.variant_evidence(run)
+            self.assertEqual(gate.validate_net_variants(run, "Lua"), [])
+            for name, field, value in (("Iris", "IrisEnabled", False),
+                                       ("PushOff", "PushModelEnabled", True),
+                                       ("Legacy", "Variant", "Iris")):
+                with self.subTest(variant=name):
+                    path = run / f"net/variants/{name}/DedicatedServer/Client1.json"
+                    data = json.loads(path.read_text())
+                    data[field] = value
+                    path.write_text(json.dumps(data))
+                    self.assertTrue(gate.validate_net_variants(run, "Lua"))
+                    data[field] = gate.NET_VARIANTS[name]["iris"] if field == "IrisEnabled" else (
+                        False if field == "PushModelEnabled" else name)
+                    path.write_text(json.dumps(data))
+            manifest = run / "metadata/net-variants.json"
+            manifest.write_text(json.dumps(dict(variants=["Legacy"])))
+            self.assertTrue(gate.validate_net_variants(run, "Lua"))
 
 
 if __name__ == "__main__":

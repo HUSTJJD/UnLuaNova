@@ -28,6 +28,6 @@ Env owns the VM and registries; UE owns UObjects and Worlds. Borrowed struct/con
 
 Automatic GC delegates scheduling to the VM. TimeSliced requests steps under a per-frame budget; this is not a hard pause bound or multithreaded GC and does not establish equal latency.
 
-Editor-generated declarations feed external LuaLS/luau-lsp, not runtime type checking. Runtime debug service and editor DAP adapter have different deployment scope. Experimental networking creates UFunctions and uses typed replicated buckets; instance-derived conditions conflict with class-cached layouts. See [networking](LuaNetworking.md).
+Editor-generated declarations feed external LuaLS/luau-lsp, not runtime type checking. Runtime debug service and editor DAP adapter have different deployment scope. Experimental networking creates UFunctions and uses typed replicated buckets. Unconditional fields live in per-type arrays so push model can dirty them individually; conditional fields live in one `FLuaNetBuckets` group per condition, because UE decides what to send from the property's class-cached registration and that cannot depend on an instance or a script value. A field's address is therefore (condition group, type bucket, index). See [networking](LuaNetworking.md).
 
 Changes must specify backend/error/ownership/platform contracts, update the matrix, and add meaningful tests/examples. Source existence and old screenshots are not current acceptance evidence.

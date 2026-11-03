@@ -8,7 +8,7 @@ Use the pinned revisions in the [audit](Benchmark_Review.md). Upstream marketing
 
 Read LuaObject/LuaVar/LuaState, delegates, overrides, profiler and CppBinding together with the export tools. UnLuaNova inherits reflection, bidirectional calls, overrides, out/ref, containers and delegates from UnLua. It also has template exports; claiming no CppBinding-like path would be wrong. Its generated reflected thunks are not arbitrary C++ libclang exports and still call ProcessEvent.
 
-Multi-state, hot reload, actor/component/widget binding, RPC, profiling, watchdog and remote debugging must be assessed as workflows. Current gaps include per-instance modules, callback ownership, network conditions, packaged remote debugging and performance evidence. Budgeted incremental GC is not equivalent to slua's multithreaded GC.
+Multi-state, hot reload, actor/component/widget binding, RPC, profiling, watchdog and remote debugging must be assessed as workflows. Current gaps include per-instance modules, callback ownership, connected owner/non-owner acceptance for network conditions (the per-condition layout itself is delivered), packaged remote debugging and performance evidence. Budgeted incremental GC is not equivalent to slua's multithreaded GC.
 
 ## FUnLua
 

@@ -20,6 +20,14 @@ description: "Static binding crash, backend compatibility and release validation
 
 ### Complete Release28 Acceptance
 
+> [!NOTE]
+> **Evidence retention correction (2026-11-03)**: `ConnectedNet-Release-28/` and the raw
+> `net/*.json` behind the four SessionIds below are no longer in the working tree. This section is a
+> **historical record that cannot be re-verified in place**. Structurally equivalent real DS
+> artifacts do exist under `Saved/ReleaseTests/baseline/` (the 2026-11-03 run, four carriers,
+> different SessionIds, `complete=true / passed=true`); its automation reports have been recorded
+> into `Tools/evidence/` with `commit 347bb8c5`. Re-verifying Release28 itself requires a re-run.
+
 `Saved/ReleaseTests/ConnectedNet-Release-28/` completed on 2026-10-25 with `complete=true`, `passed=true`, **33/33 stages passed and process exit code 0**. It ran from 19:22:41 to 20:17:28 local time. These results come from one complete matrix, without combining historical diagnostics.
 
 | Backend | Carrier | Passed / Total | Failed | Skipped | Relative report path |

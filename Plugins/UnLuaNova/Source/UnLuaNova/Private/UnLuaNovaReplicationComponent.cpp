@@ -1,6 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLuaNova available.
-//
-// Copyright (C) 2019 Tencent. All rights reserved.
+// Copyright (c) 2026 UnLuaNova contributors
 //
 // Licensed under the MIT License (the "License");
 // you may obtain a copy of the License at
@@ -22,6 +20,7 @@
 #include "UnLuaNovaModule.h"
 #include "UnLuaNovaNet.h"
 #include "UnLuaNovaNetPayload.h"
+#include "UnLuaNovaNetTypeSpec.h"
 
 /**
  * Push model is a compile-time capability (WITH_PUSH_MODEL) that a project can also switch
@@ -390,6 +389,8 @@ void UUnLuaNovaReplicationComponent::GetLifetimeReplicatedProps(TArray<FLifetime
 
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Objects, Params);
 
+    DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, Generics, Params);
+
     // The fingerprint is not push-based: it changes at most once per hot reload, and it has
     // to be there before the data is interpreted, so it is allowed to be polled.
     FDoRepLifetimeParams MetaParams;
@@ -454,6 +455,7 @@ void UUnLuaNovaReplicationComponent::BeginPlay()
     Rotators.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Rotator)]);
     Transforms.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Transform)]);
     Objects.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Object)]);
+    Generics.SetNum(Unconditional[int32(UnLuaNova::ELuaNetBucket::Generic)]);
 
     for (int32 Group = 1; Group < int32(UnLuaNova::ELuaNetConditionGroup::Max); ++Group)
     {
@@ -601,6 +603,7 @@ void UUnLuaNovaReplicationComponent::MarkBucketDirty(UnLuaNova::ELuaNetBucket Bu
     case UnLuaNova::ELuaNetBucket::Rotator:   MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Rotators, this);   break;
     case UnLuaNova::ELuaNetBucket::Transform: MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Transforms, this); break;
     case UnLuaNova::ELuaNetBucket::Object:    MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Objects, this);    break;
+    case UnLuaNova::ELuaNetBucket::Generic:   MARK_PROPERTY_DIRTY_FROM_NAME(UUnLuaNovaReplicationComponent, Generics, this);   break;
     default: break;
     }
 #endif
@@ -657,6 +660,7 @@ bool UUnLuaNovaReplicationComponent::ResolveStorage(const UnLuaNova::FLuaNetSlot
         View.Rotators = &Rotators;
         View.Transforms = &Transforms;
         View.Objects = &Objects;
+        View.Generics = &Generics;
         OutView = View;
         return OutView.IsValid();
     }
@@ -768,6 +772,29 @@ bool UUnLuaNovaReplicationComponent::SyncSlot(lua_State* L, int32 TableIdx, cons
             || Same((*View.Objects)[Slot.Index].Get(), Value))
             return false;
         (*View.Objects)[Slot.Index] = Value;
+        return true;
+    }
+    case UnLuaNova::ELuaNetBucket::Generic:
+    {
+        UnLuaNova::FLuaNetTypeSpec Spec;
+        FString SpecError;
+        if (!View.Generics->IsValidIndex(Slot.Index)
+            || !UnLuaNova::ParseLuaNetTypeSpec(Slot.TypeSpec, Spec, SpecError))
+            return false;
+
+        lua_getfield(L, TableIdx, Key.Get());
+        FString Text, Error;
+        const bool bOk = UnLuaNova::EncodeLuaNetValue(L, -1, Spec, Text, Error);
+        lua_pop(L, 1);
+        if (!bOk)
+        {
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Generic field '%s' on '%s' was not replicated: %s"),
+                *Slot.Name.ToString(), *GetNameSafe(GetOwner()), *Error);
+            return false;
+        }
+        if (Same((*View.Generics)[Slot.Index], Text))
+            return false;
+        (*View.Generics)[Slot.Index] = MoveTemp(Text);
         return true;
     }
     default:
@@ -1060,6 +1087,39 @@ bool UUnLuaNovaReplicationComponent::ApplySlot(lua_State* L, int32 TableIdx, con
         WriteField(L, TableIdx, Key.Get(), Current);
         return true;
     }
+    case UnLuaNova::ELuaNetBucket::Generic:
+    {
+        UnLuaNova::FLuaNetTypeSpec Spec;
+        FString SpecError;
+        if (!View.Generics->IsValidIndex(Slot.Index)
+            || !UnLuaNova::ParseLuaNetTypeSpec(Slot.TypeSpec, Spec, SpecError))
+            return false;
+
+        const FString& Text = (*View.Generics)[Slot.Index];
+        if (Text.IsEmpty())
+            return false;
+
+        // Compare canonical encodings, not Lua values: the Lua side holds a table while the
+        // wire side holds text, and re-encoding it is what tells us whether anything changed.
+        FString OldText, OldError;
+        lua_getfield(L, TableIdx, Key.Get());
+        const bool bHasOld = UnLuaNova::EncodeLuaNetValue(L, -1, Spec, OldText, OldError);
+        lua_pop(L, 1);
+        if (bHasOld && Same(OldText, Text))
+            return false;
+
+        const int32 Top = lua_gettop(L);
+        FString Error;
+        if (!UnLuaNova::DecodeLuaNetValue(L, Text, Spec, Error))
+        {
+            lua_settop(L, Top);
+            UE_LOG(LogUnLuaNova, Warning, TEXT("Generic field '%s' on '%s' was not applied: %s"),
+                *Slot.Name.ToString(), *GetNameSafe(GetOwner()), *Error);
+            return false;
+        }
+        lua_setfield(L, TableIdx, Key.Get());
+        return true;
+    }
     default:
         return false;
     }
@@ -1076,6 +1136,7 @@ void UUnLuaNovaReplicationComponent::OnRep_Vectors()    { PushBucket(UnLuaNova::
 void UUnLuaNovaReplicationComponent::OnRep_Rotators()   { PushBucket(UnLuaNova::ELuaNetBucket::Rotator); }
 void UUnLuaNovaReplicationComponent::OnRep_Transforms() { PushBucket(UnLuaNova::ELuaNetBucket::Transform); }
 void UUnLuaNovaReplicationComponent::OnRep_Objects()    { PushBucket(UnLuaNova::ELuaNetBucket::Object); }
+void UUnLuaNovaReplicationComponent::OnRep_Generics()   { PushBucket(UnLuaNova::ELuaNetBucket::Generic); }
 
 void UUnLuaNovaReplicationComponent::OnRep_GroupInitialOnly()        { PushGroup(UnLuaNova::ELuaNetConditionGroup::InitialOnly); }
 void UUnLuaNovaReplicationComponent::OnRep_GroupOwnerOnly()          { PushGroup(UnLuaNova::ELuaNetConditionGroup::OwnerOnly); }

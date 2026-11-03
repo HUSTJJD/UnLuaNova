@@ -1,6 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLuaNova available.
-//
-// Copyright (C) 2019 Tencent. All rights reserved.
+// Copyright (c) 2026 UnLuaNova contributors
 //
 // Licensed under the MIT License (the "License");
 // you may obtain a copy of the License at
@@ -20,6 +18,7 @@
 #include "LuaOverridesClass.h"
 #include "UnLuaNovaBase.h"
 #include "UnLuaNovaNetPayload.h"
+#include "UnLuaNovaNetTypeSpec.h"
 #include "UObject/UnrealType.h"
 #include <initializer_list>
 
@@ -76,6 +75,12 @@ namespace UnLuaNova
         if (Lower == TEXT("simulatedonlynoreplay"))       { OutCondition = COND_SimulatedOnlyNoReplay;     return true; }
         if (Lower == TEXT("simulatedorphysicsnoreplay"))  { OutCondition = COND_SimulatedOrPhysicsNoReplay; return true; }
         if (Lower == TEXT("skipreplay"))                  { OutCondition = COND_SkipReplay;                return true; }
+        // These are real engine conditions but have no storage group here. Parsing them must
+        // succeed so a typo stays distinguishable from an unsupported condition; declaring
+        // one is refused by ConditionToGroup instead of being silently downgraded to None.
+        if (Lower == TEXT("dynamic"))                     { OutCondition = COND_Dynamic;                   return true; }
+        if (Lower == TEXT("never"))                       { OutCondition = COND_Never;                     return true; }
+        if (Lower == TEXT("netgroup"))                    { OutCondition = COND_NetGroup;                  return true; }
 
         return false;
     }
@@ -139,6 +144,26 @@ namespace UnLuaNova
         }
 
         /**
+         * A type name is either one of the eleven fixed buckets or a generic type spec.
+         * Generic specs are normalised before being stored, so SchemaVersion and the codec
+         * on the receiving peer see exactly the same string.
+         */
+        bool ParseDeclaredType(const FString& TypeName, ELuaNetParamType& OutType, FString& OutSpec)
+        {
+            OutSpec.Empty();
+            if (ParseLuaNetParamType(TypeName, OutType))
+                return true;
+
+            FLuaNetTypeSpec Spec;
+            FString Error;
+            if (!ParseLuaNetTypeSpec(TypeName, Spec, Error) || !Spec.IsGeneric())
+                return false;
+            OutType = ELuaNetParamType::Generic;
+            OutSpec = MoveTemp(Spec.Canonical);
+            return true;
+        }
+
+        /**
          * Parameters: an array of type names ("Int"), or of tables
          * ({ Name = "HP", Type = "Float" }). Unnamed ones become Arg0, Arg1, ...
          */
@@ -169,7 +194,7 @@ namespace UnLuaNova
 
                 if (lua_type(L, -1) == LUA_TSTRING)
                 {
-                    bOk = ParseLuaNetParamType(UTF8_TO_TCHAR(lua_tostring(L, -1)), Param.Type);
+                    bOk = ParseDeclaredType(FString(UTF8_TO_TCHAR(lua_tostring(L, -1))), Param.Type, Param.TypeSpec);
                 }
                 else if (lua_istable(L, -1))
                 {
@@ -181,7 +206,7 @@ namespace UnLuaNova
                     if (!TypeName.IsEmpty() && HasOnlyFields(L, EntryIdx, { "Name", "Type" })
                         && (NameType == LUA_TNIL || (NameType == LUA_TSTRING && !NameText.IsEmpty() && !FName(*NameText).IsNone())))
                     {
-                        bOk = ParseLuaNetParamType(TypeName, Param.Type);
+                        bOk = ParseDeclaredType(TypeName, Param.Type, Param.TypeSpec);
                         if (!NameText.IsEmpty())
                             Param.Name = FName(*NameText);
                     }
@@ -270,6 +295,17 @@ namespace UnLuaNova
                 auto* Property = new FObjectProperty(Outer, Param.Name);
                 Property->SetPropertyClass(UObject::StaticClass());
                 return Property;
+            }
+            case ELuaNetParamType::Generic:
+            {
+                // The UFunction is built at runtime, so an arbitrary FStructProperty or a
+                // container FProperty can be linked into it. FFunctionDesc then marshals the
+                // Lua value using the same reflection path as a native UFUNCTION parameter.
+                FLuaNetTypeSpec Spec;
+                FString Error;
+                if (!ParseLuaNetTypeSpec(Param.TypeSpec, Spec, Error))
+                    return nullptr;
+                return BuildLuaNetTypeProperty(Outer, Param.Name, Spec);
             }
             }
 
@@ -493,8 +529,8 @@ namespace UnLuaNova
             lua_pop(L, 1);
 
             FLuaRepDecl Decl;
-            if (Name.IsEmpty() || !ParseLuaNetParamType(TypeName, Decl.Type))
-                return Reject(TEXT("Every property requires a nonempty Name and known Type."));
+            if (Name.IsEmpty() || !ParseDeclaredType(TypeName, Decl.Type, Decl.TypeSpec))
+                return Reject(TEXT("Every property requires a nonempty Name and a known Type or type spec (Struct:<path>, Array:<spec>, Set:<spec>, Map:<key>:<value>)."));
 
             Decl.Name = FName(*Name);
             if (Decl.Name.IsNone() || Names.Contains(Decl.Name))
@@ -509,7 +545,7 @@ namespace UnLuaNova
             // an owner-only value to everyone is worse than refusing to replicate the field.
             ELuaNetConditionGroup Group = ELuaNetConditionGroup::None;
             if (!ConditionToGroup(Decl.Condition, Group))
-                return Reject(TEXT("Unsupported replication condition. COND_Custom and COND_Dynamic are refused by the engine on subobjects, and the Replay* conditions are not decided here."));
+                return Reject(TEXT("Unsupported replication condition: no storage group is registered for it. Custom and Dynamic are refused by the engine on subobjects; Never, NetGroup and the Replay* conditions are not decided here. Supported: None, InitialOnly, OwnerOnly, SkipOwner, SimulatedOnly, AutonomousOnly, SimulatedOrPhysics, InitialOrOwner."));
 
             Decls.Add(Decl);
             lua_pop(L, 1); // the entry
@@ -524,7 +560,8 @@ namespace UnLuaNova
                 return Reject(TEXT("Class schema is immutable until network teardown."));
             for (int32 Index = 0; Index < Decls.Num(); ++Index)
                 if (Existing->Decls[Index].Name != Decls[Index].Name || Existing->Decls[Index].Type != Decls[Index].Type
-                    || Existing->Decls[Index].Condition != Decls[Index].Condition)
+                    || Existing->Decls[Index].Condition != Decls[Index].Condition
+                    || Existing->Decls[Index].TypeSpec != Decls[Index].TypeSpec)
                     return Reject(TEXT("Class schema is immutable until network teardown."));
 
             // An identical schema keeps its original owner: the environment that declared it
@@ -574,9 +611,11 @@ namespace UnLuaNova
         for (auto It = RepProps.CreateIterator(); It; ++It)
         {
             const FRepPropsEntry& Entry = It->Value;
-            // 'Env' owns it, or nobody does (declared before an environment could be
-            // resolved), or the class is already gone and the entry can only be dead weight.
-            if (Entry.Env == Env || Entry.Env == nullptr || !It->Key.IsValid())
+            // 'Env' owns it, or the class is already gone and the entry can only be dead
+            // weight. An entry with no owning Env is process-wide state, not this Env's:
+            // only Cleanup(nullptr) may drop it. Attributing one to whichever Env happens
+            // to shut down first is what used to wipe another Env's schema.
+            if (Entry.Env == Env || !It->Key.IsValid())
                 It.RemoveCurrent();
         }
     }

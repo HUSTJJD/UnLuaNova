@@ -381,13 +381,15 @@
       ],
       "tests": [
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp",
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetMulticastTest.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetMulticastTest.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetDedicatedServerTest.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetNetScenariosTest.cpp"
       ],
       "examples": [
         "Content/Script/Tests/Net/NetActor.lua"
       ],
-      "gap": "Sorted registration, whole-RPC parameter validation, reliable/unreliable flags on all three kinds, and parent-class schema lookup delivered. The engine already rejects a non-owner Server RPC on the server (UNetDriver::ShouldCallRemoteFunction requires RepFlags.bNetOwner), but that path has no connected-peer assertion yet. Reconnect, cooked acceptance and cross-peer schema mismatch remain incomplete.",
-      "acceptance": "Connected DS + 2 clients with an explicit non-owner Server RPC rejection assertion, reconnect, cross-peer schema mismatch and cooked carriers. Reliable/unreliable and declaration syntax are covered by unit cases.",
+      "gap": "Sorted registration, whole-RPC parameter validation, reliable/unreliable flags on all three kinds, and parent-class schema lookup delivered. RPC parameters now accept any resolvable UScriptStruct and Array/Set/Map nests: the runtime-built UFunction gains a real FStructProperty/FArrayProperty/FSetProperty/FMapProperty, so UnLua's own FFunctionDesc marshalling handles them. The engine already rejects a non-owner Server RPC (UNetDriver::ShouldCallRemoteFunction requires RepFlags.bNetOwner); the DS scenario and release gate assert this with a unique token, but that assertion has not been executed. Late join and process-level reconnect scenarios plus their gates are delivered in source and are also unexecuted. Cooked acceptance and cross-peer schema mismatch remain incomplete.",
+      "acceptance": "The connected DS + 2 clients scenario includes an explicit non-owner Server RPC rejection assertion (unique token, exact CallLog comparison, and a ValidateRelease.py gate requiring the attempt itself). Late join needs a spawn marker plus topology launch order; reconnect needs a distinct replacement PID, launch_count=2 and a server-observed connection drop. All of these must be executed via Tools/RunNetMatrix.ps1 before they count. Still outstanding: cross-peer schema mismatch and cooked carriers. Reliable/unreliable, declaration syntax, spec parsing and UStruct property construction are covered by unit cases.",
       "upstream": [
         "slua"
       ],
@@ -405,13 +407,15 @@
       ],
       "tests": [
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp",
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetClientServerTest.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetClientServerTest.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetDedicatedServerTest.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetNetScenariosTest.cpp"
       ],
       "examples": [
         "Content/Script/Tests/Net/NetActor.lua"
       ],
-      "gap": "One storage group per supported condition (None/InitialOnly/OwnerOnly/SkipOwner/SimulatedOnly/AutonomousOnly/SimulatedOrPhysics/InitialOrOwner); malformed and unsupported declarations (Custom/Dynamic/Replay*) are rejected atomically and cached schemas stay immutable. Connected owner/non-owner acceptance, late join, dormancy and multi-Env cache cleanup remain incomplete.",
-      "acceptance": "The per-condition layout is delivered. Remaining: connected owner/non-owner assertion, mixed conditions/types across actors, late join and dormancy.",
+      "gap": "One storage group per supported condition (None/InitialOnly/OwnerOnly/SkipOwner/SimulatedOnly/AutonomousOnly/SimulatedOrPhysics/InitialOrOwner), plus a shared Generic group for arbitrary UStruct/container fields; malformed and unsupported declarations (Custom/Dynamic/Never/NetGroup/Replay*) are rejected atomically and cached schemas stay immutable. Env-owned cleanup no longer drops orphan entries, and a subclass without its own declaration inherits the parent's schema. Connected owner/non-owner visibility is asserted by the DS scenario source and release gate, but has not been executed. Dormancy (suppression then FlushNetDormancy recovery) and relevancy (owner-only visibility) scenarios and their gates are delivered in source and are also unexecuted. An execution run for multi-Env declaration/teardown order remains incomplete.",
+      "acceptance": "The per-condition layout is delivered, and the DS scenario source mixes an unconditional field with an OwnerOnly field in one declaration list and exports per-peer visibility for ValidateRelease.py to assert. Dormancy requires a client to observe a suppressed dormant value and then the flushed value; relevancy requires the non-owner to lose the owner-only actor. All of these must be executed before they count. Still outstanding: join-order swaps and cooked carriers.",
       "upstream": [
         "slua"
       ],
@@ -420,19 +424,25 @@
     {
       "id": "NET-TYPES",
       "area": "Networking",
-      "title": "Replication types, int64 and Iris/push model",
+      "title": "Replication types, UStruct/containers and Iris/push model",
       "status": "experimental",
       "priority": "P0",
       "source": [
         "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaReplicationComponent.cpp",
-        "Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaNetDecl.h"
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaNetTypeSpec.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaNetTypeSpec.h",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaNetDecl.h",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaNetBuckets.h"
       ],
       "tests": [
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetDedicatedServerTest.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetNetScenariosTest.cpp",
+        "Tools/tests/test_release_validation.py"
       ],
       "examples": [],
-      "gap": "Strict int32/int64 conversion, scalar and Object bucket round-trips, and per-condition storage covered by unit cases. Arbitrary UStruct / container fields are a scope boundary rather than a TODO: a replicated UPROPERTY cannot be conjured onto a class at runtime, which is why fields live in typed arrays. Iris/push and packaged-peer acceptance still need evidence.",
-      "acceptance": "Legacy / Iris / push-model combinations and packaged peers. Exact integer boundaries and Object resolution are covered by unit cases.",
+      "gap": "Strict int32/int64 conversion, scalar and Object bucket round-trips, and per-condition storage covered by unit cases. The earlier claim that arbitrary UStruct/container fields are an architecture boundary was wrong: a UClass cannot gain a UPROPERTY at runtime, but a generic bucket carrying a canonical self-describing payload does not need one, and a runtime-built UFunction can own any FStructProperty/FArrayProperty/FSetProperty/FMapProperty. Both paths are now delivered, with the spec folded into SchemaVersion so mismatched peers cannot misdecode. UObject references still use the dedicated Object bucket because a text payload cannot carry a NetGUID. The Legacy / PushOff / Iris delivery matrix and Tools/RunNetMatrix.ps1 are delivered in source, but no variant has been executed; packaged-peer acceptance still needs evidence.",
+      "acceptance": "ValidateRelease.py --net-matrix must see three variant topologies with real engine switch state read back from every peer (-UseIrisReplication=1 or a push-model cvar override), plus four scenario topologies. Exact integer boundaries, Object resolution, spec parsing/nesting and canonical Lua <-> payload round-trips are covered by unit cases.",
       "upstream": [
         "slua"
       ],

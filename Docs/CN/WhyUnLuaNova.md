@@ -8,6 +8,6 @@ UnLuaNova 基于 Tencent/UnLua fork，继承其 UE 反射、覆写、容器和�
 4. 工具形成闭环：源码、声明、示例、用例、构建身份和运行产物可追溯。
 5. 安全可理解：可信游戏脚本与不可信扩展采用不同能力配置，沙盒开关不代替权限模型。
 
-拟议创新包括带代际标识的 Env/World 回调句柄、生成绑定与类型声明共用签名描述、确定性网络 schema、可导出的能力清单。这些属于路线图，未作为已实现能力发布。
+拟议创新包括带代际标识的 Env/World 回调句柄、生成绑定与类型声明共用签名描述、可导出的能力清单。网络 schema 已有按条件分组的确定性布局（8 种条件、字段地址由声明推导、SchemaVersion 指纹校验），但仍是**实验特性**：owner / 非 owner 的联机验收与 Iris 组合未覆盖，因此未作为成熟能力发布。详见 [网络](LuaNetworking.md)。
 
 [对照证据](Comparison_sluaunreal.md) · [当前审计](Benchmark_Review.md) · [能力矩阵](../feature-matrix.md)

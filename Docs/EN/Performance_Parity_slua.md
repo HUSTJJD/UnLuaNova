@@ -34,13 +34,15 @@ AMD Ryzen 7 4700G · machine `davidsjian-PC2`.
 
 Lua 5.5.1 is faster on `VM.TableGrow` — recorded as measured, not cherry-picked.
 
-## Latest Release run
+## Latest regular validations
 
-The 2026-11-03 regular Release validation (`Saved/ReleaseTests/test`) failed the gate on five
-Luau Editor cases (+43.8% to +55.8%); product sources, manifests and process priorities are
-unchanged from the validated baseline run, so this is measurement-environment interference to be
-re-checked, not a confirmed code regression. The committed baseline was **not** replaced and the
-25% gate was **not** relaxed. See the [current version status](ReleaseNotes.md).
+One re-run failed the gate on five Luau Editor cases (+43.8% to +55.8%). Product sources,
+manifests and process priorities were unchanged from the validated baseline run, and a later re-run
+passed Luau Editor 641/641 with the performance gate green, so this was measurement-environment
+interference, not a code regression. The committed baseline was **not** replaced and the 25% gate
+was **not** relaxed. Current release status is still not passed (externally interrupted UBT
+compilers and uncommitted Net changes failing cases); see the
+[current version status](ReleaseNotes.md).
 
 ## Implemented paths
 

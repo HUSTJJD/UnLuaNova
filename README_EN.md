@@ -106,12 +106,19 @@ automation reports — the test → spec → capability mapping is **derived, no
 Current state:
 
 ```
-Repository audit passed: 40 capability groups; 35 have execution evidence from 5 recorded run(s).
+Repository audit passed: 40 capability groups; 35 have execution evidence from 9 recorded run(s).
 ```
 
-That is **35 of 40 with execution evidence** (the 2026-11-03 Release validation: the Luau run
-covered 35 items / 641 tests, the Lua run 33 items / 626 tests, all passing). Per-item detail is
-in the [capability matrix](Docs/feature-matrix.md).
+That is **35 of 40 with execution evidence**, across 9 recorded runs: 5 Editor runs plus the four
+2026-11-03 baseline runs (Lua / Luau x Editor / Game, 626 / 641 / 600 / 615 tests, all passing).
+
+This closes the carrier gap for networking: NET-RPC / NET-PROPS / NET-TYPES now all have **Game
+carrier** results, and the three-process DS suite `LuaNetDedicatedServerTest.cpp` is registered
+in the matrix instead of falling into "unmapped". Read the provenance carefully though — those four
+runs come from the **pre-change** build at commit `347bb8c5`, carry `historical: true` and a `source`
+field, and **do not describe the current worktree**. Connected-session `net/*.json` reports remain a
+separate gate in `ValidateRelease.py`, not automation evidence. Per-item detail is in the
+[capability matrix](Docs/feature-matrix.md).
 
 ---
 
@@ -143,17 +150,31 @@ Replicated fields support eight conditions (`None` / `InitialOnly` / `OwnerOnly`
 `SimulatedOnly` / `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`), each with its own
 storage group: UE decides whether to send a property from **the condition it was registered with**,
 and that registration is cached per class and cannot depend on a script value.
-`COND_Custom` / `COND_Dynamic` (the engine refuses custom conditions on subobjects) and the
-Replay* family are rejected with an Error and **never silently downgraded to `None`**.
+`Custom` / `Dynamic` (the engine refuses custom conditions on subobjects), `Never` / `NetGroup`
+and the Replay* family - every condition with no storage group - are rejected with an Error and
+**never silently downgraded to `None`**.
+
+Types can also be **specs** (`Struct:/Script/Engine.Vector`, `Array:<spec>`, `Set:<spec>`,
+`Map:<key>:<value>`): the RPC `UFunction` is built at runtime, so it can own an
+`FStructProperty` / `FArrayProperty` / `FSetProperty` / `FMapProperty` directly, while replicated
+fields use a canonical self-describing payload in a shared Generic bucket with the spec folded
+into `SchemaVersion`. **No `UPROPERTY` is added to a `UClass` at runtime** - the earlier claim
+that this was an architectural boundary was wrong. `UObject` references keep the dedicated
+Object bucket because a text payload cannot carry a NetGUID.
 
 > [!WARNING]
-> Still **experimental**. Read the three hard limits first: (1) connected owner / non-owner
-> acceptance is not done - single-process cases prove grouping and indices, not that a non-owner
-> received nothing; (2) late join / reconnect / dormancy / relevancy are uncovered; (3) the
-> Iris / push-model packaging matrix is unverified. Replicated fields are limited to eleven
-> built-in types - a UPROPERTY cannot be conjured onto a UClass at runtime, which is the
-> architectural boundary of a pure plugin. See the [capability matrix](Docs/feature-matrix.md)
-> and [Lua-declared networking (experimental)](Docs/EN/LuaNetworking.md).
+> Still **experimental**. The 0-to-1 difference and the hard limits belong together: (1) connected
+> owner / non-owner acceptance and the non-owner Server RPC rejection assertion are **not
+> executed** - single-process cases prove grouping and indices, not that a non-owner received
+> nothing; (2) late join / process-level reconnect / dormancy / relevancy have scenario source
+> and gates, but **none has been run**; (3) the Legacy / PushOff / Iris launch switches and the
+> `ValidateRelease.py --net-matrix` gate are delivered, again **with no execution evidence**.
+> All of them require real DS runs through `Tools/RunNetMatrix.ps1`; source existing is not a
+> test passing. Packet loss, seamless travel / `UNetConnection`-level reconnect, cross-peer
+> declaration mismatch and cooked carriers remain uncovered. `release-status` is still
+> `not-passed` and can only change through a genuinely passing Release run. See the
+> [capability matrix](Docs/feature-matrix.md) and
+> [Lua-declared networking (experimental)](Docs/EN/LuaNetworking.md).
 
 ---
 
@@ -200,6 +221,7 @@ means**; both backends use identical iteration counts.
 | ♻️ | **Hot reload** | In-editor reload, non-structural reload in PIE, runtime script shipping |
 | 🧪 | **Tests ship with the plugin** | The `UnLuaNovaTestSuite` module plus one command; reports land in `Saved/ReleaseTests/` |
 | 🧱 | **Pure plugin** | No engine fork; the backend is a compile-time choice |
+| 🌐 | **Declarative networking (experimental)** | Lua declares its own RPCs and replicated fields; eight conditions each have a storage group, and parameters/fields accept `UStruct` and container type specs, limits in the [networking doc](Docs/EN/LuaNetworking.md) |
 
 ---
 
@@ -212,7 +234,7 @@ means**; both backends use identical iteration counts.
 | **FUnLua** | Solid object-reference tree, property invalidation, per-instance binding design | Its license file is missing at the pinned commit, so its source is not referenced until verified |
 | **UE-AngelScript** | Static types, VSCode LSP, breakpoints as a first-class citizen | **Requires a source engine fork**; no runtime hot updates |
 | **Verse / Blueprint** | Official, zero integration | No runtime hot updates; iteration is bound to releases |
-| **UnLuaNova** | No engine fork + two backends + hot updates + observability + acceptance + MIT | Conditional replication and other gaps remain, see the limits table |
+| **UnLuaNova** | No engine fork + two backends + hot updates + observability + acceptance + MIT + declarative networking (experimental) | Connected owner/non-owner acceptance, the four connected scenarios and the Iris variants have source and gates but no execution run, see the limits table |
 
 **One-line boundary**: if you can accept a **source engine fork**, target PC/console single-player and do
 not need runtime updates, UE-AngelScript is the more complete experience. If you **cannot fork the
@@ -266,8 +288,12 @@ python Tools/AuditRepository.py      # repository consistency, no compile
 
 This project separates "it runs" from "it has been verified". **Source existing, tests existing, tests passing, and target-platform acceptance are four different pieces of evidence.**
 
-**Current release status: not passed.** The latest regular validation (`Saved/ReleaseTests/test`)
-failed because five Luau Editor benchmark cases exceeded the 25% gate; see
+**Current release status: not passed** (source: `Saved/ReleaseTests/test/release-summary.json`).
+The performance regression was reproduced as measurement-environment interference (a re-run passed
+641/641 with the gate green); UBT mutex clashes and externally interrupted compiler processes
+failed packaging/build stages; and uncommitted Net source changes in the worktree now fail two
+`UnLuaNova.API.Net.*` cases. The baseline is not replaced and the gate is not relaxed; freeze the
+worktree and re-run the full Release pipeline. See
 [Current Version Status](Docs/EN/ReleaseNotes.md).
 
 ### Baseline run (`.\Tools\RunTests.ps1 -Baseline`, 2026-11-03, commit `347bb8c5`, UE 5.8.3 source build / Win64 / Visual Studio 2026 18.10)
@@ -306,7 +332,7 @@ Clear beats flattering. The following are known gaps — a statement of scope, n
 
 | Area | Limit |
 |---|---|
-| **Declarative networking (experimental)** | Conditions supported: `None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` / `SimulatedOnly` / `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`, each with its own storage group. `COND_Custom` / `COND_Dynamic` (the engine refuses custom conditions on subobjects) and the Replay* family are **rejected loudly** (an Error log, no silent downgrade). Not covered: connected owner / non-owner acceptance, late join / reconnect, Iris / push model, illegal-RPC rejection, relevancy and dormancy |
+| **Declarative networking (experimental)** | Conditions supported: `None` / `InitialOnly` / `OwnerOnly` / `SkipOwner` / `SimulatedOnly` / `AutonomousOnly` / `SimulatedOrPhysics` / `InitialOrOwner`, each with its own storage group. `Custom` / `Dynamic` / `Never` / `NetGroup` and the Replay* family - every condition with no storage group - are **rejected loudly** (an Error log, no silent downgrade). `UStruct` / containers use type specs via dynamic RPC FProperties and the replicated Generic bucket. **Awaiting execution**: connected owner / non-owner acceptance, the non-owner RPC rejection assertion, late join / process-level reconnect / dormancy / relevancy scenarios, and Legacy / PushOff / Iris variants (source and the `--net-matrix` gate are in place, a rebuild plus real DS runs are still required); **not covered**: packet loss, seamless-travel reconnect, cross-peer declaration mismatch and cooked carriers |
 | **Generated thunks** | Final dispatch still goes through `UObject::ProcessEvent` — static binding removes the runtime reflection lookup and marshalling, not the dispatch. A self-baseline and a 25% regression gate are committed; **no same-machine comparison against slua-unreal / FUnLua yet** |
 | **Luau native codegen** | Opt-in: `lua.codegen.enabled=1` (default 0), narrow it with `lua.codegen.modules`. Applies only to chunks loaded after the switch, and only on Luau + x64/arm64 |
 | **Engine versions and platforms** | Verified on UE **5.8.3 / Win64**. Other engine versions, Linux / Mac / iOS / Android and consoles need their own acceptance |

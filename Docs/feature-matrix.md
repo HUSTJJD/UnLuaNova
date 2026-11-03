@@ -4,7 +4,7 @@ Generated from `Tools/feature-matrix.json`; edit that file and run `python Tools
 
 Audit: 2026-10-24. Source audit, not a claim of exhaustive feature or execution coverage.
 
-Execution evidence is recorded per capability under `Tools/evidence/` (5 run(s), covering 35 of 40 capabilities). `feature-matrix.json` itself never claims execution: its `verification` field stays `pending-runtime`, and a status edit there is rejected by this audit.
+Execution evidence is recorded per capability under `Tools/evidence/` (9 run(s), covering 35 of 40 capabilities). `feature-matrix.json` itself never claims execution: its `verification` field stays `pending-runtime`, and a status edit there is rejected by this audit.
 
 `implemented` means source exists within the stated boundary; it does not mean tested, complete parity or platform acceptance. `partial` has known gaps; `experimental` is not a release guarantee; `planned` is not delivered.
 
@@ -24,7 +24,7 @@ Execution evidence is recorded per capability under `Tools/evidence/` (5 run(s),
 
 Status: **implemented**; priority: P1; references: UnLua, slua, FUnLua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 29/29 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 29/29 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 29/29 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 29/29 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 29/29 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 29/29 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 29/29 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 29/29 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 29/29 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 29/29 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 29/29 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 29/29 passed, 0 failed.
 
 - Source: [UnLuaNovaBase.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaBase.cpp), [FunctionDesc.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/ReflectionUtils/FunctionDesc.cpp)
 - Tests: [UnLuaNovaBase.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/UnLuaNovaBase.spec.cpp)
@@ -38,7 +38,7 @@ Acceptance: Test null, exception, out/ref, defaults and backend equivalence.
 
 Status: **partial**; priority: P1; references: UnLua, slua, FUnLua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 18/18 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 18/18 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 18/18 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 18/18 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 18/18 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 18/18 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 18/18 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 18/18 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 18/18 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 18/18 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 18/18 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 18/18 passed, 0 failed.
 
 - Source: [UnLuaNovaOverrider.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaOverrider.cpp)
 - Tests: [Overrides.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Overrides.spec.cpp), [LuaOverrider.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaOverrider.spec.cpp)
@@ -52,7 +52,7 @@ Acceptance: Run parent/child/super, interface, RPC and Blueprint recompile scena
 
 Status: **partial**; priority: P0; references: slua, FUnLua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 82/82 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 82/82 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 82/82 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 82/82 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 82/82 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 82/82 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 82/82 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 82/82 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 82/82 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 82/82 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 82/82 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 82/82 passed, 0 failed.
 
 - Source: [ContainerRegistry.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/Registries/ContainerRegistry.cpp), [LuaLib_Array.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/BaseLib/LuaLib_Array.cpp)
 - Tests: [LuaLib_Array.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_Array.spec.cpp), [LuaLib_Map.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_Map.spec.cpp), [LuaLib_Set.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_Set.spec.cpp), [DanglingCheck.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DanglingCheck.spec.cpp)
@@ -66,7 +66,7 @@ Acceptance: Destroy parent, mutate/reallocate containers, reinstance Blueprint a
 
 Status: **partial**; priority: P1; references: slua, FUnLua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 14/14 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 14/14 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 14/14 passed, 0 failed.
 
 - Source: [DelegateRegistry.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/Registries/DelegateRegistry.cpp)
 - Tests: [LuaLib_Delegate.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_Delegate.spec.cpp), [LuaLib_MulticastDelegate.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_MulticastDelegate.spec.cpp)
@@ -80,7 +80,7 @@ Acceptance: Test duplicate binding, reentrant removal, owner destruction, hot re
 
 Status: **partial**; priority: P1; references: UnLua, slua, FUnLua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 11/11 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 11/11 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 11/11 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 11/11 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 11/11 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 11/11 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 11/11 passed, 0 failed.
 
 - Source: [UnLuaNovaManager.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaManager.cpp)
 - Tests: [Overrides.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Overrides.spec.cpp)
@@ -96,7 +96,7 @@ Acceptance: Run real RHI scenarios, input rebinding, UI release and animation ca
 
 Status: **implemented**; priority: P1; references: slua, FUnLua.
 
-Evidence: `2026-11-03-editor-lua` Lua/Editor: 4/4 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 4/4 passed, 0 failed.
+Evidence: `2026-11-03-editor-lua` Lua/Editor: 4/4 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 4/4 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 4/4 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 4/4 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 4/4 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 4/4 passed, 0 failed.
 
 - Source: [UnLuaNovaEx.inl](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaEx.inl)
 - Tests: [UnLuaNovaEx.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/UnLuaNovaEx.spec.cpp)
@@ -110,7 +110,7 @@ Acceptance: Test constructors/destructors, overloads, inheritance, globals and n
 
 Status: **partial**; priority: P1; references: slua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 6/6 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 6/6 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 11/11 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 6/6 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 6/6 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 11/11 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 11/11 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 6/6 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 6/6 passed, 0 failed.
 
 - Source: [StaticBindingThunk.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/StaticBinding/StaticBindingThunk.h)
 - Tests: [StaticBinding.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/StaticBinding.spec.cpp), [StaticBindingGenerator.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/StaticBindingGenerator.spec.cpp)
@@ -140,7 +140,7 @@ Acceptance: Bind A/B modules to same class, verify isolation through inheritance
 
 Status: **partial**; priority: P0; references: Luau, FUnLua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 13/13 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 13/13 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 13/13 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 13/13 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 13/13 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 13/13 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 13/13 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 13/13 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 13/13 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 13/13 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 13/13 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 13/13 passed, 0 failed.
 
 - Source: [ObjectRegistry.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/Registries/ObjectRegistry.cpp), [UnLuaNovaEx.inl](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaEx.inl)
 - Tests: [Lifetime.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Lifetime.spec.cpp)
@@ -154,7 +154,7 @@ Acceptance: Force both collectors; prove release counts and safety under both te
 
 Status: **partial**; priority: P0; references: slua, FUnLua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 33/33 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 33/33 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 33/33 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 33/33 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 33/33 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 33/33 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 33/33 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 33/33 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 33/33 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 33/33 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 33/33 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 33/33 passed, 0 failed.
 
 - Source: [LuaEnv.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp), [LuaEnvLocator.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnvLocator.cpp)
 - Tests: [LuaEnv.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaEnv.spec.cpp), [Locators.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Locators.spec.cpp)
@@ -168,7 +168,7 @@ Acceptance: Create/destroy/recreate Env and World, reuse addresses, forbid cross
 
 Status: **partial**; priority: P1; references: Luau, slua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 2/2 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 2/2 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 2/2 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 2/2 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 2/2 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 2/2 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 2/2 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 2/2 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 2/2 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 2/2 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 2/2 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 2/2 passed, 0 failed.
 
 - Source: [LuaCoroutineTracker.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaCoroutineTracker.cpp)
 - Tests: [Latent.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Latent.spec.cpp)
@@ -184,7 +184,7 @@ Acceptance: Test yield/resume/errors/cancellation with Env and World teardown.
 
 Status: **partial**; priority: P0; references: slua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 31/31 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 31/31 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 31/31 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 31/31 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 31/31 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 31/31 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 31/31 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 31/31 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 31/31 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 31/31 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 31/31 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 31/31 passed, 0 failed.
 
 - Source: [UnLuaNovaTimerSubsystem.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaTimerSubsystem.cpp), [LuaLib_Timer.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaLib_Timer.cpp)
 - Tests: [RuntimeModules.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp), [Timer.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Timer.spec.cpp)
@@ -198,7 +198,7 @@ Acceptance: Test due/pause/unscaled/reentry plus coroutine GC, Env-first/World-f
 
 Status: **partial**; priority: P1; references: FUnLua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 22/22 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 22/22 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 22/22 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 22/22 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 22/22 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 22/22 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 22/22 passed, 0 failed.
 
 - Source: [Event.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Content/Script/UnLuaNova/Event.lua)
 - Tests: [RuntimeModules.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp), [RuntimeContracts.spec.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Lua/RuntimeContracts.spec.lua)
@@ -212,7 +212,7 @@ Acceptance: Run recursive Once and cleanup tests; add exception/reload/owner des
 
 Status: **implemented**; priority: P2; references: slua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 22/22 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 22/22 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 22/22 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 22/22 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 22/22 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 22/22 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 22/22 passed, 0 failed.
 
 - Source: [OOP.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Content/Script/UnLuaNova/OOP.lua)
 - Tests: [RuntimeModules.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp)
@@ -226,7 +226,7 @@ Acceptance: Validate constructor chain, Super, class/instance identity and both 
 
 Status: **partial**; priority: P1; references: slua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 28/28 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 28/28 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 28/28 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 28/28 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 28/28 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 28/28 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 28/28 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 28/28 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 28/28 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 28/28 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 28/28 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 28/28 passed, 0 failed.
 
 - Source: [HotReload.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Content/Script/UnLuaNova/HotReload.lua), [LuaScriptCompat.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaScriptCompat.cpp)
 - Tests: [RuntimeModules.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp), [LuaScriptCompat.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp)
@@ -242,43 +242,43 @@ Acceptance: Test shared closures, table cycles, delegates, active coroutine and 
 
 Status: **experimental**; priority: P0; references: slua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 19/19 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 19/19 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 21/21 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 21/21 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 19/19 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 19/19 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 21/21 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 21/21 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 23/23 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 23/23 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 23/23 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 23/23 passed, 0 failed.
 
 - Source: [UnLuaNovaNet.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaNet.cpp)
-- Tests: [LuaNet.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp), [LuaNetMulticastTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetMulticastTest.cpp)
+- Tests: [LuaNet.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp), [LuaNetMulticastTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetMulticastTest.cpp), [LuaNetDedicatedServerTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetDedicatedServerTest.cpp), [LuaNetNetScenariosTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetNetScenariosTest.cpp)
 - Examples: [NetActor.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Net/NetActor.lua)
 
-Boundary: Sorted registration, whole-RPC parameter validation, reliable/unreliable flags on all three kinds, and parent-class schema lookup delivered. The engine already rejects a non-owner Server RPC on the server (UNetDriver::ShouldCallRemoteFunction requires RepFlags.bNetOwner), but that path has no connected-peer assertion yet. Reconnect, cooked acceptance and cross-peer schema mismatch remain incomplete.
+Boundary: Sorted registration, whole-RPC parameter validation, reliable/unreliable flags on all three kinds, and parent-class schema lookup delivered. RPC parameters now accept any resolvable UScriptStruct and Array/Set/Map nests: the runtime-built UFunction gains a real FStructProperty/FArrayProperty/FSetProperty/FMapProperty, so UnLua's own FFunctionDesc marshalling handles them. The engine already rejects a non-owner Server RPC (UNetDriver::ShouldCallRemoteFunction requires RepFlags.bNetOwner); the DS scenario and release gate assert this with a unique token, but that assertion has not been executed. Late join and process-level reconnect scenarios plus their gates are delivered in source and are also unexecuted. Cooked acceptance and cross-peer schema mismatch remain incomplete.
 
-Acceptance: Connected DS + 2 clients with an explicit non-owner Server RPC rejection assertion, reconnect, cross-peer schema mismatch and cooked carriers. Reliable/unreliable and declaration syntax are covered by unit cases.
+Acceptance: The connected DS + 2 clients scenario includes an explicit non-owner Server RPC rejection assertion (unique token, exact CallLog comparison, and a ValidateRelease.py gate requiring the attempt itself). Late join needs a spawn marker plus topology launch order; reconnect needs a distinct replacement PID, launch_count=2 and a server-observed connection drop. All of these must be executed via Tools/RunNetMatrix.ps1 before they count. Still outstanding: cross-peer schema mismatch and cooked carriers. Reliable/unreliable, declaration syntax, spec parsing and UStruct property construction are covered by unit cases.
 
 ### NET-PROPS: Property conditions and schemas
 
 Status: **experimental**; priority: P0; references: slua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 20/20 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 20/20 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 20/20 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 20/20 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 20/20 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 20/20 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 20/20 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 20/20 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 22/22 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 21/21 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 21/21 passed, 0 failed.
 
 - Source: [UnLuaNovaReplicationComponent.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaReplicationComponent.cpp), [UnLuaNovaNetPayload.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaNetPayload.cpp)
-- Tests: [LuaNet.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp), [LuaNetClientServerTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetClientServerTest.cpp)
+- Tests: [LuaNet.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp), [LuaNetClientServerTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetClientServerTest.cpp), [LuaNetDedicatedServerTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetDedicatedServerTest.cpp), [LuaNetNetScenariosTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetNetScenariosTest.cpp)
 - Examples: [NetActor.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Net/NetActor.lua)
 
-Boundary: One storage group per supported condition (None/InitialOnly/OwnerOnly/SkipOwner/SimulatedOnly/AutonomousOnly/SimulatedOrPhysics/InitialOrOwner); malformed and unsupported declarations (Custom/Dynamic/Replay*) are rejected atomically and cached schemas stay immutable. Connected owner/non-owner acceptance, late join, dormancy and multi-Env cache cleanup remain incomplete.
+Boundary: One storage group per supported condition (None/InitialOnly/OwnerOnly/SkipOwner/SimulatedOnly/AutonomousOnly/SimulatedOrPhysics/InitialOrOwner), plus a shared Generic group for arbitrary UStruct/container fields; malformed and unsupported declarations (Custom/Dynamic/Never/NetGroup/Replay*) are rejected atomically and cached schemas stay immutable. Env-owned cleanup no longer drops orphan entries, and a subclass without its own declaration inherits the parent's schema. Connected owner/non-owner visibility is asserted by the DS scenario source and release gate, but has not been executed. Dormancy (suppression then FlushNetDormancy recovery) and relevancy (owner-only visibility) scenarios and their gates are delivered in source and are also unexecuted. An execution run for multi-Env declaration/teardown order remains incomplete.
 
-Acceptance: The per-condition layout is delivered. Remaining: connected owner/non-owner assertion, mixed conditions/types across actors, late join and dormancy.
+Acceptance: The per-condition layout is delivered, and the DS scenario source mixes an unconditional field with an OwnerOnly field in one declaration list and exports per-peer visibility for ValidateRelease.py to assert. Dormancy requires a client to observe a suppressed dormant value and then the flushed value; relevancy requires the non-owner to lose the owner-only actor. All of these must be executed before they count. Still outstanding: join-order swaps and cooked carriers.
 
-### NET-TYPES: Replication types, int64 and Iris/push model
+### NET-TYPES: Replication types, UStruct/containers and Iris/push model
 
 Status: **experimental**; priority: P0; references: slua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 19/19 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 19/19 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 19/19 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 19/19 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 19/19 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 19/19 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 19/19 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 19/19 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 21/21 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 21/21 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 21/21 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 21/21 passed, 0 failed.
 
-- Source: [UnLuaNovaReplicationComponent.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaReplicationComponent.cpp), [UnLuaNovaNetDecl.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaNetDecl.h)
-- Tests: [LuaNet.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp)
+- Source: [UnLuaNovaReplicationComponent.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaReplicationComponent.cpp), [UnLuaNovaNetTypeSpec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaNetTypeSpec.cpp), [UnLuaNovaNetTypeSpec.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaNetTypeSpec.h), [UnLuaNovaNetDecl.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaNetDecl.h), [UnLuaNovaNetBuckets.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaNetBuckets.h)
+- Tests: [LuaNet.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaNet.spec.cpp), [LuaNetDedicatedServerTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetDedicatedServerTest.cpp), [LuaNetNetScenariosTest.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Tests/LuaNetNetScenariosTest.cpp), [test_release_validation.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/tests/test_release_validation.py)
 - Examples: Missing dedicated evidence.
 
-Boundary: Strict int32/int64 conversion, scalar and Object bucket round-trips, and per-condition storage covered by unit cases. Arbitrary UStruct / container fields are a scope boundary rather than a TODO: a replicated UPROPERTY cannot be conjured onto a class at runtime, which is why fields live in typed arrays. Iris/push and packaged-peer acceptance still need evidence.
+Boundary: Strict int32/int64 conversion, scalar and Object bucket round-trips, and per-condition storage covered by unit cases. The earlier claim that arbitrary UStruct/container fields are an architecture boundary was wrong: a UClass cannot gain a UPROPERTY at runtime, but a generic bucket carrying a canonical self-describing payload does not need one, and a runtime-built UFunction can own any FStructProperty/FArrayProperty/FSetProperty/FMapProperty. Both paths are now delivered, with the spec folded into SchemaVersion so mismatched peers cannot misdecode. UObject references still use the dedicated Object bucket because a text payload cannot carry a NetGUID. The Legacy / PushOff / Iris delivery matrix and Tools/RunNetMatrix.ps1 are delivered in source, but no variant has been executed; packaged-peer acceptance still needs evidence.
 
-Acceptance: Legacy / Iris / push-model combinations and packaged peers. Exact integer boundaries and Object resolution are covered by unit cases.
+Acceptance: ValidateRelease.py --net-matrix must see three variant topologies with real engine switch state read back from every peer (-UseIrisReplication=1 or a push-model cvar override), plus four scenario topologies. Exact integer boundaries, Object resolution, spec parsing/nesting and canonical Lua <-> payload round-trips are covered by unit cases.
 
 ## Luau
 
@@ -286,7 +286,7 @@ Acceptance: Legacy / Iris / push-model combinations and packaged peers. Exact in
 
 Status: **partial**; priority: P1; references: Luau.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 39/39 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 30/30 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 39/39 passed, 0 failed.
 
 - Source: [LuaBackend.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp)
 - Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp)
@@ -300,7 +300,7 @@ Acceptance: Import pinned syntax/interpolation/if-expression/generics/iteration 
 
 Status: **partial**; priority: P1; references: Luau.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 39/39 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 30/30 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 39/39 passed, 0 failed.
 
 - Source: [LuaEnv.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp)
 - Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp)
@@ -314,7 +314,7 @@ Acceptance: Run library/metatable/error/weak-table conformance and host-specific
 
 Status: **implemented**; priority: P1; references: Luau.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 53/53 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 44/44 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 44/44 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 53/53 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 53/53 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 44/44 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 44/44 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 53/53 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 44/44 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 53/53 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 44/44 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 53/53 passed, 0 failed.
 
 - Source: [LuaLib_FVector.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/MathLib/LuaLib_FVector.cpp)
 - Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp), [LuaLib_FVector.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_FVector.spec.cpp)
@@ -328,7 +328,7 @@ Acceptance: Test conversion/parameter/operator edges and document precision budg
 
 Status: **implemented**; priority: P1; references: Luau.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 27/27 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 27/27 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 27/27 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 27/27 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 27/27 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 22/22 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 27/27 passed, 0 failed.
 
 - Source: [UnLuaNovaLib.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaLib.cpp), [Buffer.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Content/Script/UnLuaNova/Buffer.lua)
 - Tests: [RuntimeModules.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp), [LuauIntegration.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp)
@@ -342,7 +342,7 @@ Acceptance: Bounds/type/value tests and verify source/buffer independence; measu
 
 Status: **experimental**; priority: P1; references: Luau.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 5/5 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 5/5 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 5/5 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 5/5 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 5/5 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 5/5 passed, 0 failed.
 
 - Source: [LuaBackend.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp)
 - Tests: [LuauIntegration.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp)
@@ -356,7 +356,7 @@ Acceptance: Test VM/coroutine lifecycle, supported architectures, debug attachme
 
 Status: **partial**; priority: P1; references: Luau, slua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 6/6 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 6/6 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 6/6 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 6/6 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 6/6 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 6/6 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 6/6 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 6/6 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 6/6 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 6/6 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 6/6 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 6/6 passed, 0 failed.
 
 - Source: [LuaGcScheduler.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaGcScheduler.cpp), [LuaBackend.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp)
 - Tests: [LuaGcScheduler.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaGcScheduler.spec.cpp)
@@ -370,7 +370,7 @@ Acceptance: Measure pauses and allocation pressure; validate tuning, errors and 
 
 Status: **partial**; priority: P1; references: Luau.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 39/39 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 30/30 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 39/39 passed, 0 failed.
 
 - Source: [LuaEnv.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp), [LuaBackend.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp)
 - Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp)
@@ -384,7 +384,7 @@ Acceptance: Define capability policy and verify writable escape paths, new threa
 
 Status: **partial**; priority: P1; references: Luau.
 
-Evidence: `2026-11-03-editor-lua` Lua/Editor: 5/5 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 5/5 passed, 0 failed.
+Evidence: `2026-11-03-editor-lua` Lua/Editor: 5/5 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 5/5 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 5/5 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 5/5 passed, 0 failed.
 
 - Source: [UnLuaNovaIntelliSenseGenerator.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNovaEditor/Private/UnLuaNovaIntelliSenseGenerator.cpp), [CheckLuauTypes.ps1](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CheckLuauTypes.ps1)
 - Tests: [IntelliSense.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/IntelliSense.spec.cpp)
@@ -398,7 +398,7 @@ Acceptance: Require checker and fresh declarations; verify inference/generics/ov
 
 Status: **partial**; priority: P1; references: Luau.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 26/26 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 26/26 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 26/26 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 26/26 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 26/26 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 26/26 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 26/26 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 26/26 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 26/26 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 26/26 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 26/26 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 26/26 passed, 0 failed.
 
 - Source: [LuaEnv.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp), [LuaScriptCompat.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaScriptCompat.cpp)
 - Tests: [LuaEnv.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaEnv.spec.cpp), [LuaScriptCompat.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp)
@@ -442,7 +442,7 @@ Acceptance: Record flags, compatibility/ABI/type declarations and tests before e
 
 Status: **partial**; priority: P1; references: Luau.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 6/6 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 6/6 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 6/6 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 6/6 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 6/6 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 6/6 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 6/6 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 6/6 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 6/6 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 6/6 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 6/6 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 6/6 passed, 0 failed.
 
 - Source: [LuaScriptCompat.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaScriptCompat.cpp)
 - Tests: [LuaScriptCompat.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp)
@@ -456,7 +456,7 @@ Acceptance: Reject unsupported operations or implement exact subset; test closur
 
 Status: **partial**; priority: P1; references: Luau.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 5/5 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 5/5 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 5/5 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 5/5 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 5/5 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 5/5 passed, 0 failed.
 
 - Source: [LuaLib_Io.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaLib_Io.cpp)
 - Tests: [LuauIntegration.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp)
@@ -470,7 +470,7 @@ Acceptance: Compare subset against Lua, including binary/large files, mutated ha
 
 Status: **partial**; priority: P1; references: Luau, UnLua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 45/45 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 36/36 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 36/36 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 45/45 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 45/45 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 36/36 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 36/36 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 45/45 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 36/36 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 45/45 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 36/36 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 45/45 passed, 0 failed.
 
 - Source: [LuaBackend.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/LuaBackend.h), [LuaScriptCompat.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaScriptCompat.cpp)
 - Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp), [LuaScriptCompat.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp)
@@ -486,7 +486,7 @@ Acceptance: Publish migration contracts and explicit failures; verify int64, clo
 
 Status: **partial**; priority: P1; references: slua, Luau.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 14/14 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 8/8 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 8/8 passed, 0 failed.
 
 - Source: [LuaDebugService.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaDebugService.cpp), [LuaDebugAdapter.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNovaEditor/Private/LuaDebugAdapter.cpp)
 - Tests: [DebugService.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DebugService.spec.cpp), [DebugAdapter.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DebugAdapter.spec.cpp)
@@ -500,7 +500,7 @@ Acceptance: Break/step/locals/upvalues across multiple Env and coroutine; malfor
 
 Status: **partial**; priority: P1; references: slua, Luau.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 9/9 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 9/9 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 9/9 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 9/9 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 9/9 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 9/9 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 9/9 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 9/9 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 9/9 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 9/9 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 9/9 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 9/9 passed, 0 failed.
 
 - Source: [LuaProfiler.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaProfiler.cpp), [perfgraph.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/LuauPerfgraph/perfgraph.py)
 - Tests: [Observability.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Observability.spec.cpp)
@@ -514,7 +514,7 @@ Acceptance: Validate stack/yield/GC attribution, overhead and malformed dumps; p
 
 Status: **partial**; priority: P1; references: slua.
 
-Evidence: `2026-11-02-editor-luau` Luau/Editor: 10/10 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 10/10 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 11/11 passed, 0 failed.
+Evidence: `2026-11-02-editor-luau` Luau/Editor: 10/10 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 10/10 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 11/11 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 11/11 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 11/11 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 11/11 passed, 0 failed.
 
 - Source: [LuaCoroutineTracker.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaCoroutineTracker.cpp)
 - Tests: [LuaDeadLoopCheck.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaDeadLoopCheck.spec.cpp), [ErrorHandling.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/ErrorHandling.spec.cpp)
@@ -530,7 +530,7 @@ Acceptance: Test timeout/reset/teardown, native callbacks and abandoned coroutin
 
 Status: **partial**; priority: P1; references: UnLua, slua.
 
-Evidence: `2026-11-03-editor-lua` Lua/Editor: 8/8 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 8/8 passed, 0 failed.
+Evidence: `2026-11-03-editor-lua` Lua/Editor: 8/8 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 8/8 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 8/8 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 8/8 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 8/8 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 8/8 passed, 0 failed.
 
 - Source: [pb.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaExtensions/LuaProtobuf/Source/src/pb.cpp), [luasocket.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaExtensions/LuaSocket/Source/src/luasocket.cpp), [rapidjson.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaExtensions/LuaRapidjson/Source/src/rapidjson.cpp)
 - Tests: [Extensions.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Extensions.spec.cpp)
@@ -546,7 +546,7 @@ Acceptance: Large/malformed payloads, socket close/failure, userdata GC and pack
 
 Status: **partial**; priority: P1; references: UnLua, slua, FUnLua.
 
-Evidence: `2026-11-03-editor-lua` Lua/Editor: 1/1 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 1/1 passed, 0 failed.
+Evidence: `2026-11-03-editor-lua` Lua/Editor: 1/1 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 1/1 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 1/1 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 1/1 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 1/1 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 1/1 passed, 0 failed.
 
 - Source: [RunTests.ps1](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/RunTests.ps1), [ReleasePipeline.ps1](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/ReleasePipeline.ps1), [ValidateRelease.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/ValidateRelease.py), [GenerateTestReport.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/GenerateTestReport.py), [ClassifyTests.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/ClassifyTests.py)
 - Tests: [LuaSpecs.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaSpecs.spec.cpp)
@@ -560,7 +560,7 @@ Acceptance: Fail missing/empty/malformed runs; record commit/dirty/dependencies/
 
 Status: **partial**; priority: P1; references: slua, FUnLua.
 
-Evidence: `2026-11-03-editor-lua` Lua/Editor: 2/2 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 2/2 passed, 0 failed.
+Evidence: `2026-11-03-editor-lua` Lua/Editor: 2/2 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 2/2 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 2/2 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 2/2 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 2/2 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 2/2 passed, 0 failed.
 
 - Source: [RunTests.ps1](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/RunTests.ps1)
 - Tests: [Benchmark.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Benchmark.spec.cpp), [BenchmarkParity.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/BenchmarkParity.spec.cpp)

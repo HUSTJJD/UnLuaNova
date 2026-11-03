@@ -212,8 +212,10 @@ def validate_performance(actual, baseline, backend, require_samples=False):
     return errors
 
 
-def validate_connected_session(run, backend):
-    directory = run / "net/DedicatedServer"
+def validate_connected_session(run, backend, directory=None):
+    # A variant run has the same three-peer contract in a different directory. Keeping the
+    # directory an argument is what stops the legacy and Iris/push-model checks from drifting.
+    directory = directory or run / "net/DedicatedServer"
     topology = read_json(directory / "topology.json")
     labels = ("Server", "Client1", "Client2")
     peers = topology.get("peers", [])
@@ -310,11 +312,179 @@ def validate_connected_session(run, backend):
         log = directory / "logs" / f"{label}.log"
         if not log.is_file() or log.stat().st_size == 0:
             errors.append(f"Missing connected peer log: {label}")
+    # Conditional replication, same declaration list as an unconditional field: OwnerOnly must
+    # reach the owning connection and nobody else. This is the connected half of NET-PROPS'
+    # acceptance; single-process unit cases can prove grouping, not visibility.
+    props = server.get("Props", [])
+    if not any(p.get("Name") == "OwnerSecret" and p.get("Condition") == 2 for p in props):
+        errors.append("OwnerOnly field missing from connected declaration report")
+    for label, data in reports.items():
+        owner = data.get("OwnedActorId")
+        for actor in data.get("Actors", []):
+            actor_id = actor.get("ActorId")
+            if actor_id not in seeds:
+                continue
+            expected_secret = 777 if label == "Server" or actor_id == owner else -1
+            if actor.get("OwnerSecret") != expected_secret:
+                errors.append(f"OwnerOnly field visibility failed: {label}/{actor_id}")
+
+    # A Server RPC from a client that does not own the actor must be dropped on the server
+    # (UNetDriver::ShouldCallRemoteFunction requires RepFlags.bNetOwner). Each client records
+    # one such attempt with a unique token. Requiring the attempt itself is what makes the
+    # absence of the token evidence: without it, "never executed" could just mean "never tried".
+    non_owner_tokens = []
+    for label in ("Client1", "Client2"):
+        attempted = reports[label].get("NonOwnerRpcAttempted") is True
+        token = reports[label].get("NonOwnerRpcToken") or ""
+        if not attempted or not token:
+            errors.append(f"Non-owner Server RPC attempt not recorded: {label}")
+        else:
+            non_owner_tokens.append(token)
+    if len(set(non_owner_tokens)) != len(non_owner_tokens):
+        errors.append("Non-owner RPC tokens must be distinct across clients")
+    for label, data in reports.items():
+        logs = [a.get("CallLog") or "" for a in data.get("Actors", [])]
+        for observation in data.get("Observations", []):
+            logs.extend(a.get("CallLog") or "" for a in observation.get("Actors", []))
+        for token in non_owner_tokens:
+            if any(token in text for text in logs):
+                errors.append(f"Non-owner Server RPC executed on {label}: {token}")
+                break
     if Counter(owners) != Counter([1, 2]):
         errors.append("Clients must own different server-spawned actors")
     if len(set(pids)) != 3:
         errors.append("Connected peers must be three distinct processes")
     return errors
+
+
+# The four connected scenarios and the delivery variants are separate gates: a normal
+# automation run does not launch three extra process triples, and a missing scenario must not
+# be silently counted as a pass by the ordinary network check. The dedicated net-matrix stage
+# calls these explicitly and fails closed on absent topology/reports.
+NET_SCENARIOS = ("LateJoin", "Reconnect", "Dormancy", "Relevancy")
+NET_VARIANTS = {
+    "Legacy": {"iris": False, "push": None},
+    "PushOff": {"iris": False, "push": False},
+    "Iris": {"iris": True, "push": None},
+}
+
+
+def validate_net_scenario(run, name, backend):
+    directory = run / "net/scenarios" / name
+    labels = ("Server", "Client1", "Client2")
+    errors = []
+    topology = read_json(directory / "topology.json")
+    peers = topology.get("peers", [])
+    if Counter(p.get("label") for p in peers) != Counter(labels):
+        return [f"{name}: scenario topology requires one server and two clients"]
+    if topology.get("scenario") != name:
+        errors.append(f"{name}: topology scenario mismatch")
+    variant = topology.get("variant", "")
+    by_label = {p.get("label"): p for p in peers}
+    reports = {label: read_json(directory / f"{label}.json") for label in labels}
+    server = reports["Server"]
+    session = server.get("SessionId", "")
+    if len(session) != 32 or any(c not in "0123456789abcdefABCDEF" for c in session):
+        errors.append(f"{name}: missing server-generated session identity")
+
+    for label, data in reports.items():
+        if data.get("Complete") is not True:
+            errors.append(f"{name}: incomplete peer: {label}")
+        if data.get("Scenario") != name or data.get("SessionId") != session:
+            errors.append(f"{name}: scenario/session provenance mismatch: {label}")
+        if data.get("Backend") != backend or data.get("Variant", "") != variant:
+            errors.append(f"{name}: backend/variant provenance mismatch: {label}")
+        if data.get("ProcessId") != by_label[label].get("pid"):
+            errors.append(f"{name}: report PID differs from launched peer: {label}")
+        if data.get("IrisEnabled") is not (variant == "Iris"):
+            errors.append(f"{name}: Iris flag does not match the declared variant: {label}")
+        if variant == "PushOff" and data.get("PushModelEnabled") is not False:
+            errors.append(f"{name}: push model was not actually disabled: {label}")
+        log = directory / "logs" / f"{label}.log"
+        if not log.is_file() or log.stat().st_size == 0:
+            errors.append(f"{name}: missing peer log: {label}")
+
+    if name == "LateJoin":
+        if server.get("ClientsAtSpawn") != 1 or server.get("ClientsFinal") != 2:
+            errors.append("LateJoin: actors must exist before the second client connects")
+        if reports["Client2"].get("JoinedAfterSpawn") is not True:
+            errors.append("LateJoin: second client did not observe a pre-existing session")
+        if not (by_label["Client2"].get("launch_serial", 0) > by_label["Client1"].get("launch_serial", 0)):
+            errors.append("LateJoin: launch order does not prove a late join")
+    elif name == "Reconnect":
+        client1 = by_label["Client1"]
+        if client1.get("launch_count") != 2 or client1.get("first_pid", 0) <= 0 \
+                or client1.get("first_pid") == client1.get("pid"):
+            errors.append("Reconnect: no distinct replacement process for Client1")
+        if server.get("ConnectionDrops", 0) < 1 or server.get("ClientsFinal") != 2:
+            errors.append("Reconnect: server did not observe a drop and recovery")
+    elif name == "Dormancy":
+        if server.get("DormancyFlushed") is not True or server.get("DormantValue") == server.get("FlushedValue"):
+            errors.append("Dormancy: FlushNetDormancy path was not exercised")
+        for label in ("Client1", "Client2"):
+            data = reports[label]
+            if data.get("DormancySuppressed") is not True or data.get("DormancyResumed") is not True:
+                errors.append(f"Dormancy: {label} did not observe suppression and recovery")
+            if data.get("DormancyAfterValue") != server.get("FlushedValue"):
+                errors.append(f"Dormancy: {label} never received the flushed value")
+    elif name == "Relevancy":
+        if server.get("RelevancyRestrictedActor") != 2:
+            errors.append("Relevancy: no owner-only actor was declared by the server")
+        if 2 in reports["Client1"].get("VisibleActorIds", []):
+            errors.append("Relevancy: non-owner still sees the owner-only actor")
+        if 2 not in reports["Client2"].get("VisibleActorIds", []):
+            errors.append("Relevancy: owner cannot see the owner-only actor")
+    else:
+        errors.append(f"{name}: unknown scenario")
+    return errors
+
+
+def validate_net_scenarios(run, backend):
+    errors = []
+    for name in NET_SCENARIOS:
+        try:
+            errors.extend(f"net-scenario:{name}: {e}" for e in validate_net_scenario(run, name, backend))
+        except (OSError, ValueError, TypeError, AttributeError, KeyError) as exc:
+            errors.append(f"net-scenario:{name}: missing or invalid evidence: {exc}")
+    return errors
+
+
+def validate_net_variants(run, backend):
+    try:
+        manifest = read_json(run / "metadata/net-variants.json")
+    except (OSError, ValueError) as exc:
+        return [f"Network delivery matrix manifest is missing or invalid: {exc}"]
+    requested = manifest.get("variants", [])
+    if not isinstance(requested, list) or sorted(requested) != sorted(NET_VARIANTS):
+        return [f"Network delivery matrix requires exactly {sorted(NET_VARIANTS)}"]
+    errors = []
+    labels = ("Server", "Client1", "Client2")
+    for name in requested:
+        directory = run / "net/variants" / name / "DedicatedServer"
+        spec = NET_VARIANTS[name]
+        try:
+            topology = read_json(directory / "topology.json")
+            if topology.get("variant") != name:
+                errors.append(f"net-variant:{name}: topology variant mismatch")
+            if Counter(p.get("label") for p in topology.get("peers", [])) != Counter(labels):
+                errors.append(f"net-variant:{name}: three connected peers required")
+            for label in labels:
+                data = read_json(directory / f"{label}.json")
+                if data.get("Variant") != name:
+                    errors.append(f"net-variant:{name}: variant provenance mismatch: {label}")
+                if data.get("IrisEnabled") is not spec["iris"]:
+                    errors.append(f"net-variant:{name}: Iris state mismatch: {label}")
+                if spec["push"] is not None and data.get("PushModelEnabled") is not spec["push"]:
+                    errors.append(f"net-variant:{name}: push model state mismatch: {label}")
+            errors.extend(f"net-variant:{name}: {e}" for e in
+                          validate_connected_session(run, backend, directory))
+        except (OSError, ValueError, TypeError, AttributeError, KeyError) as exc:
+            errors.append(f"net-variant:{name}: missing or invalid evidence: {exc}")
+    return errors
+
+
+def validate_net_matrix(run, backend):
+    return validate_net_scenarios(run, backend) + validate_net_variants(run, backend)
 
 
 def validate_network(run, backend):
@@ -386,14 +556,22 @@ def main():
     parser.add_argument("--run", type=Path, required=True)
     parser.add_argument("--backend", choices=("Lua", "Luau"), required=True)
     parser.add_argument("--carrier", choices=("editor", "game"), required=True)
+    parser.add_argument("--net-matrix", action="store_true",
+                        help="validate connected scenarios and the Legacy/PushOff/Iris delivery matrix")
     args = parser.parse_args()
-    errors = validate_run(args.run, args.backend, args.carrier)
-    output = args.run / "metadata/release-gate.json"
+    if args.net_matrix:
+        errors = validate_net_matrix(args.run, args.backend)
+        output = args.run / "metadata/net-matrix-gate.json"
+        label = "Network matrix"
+    else:
+        errors = validate_run(args.run, args.backend, args.carrier)
+        output = args.run / "metadata/release-gate.json"
+        label = "Release evidence"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps({"passed": not errors, "errors": errors}, ensure_ascii=False, indent=2), encoding="utf-8")
     for error in errors:
         print(error)
-    print(f"Release evidence: {'FAILED' if errors else 'passed'} ({len(errors)} errors)")
+    print(f"{label}: {'FAILED' if errors else 'passed'} ({len(errors)} errors)")
     return 1 if errors else 0
 
 

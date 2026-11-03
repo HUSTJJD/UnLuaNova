@@ -1,6 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLuaNova available.
-//
-// Copyright (C) 2019 Tencent. All rights reserved.
+// Copyright (c) 2026 UnLuaNova contributors
 //
 // Licensed under the MIT License (the "License");
 // you may obtain a copy of the License at
@@ -78,8 +76,10 @@ enum class ELuaNetUpdateMode : uint8
  *   SimulatedOrPhysics and InitialOrOwner are supported. Each has its own storage group
  *   (see UnLuaNovaNetBuckets.h) because UE decides what to send from the property's own
  *   registration, which is cached per class and cannot depend on a script value.
- *   COND_Custom / COND_Dynamic are rejected: the engine refuses them on subobjects, and this
- *   is a component. The Replay* family is rejected too - replay visibility is not decided here.
+ *   Custom / Dynamic are rejected: the engine refuses them on subobjects, and this is a
+ *   component. Never / NetGroup and the Replay* family are rejected too - none of them has a
+ *   storage group here. Their names still parse, so a typo and an unsupported condition
+ *   produce two distinct errors rather than one vague "unknown condition".
  *   Legacy, Iris and push-model delivery still require connected-peer acceptance tests.
  */
 UCLASS(ClassGroup = (UnLuaNova), meta = (BlueprintSpawnableComponent))
@@ -121,7 +121,11 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UnLuaNova|Net")
     float PollInterval = 0.1f;
 
-    /** Retained to detect old assets: any non-None value disables replication at BeginPlay. */
+    /**
+     * Obsolete component-wide condition, retained only to recognise old assets. A non-None
+     * value logs a Warning at BeginPlay and is ignored - it no longer disables replication.
+     * Conditions are declared per field in the Lua module instead.
+     */
     UPROPERTY(VisibleAnywhere, Category = "UnLuaNova|Net")
     TEnumAsByte<ELifetimeCondition> Condition;
 
@@ -137,6 +141,7 @@ protected:
     UFUNCTION() void OnRep_Rotators();
     UFUNCTION() void OnRep_Transforms();
     UFUNCTION() void OnRep_Objects();
+    UFUNCTION() void OnRep_Generics();
     UFUNCTION() void OnRep_SchemaVersion();
 
     // One RepNotify per conditional group. A group arrives as one property, so its notify
@@ -209,6 +214,14 @@ private:
 
     UPROPERTY(ReplicatedUsing = OnRep_Objects)
     TArray<TObjectPtr<UObject>> Objects;
+
+    /**
+     * One canonical text payload per declared UStruct / container field, in declaration order.
+     * A class cannot gain a UPROPERTY at runtime, so all generic fields share this array;
+     * UnLuaNovaNetTypeSpec.h defines the codec and SchemaVersion guards the layout.
+     */
+    UPROPERTY(ReplicatedUsing = OnRep_Generics)
+    TArray<FString> Generics;
 
     // --- conditional groups ------------------------------------------------
     //

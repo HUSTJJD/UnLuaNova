@@ -1,6 +1,4 @@
-// Tencent is pleased to support the open source community by making UnLuaNova available.
-//
-// Copyright (C) 2019 Tencent. All rights reserved.
+// Copyright (c) 2026 UnLuaNova contributors
 //
 // Licensed under the MIT License (the "License");
 // you may obtain a copy of the License at
@@ -28,6 +26,7 @@
 #include "UnLuaNovaManager.h"
 #include "UnLuaNovaNet.h"
 #include "UnLuaNovaNetPayload.h"
+#include "UnLuaNovaNetTypeSpec.h"
 #include "UnLuaNovaTestHelpers.h"
 #include "Misc/AutomationTest.h"
 #include "UObject/UnrealType.h"
@@ -351,6 +350,9 @@ void FNetSpec::Define()
             // is not something this layer decides.
             for (const char* Script : {
                 "return {ReplicatedProps={{Name='Private',Type='String',Condition='Custom'}}}",
+                "return {ReplicatedProps={{Name='Private',Type='String',Condition='Dynamic'}}}",
+                "return {ReplicatedProps={{Name='Private',Type='String',Condition='Never'}}}",
+                "return {ReplicatedProps={{Name='Private',Type='String',Condition='NetGroup'}}}",
                 "return {ReplicatedProps={{Name='Private',Type='String',Condition='ReplayOnly'}}}",
                 "return {ReplicatedProps={{Name='Private',Type='String',Condition='SkipReplay'}}}",
                 "return {ReplicatedProps={{Name='HP',Type='Float',Condition='Typo'}}}",
@@ -587,11 +589,132 @@ void FNetSpec::Define()
             TEST_TRUE(Group == UnLuaNova::ELuaNetConditionGroup::OwnerOnly);
             TEST_EQUAL((int32)UnLuaNova::GroupToCondition(UnLuaNova::ELuaNetConditionGroup::OwnerOnly), (int32)COND_OwnerOnly);
 
+            // Every ELifetimeCondition name parses, but only the eight with a storage group
+            // may be declared: a typo and an unsupported condition are different errors.
+            uint8 Parsed = 0;
+            TEST_TRUE(UnLuaNova::ParseLifetimeCondition(TEXT("Dynamic"), Parsed));
+            TEST_EQUAL((int32)Parsed, (int32)COND_Dynamic);
+            TEST_TRUE(UnLuaNova::ParseLifetimeCondition(TEXT("Never"), Parsed));
+            TEST_EQUAL((int32)Parsed, (int32)COND_Never);
+            TEST_TRUE(UnLuaNova::ParseLifetimeCondition(TEXT("NetGroup"), Parsed));
+            TEST_EQUAL((int32)Parsed, (int32)COND_NetGroup);
+
             // Custom is refused by the engine on subobjects and the Replay* family is not
-            // decided here, so neither may quietly become COND_None.
+            // decided here, so none of them may quietly become COND_None.
             TEST_FALSE(UnLuaNova::ConditionToGroup(COND_Custom, Group));
+            TEST_FALSE(UnLuaNova::ConditionToGroup(COND_Dynamic, Group));
+            TEST_FALSE(UnLuaNova::ConditionToGroup(COND_Never, Group));
+            TEST_FALSE(UnLuaNova::ConditionToGroup(COND_NetGroup, Group));
             TEST_FALSE(UnLuaNova::ConditionToGroup(COND_ReplayOnly, Group));
             TEST_FALSE(UnLuaNova::ConditionToGroup(COND_SkipReplay, Group));
+        });
+    });
+
+    Describe(TEXT("任意 UStruct / 容器类型"), [this]()
+    {
+        It(TEXT("类型规格可解析、规范化，且规范形式可再次解析"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::FLuaNetTypeSpec Spec;
+            FString Error;
+
+            TEST_TRUE(UnLuaNova::ParseLuaNetTypeSpec(TEXT("Struct:/Script/CoreUObject.Vector"), Spec, Error));
+            TEST_TRUE(Spec.Kind == UnLuaNova::ELuaNetSpecKind::Struct);
+            UnLuaNova::FLuaNetTypeSpec Again;
+            TEST_TRUE(UnLuaNova::ParseLuaNetTypeSpec(Spec.Canonical, Again, Error));
+            TEST_EQUAL(Spec.Canonical, Again.Canonical);
+
+            TEST_TRUE(UnLuaNova::ParseLuaNetTypeSpec(TEXT("/Script/CoreUObject.Transform"), Spec, Error));
+            TEST_TRUE(Spec.Kind == UnLuaNova::ELuaNetSpecKind::Struct);
+            TEST_TRUE(UnLuaNova::ParseLuaNetTypeSpec(TEXT("Array:Int"), Spec, Error));
+            TEST_TRUE(Spec.Kind == UnLuaNova::ELuaNetSpecKind::Array);
+            TEST_TRUE(UnLuaNova::ParseLuaNetTypeSpec(TEXT("Set:String"), Spec, Error));
+            TEST_TRUE(Spec.Kind == UnLuaNova::ELuaNetSpecKind::Set);
+            TEST_TRUE(UnLuaNova::ParseLuaNetTypeSpec(TEXT("Map:Name:Array:Struct:/Script/CoreUObject.Vector"), Spec, Error));
+            TEST_TRUE(Spec.Kind == UnLuaNova::ELuaNetSpecKind::Map);
+            TEST_EQUAL(Spec.Children.Num(), 2);
+            TEST_TRUE(UnLuaNova::ParseLuaNetTypeSpec(Spec.Canonical, Again, Error));
+            TEST_EQUAL(Spec.Canonical, Again.Canonical);
+        });
+
+        It(TEXT("非法类型规格在解析期整份拒绝"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::FLuaNetTypeSpec Spec;
+            FString Error;
+            TEST_FALSE(UnLuaNova::ParseLuaNetTypeSpec(TEXT("TArray:Int"), Spec, Error));
+            TEST_FALSE(UnLuaNova::ParseLuaNetTypeSpec(TEXT("Array:"), Spec, Error));
+            TEST_FALSE(UnLuaNova::ParseLuaNetTypeSpec(TEXT("Array:NoSuchKind"), Spec, Error));
+            TEST_FALSE(UnLuaNova::ParseLuaNetTypeSpec(TEXT("Map:Array:Int:Int"), Spec, Error));
+            TEST_FALSE(UnLuaNova::ParseLuaNetTypeSpec(TEXT("Struct:"), Spec, Error));
+        });
+
+        It(TEXT("通用字段进入独立 bucket，类型规格参与 SchemaVersion"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::FLuaRepDecl Decl;
+            Decl.Name = FName(TEXT("Inventory"));
+            Decl.Type = UnLuaNova::ELuaNetParamType::Generic;
+            Decl.TypeSpec = TEXT("Array:Struct:/Script/CoreUObject.Vector");
+
+            TArray<UnLuaNova::FLuaRepDecl> Decls;
+            Decls.Add(Decl);
+            TArray<UnLuaNova::FLuaNetSlot> Slots;
+            UnLuaNova::BuildSlots(Decls, Slots);
+            TEST_EQUAL(Slots.Num(), 1);
+            TEST_TRUE(Slots[0].Bucket == UnLuaNova::ELuaNetBucket::Generic);
+            TEST_EQUAL(Slots[0].TypeSpec, Decl.TypeSpec);
+
+            int32 Counts[int32(UnLuaNova::ELuaNetBucket::Max)];
+            UnLuaNova::CountSlots(Slots, Counts);
+            TEST_EQUAL(Counts[int32(UnLuaNova::ELuaNetBucket::Generic)], 1);
+
+            UnLuaNova::FLuaRepDecl Other = Decl;
+            Other.TypeSpec = TEXT("Array:Struct:/Script/CoreUObject.Rotator");
+            TArray<UnLuaNova::FLuaRepDecl> OtherDecls;
+            OtherDecls.Add(Other);
+            TEST_TRUE(UnLuaNova::ComputeSchemaVersion(Decls) != UnLuaNova::ComputeSchemaVersion(OtherDecls));
+        });
+
+        It(TEXT("Lua 值与通用 payload 往返，且不受表插入顺序影响"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::FLuaNetTypeSpec Spec;
+            FString Error;
+            TEST_TRUE(UnLuaNova::ParseLuaNetTypeSpec(TEXT("Map:Name:Array:Int"), Spec, Error));
+
+            auto PushMap = [this](bool bReverse)
+            {
+                lua_newtable(L);
+                const char* Names[2] = { "zeta", "alpha" };
+                for (int32 Index = 0; Index < 2; ++Index)
+                {
+                    const char* Name = bReverse ? Names[1 - Index] : Names[Index];
+                    lua_newtable(L);
+                    lua_pushinteger(L, 10 + Index);
+                    lua_rawseti(L, -2, 1);
+                    lua_pushinteger(L, 20 + Index);
+                    lua_rawseti(L, -2, 2);
+                    lua_setfield(L, -2, Name);
+                }
+            };
+
+            const int32 Top = lua_gettop(L);
+            PushMap(false);
+            FString Text;
+            TEST_TRUE(UnLuaNova::EncodeLuaNetValue(L, -1, Spec, Text, Error));
+            lua_settop(L, Top);
+
+            PushMap(true);
+            FString Reordered;
+            TEST_TRUE(UnLuaNova::EncodeLuaNetValue(L, -1, Spec, Reordered, Error));
+            TEST_EQUAL(Text, Reordered);
+            lua_settop(L, Top);
+
+            TEST_TRUE(UnLuaNova::DecodeLuaNetValue(L, Text, Spec, Error));
+            FString Decoded;
+            TEST_TRUE(UnLuaNova::EncodeLuaNetValue(L, -1, Spec, Decoded, Error));
+            TEST_EQUAL(Text, Decoded);
+            lua_settop(L, Top);
+
+            TEST_FALSE(UnLuaNova::DecodeLuaNetValue(L, TEXT("a2:i1;"), Spec, Error));
+            TEST_EQUAL(lua_gettop(L), Top);
         });
     });
 
@@ -633,7 +756,9 @@ void FNetSpec::Define()
             auto* Component = NewObject<UUnLuaNovaReplicationComponent>();
             Component->Objects.SetNum(1);
 
-            UObject* Target = NewObject<UObject>();
+            // UObject itself is abstract here: NewObject<UObject>() trips the editor-only
+            // ensure in StaticAllocateObject and fails the spec on a log error, not an assert.
+            UObject* Target = NewObject<UUnLuaNovaReplicationComponent>();
             Target->AddToRoot();
 
             UnLuaNova::FLuaNetSlot Slot;

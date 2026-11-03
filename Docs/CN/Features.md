@@ -10,6 +10,6 @@
 | Luau | 语法、标准库、vector、buffer、原生调试、可选 CodeGen | 类型检查在外部；实验库受上游 flag 控制 |
 | 开发工具 | DAP、Profiler、内存/协程诊断、声明导出 | CI 与打包场景的证据尚不完整 |
 | 运行时模块 | Event、OOP、Timer、HotReload | Timer 生命周期和 HotReload upvalue 语义有缺口 |
-| 网络 | RPC、按类型分桶的复制属性 | 实验阶段；条件复制未支持（非 `COND_None` 显式拒绝），复制声明已按 Env 归属；晚加入/重连与 Iris 未覆盖 |
+| 网络 | RPC、按类型分桶的复制属性、按条件分组的条件复制、`UStruct` / 容器类型规格 | 实验阶段；8 种条件已有独立存储组与单测，不支持的条件显式拒绝；复制声明已按 Env 归属；owner/非 owner 联机验收、晚加入/进程级重连、dormancy/relevancy 四类场景与 Legacy/PushOff/Iris 变体均为**源码与门禁已补、尚未执行** |
 
 [当前风险与验收](Benchmark_Review.md) · [Luau](Luau.md) · [内置库](StdLib.md)

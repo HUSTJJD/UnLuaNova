@@ -54,7 +54,7 @@ GC 默认由 VM 自动调度；TimeSliced 模式通过每帧预算发出 GC step
 
 编辑器生成绑定与类型声明，外部 LuaLS/luau-lsp 做静态分析，运行时并不执行类型检查。调试服务与 DAP 分属运行时/编辑器模块；打包目标不自动具备完整 IDE 链路。
 
-网络注册动态 UFunction，并用固定 typed UPROPERTY 桶承载字段。目前条件复制依赖实例而布局按类缓存，不能视作成熟网络 schema 系统。详见 [网络](LuaNetworking.md)。
+网络注册动态 UFunction；无条件字段用固定 typed UPROPERTY 桶，条件字段按条件分到独立的 `FLuaNetBuckets` 组。UE 的复制条件来自按类缓存的属性注册、不能由实例或脚本值决定，所以"某字段是 OwnerOnly"只能意味着"它存在注册为 OwnerOnly 的属性里"。字段地址因此是 (条件组, 类型桶, 下标)。详见 [网络](LuaNetworking.md)。
 
 ## 修改要求
 

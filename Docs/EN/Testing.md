@@ -108,6 +108,17 @@ Partial runs explicitly select `Development` and are not release evidence:
 
 `SkipBuild`, `BuildOnly`, `NullRHI`, `NoReport`, individual backends and custom filters are Development options. The release entry rejects reduced coverage. The nightly build installer also uses Development and only verifies compilation.
 
+### Connected network matrix (separate opt-in)
+
+The four connected scenarios and the Legacy / PushOff / Iris variants each launch three real processes, so they are not part of the ordinary test matrix or the 33 normal Release stages:
+
+```powershell
+.\Tools\RunTests.ps1 -Profile Development -NetMatrix -Backend Lua -SkipBuild
+python Tools\ValidateRelease.py --net-matrix --run Saved\ReleaseTests\net-matrix\Lua --backend Lua --carrier game
+```
+
+`Tools/RunNetMatrix.ps1` is the underlying script. `-ExtraArgs` puts `-UnLuaNovaNetScenarios` and the variant's real engine switch (`-UseIrisReplication=1` or a push-model cvar ini override) on the process command line; `FNetSession` forwards `UNLUANOVA_TEST_NET_VARIANT` to every peer, and `AppendWorldFacts` reads the resulting cvar state back into the report, so renaming a directory cannot impersonate a variant. Artifacts land in `net/scenarios/<Name>/` and `net/variants/<Name>/DedicatedServer/`, judged into `metadata/net-matrix-gate.json`. This is **not** UE automation evidence and does not touch `Tools/evidence/index.json`. The gate fails closed on a missing topology, a missing peer log, a PID mismatch, a faked Iris/push-model flag or a scenario that never ran. **At present these scenarios and variants have source and gates only, with no execution evidence.**
+
 Preview the default plan without writing config, installing tools, compiling or launching UE:
 
 ```powershell
@@ -134,12 +145,13 @@ This entry covers the defined Win64 matrix, not every unfinished product require
 
 Validation status (only for the 2026-11-03 baseline run: `-Baseline`, `Saved/ReleaseTests/baseline`, commit `347bb8c5`): 33/33 stages passed with 2482/2482 UE executions, zero failures and zero skips — Lua Editor 626, Lua cooked 600, Luau Editor 641, Luau cooked 615. All four real DS + two-client gates (DedicatedServer and Multicast) passed, and both backends packaged Development, Server and Shipping. All 41 Python tooling tests and PowerShell support checks passed. Static analysis had zero errors, with 298 Lua warnings and seven Luau warnings retained — both are a known analyzer limitation on `package.path`-style requires and do not affect loading. Both LuaLS and luau-lsp run the binary built from their submodule, and the build does not modify submodule sources; LuaLS's bee dependency retains two upstream-disabled tests. Release22's old DedicatedServer case does not establish transport. Historical failures and acceptance limits are in the [regression record](Regression_20261024.md).
 
-The latest regular validation (`Saved/ReleaseTests/test`) reports `complete=true`, `passed=false`:
-five `UnLuaNova.Perf.Benchmark` cases on Luau Editor exceeded the 25% gate, so
-`Luau-editor-tests` failed and `Luau-editor-evidence` was blocked; all other stages passed or
-reused verified cache. Product sources are unchanged between the two runs, and the manifests and
-process priority match, so measurement-environment interference is the leading explanation. The
-baseline is not replaced and the gate is not relaxed. **Current release status follows the latest
-run: not passed.**
+**Current release status: not passed** (source: `Saved/ReleaseTests/test/release-summary.json`).
+Across later regular validations, the Luau Editor performance regression was ruled out as a code
+regression (sources unchanged, manifests and priority matched, a re-run passed 641/641 with the
+gate green); UBT mutex clashes and externally interrupted compiler processes failed packaging and
+build stages; and uncommitted Net source changes in the worktree now fail two
+`UnLuaNova.API.Net.*` cases. The baseline is not replaced and the gate is not relaxed. Freeze the
+worktree, refresh the generated matrix, then re-run the full Release pipeline without concurrent
+UE builds.
 
 Type-check summaries retain every warning and the raw `analyzer_exit`. The final `exit` follows error-level diagnostics: warnings alone do not block, while type errors, abnormal analyzer exits and missing results fail.
