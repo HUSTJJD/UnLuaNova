@@ -1,6 +1,7 @@
 #include "LuaBackend.h"
 #include "LuaEnv.h"
 #include "UnLuaNovaBase.h"
+#include "UnLuaNovaSandbox.h"
 #include "UnLuaNovaTestHelpers.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/FileManager.h"
@@ -88,6 +89,168 @@ void FLuauIntegrationSpec::Define()
             f.__path = '../escape.txt'
             assert(not pcall(f.flush, f))
             f.__path = 'lines.txt' assert(f:close())
+        )"));
+    });
+
+    It(TEXT("io.open modes and file:seek options are validated"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        TEST_TRUE(UnLuaNova::RunChunk(L, R"(
+            local f = assert(io.open('lines.txt', 'w'))
+            f:write('abc\ndef') assert(f:close())
+
+            -- 'b' is a no-op here, but an unknown letter, an empty mode or 'b' alone
+            -- must be refused instead of quietly opening a readable handle.
+            assert(not pcall(io.open, 'lines.txt', 'q'))
+            assert(not pcall(io.open, 'lines.txt', ''))
+            assert(not pcall(io.open, 'lines.txt', 'b'))
+
+            f = assert(io.open('lines.txt', 'rb'))
+            assert(f:seek('set', 4) == 4)
+            assert(f:read(3) == 'def')
+            assert(f:seek('end', -3) == 4)
+            assert(f:seek('cur', -100) == 0)
+            assert(not pcall(f.seek, f, 'nonsense'))
+            assert(f:close())
+        )"));
+    });
+
+    It(TEXT("file:lines and io.lines honour format lists"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        TEST_TRUE(UnLuaNova::RunChunk(L, R"(
+            local f = assert(io.open('lines.txt', 'w'))
+            f:write('1 first\n2 second\n3 third') assert(f:close())
+
+            local count = 0
+            for n, word in io.lines('lines.txt', 'n', 'l') do
+                count = count + 1
+                assert(n == count)
+                assert(word == ' first' or word == ' second' or word == ' third')
+            end
+            assert(count == 3)
+
+            local g = assert(io.open('lines.txt', 'r'))
+            local lines = {}
+            for line in g:lines('l') do lines[#lines + 1] = line end
+            assert(#lines == 3 and lines[1] == '1 first' and lines[3] == '3 third')
+            assert(g:close())
+        )"));
+    });
+
+    It(TEXT("lua.iomaxbytes stops an unbounded write before it is buffered"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        // Register the CVar with a harmless call first, then tighten it for this case.
+        UnLuaNova::ApplyCapabilityPolicy(L);
+        auto* MaxVar = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.iomaxbytes"));
+        if (!MaxVar)
+            return;
+        const int32 Saved = MaxVar->GetInt();
+        MaxVar->Set(8, ECVF_SetByCode);
+
+        const bool bOk = UnLuaNova::RunChunk(L, R"(
+            local f = assert(io.open('lines.txt', 'w'))
+            assert(not pcall(f.write, f, string.rep('x', 32)))
+            assert(f:close())
+        )");
+
+        MaxVar->Set(Saved, ECVF_SetByCode);
+        TEST_TRUE(bOk);
+    });
+
+    It(TEXT("sandbox capability policy trims globals but protects host tables"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        UnLuaNova::ApplyCapabilityPolicy(L); // registers lua.sandboxdeny
+        auto* Deny = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.sandboxdeny"));
+        if (!Deny)
+            return;
+        const FString Saved(Deny->GetString());
+        Deny->Set(TEXT("debug,io,require,UE"), ECVF_SetByCode);
+
+        const int32 Removed = UnLuaNova::ApplyCapabilityPolicy(L);
+        const bool bState = UnLuaNova::RunChunk(L,
+            "return debug == nil and io == nil and require ~= nil");
+
+        Deny->Set(*Saved, ECVF_SetByCode);
+        TEST_TRUE(Removed == 2);
+        TEST_TRUE(bState && lua_toboolean(L, -1) != 0);
+    });
+
+    It(TEXT("file:write overwrites at __pos and append mode still writes at the end"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        TEST_TRUE(UnLuaNova::RunChunk(L, R"(
+            local f = assert(io.open('lines.txt', 'w'))
+            f:write('abcdef') assert(f:close())
+
+            f = assert(io.open('lines.txt', 'r+'))
+            assert(f:seek('set', 2) == 2)
+            f:write('XY')
+            assert(f.__data == 'abXYef')
+            assert(f.__pos == 4)
+            assert(f:seek('set', 0) == 0)
+            assert(f:read('a') == 'abXYef')
+            assert(f:close())
+
+            -- Append mode ignores a seek: the write always lands at the end.
+            f = assert(io.open('lines.txt', 'a'))
+            assert(f:seek('set', 0) == 0)
+            f:write('Z')
+            assert(f.__data == 'abXYefZ')
+            assert(f:close())
+        )"));
+    });
+
+    It(TEXT("io.tmpfile is an in-memory handle and io.popen is an explicit refusal"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        TEST_TRUE(UnLuaNova::RunChunk(L, R"(
+            local t = assert(io.tmpfile())
+            t:write('scratch')
+            assert(t:seek('set', 0) == 0)
+            assert(t:read('a') == 'scratch')
+            assert(io.type(t) == 'file')
+            assert(t:close())
+            assert(io.type(t) == 'closed file')
+            assert(not pcall(io.popen, 'dir'))
+        )"));
+    });
+
+    It(TEXT("package.aliases redirects require and rejects a self-alias"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        TEST_TRUE(UnLuaNova::RunChunk(L, R"(
+            package.preload['Spec.AliasTarget'] = function() return { tag = 'target' } end
+            package.aliases['Spec.Alias'] = 'Spec.AliasTarget'
+            local m = require('Spec.Alias')
+            assert(m.tag == 'target')
+            assert(require('Spec.AliasTarget') == m)
+            assert(not pcall(function()
+                package.aliases['Spec.Loop'] = 'Spec.Loop'
+                return require('Spec.Loop')
+            end))
+
+            package.aliases['Spec.Alias'] = nil
+            package.aliases['Spec.Loop'] = nil
+            package.preload['Spec.AliasTarget'] = nil
+            package.loaded['Spec.Alias'] = nil
+            package.loaded['Spec.AliasTarget'] = nil
+        )"));
+    });
+
+    It(TEXT("require reports a cyclic dependency and a failed load does not poison the name"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        TEST_TRUE(UnLuaNova::RunChunk(L, R"(
+            package.preload['Spec.CycleA'] = function() return require('Spec.CycleB') end
+            package.preload['Spec.CycleB'] = function() return require('Spec.CycleA') end
+            local ok, err = pcall(require, 'Spec.CycleA')
+            assert(not ok)
+            assert(tostring(err):find('cyclic dependency', 1, true))
+
+            -- The loading marks must be cleared on error, otherwise this name can
+            -- never be required again even after the module is fixed.
+            package.preload['Spec.CycleA'] = function() return { ok = true } end
+            package.preload['Spec.CycleB'] = nil
+            assert(require('Spec.CycleA').ok == true)
+
+            package.loaded['Spec.CycleA'] = nil
+            package.loaded['Spec.CycleB'] = nil
+            package.preload['Spec.CycleA'] = nil
         )"));
     });
 

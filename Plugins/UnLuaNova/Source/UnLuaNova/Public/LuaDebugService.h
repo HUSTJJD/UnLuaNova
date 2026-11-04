@@ -15,7 +15,10 @@
 #include "LuaBackend.h"
 
 #include "Containers/Array.h"
+#include "Containers/Map.h"
+#include "Containers/Set.h"
 #include "Containers/UnrealString.h"
+#include "HAL/CriticalSection.h"
 
 namespace UnLuaNova
 {
@@ -32,6 +35,10 @@ namespace UnLuaNova
         FString Name;
         FString Type;
         FString Value;
+        /** Non-zero when the value is a table that DAP can expand with `variables`. */
+        int32 VariablesReference = 0;
+        /** Expansion depth of this reference; internal to the service. */
+        int32 Depth = 0;
     };
 
     // Headless debug service: no UI of its own, everything is driven through this API so
@@ -70,6 +77,24 @@ namespace UnLuaNova
         void ClearBreakpoints();
         const TArray<FBreakpoint>& GetBreakpoints() const { return Breakpoints; }
 
+        /**
+         * DAP setFunctionBreakpoints. A name matches a frame's function name exactly, or as
+         * a '.' / ':' qualified suffix ("Foo" matches "Table.Foo" / "Table:Foo"). Like
+         * source:line breakpoints this is matched by the line hook: with any function
+         * breakpoint armed the VM runs in single step and stops on the first line of a
+         * frame whose name matches. Empty names are rejected by the adapter.
+         */
+        void SetFunctionBreakpoints(const TArray<FString>& Names);
+        const TSet<FString>& GetFunctionBreakpoints() const { return FunctionBreakpoints; }
+
+        /**
+         * Keys of package.loaded, snapshotted on the VM thread at Attach and at every
+         * stop. DAP `modules` reads this copy so the adapter thread never touches
+         * lua_State. Empty means no VM is attached / nothing is loaded - never a fake
+         * module invented to make the response look populated.
+         */
+        TArray<FString> GetLoadedModules() const;
+
         void SetSingleStep(bool bInEnabled);
 
         /**
@@ -94,6 +119,33 @@ namespace UnLuaNova
         bool IsPaused() const { return bPaused; }
         const TArray<FLuaDebugFrame>& GetStackTrace() const { return StackTrace; }
         const TArray<FLuaDebugVariable>& GetLocals() const { return Locals; }
+
+        /** DAP: 1 is the Locals scope; anything above that is a nested table handle. */
+        int32 GetLocalsReferenceId() const { return 1; }
+
+        /**
+         * Expand a nested table captured at the last stop. Returns false with OutError
+         * when the VM is not paused, the handle is stale, or the expansion budget is
+         * exhausted. Handles are only valid until the next stop or Detach().
+         */
+        bool GetChildren(int32 ReferenceId, TArray<FLuaDebugVariable>& Out, FString& OutError);
+
+        // ── 异常过滤器 / exceptionInfo ──────────────────────────────────────
+        /** "raised" and "uncaught" are the two filters the shared error handler knows. */
+        void SetExceptionFilters(const TArray<FString>& Filters);
+        const TSet<FString>& GetExceptionFilters() const { return ExceptionFilters; }
+
+        /**
+         * Record an uncaught Lua error from the shared ReportLuaCallError handler. With an
+         * active filter this arms the line hook so the VM stops on the next line and the
+         * DAP `stopped` event can report reason "exception" instead of "breakpoint".
+         * The message is retained for the `exceptionInfo` request.
+         */
+        void RecordException(lua_State* L);
+        void RecordException(const FString& Message);
+        void ClearException();
+        FString GetLastException() const { return LastException; }
+        FString GetStopReason() const { return StopReason.IsEmpty() ? FString(TEXT("breakpoint")) : StopReason; }
 
         // Release a stopped VM. Safe to call from another thread.
         void Continue();
@@ -140,14 +192,32 @@ namespace UnLuaNova
 
         void OnStop(lua_State* L, lua_Debug* Ar, bool bAtBreakpoint);
         bool MatchesBreakpoint(const FString& Source, int32 Line) const;
+        bool MatchesFunctionBreakpoint(const FString& FunctionName) const;
         void SyncVmBreakpoints();
+        void RefreshLoadedModules(lua_State* L);
         void CaptureStackTrace(lua_State* L);
         void CaptureLocals(lua_State* L);
+        void ClearVariableRefs();
 
         lua_State* Attached = nullptr;
         TArray<FBreakpoint> Breakpoints;
+        TSet<FString> FunctionBreakpoints;
         TArray<FLuaDebugFrame> StackTrace;
         TArray<FLuaDebugVariable> Locals;
+
+        // Written on the VM thread, read on the DAP adapter thread.
+        TArray<FString> LoadedModules;
+        mutable FCriticalSection ModulesLock;
+
+        TSet<FString> ExceptionFilters;
+        FString LastException;
+        FString StopReason;
+        bool bExceptionStopPending = false;
+
+        // DAP variablesReference (starting at 2) -> luaL_ref of the captured table.
+        TMap<int32, int32> VariableRefs;
+        TMap<int32, int32> VariableDepths;
+        int32 NextVariableReference = 2;
         bool bPaused = false;
         bool bSingleStep = false;
         bool bBlocking = false;

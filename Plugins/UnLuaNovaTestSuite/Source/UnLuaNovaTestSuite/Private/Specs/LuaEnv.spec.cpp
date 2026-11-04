@@ -365,6 +365,36 @@ void FLuaEnvSpec::Define()
             TEST_EQUAL((int64)lua_tonumber(L, -1), 1ll);
             lua_pop(L, 1);
         });
+
+        It(TEXT("package.aliases 在两个后端都存在并可重定向 require"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // The alias searcher sits before preload on both backends: plain Lua's own
+            // require walks package.searchers, and Luau uses FLuaEnv::Require which walks
+            // the same table. Both must see the same package.aliases field.
+            Env->DoString(TEXT(" \
+                package.preload['Spec.AliasTarget2'] = function() return { FromAlias = true } end \
+                package.aliases['Spec.Alias2'] = 'Spec.AliasTarget2' \
+                local M = require('Spec.Alias2') \
+                local Same = require('Spec.AliasTarget2') == M \
+                package.aliases['Spec.Alias2'] = nil \
+                package.preload['Spec.AliasTarget2'] = nil \
+                return type(package.aliases) == 'table' and M.FromAlias == true and Same \
+            "));
+            TEST_EQUAL(lua_toboolean(L, -1), 1);
+            lua_pop(L, 1);
+        });
+
+        It(TEXT("自引用别名明确报错，不会无限递归"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            Env->DoString(TEXT(" \
+                package.aliases['Spec.SelfAlias'] = 'Spec.SelfAlias' \
+                local Ok = pcall(require, 'Spec.SelfAlias') \
+                package.aliases['Spec.SelfAlias'] = nil \
+                return not Ok \
+            "));
+            TEST_EQUAL(lua_toboolean(L, -1), 1);
+            lua_pop(L, 1);
+        });
     });
 
     AfterEach([this]

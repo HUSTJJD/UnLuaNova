@@ -846,7 +846,14 @@ namespace UnLuaNova
      */
     UNLUANOVA_API void MaybeCompileNativeChunk(lua_State* L, const char* ChunkName);
 
-    /** Chunks handed to the native compiler so far, for `lua.codegen` to report. */
+    /**
+     * Chunks HANDED to the native compiler so far, for `lua.codegen` to report.
+     * luau_codegen_compile() returns void, so this is a request count, not a success
+     * count - there is no supported way to observe whether a chunk was actually compiled.
+     */
+    UNLUANOVA_API int32 GetNativeCodeGenRequestCount();
+
+    /** Source-compatible alias of GetNativeCodeGenRequestCount(); same semantics. */
     UNLUANOVA_API int32 GetNativeCodeGenChunkCount();
 
     /**

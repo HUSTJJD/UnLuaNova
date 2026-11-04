@@ -12,6 +12,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
+#include "LuaDeadLoopCheck.h"
+#include "LuaEnv.h"
+#include "HAL/IConsoleManager.h"
 #include "UnLuaNovaTestHelpers.h"
 #include "UnLuaNovaModule.h"
 #include "UnLuaNovaSettings.h"
@@ -59,9 +62,38 @@ void FLuaDeadLoopCheckSpec::Define()
                     count = count + 1
                 end
             )";
+            const int32 Before = UnLuaNova::FDeadLoopCheck::GetTimeoutCount();
             Env->DoString(Chunk);
+            // Detection alone is not evidence of cancellation: the hook must have fired.
+            TestTrue(TEXT("watchdog recorded a real cancellation"),
+                UnLuaNova::FDeadLoopCheck::GetTimeoutCount() > Before);
 
             UnLuaNova::Shutdown();
+        });
+
+        It(TEXT("lua.maxsafepoints 打断死循环，且不污染下一次调用"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // Constructing a guard registers the CVar. Use a private env so the case does
+            // not depend on whichever PIE / module state the previous test left behind.
+            auto LocalEnv = MakeShared<UnLuaNova::FLuaEnv>();
+            LocalEnv->DoString(TEXT("return 1"));
+            auto* Var = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.maxsafepoints"));
+            if (!Var)
+                return;
+
+            const int32 Saved = Var->GetInt();
+            Var->Set(64, ECVF_SetByCode);
+
+            const int32 Before = UnLuaNova::FDeadLoopCheck::FGuard::GetSafePointInterruptCount();
+            AddExpectedError(TEXT("maxsafepoints"), EAutomationExpectedErrorFlags::Contains);
+            LocalEnv->DoString(TEXT("local n = 0 while true do n = n + 1 end"));
+            const bool bInterrupted =
+                UnLuaNova::FDeadLoopCheck::FGuard::GetSafePointInterruptCount() > Before;
+            const bool bShort = LocalEnv->DoString(TEXT("return 1 + 1"));
+
+            Var->Set(Saved, ECVF_SetByCode);
+            TestTrue(TEXT("budget recorded a real interruption"), bInterrupted);
+            TestTrue(TEXT("the next call is not capped by a stale counter"), bShort);
         });
     });
 }

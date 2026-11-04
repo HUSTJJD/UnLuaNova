@@ -11,9 +11,9 @@ Integrated revision: `6d36d483cb88973276af611198169f76f3ce05b0` (0.743 + 1). Ups
 | UE bridge | vector/FVector and buffer/TArray copies | float versus double precision; buffer does not alias external UE storage; result array is not guaranteed uint8 |
 | Compiler settings | optimize/debuglevel/coverage | Coverage export and gates incomplete |
 | CodeGen | Opt-in with module filter | Platform/executable-memory policy and debug interaction need validation; counters measure requests |
-| Diagnostics | Debug primitives, profiler, allocation categories, coroutine census, GC controls | Churn is not live bytes; remote/packaged acceptance incomplete |
+| Diagnostics | Debug primitives, profiler, allocation categories, coroutine census, GC controls, a time watchdog and a deterministic safe-point budget (`lua.maxsafepoints`) | Churn is not live bytes; Luau self time is sampled attribution, not measurement; a safe point is not an instruction on Luau; remote/packaged acceptance incomplete |
 | Type checking | Generated declarations plus external luau-lsp | Analysis/Config are not runtime type checking; skip behavior must be checked |
-| Modules | Host loader, package.searchers/preload | Not upstream Require path/alias/config semantics |
+| Modules | Host loader, package.searchers/preload, `package.aliases` redirection on both backends (self-alias rejected), cycle detection in the Luau-side `require` | Upstream Require config/path-alias semantics are not claimed; plain Lua keeps its native `require` (no cycle detection); longer alias cycles rely on the VM stack guard |
 
 See upstream [compatibility](https://luau.org/compatibility/) and [sandbox](https://luau.org/sandbox/) documentation and the [local matrix](../feature-matrix.md).
 

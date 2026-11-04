@@ -20,6 +20,7 @@
 
 #include "UnLuaNovaBase.h"
 #include "UnLuaNovaTemplate.h"
+#include "LuaBackend.h"
 #include "Misc/AutomationTest.h"
 #include "UnLuaNovaTestHelpers.h"
 
@@ -96,6 +97,42 @@ void FLuaScriptCompatSpec::Define()
             UnLuaNova::RunChunk(L, "local F = load('return 7') return F and F() or 0");
             TEST_EQUAL((int32)lua_tointeger(L, -1), 7);
         });
+    });
+
+    Describe(TEXT("debug 精确子集"), [this]()
+    {
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+        It(TEXT("getregistry 明确报错，而不是返回一张看起来无害的空表"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::RunChunk(L, "return (pcall(debug.getregistry))");
+            TEST_FALSE(lua_toboolean(L, -1));
+        });
+
+        It(TEXT("getuservalue 恒为 nil，setuservalue 明确返回 false"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::RunChunk(L,
+                "return debug.getuservalue({}) == nil and debug.setuservalue({}, {}) == false");
+            TEST_TRUE(lua_toboolean(L, -1));
+        });
+
+        It(TEXT("upvalueid 对共享引用一致，同一闭包保持确定性"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::RunChunk(L, R"(
+                local shared = {}
+                local function a() return shared end
+                local function b() return shared end
+                return debug.upvalueid(a, 1) == debug.upvalueid(b, 1)
+                    and debug.upvalueid(a, 1) == debug.upvalueid(a, 1)
+            )");
+            TEST_TRUE(lua_toboolean(L, -1));
+        });
+#else
+        It(TEXT("plain Lua 保留原生 debug 表，不被兼容层替换"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::RunChunk(L, "return type(debug.getregistry()) == 'table'");
+            TEST_TRUE(lua_toboolean(L, -1));
+        });
+#endif
     });
 }
 

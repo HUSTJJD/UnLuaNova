@@ -61,6 +61,27 @@ void FErrorHandlingSpec::Define()
             TEST_TRUE(lua_toboolean(L, -1));
         });
 
+        It(TEXT("load 的 mode 只接受源码，二进制与非法模式明确失败"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // Luau's compat load() rejects "b" by raising; plain Lua's native load()
+            // returns nil for a text chunk under mode "b". Both must refuse it, and an
+            // unknown or empty mode must not quietly fall back to compiling source.
+            UnLuaNova::RunChunk(L, R"(
+                local ok, result = pcall(function()
+                    local function Refused(mode)
+                        local loaded, f = pcall(load, 'return 1', nil, mode)
+                        return (not loaded) or (f == nil)
+                    end
+                    return Refused('b') and Refused('q') and Refused('')
+                        and type(load('return 1', nil, 't')) == 'function'
+                        and type(load('return 1', nil, 'bt')) == 'function'
+                        and load('return x', nil, 't', { x = 7 })() == 7
+                end)
+                return ok and result == true
+            )");
+            TEST_TRUE(lua_toboolean(L, -1));
+        });
+
         It(TEXT("错误信息带上 chunk 名与行号"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             // The chunk name is threaded through from C++, so a script that fails to

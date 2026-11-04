@@ -110,6 +110,34 @@ lua.profiler dump my-run.csv
 也就减不掉被调函数的耗时 —— 那一列恒为 0，`Hits` 记的是安全点采样次数而不是调用次数。
 采样最多的函数仍然是热点函数，排序在这两个后端上都对。*
 
+还有一组**采样轨迹**子命令，输出 Luau 上游 `perfgraph.py` 能读的 `profile.out` 格式
+（约 1 kHz 采样，有样本上限）：
+
+| 子命令 | 说明 |
+|---|---|
+| `trace on` | 同时打开 profiler 与轨迹采样 |
+| `trace off` | 关闭轨迹采样 |
+| `trace reset` | 清空已采样轨迹 |
+| `trace dump [文件]` | 写出 `profile.out`；相对路径落到 `Saved/Profiling/<文件>`，默认 `Saved/Profiling/profile.out` |
+
+端到端：UE 控制台采集 → 落盘 → 渲染。
+
+```
+lua.profiler trace reset
+lua.profiler trace on
+:: 跑目标工作负载 ::
+lua.profiler trace off
+lua.profiler trace dump my-run.out
+```
+
+```powershell
+python -B Tools/LuauPerfgraph/perfgraph.py --help
+```
+
+wrapper 把参数**原样转发**给仓库内固定版本的上游渲染器，参数名以该 `--help` 为准；
+把 `Saved/Profiling/my-run.out` 按上游要求传入即可得到火焰图。submodule 未初始化时
+它会明确报出 `git submodule update --init ...` 指引，而不是假装渲染成功。
+
 ### lua.memstats \[on\|off\|reset\]
 
 Lua 堆内存统计。
@@ -203,6 +231,35 @@ lua.sandbox=1
 CVar 本身在两个后端上都存在，所以 `lua.sandbox` 在任何后端都能读写，不会因为后端不支持而变成
 "命令不存在"——只是写入在 Lua 5.5 下不产生效果。脚本要判断它是否真的生效，用
 `UnLuaNova.HasFeature('sandbox')`。
+
+### lua.sandboxdeny（启动期 CVar）
+
+`lua.sandbox=1` 时，在 `luaL_sandbox` 冻结 `_G` **之前**按逗号分隔的名字移除全局，例如
+`lua.sandboxdeny=debug,io,socket,os`。`_G` / `package` / `require` / `Lua` / `UnLua` /
+`UnLuaNova` / `UE` / `UE4` 是宿主启动后仍要写的表，受保护不会被移除（否则延迟注册 UE
+类型与 `require` 会直接坏掉）。默认空，即保留宿主默认能力集。
+
+这是**能力裁剪，不是完整的不可信代码权限模型**：默认仍保留 UE / debug / io / socket，
+需要显式 deny；也没有按脚本授权。`ApplyCapabilityPolicy()` 返回实际移除数量，
+自动化用例用它区分「策略生效」和「静默什么都没做」。
+
+### lua.iomaxbytes（运行时 CVar）
+
+`lua.io` 缓冲式 io 的单个文件字节上限（默认 16 MiB，`0` 为不限）。在 `io.open` 读盘前、
+`file:write` 拼接后、`file:flush` 写盘前检查，超限直接报错，避免一个脚本把整个文件读进
+Lua 字符串造成无上限分配。它是宿主策略，不属于 Lua io 语义。
+
+### lua.maxsafepoints（运行时 CVar）
+
+每次宿主调用的 Lua 执行预算（默认 `0` 关闭）。按 VM **安全点**计数：Luau 是
+`lua_Callbacks::interrupt`（循环回边 / 调用），纯 Lua 后端是 `LUA_MASKCOUNT` 指令钩子。
+超限直接抛 Lua 错误；`FDeadLoopCheck::FGuard::GetSafePointInterruptCount()` 可观测真实
+中断次数。GC 中断不计入，也不会在收集器内部抛错。
+
+它与基于时间的 `DeadLoopCheck` 相互独立，可以只开一个。`FLuaVmHooks` 现在把 GC 标志
+透传给所有监听器：profiler 用它区分收集器耗时，看门狗与配额则跳过 GC 中断。
+**Luau 没有逐指令钩子**，所以这一项在 Luau 上是"安全点配额"而非逐指令配额；只有
+纯 Lua 后端是真正的指令计数。两者都只覆盖宿主调用期间的脚本，不是完整的恶意代码隔离。
 
 ### lua.coverage \[dump \[file\]\|status\]
 

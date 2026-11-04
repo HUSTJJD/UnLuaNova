@@ -9,6 +9,60 @@ outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
 
 ## Unreleased — source changes, not yet validated
 
+- Source-only loading, require cycles, a deterministic execution budget and the profiler
+  end-to-end path (`COMPAT-LANGUAGE`, `LUAU-REQUIRE`, `WATCHDOG`, `PROFILE`): `load()`
+  validates its mode (pure `b`, unknown letters and empty modes fail clearly; `t` / `bt`
+  compile source through mode `t`); the Luau-side `require` detects cyclic dependencies
+  with a `loading` upvalue, names the module in the error and clears the marks on failure
+  so a failed load cannot poison later requires; `lua.maxsafepoints` adds a per-host-call
+  safe-point budget (Luau interrupts / plain Lua `LUA_MASKCOUNT` instructions) with an
+  observable interruption counter; `FLuaVmHooks` forwards the GC flag so the profiler
+  attributes collector time (no longer hardcoded to 0) while the watchdog and budget skip
+  GC interrupts instead of longjmp'ing out of the collector; `lua.profiler trace dump`
+  resolves relative paths under `Saved/Profiling`, the perfgraph wrapper gives an
+  actionable submodule hint, and CN/EN console docs carry the collect -> dump -> render
+  example. New specs in `ErrorHandling.spec.cpp`, `LuauIntegration.spec.cpp` and
+  `LuaDeadLoopCheck.spec.cpp`.
+- io and module resolution reached their code-complete subsets (`COMPAT-IO`,
+  `LUAU-REQUIRE`): `file:write` now overwrites at `__pos` and advances the position while
+  append mode still forces the end; `io.tmpfile()` returns an in-memory handle whose flush
+  never touches disk; `io.popen()` raises an explicit refusal instead of pretending to be
+  a pipe; `package.aliases[name] = target` redirects `require` on both backends through a
+  searcher placed before preload, with alias/target sharing one cached instance and
+  self-aliases rejected. `LuaEnv.spec.cpp` and `LuauIntegration.spec.cpp` cover alias
+  redirection, self-loop rejection, overwrite/append positions, tmpfile and popen refusal.
+  Searcher order in the docs is updated to five host entries.
+- DAP command surface finished (`DEBUG-DAP`): `setFunctionBreakpoints` now matches
+  `lua_getinfo('n')` names in the line hook (exact or `.` / `:` qualified suffix) with
+  `verified=false` for empty names; `modules` returns a real `package.loaded` snapshot taken
+  on the VM thread at attach / every stop with `startModule` / `moduleCount` paging, instead
+  of a static placeholder. Specs cover verification, paging consistency and the snapshot.
+- Compatibility and safety (`COMPAT-IO`, `WATCHDOG`, `LUAU-SANDBOX`, `LUAU-REQUIRE`):
+  strict `io.open` modes (`r/w/a/+/b`, unknown or empty refused), strict `file:seek` whence
+  clamped to the in-memory buffer, format lists for `file:lines()` / `io.lines()`, and a
+  `lua.iomaxbytes` quota on open/write/flush; the watchdog now disarms the guard that
+  actually finished (fixing a nested-call dangling pointer), lets nested guards take over,
+  and exposes `FDeadLoopCheck::GetTimeoutCount()`; `lua.sandboxdeny` trims globals before
+  `luaL_sandbox` freezes `_G` while protecting host-written tables; `LoadFromFileSystem`
+  no longer mangles `./Foo` / `Foo.lua` into `//Foo` / `Foo/lua`. New Luau integration and
+  dead-loop specs cover all of these.
+- Debug adapter (`DEBUG-DAP`) closed its three remaining functional gaps: `setBreakpoints`
+  now verifies each line against the resolved script's actual line count; exception filters
+  (`raised` / `uncaught`) are wired into the shared `ReportLuaCallError` handler, arm the
+  line hook, stop with `reason=exception` and answer `exceptionInfo`; `variables` expands
+  nested tables through registry-backed handles with depth / cycle / count budgets, released
+  at the next stop or `Detach()`. `stopped.reason` now reports the real cause. DAP and
+  service specs cover verified breakpoints, capability bits, filters, last-error recording
+  and expansion failure paths.
+- Compatibility, event lifetime, codegen and benchmark tooling: `debug.getregistry` rejects
+  explicitly instead of returning a misleading empty table, `getuservalue` documents its
+  nil-only subset, `setuservalue` returns false instead of a pretend success, `upvalueid`
+  documents value identity; `UnLuaNova.Event` prunes listeners whose owner reports
+  `IsValid()==false` before each broadcast and accepts an injected validator; the native
+  codegen counter is explicitly a REQUEST count (`GetNativeCodeGenRequestCount`);
+  `Tools/CrossProject/metrics.py` produces fail-closed raw multi-run distributions. New
+  `LuauConformance.spec.lua` samples syntax / library / vector / buffer boundaries on both
+  backends. 100 tooling tests pass.
 - Per-instance binding (`BIND-INSTANCE`) delivered: `UUnLuaNovaManager::BindInstance` /
   `UnbindInstance` (plus Blueprint entry points and query API) keep a shallow copy of the
   module table per object, `FObjectRegistry::RebindModule` swaps the INSTANCE metatable

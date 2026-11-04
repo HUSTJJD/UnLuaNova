@@ -204,9 +204,9 @@ Evidence: `2026-11-02-editor-luau` Luau/Editor: 22/22 passed, 0 failed; `2026-11
 - Tests: [RuntimeModules.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp), [RuntimeContracts.spec.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Lua/RuntimeContracts.spec.lua)
 - Examples: [RuntimeContracts.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Examples/RuntimeContracts.lua)
 
-Boundary: Tokens retain owner until explicit unsubscribe; not automatic UObject lifecycle cleanup.
+Boundary: Owner lifecycle cleanup is now automatic as well as explicit: before taking its broadcast snapshot, Emit prunes tokens whose owner reports IsValid()==false; SetOwnerValidator allows a project-accurate predicate and PruneDeadOwners is a manual entry point. UnbindOwner remains the recommended explicit path for hot reload. Runtime evidence for real UObject destruction, exception/reload scenarios and recursive Once is pending.
 
-Acceptance: Run recursive Once and cleanup tests; add exception/reload/owner destruction scenarios.
+Acceptance: Run recursive Once and cleanup tests; RuntimeContracts.spec.lua now covers dead-owner pruning, live-owner retention and validator replacement; a real UObject destruction scenario still needs a live run.
 
 ### RUNTIME-OOP: Pure Lua classes
 
@@ -289,7 +289,7 @@ Status: **partial**; priority: P1; references: Luau.
 Evidence: `2026-11-02-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 30/30 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 39/39 passed, 0 failed.
 
 - Source: [LuaBackend.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp)
-- Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp)
+- Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp), [LuauConformance.spec.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Lua/LuauConformance.spec.lua)
 - Examples: [04_LuauSyntax.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Luau/04_LuauSyntax.lua), [01_StrictTyping.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Luau/01_StrictTyping.lua)
 
 Boundary: Pinned compiler supports syntax; not a full integrated conformance run.
@@ -303,7 +303,7 @@ Status: **partial**; priority: P1; references: Luau.
 Evidence: `2026-11-02-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 30/30 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 39/39 passed, 0 failed.
 
 - Source: [LuaEnv.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp)
-- Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp)
+- Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp), [LuauConformance.spec.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Lua/LuauConformance.spec.lua)
 - Examples: [04_LuauSyntax.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Luau/04_LuauSyntax.lua)
 
 Boundary: VM libraries exposed; tests sample behavior rather than all upstream conformance.
@@ -317,7 +317,7 @@ Status: **implemented**; priority: P1; references: Luau.
 Evidence: `2026-11-02-editor-luau` Luau/Editor: 53/53 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 44/44 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 44/44 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 53/53 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 44/44 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 53/53 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 44/44 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 53/53 passed, 0 failed.
 
 - Source: [LuaLib_FVector.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/MathLib/LuaLib_FVector.cpp)
-- Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp), [LuaLib_FVector.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_FVector.spec.cpp)
+- Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp), [LuaLib_FVector.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_FVector.spec.cpp), [LuauConformance.spec.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Lua/LuauConformance.spec.lua)
 - Examples: [05_VectorInterop.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Luau/05_VectorInterop.lua)
 
 Boundary: float vector versus UE double FVector loses precision.
@@ -331,7 +331,7 @@ Status: **implemented**; priority: P1; references: Luau.
 Evidence: `2026-11-02-editor-luau` Luau/Editor: 27/27 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 27/27 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 22/22 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 27/27 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 22/22 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 27/27 passed, 0 failed.
 
 - Source: [UnLuaNovaLib.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaLib.cpp), [Buffer.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Content/Script/UnLuaNova/Buffer.lua)
-- Tests: [RuntimeModules.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp), [LuauIntegration.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp)
+- Tests: [RuntimeModules.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp), [LuauIntegration.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp), [LuauConformance.spec.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Lua/LuauConformance.spec.lua)
 - Examples: [06_BufferInterop.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Luau/06_BufferInterop.lua)
 
 Boundary: Copies rather than external-memory aliases; output array type differs from uint8.
@@ -348,7 +348,7 @@ Evidence: `2026-11-02-editor-luau` Luau/Editor: 5/5 passed, 0 failed; `2026-11-0
 - Tests: [LuauIntegration.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp)
 - Examples: Missing dedicated evidence.
 
-Boundary: VM-scoped initialization fixed; request counter is not success count; platform acceptance absent.
+Boundary: VM-scoped initialization fixed. The counter is now explicitly a REQUEST count: GetNativeCodeGenRequestCount() plus a `lua.codegen` console line that states luau_codegen_compile() exposes no success signal, with the old getter kept as a documented alias. Platform acceptance, executable-memory policy and any per-chunk success signal remain absent (upstream API limitation, not a missing gate).
 
 Acceptance: Test VM/coroutine lifecycle, supported architectures, debug attachment, failures and executable-memory policy.
 
@@ -372,13 +372,13 @@ Status: **partial**; priority: P1; references: Luau.
 
 Evidence: `2026-11-02-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 30/30 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 39/39 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 30/30 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 39/39 passed, 0 failed.
 
-- Source: [LuaEnv.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp), [LuaBackend.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp)
-- Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp)
+- Source: [LuaEnv.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp), [LuaBackend.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp), [UnLuaNovaLib.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaLib.cpp), [UnLuaNovaSandbox.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaSandbox.h)
+- Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp), [LuauIntegration.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp)
 - Examples: [02_SandboxBoundary.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Luau/02_SandboxBoundary.lua)
 
-Boundary: Default off; host UE/debug/io/socket capabilities remain; not an untrusted-code permission model.
+Boundary: Capability trimming delivered: lua.sandboxdeny removes named globals before luaL_sandbox freezes _G, protects host-written globals (UE.*/Lua/package.loaded/require) and returns the removal count so a spec can tell 'policy applied' from a no-op. Still default off, still not an untrusted-code permission model: host UE/debug/io/socket capabilities remain unless explicitly denied, and there is no per-script grant. Runtime evidence for writable escape paths, new threads and host limits pending.
 
-Acceptance: Define capability policy and verify writable escape paths, new threads, imports and host limits.
+Acceptance: Define capability policy and verify writable escape paths, new threads, imports and host limits; LuauIntegration.spec.cpp asserts that denied globals disappear while protected ones survive.
 
 ### LUAU-TYPES: Type inference, declarations and LSP
 
@@ -401,12 +401,12 @@ Status: **partial**; priority: P1; references: Luau.
 Evidence: `2026-11-02-editor-luau` Luau/Editor: 26/26 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 26/26 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 26/26 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 26/26 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 26/26 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 26/26 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 26/26 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 26/26 passed, 0 failed.
 
 - Source: [LuaEnv.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp), [LuaScriptCompat.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaScriptCompat.cpp)
-- Tests: [LuaEnv.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaEnv.spec.cpp), [LuaScriptCompat.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp)
+- Tests: [LuaEnv.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaEnv.spec.cpp), [LuaScriptCompat.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp), [LuauIntegration.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp)
 - Examples: [12_CustomLoader.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tutorials/12_CustomLoader.lua)
 
-Boundary: Host searchers/preload differ from upstream Require relative paths/aliases/config.
+Boundary: Host searchers/preload still differ from upstream Require config semantics. Delivered: relative-path mangling fixed (LoadFromFileSystem only rewrites dots for dotted module names, so './Foo' / 'Foo.lua' / explicit paths keep their dots), package.aliases redirects require on both backends via a searcher placed before preload (alias and target share one cached module instance, self-aliases raise instead of recursing), and the Luau-side FLuaEnv::Require now detects cyclic dependencies with a dedicated 'loading' upvalue - it names the module in the error and clears the marks on success and failure so one failed load cannot poison later requires. Plain Lua keeps its native require (no cycle detection). Upstream @alias config files, case sensitivity, cooked-build resolution and the full cache/reload contract remain unproven.
 
-Acceptance: Document resolution/cycle/cache contract and add alias/case/cook tests or explicit unsupported errors.
+Acceptance: Document resolution/cycle/cache contract and add case/cook tests or explicit unsupported errors; LuaEnv.spec.cpp and LuauIntegration.spec.cpp cover alias redirection, self-alias rejection, cycle rejection and post-failure reuse. A real-run relative-path resolution case is still pending.
 
 ### LUAU-COVERAGE: Coverage export and quality gates
 
@@ -448,9 +448,9 @@ Evidence: `2026-11-02-editor-luau` Luau/Editor: 6/6 passed, 0 failed; `2026-11-0
 - Tests: [LuaScriptCompat.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp)
 - Examples: Missing dedicated evidence.
 
-Boundary: Registry/uservalue placeholders and approximate upvalue identity.
+Boundary: Exact subset delivered and documented: debug.getregistry rejects explicitly instead of returning a misleading empty table; getuservalue is the documented nil-only subset HotReload.lua relies on; setuservalue returns false instead of a pretend success; upvalueid is value identity (exact for shared references, slot identity for scalars, never a scalar-aliasing proof). Backend-specific spec cases cover all four. Full Lua 5.x debug parity is not claimed.
 
-Acceptance: Reject unsupported operations or implement exact subset; test closure identity and error cases.
+Acceptance: Reject unsupported operations or implement exact subset; test closure identity and error cases. Both backends must keep their own exact semantics (Luau compat layer vs plain Lua native debug table).
 
 ### COMPAT-IO: Optional rooted buffered io
 
@@ -462,9 +462,9 @@ Evidence: `2026-11-02-editor-luau` Luau/Editor: 5/5 passed, 0 failed; `2026-11-0
 - Tests: [LuauIntegration.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp)
 - Examples: Missing dedicated evidence.
 
-Boundary: CRLF/path/read checks improved; modes/seek/errors/links/quotas remain incomplete; not Lua io parity.
+Boundary: Delivered: CRLF/path/read checks, strict mode validation (r/w/a/+/b, unknown or empty modes refused), strict seek whence ('set'/'cur'/'end', clamped to the in-memory buffer), format lists for file:lines() and io.lines() (shared reader for 'a'/'l'/'L'/'n' and numeric counts), a lua.iomaxbytes quota on open/write/flush, writes that overwrite at __pos and advance the position (append mode still forces the end), an in-memory io.tmpfile() whose flush never touches disk, and an explicit io.popen() refusal. Still not Lua io parity: there is no OS stream or sparse file, hard links / symlinks are outside the capability set, and binary/large-file comparisons need a real run.
 
-Acceptance: Compare subset against Lua, including binary/large files, mutated handles, failure and root changes.
+Acceptance: Compare subset against Lua, including binary/large files, mutated handles, failure and root changes; LuauIntegration.spec.cpp covers mode/seek rejection, multi-format iterators, overwrite and append positions, tmpfile, popen refusal, the byte quota and sandbox capability trimming.
 
 ### COMPAT-LANGUAGE: Lua 5.x integer, close, goto and bytecode differences
 
@@ -473,12 +473,12 @@ Status: **partial**; priority: P1; references: Luau, UnLua.
 Evidence: `2026-11-02-editor-luau` Luau/Editor: 45/45 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 36/36 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 36/36 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 45/45 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 36/36 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 45/45 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 36/36 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 45/45 passed, 0 failed.
 
 - Source: [LuaBackend.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/LuaBackend.h), [LuaScriptCompat.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaScriptCompat.cpp)
-- Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp), [LuaScriptCompat.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp)
+- Tests: [LuaBackend.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp), [LuaScriptCompat.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp), [ErrorHandling.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/ErrorHandling.spec.cpp)
 - Examples: Missing dedicated evidence.
 
-Boundary: No language-level equivalence; source-only load mode and bytecode/version policy incomplete.
+Boundary: Delivered: source-only load is now an explicit contract - load() validates its mode (pure 'b', unknown letters and empty modes fail with a clear error), accepts 't' (including Lua's default 'bt') and always passes 't' to luaL_loadbufferx, so bytecode is never fed to Luau's source compiler nor accepted on plain Lua. Still no language-level equivalence: int64/close/goto differences, bytecode version policy and trusted-bytecode loading need an execution-backed migration contract.
 
-Acceptance: Publish migration contracts and explicit failures; verify int64, close alternatives and trusted bytecode.
+Acceptance: Publish the int64/close/goto migration contract and verify trusted bytecode; ErrorHandling.spec.cpp, LuaBackend.spec.cpp and LuaScriptCompat.spec.cpp assert mode rejection, 't'/'bt' acceptance and the env argument on both backends.
 
 ## Tooling
 
@@ -488,13 +488,13 @@ Status: **partial**; priority: P1; references: slua, Luau.
 
 Evidence: `2026-11-02-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 8/8 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 8/8 passed, 0 failed.
 
-- Source: [LuaDebugService.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/LuaDebugService.h), [LuaDebugService.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaDebugService.cpp), [LuaDebugAdapter.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNovaEditor/Public/LuaDebugAdapter.h), [LuaDebugAdapter.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNovaEditor/Private/LuaDebugAdapter.cpp)
+- Source: [LuaDebugService.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/LuaDebugService.h), [LuaDebugService.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaDebugService.cpp), [UnLuaNovaBase.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaBase.cpp), [LuaDebugAdapter.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNovaEditor/Public/LuaDebugAdapter.h), [LuaDebugAdapter.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNovaEditor/Private/LuaDebugAdapter.cpp)
 - Tests: [DebugService.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DebugService.spec.cpp), [DebugAdapter.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DebugAdapter.spec.cpp)
 - Examples: [03_NativeDebug.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Luau/03_NativeDebug.lua)
 
-Boundary: Command surface delivered: launch (explicit refusal), configurationDone, setExceptionBreakpoints, setFunctionBreakpoints, setVariable (real lua_setlocal on a paused frame), source (disk read with dotted module resolution), modules (static view) and honest capability bits. next/stepIn/stepOut now use stack depth through FLuaDebugService::BeginStep instead of one persistent single-step switch. Remaining: exception filters are acknowledged but not wired into the VM hook, setBreakpoints still reports verified=false, scopes/variables do not expand nested references, and packaged remote support/authorization/reconnect are unverified. Runtime evidence pending.
+Boundary: Full command surface delivered and verified against real state: setBreakpoints verifies each line against the resolved script's real line count; exception filters (raised/uncaught) are wired into the shared ReportLuaCallError handler, arm the line hook, stop with reason=exception and answer exceptionInfo; variables expands nested tables through registry-backed handles with depth/cycle/count budgets and releases them at the next stop or Detach. setFunctionBreakpoints now matches lua_getinfo('n') names (exact or '.'/':' qualified suffix) in the line hook with explicit verified=false for empty names; modules is a real package.loaded snapshot taken on the VM thread at attach and every stop, with startModule/moduleCount paging, instead of a static placeholder. launch is still an explicit refusal. Remaining: packaged remote support, authorization, reconnect and a paused-frame multi-Env/coroutine run are unverified. Runtime evidence pending.
 
-Acceptance: DebugAdapter.spec.cpp drives every new command through a real DAP session (per-command probe) and asserts capability bits; DebugService.spec.cpp covers breakpoints, stack, locals and evaluate. Break/step behaviour still needs a paused-frame multi-Env/coroutine run.
+Acceptance: DebugAdapter.spec.cpp drives every command through a real DAP session and asserts verified breakpoints, exception capabilities/filters, function-breakpoint verification/rejection, modules paging consistency and nested-variable failure paths; DebugService.spec.cpp covers filters, last-error recording, stop reason, nested expansion refusal, function-name dedup and the package.loaded snapshot. Break/step behaviour still needs a paused-frame multi-Env/coroutine run.
 
 ### PROFILE: CPU, self time, memory and flamegraphs
 
@@ -506,9 +506,9 @@ Evidence: `2026-11-02-editor-luau` Luau/Editor: 9/9 passed, 0 failed; `2026-11-0
 - Tests: [Observability.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Observability.spec.cpp)
 - Examples: Missing dedicated evidence.
 
-Boundary: Sampled/measured attribution differs; tool wrapper requires initialized pinned VM tools.
+Boundary: Sampled/measured attribution still differs: plain Lua pairs call/return for exact self time, Luau charges the interval between safe points to whatever was running (the GC flag is now forwarded to the profiler instead of hardcoded to 0). Delivered: lua.profiler trace on/off/reset/dump writes Luau's profile.out (relative dump paths now land under Saved/Profiling), the perfgraph.py wrapper documents an end-to-end flow and fails with an actionable submodule hint, and CN/EN console docs carry the collect -> dump -> render example. The renderer itself is upstream pinned code, so it needs the Luau submodule; stack/yield/GC attribution, overhead and malformed dumps still need execution evidence.
 
-Acceptance: Validate stack/yield/GC attribution, overhead and malformed dumps; produce an end-to-end example.
+Acceptance: Validate stack/yield/GC attribution, overhead and malformed dumps; follow the end-to-end example in Docs/{CN,EN}/ConsoleCommand.md and render with Tools/LuauPerfgraph/perfgraph.py once the pinned submodule is initialized.
 
 ### WATCHDOG: Dead-loop and coroutine diagnostics
 
@@ -516,13 +516,13 @@ Status: **partial**; priority: P1; references: slua.
 
 Evidence: `2026-11-02-editor-luau` Luau/Editor: 10/10 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 10/10 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 11/11 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 11/11 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 11/11 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 11/11 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 11/11 passed, 0 failed.
 
-- Source: [LuaCoroutineTracker.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaCoroutineTracker.cpp)
+- Source: [LuaCoroutineTracker.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaCoroutineTracker.cpp), [LuaDeadLoopCheck.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaDeadLoopCheck.cpp), [LuaVmHooks.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/LuaVmHooks.h)
 - Tests: [LuaDeadLoopCheck.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaDeadLoopCheck.spec.cpp), [ErrorHandling.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/ErrorHandling.spec.cpp)
 - Examples: Missing dedicated evidence.
 
-Boundary: Detection exists; quotas and cancellation are not complete hostile-code controls.
+Boundary: Delivered: cancellation is correct and observable (GuardLeave disarms the guard that actually finished, nested guards take over the armed slot, GetTimeoutCount() counts real interruptions), plus a deterministic safe-point budget lua.maxsafepoints counted through FLuaVmHooks - LUA_MASKCOUNT instructions on plain Lua, Luau interrupts on Luau - with GetSafePointInterruptCount() and a guard that exists even when the polling thread is off. GC interrupts are passed through to listeners: the profiler uses the flag (no longer hardcoded to 0) while the watchdog and budget skip them rather than longjmp out of the collector. Still not a complete hostile-code control: no memory quota, native callback and abandoned-coroutine attribution unproven, and a Luau safe point is not an instruction.
 
-Acceptance: Test timeout/reset/teardown, native callbacks and abandoned coroutine attribution.
+Acceptance: Test timeout/reset/teardown, nested guards, native callbacks and abandoned coroutine attribution; LuaDeadLoopCheck.spec.cpp now also asserts the safe-point budget interrupts a real loop and does not cap the next call with a stale counter. Memory quotas remain out of scope.
 
 ## Product
 
@@ -562,11 +562,11 @@ Status: **partial**; priority: P1; references: slua, FUnLua.
 
 Evidence: `2026-11-03-editor-lua` Lua/Editor: 2/2 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 2/2 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 2/2 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 2/2 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 2/2 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 2/2 passed, 0 failed.
 
-- Source: [RunTests.ps1](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/RunTests.ps1), [runner.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CrossProject/runner.py), [cases.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CrossProject/workload/unluanova/cases.lua), [cases.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CrossProject/workload/external/cases.lua)
-- Tests: [Benchmark.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Benchmark.spec.cpp), [BenchmarkParity.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/BenchmarkParity.spec.cpp), [test_crossproject_runner.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/tests/test_crossproject_runner.py), [test_crossproject_workloads.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/tests/test_crossproject_workloads.py)
+- Source: [RunTests.ps1](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/RunTests.ps1), [runner.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CrossProject/runner.py), [metrics.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CrossProject/metrics.py), [cases.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CrossProject/workload/unluanova/cases.lua), [cases.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CrossProject/workload/external/cases.lua)
+- Tests: [Benchmark.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Benchmark.spec.cpp), [BenchmarkParity.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/BenchmarkParity.spec.cpp), [test_crossproject_runner.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/tests/test_crossproject_runner.py), [test_crossproject_workloads.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/tests/test_crossproject_workloads.py), [test_crossproject_metrics.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/tests/test_crossproject_metrics.py)
 - Examples: [BP_UnLuaNovaBenchmark.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Benchmark/BP_UnLuaNovaBenchmark.lua), [README.md](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CrossProject/README.md)
 
-Boundary: Workload contract (revision 1), UnLuaNova workload, adaptive slua-unreal/FUnLua adapter, fail-closed alignment gate and 12 static regressions are delivered; the hardware-identity placeholders are gone and the runner rejects them. Still absent: same-machine runs in the two external projects, raw multi-run distributions and any cross-project conclusion.
+Boundary: Workload contract (revision 1), UnLuaNova workload, adaptive slua-unreal/FUnLua adapter, fail-closed alignment gate and 22 static regressions delivered. Tools/CrossProject/metrics.py now produces raw multi-run distributions (min/median/mean/p95/max/stddev plus per-run medians) for one aligned project/backend, refusing mismatched hardware, project, backend, case sets or empty samples. Still absent: same-machine runs in the two external projects, memory/startup/GC/code-size metrics and any cross-project conclusion.
 
 Acceptance: Same hardware/UE/config, identical 10-case sets and iteration counts (checked statically), raw multi-run distributions, memory/startup/GC/code-size metrics, and real logs from both external bindings before any comparison is published.
 

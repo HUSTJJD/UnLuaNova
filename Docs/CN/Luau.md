@@ -13,7 +13,7 @@
 | 原生编译 | CodeGen 显式开启，可按模块筛选 | 目标架构与可执行内存策略有限制；计数是请求数，不等于成功函数数；需验证断点协作 |
 | 调试/诊断 | 原生断点/单步、Profiler、内存分类、协程统计、GC 调节 | 分类统计是分配 churn，不等于分类存活字节；远程/打包验收未完成 |
 | 类型工具 | 编辑器导出声明、外部 luau-lsp | Analysis/Config 不作为游戏运行时类型检查器；声明完整性与跳过行为必须验收 |
-| 模块加载 | UnLuaNova 自有 loader 与 package.searchers/preload | 不等同于上游 Require 的相对路径/别名/配置解析；path/cpath 不是自动加载策略 |
+| 模块加载 | 自有 loader 与 package.searchers/preload/aliases | 相对路径解析已修正、`package.aliases` 双后端重定向已交付；不等同于上游 Require 的 `@alias` 配置文件语义；path/cpath 不是自动加载策略 |
 
 上游 [兼容说明](https://luau.org/compatibility/) 与 [沙盒说明](https://luau.org/sandbox/) 是语义边界的来源；本插件补充 API 不改变 Luau 的全部语言语义。
 
@@ -24,10 +24,10 @@
 | Lua 5.3+ 整数、位运算语法、goto、5.4/5.5 close 语义 | 不承诺同语言兼容；bit32 不等于整数/操作符语义；资源需显式 Close/Destroy |
 | int64 | 复制桶已接严格 int64 读写，±2^31 / ±2^53 与坏输入用例已在双后端执行通过；跨端真实传输的极值与不匹配 schema 仍是专项缺口。超出 ±2^53 的精确值使用原生 integer64，不能恢复 number 已丢失的精度 |
 | userdata 终结 | `UNLUANOVA_HAS_GC_METAMETHOD=0`，`UNLUANOVA_HAS_USERDATA_FINALIZER=1`；容器、FText、导出构造、手动代理及已知智能指针路径走 native dtor；强制 GC 与销毁顺序用例已执行通过，结构体数组与 DataTable 行拷贝仍待专项内存验收 |
-| debug/upvalue | getregistry、get/setuservalue 等存在占位，upvalueid 近似；热重载共享标量 upvalue 需专门验证 |
-| load/字节码 | 宿主提供源代码编译；load mode 与后端字节码兼容未完整保证；只加载可信且匹配版本的字节码 |
-| io / os | 可选的缓冲文件 io，不提供完整 Lua io/进程能力；模式、seek、错误约定、链接逃逸、容量限制仍需完善 |
-| package | 提供 preload/searchers 等子集；不提供任意原生动态库加载保证 |
+| debug/upvalue | 精确子集：`getregistry` 明确拒绝，`getuservalue` 恒 nil，`setuservalue` 返回 false，`upvalueid` 是值身份（不能证明标量别名）；不承诺 Lua 5.x debug 全兼容 |
+| load/字节码 | 宿主只编译源码：`load` 的 mode 现在显式校验，纯 `b`、未知字母与空模式都明确失败，`t`（含 `bt`）走源码编译并以 `"t"` 交给加载器；不接受字节码输入，字节码 / 版本兼容不承诺 |
+| io / os | 可选的 rooted 缓冲文件 io：模式 / seek / lines 格式校验、`lua.iomaxbytes` 配额、按 `__pos` 覆盖写、`io.tmpfile()` 内存句柄；`io.popen` 明确拒绝，链接 / 进程 / 原生流不在能力集内 |
+| package | 提供 preload / searchers / aliases 子集与双后端一致的 require 缓存；Luau 后端的自有 `require` 会检测循环依赖并明确报错（失败后清理加载标记，名字不会被毒化），别名自环同样拒绝；不提供任意原生动态库加载保证；上游 Require 的 config / 路径别名语义仍不承诺 |
 | yield / coroutine | 跨 C/元方法边界受 VM 限制；宿主回调、Latent、Timer 需分别验证 |
 | GC | 增量 GC 与预算调度；不是 Lua 分代 GC，也不是多线程 GC |
 | 迭代 | Luau 使用 __iter；与 __pairs / __ipairs 及容器增删期间行为分别测试 |

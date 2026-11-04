@@ -257,8 +257,8 @@ if UnLuaNova.HasFeature('sandbox') then ... end
    above, and write the result in the module header comment
 2. Lua modules go to `Content/Script/UnLuaNova/<Name>.lua`, Lua 5.1 compatible
    (no `continue` / compound assignment / type annotations) - both backends must compile it
-3. Native modules register through `FLuaEnv::AddBuiltInLoader` (the fourth `require`
-   searcher hits it)
+3. Native modules register through `FLuaEnv::AddBuiltInLoader` (the fifth `require`
+   searcher hits it: aliases, preload, custom loaders, file system, then builtins)
 4. **There must be a spec**, and if the claim is "for performance", put both the Lua and
    the C++ variant into `UnLuaNova.Perf.Benchmark`'s CSV - the number has to justify
    going native (see [Testing and Automation](Testing.md))

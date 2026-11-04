@@ -90,14 +90,16 @@ namespace
         if (lua_getupvalue(L, 1, N) == nullptr)
             return 0;
 
-        // Luau has no lua_upvalueid, and an UpVal address is not reachable from the public
-        // API, so the id has to be an approximation.
+        // Exact subset, documented rather than approximated away: Luau has no lua_upvalueid
+        // and an UpVal address is not reachable from the public API, so the id is a VALUE
+        // identity, not an upvalue-cell identity.
         //
         // For a reference - a table, a closure, userdata - the pointer of the value itself
-        // is the answer plain Lua would give: two closures sharing an upvalue share the
-        // value, and that is exactly the case hot reload cares about. For a scalar there is
-        // no shared object to point at, so fall back to the slot: the same closure and
-        // index always produce the same id, which is stable but not shared.
+        // is exactly what plain Lua's upvalueid gives: two closures sharing an upvalue
+        // share the value. That is the case hot reload cares about. For a scalar there is
+        // no shared object, so the id falls back to (closure, slot): deterministic for one
+        // closure but NOT shared between closures that happen to hold the same number.
+        // Callers must not use this to prove scalar aliasing; see Docs/CN/Debugging.md.
         //
         // Returning a string in both cases keeps it non-nil, because callers use it as a
         // table key and a nil key would be the error, not the degradation.
@@ -161,27 +163,33 @@ namespace
         return 1;
     }
 
-    // debug.getregistry() -> table
+    // debug.getregistry() -> ERROR (unsupported)
     int DebugGetRegistry(lua_State* L)
     {
-        // Luau keeps its registry behind a pseudo-index and never exposes it as a table,
-        // so there is nothing to hand over. An empty table is the honest answer: callers
-        // walk it looking for stale references and simply find none.
-        lua_newtable(L);
-        return 1;
+        // Luau keeps its registry behind a pseudo-index and never exposes it as a table.
+        // An empty table used to be returned as a "harmless" placeholder, but callers walk
+        // it looking for stale references: an empty table silently claims there are none
+        // when in fact nothing was inspected. Reject the operation explicitly instead.
+        return luaL_error(L,
+            "debug.getregistry is not supported by UnLuaNova: the Luau registry is a pseudo-index, not a table");
     }
 
-    // debug.getuservalue(u) -> value | nil
+    // debug.getuservalue(u) -> nil (exact subset: this backend has no uservalues)
     int DebugGetUserValue(lua_State* L)
     {
         // No uservalues on Luau: userdata carries a tag and a metatable, nothing else.
+        // Returning nil is the exact, documented answer - HotReload.lua relies on it to
+        // skip userdata instead of following a value that cannot exist.
+        (void)L;
         return 0;
     }
 
-    // debug.setuservalue(u, v) -> v
+    // debug.setuservalue(u, v) -> false (explicit failure, never a pretend success)
     int DebugSetUserValue(lua_State* L)
     {
-        lua_settop(L, 2);
+        // The old implementation returned the value it was handed, which looked exactly
+        // like a successful write. Report the failure so callers can decide what to do.
+        lua_pushboolean(L, 0);
         return 1;
     }
 
@@ -221,7 +229,34 @@ namespace
         }
 
         const char* ChunkName = lua_isstring(L, 2) ? lua_tostring(L, 2) : "=(load)";
-        if (luaL_loadbufferx(L, Source.data(), Source.size(), ChunkName, nullptr) != LUA_OK)
+
+        // UnLuaNova compiles source only. The third argument used to be ignored and a
+        // nullptr mode was passed to luaL_loadbufferx: on plain Lua that meant Lua's
+        // own "bt", and on Luau the shim ignores the mode entirely and feeds whatever
+        // bytes arrived to luau_compile as source. A script asking for "b" therefore
+        // got either a confusing syntax error or, worse, bytecode handed to the source
+        // compiler. Validate the mode and pass "t" explicitly instead.
+        const char* Mode = luaL_optstring(L, 3, "t");
+        bool bText = false;
+        bool bBinary = false;
+        for (const char* C = Mode; *C; ++C)
+        {
+            if (*C == 't')
+                bText = true;
+            else if (*C == 'b')
+                bBinary = true;
+            else
+                return luaL_error(L, "load: invalid mode '%s' (expected t or b)", Mode);
+        }
+        if (!bText && !bBinary)
+            return luaL_error(L, "load: invalid mode '%s' (no text or binary access)", Mode);
+        if (!bText)
+            return luaL_error(L,
+                "load: binary chunks are not accepted (source-only load); pass mode 't'");
+
+        // "bt" is accepted for compatibility with Lua's default, but the binary half is
+        // never honoured: "t" makes plain Lua refuse bytecode outright.
+        if (luaL_loadbufferx(L, Source.data(), Source.size(), ChunkName, "t") != LUA_OK)
         {
             // Exactly what plain Lua's load returns on a syntax error: nil plus the
             // message, with the message last.

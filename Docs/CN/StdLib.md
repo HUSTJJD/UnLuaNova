@@ -232,6 +232,7 @@ if UnLuaNova.HasFeature('sandbox') then ... end
 1. 先过一遍上面的"机制 vs 策略"和下沉 C++ 的四条判据，写在模块头注释里
 2. Lua 模块放 `Content/Script/UnLuaNova/<Name>.lua`；语法保持 Lua 5.1 兼容
    （不要 `continue` / 复合赋值 / 类型标注）—— 两个后端都得能编
-3. native 模块走 `FLuaEnv::AddBuiltInLoader`（`require` 的第四个 searcher 会命中它）
+3. native 模块走 `FLuaEnv::AddBuiltInLoader`（`require` 的第五个 searcher 会命中它：
+   aliases → preload → 自定义 loader → 文件系统 → 内建模块）
 4. **要有 spec**，且如果号称"为了性能"，就把 Lua 版与 C++ 版都放进
    `UnLuaNova.Perf.Benchmark` 的 CSV —— 数字说值得才下沉（见[测试与自动化](Testing.md)）

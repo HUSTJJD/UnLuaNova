@@ -25,9 +25,9 @@ lua.dap stop
 
 VSCode 侧用 **attach** 方式连 `127.0.0.1:5699`（`request: "attach"`）。命令面已补齐：
 `initialize` / `attach` / `launch`（明确拒绝）/ `configurationDone` / `setBreakpoints` /
-`setExceptionBreakpoints` / `setFunctionBreakpoints` / `threads` / `stackTrace` / `scopes` /
-`variables` / `setVariable` / `source` / `modules` / `pause` / `evaluate` / `continue` /
-`next` / `stepIn` / `stepOut` / `disconnect`。
+`setExceptionBreakpoints` / `exceptionInfo` / `setFunctionBreakpoints` / `threads` /
+`stackTrace` / `scopes` / `variables` / `setVariable` / `source` / `modules` / `pause` /
+`evaluate` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`。
 
 服务仅监听回环地址。端口 `0` 由系统分配，实际端口可通过 `lua.dap status` 查看。
 启动与停止串行化，停止后排队的旧服务任务不会作用于重启后的服务。
@@ -51,11 +51,27 @@ VSCode 侧用 **attach** 方式连 `127.0.0.1:5699`（`request: "attach"`）。�
   没有暂停帧、名字不是该帧局部或表达式失败时返回 error。
 * **`source`** 从磁盘读文件：接受绝对路径，或把点分模块名解析到工程 / 插件的
   `Content/Script`；读不到就返回 error。适配线程不碰 `lua_State`。
-* **`modules`** 是静态视图（`UnLuaNova` 脚本根），不是 `package.loaded` 快照。
-* **`setExceptionBreakpoints` / `setFunctionBreakpoints`** 返回空 `breakpoints` 集，明确表示
-  异常过滤与函数断点未接到 VM hook；`launch` 直接拒绝并提示使用 attach。capabilities 里
-  `supportsConfigurationDoneRequest` / `supportsSetVariable` / `supportsModulesRequest` /
-  `supportsEvaluateRequest` 为 true，其余未支持项显式为 false。
+* **`setBreakpoints` 会真验证**：用与 `source` 同一个解析器找到磁盘脚本，按文件真实行数
+  判断，`verified=true` 或给出 `message`（找不到源 / 行越界）。不再一律报 `verified=false`。
+* **异常过滤器已接到 VM**：`setExceptionBreakpoints` 接受 `raised` / `uncaught`，其余 filter
+  返回 `verified=false`。共享的 `ReportLuaCallError` 把每个未捕获 Lua 错误转发给调试服务；
+  启用过滤器时它会 arm 行 hook，下一次停下时 `stopped.reason` 是 `exception` 并带上错误文本，
+  `exceptionInfo` 返回最近一次错误。未启用过滤器时 hook 不受影响。
+* **`variables` 支持嵌套展开**：`Locals` 作用域（`variablesReference=1`）里的 table 会拿到
+  一个句柄，继续请求即可展开子项；展开有深度（4）、数量（100）和循环引用保护，句柄在
+  下一次停下或 `Detach()` 时释放。没有暂停帧时请求嵌套句柄会明确报 error，不返回空列表。
+* **`modules` 是真实快照**：`package.loaded` 的键在 VM 线程上于 `Attach()` 和每次停下时抓取，
+  adapter 线程只读副本，不碰 `lua_State`；支持 `startModule` / `moduleCount` 分页，
+  未 attach 时如实返回空列表，不再伪造一个模块占位。
+* **`setFunctionBreakpoints` 已实现**：按 `lua_getinfo('n')` 的函数名匹配（精确匹配，或
+  `Foo` 匹配 `Table.Foo` / `Table:Foo`），命中时停在函数入口行；空名字返回 `verified=false`。
+  它由行 hook 匹配实现，不是原生函数断点。`launch` 仍直接拒绝并提示使用 attach。
+* **`stopped.reason`** 由 VM 线程按真实原因给出：`breakpoint` / `step` / `pause` / `exception`，
+  不再是固定的 `breakpoint`。capabilities 里 `supportsExceptionInfoRequest` 与
+  `exceptionBreakpointFilters` 已声明，其余未支持项仍显式为 false。
+* **`debug.getregistry` / `getuservalue` / `setuservalue` / `upvalueid`** 的精确子集语义见
+  见本节与 `LuaScriptCompat.spec.cpp`：Luau 下 registry 明确拒绝、
+  uservalue 恒 nil、setuservalue 返回 false、upvalueid 是值身份（不能用来证明标量别名）。
 
 ### 暂停与求值
 

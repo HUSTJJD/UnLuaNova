@@ -96,6 +96,7 @@ private:
     void OnConfigurationDone(const TSharedRef<class FJsonObject>& Request);
     void OnSetBreakpoints(const TSharedRef<class FJsonObject>& Request);
     void OnSetExceptionBreakpoints(const TSharedRef<class FJsonObject>& Request);
+    void OnExceptionInfo(const TSharedRef<class FJsonObject>& Request);
     void OnSetFunctionBreakpoints(const TSharedRef<class FJsonObject>& Request);
     void OnSetVariable(const TSharedRef<class FJsonObject>& Request);
     void OnSource(const TSharedRef<class FJsonObject>& Request);

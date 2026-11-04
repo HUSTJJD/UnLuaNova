@@ -24,7 +24,10 @@ namespace
 {
     // The registry is shared by coroutines and dies with the VM.
     char GCodeGenCreatedKey;
-    int32 GCompiledChunks = 0;
+    // luau_codegen_compile() returns void and has no per-chunk success signal, so this can
+    // only count REQUESTS. Naming it "compiled" used to make `lua.codegen` look like a
+    // success count; see GetNativeCodeGenRequestCount().
+    int32 GCodeGenRequests = 0;
     bool bLoggedUnsupported = false;
 }
 
@@ -174,13 +177,19 @@ namespace UnLuaNova
         }
 
         UNLUANOVA_CODEGEN_COMPILE(L, -1);
-        ++GCompiledChunks;
+        ++GCodeGenRequests;
 #endif
+    }
+
+    int32 GetNativeCodeGenRequestCount()
+    {
+        return GCodeGenRequests;
     }
 
     int32 GetNativeCodeGenChunkCount()
     {
-        return GCompiledChunks;
+        // Kept as a source-compatible alias. It never meant "successfully compiled".
+        return GetNativeCodeGenRequestCount();
     }
 
     bool IsClassTableFreezeEnabled()
@@ -223,6 +232,11 @@ namespace UnLuaNova
     {
         (void)L;
         (void)ChunkName;
+    }
+
+    int32 GetNativeCodeGenRequestCount()
+    {
+        return 0;
     }
 
     int32 GetNativeCodeGenChunkCount()

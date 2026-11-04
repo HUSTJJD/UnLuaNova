@@ -22,6 +22,7 @@
 #include "Async/Async.h"
 #include "Containers/Ticker.h"
 #include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 #include "HAL/Event.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
@@ -361,6 +362,51 @@ namespace
                         Body.IsValid() && Body->GetBoolField(TEXT("supportsModulesRequest")));
                     Test.TestTrue(TEXT("evaluate capability"),
                         Body.IsValid() && Body->GetBoolField(TEXT("supportsEvaluateRequest")));
+                    Test.TestTrue(TEXT("exceptionInfo capability"),
+                        Body.IsValid() && Body->GetBoolField(TEXT("supportsExceptionInfoRequest")));
+                    const TArray<TSharedPtr<FJsonValue>>* Filters = nullptr;
+                    Test.TestTrue(TEXT("exception filters advertised"),
+                        Body.IsValid() && Body->TryGetArrayField(TEXT("exceptionBreakpointFilters"), Filters)
+                        && Filters && Filters->Num() == 2);
+                }
+
+                if (Expected.Command == TEXT("setBreakpoints") && Body.IsValid())
+                {
+                    const TArray<TSharedPtr<FJsonValue>>* Breakpoints = nullptr;
+                    if (Body->TryGetArrayField(TEXT("breakpoints"), Breakpoints)
+                        && Breakpoints && Breakpoints->Num() > 0)
+                    {
+                        const TSharedPtr<FJsonObject> First = (*Breakpoints)[0]->AsObject();
+                        Test.TestTrue(TEXT("a real source line is verified"),
+                            First.IsValid() && First->GetBoolField(TEXT("verified")));
+                    }
+                }
+
+                if (Expected.Command == TEXT("setFunctionBreakpoints") && Body.IsValid())
+                {
+                    const TArray<TSharedPtr<FJsonValue>>* Breakpoints = nullptr;
+                    if (Body->TryGetArrayField(TEXT("breakpoints"), Breakpoints)
+                        && Breakpoints && Breakpoints->Num() == 2)
+                    {
+                        const TSharedPtr<FJsonObject> Good = (*Breakpoints)[0]->AsObject();
+                        const TSharedPtr<FJsonObject> Bad = (*Breakpoints)[1]->AsObject();
+                        Test.TestTrue(TEXT("named function breakpoint is verified"),
+                            Good.IsValid() && Good->GetBoolField(TEXT("verified")));
+                        Test.TestFalse(TEXT("empty function name is refused"),
+                            Bad.IsValid() && Bad->GetBoolField(TEXT("verified")));
+                    }
+                }
+
+                if (Expected.Command == TEXT("modules") && Body.IsValid())
+                {
+                    // The list may be empty before any VM is attached, but the total must
+                    // always be honest and never smaller than the page just returned.
+                    const TArray<TSharedPtr<FJsonValue>>* Modules = nullptr;
+                    Body->TryGetArrayField(TEXT("modules"), Modules);
+                    double Total = 0.0;
+                    Test.TestTrue(TEXT("modules total is consistent with the page"),
+                        Body->TryGetNumberField(TEXT("totalModules"), Total)
+                        && Modules && Modules->Num() <= (int32)Total);
                 }
 
                 ++Index;
@@ -407,8 +453,35 @@ namespace
         Add(TEXT("initialize"), true);
         Add(TEXT("configurationDone"), true);
         Add(TEXT("modules"), true, nullptr, TEXT("modules"));
-        Add(TEXT("setExceptionBreakpoints"), true, nullptr, TEXT("breakpoints"));
-        Add(TEXT("setFunctionBreakpoints"), true, nullptr, TEXT("breakpoints"));
+        auto ExceptionFilters = TArray<TSharedPtr<FJsonValue>>();
+        ExceptionFilters.Add(MakeShared<FJsonValueString>(FString(TEXT("uncaught"))));
+        ExceptionFilters.Add(MakeShared<FJsonValueString>(FString(TEXT("not-a-filter"))));
+        auto ExceptionArgs = MakeShared<FJsonObject>();
+        ExceptionArgs->SetArrayField(TEXT("filters"), ExceptionFilters);
+        Add(TEXT("setExceptionBreakpoints"), true, ExceptionArgs, TEXT("breakpoints"));
+        Add(TEXT("exceptionInfo"), true, nullptr, TEXT("description"), true);
+
+        // A named function breakpoint is verified; an empty name is refused explicitly.
+        auto FnBreakpoints = TArray<TSharedPtr<FJsonValue>>();
+        auto FnOk = MakeShared<FJsonObject>();
+        FnOk->SetStringField(TEXT("name"), TEXT("DoSomething"));
+        FnBreakpoints.Add(MakeShared<FJsonValueObject>(FnOk));
+        auto FnBad = MakeShared<FJsonObject>();
+        FnBad->SetStringField(TEXT("name"), FString());
+        FnBreakpoints.Add(MakeShared<FJsonValueObject>(FnBad));
+        auto FnArgs = MakeShared<FJsonObject>();
+        FnArgs->SetArrayField(TEXT("breakpoints"), FnBreakpoints);
+        Add(TEXT("setFunctionBreakpoints"), true, FnArgs, TEXT("breakpoints"));
+
+        // The Locals scope and a stale nested handle must not both answer "success, empty".
+        auto VarArgs = MakeShared<FJsonObject>();
+        VarArgs->SetNumberField(TEXT("variablesReference"), 1);
+        Add(TEXT("variables"), true, VarArgs, TEXT("variables"));
+        auto BadVarArgs = MakeShared<FJsonObject>();
+        BadVarArgs->SetNumberField(TEXT("variablesReference"), 999);
+        Add(TEXT("variables"), false, BadVarArgs);
+        Add(TEXT("scopes"), true, nullptr, TEXT("scopes"));
+
         Add(TEXT("launch"), false);
 
         auto SourceArgs = MakeShared<FJsonObject>();
@@ -416,6 +489,17 @@ namespace
         Source->SetStringField(TEXT("path"), TEXT("Tests.Specs.Overrides.OverridesStub"));
         SourceArgs->SetObjectField(TEXT("source"), Source);
         Add(TEXT("source"), true, SourceArgs, TEXT("content"), true);
+
+        // A line inside that very script must come back verified; an out-of-range line is
+        // covered by OnSetBreakpoints itself and by the service-side spec below.
+        auto BpLines = TArray<TSharedPtr<FJsonValue>>();
+        auto BpLine = MakeShared<FJsonObject>();
+        BpLine->SetNumberField(TEXT("line"), 1);
+        BpLines.Add(MakeShared<FJsonValueObject>(BpLine));
+        auto BpArgs = MakeShared<FJsonObject>();
+        BpArgs->SetObjectField(TEXT("source"), Source);
+        BpArgs->SetArrayField(TEXT("breakpoints"), BpLines);
+        Add(TEXT("setBreakpoints"), true, BpArgs, TEXT("breakpoints"));
 
         auto MissingArgs = MakeShared<FJsonObject>();
         auto Missing = MakeShared<FJsonObject>();
@@ -434,6 +518,12 @@ namespace
         Add(TEXT("stepIn"), true, nullptr, TEXT("allThreadsContinued"));
         Add(TEXT("stepOut"), true, nullptr, TEXT("allThreadsContinued"));
         Add(TEXT("continue"), true, nullptr, TEXT("allThreadsContinued"));
+
+        // Leave the adapter's breakpoint list empty for the next session.
+        auto ClearBpArgs = MakeShared<FJsonObject>();
+        ClearBpArgs->SetObjectField(TEXT("source"), Source);
+        ClearBpArgs->SetArrayField(TEXT("breakpoints"), TArray<TSharedPtr<FJsonValue>>());
+        Add(TEXT("setBreakpoints"), true, ClearBpArgs, TEXT("breakpoints"));
         return Cases;
     }
 }

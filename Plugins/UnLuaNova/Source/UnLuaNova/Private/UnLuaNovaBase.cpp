@@ -14,6 +14,7 @@
 
 #include "LowLevel.h"
 #include "LuaCore.h"
+#include "LuaDebugService.h"
 #include "UnLuaNovaDelegates.h"
 #include "ObjectReferencer.h"
 #include "UnLuaNovaModule.h"
@@ -154,6 +155,11 @@ namespace UnLuaNova
      */
     int32 ReportLuaCallError(lua_State *L)
     {
+        // This is the one place every uncaught Lua error passes through, including the
+        // custom-reporter branch below. Record it before anything can early-return so DAP
+        // `exceptionInfo` and exception filters see the real error object.
+        FLuaDebugService::Get().RecordException(L);
+
         if (FUnLuaNovaDelegates::ReportLuaCallError.IsBound())
         {
             return FUnLuaNovaDelegates::ReportLuaCallError.Execute(L);      // developers can provide error reporter themselves

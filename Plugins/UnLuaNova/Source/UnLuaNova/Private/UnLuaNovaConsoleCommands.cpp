@@ -565,11 +565,14 @@ namespace UnLuaNova
         // they are different: a build with no native backend must say so rather than
         // reporting the switch as if it were doing something.
         UE_LOG(LogUnLuaNova, Log,
-            TEXT("lua.codegen: available=%d enabled=%d chunks=%d modules='%s'"),
+            TEXT("lua.codegen: available=%d enabled=%d compile_requests=%d modules='%s'"),
             UnLuaNova::IsNativeCodeGenAvailable() ? 1 : 0,
             EnableCVar ? EnableCVar->GetInt() : 0,
-            UnLuaNova::GetNativeCodeGenChunkCount(),
+            UnLuaNova::GetNativeCodeGenRequestCount(),
             ModulesCVar ? *ModulesCVar->GetString() : TEXT(""));
+        UE_LOG(LogUnLuaNova, Log,
+            TEXT("lua.codegen: compile_requests counts chunks handed to Luau's compiler, "
+                 "not successful compiles - luau_codegen_compile() exposes no success signal."));
 
         if (!UnLuaNova::IsNativeCodeGenAvailable())
         {

@@ -5,12 +5,13 @@
 --
 --   ① 广播中增删监听者 —— 边遍历边改表，漏发或重发（这里用快照）
 --   ② 一个监听者报错带崩整条广播 —— 这里逐个 pcall，错误只记日志
---   ③ 监听者持有已销毁的 UObject —— 这里提供 On(name, fn, owner) + UnbindOwner(owner)，
---      对象销毁时显式摘干净；token 仍强持有 owner，弱键索引不提供自动解绑
---   ④ 热重载后残留旧闭包 —— 旧模块表没了、旧闭包还挂在总线上。唯一可靠的做法是
---      "带 owner 注册 + 停用时 UnbindOwner"，本模块为此提供这两个 API
+--   ③ 监听者持有已销毁的 UObject —— On(name, fn, owner) + UnbindOwner(owner) 仍是
+--      显式入口；此外每次广播前会惰性清理 owner 已失效的 token，不再让已销毁对象
+--      被一个忘了解绑的监听者一直抓着（见 PruneDeadOwners / SetOwnerValidator）
+--   ④ 热重载后残留旧闭包 —— 旧模块表没了、旧闭包还挂在总线上。"带 owner 注册 +
+--      停用时 UnbindOwner" 仍是最可靠的做法，自动清理只兜底 UObject 销毁
 --
--- 它不规定事件名或发送权限；调用方仍需在 owner 停用时显式解绑。
+-- 它不规定事件名或发送权限；UnbindOwner 依然推荐在 owner 停用时主动调用。
 -- 项目层的玩法事件语义（UI 栈、场景流）请自己在上层定，不要往这里塞。
 --
 -- 语法保持 Lua 5.1 兼容：不用 continue / 复合赋值 / 类型标注，两个后端都能编。
@@ -175,9 +176,63 @@ function M.UnbindOwner(owner)
 	return removed
 end
 
+--- owner 失效判定。默认只认带 IsValid() 的 UObject userdata；调用失败时保守地
+--- 判定为存活，避免把没有该方法的普通 userdata 误删。宿主可以用
+--- SetOwnerValidator 注入更准确的项目级判定（例如自己的对象池）。
+local OwnerValidator = nil
+
+local function OwnerIsDead(owner)
+	if owner == nil then
+		return false
+	end
+	if OwnerValidator ~= nil then
+		local ok, valid = pcall(OwnerValidator, owner)
+		return ok and valid == false
+	end
+	if type(owner) ~= "userdata" then
+		return false
+	end
+	local ok, isValid = pcall(function()
+		return owner.IsValid and owner:IsValid()
+	end)
+	return ok and isValid == false
+end
+
+--- 注入 owner 有效性判定：fn(owner) -> true/false。传 nil 恢复默认判定。
+--- 返回旧判定，便于测试或临时替换后还原。
+function M.SetOwnerValidator(fn)
+	if fn ~= nil and type(fn) ~= "function" then
+		error("UnLuaNova.Event: SetOwnerValidator 只接受函数或 nil", 2)
+	end
+	local previous = OwnerValidator
+	OwnerValidator = fn
+	return previous
+end
+
+--- 摘掉所有 owner 已失效的 token，返回清理数量。Emit 会在广播前自动调用它，
+--- 也可以手动调用（例如关卡切换时先清一遍再重建监听）。
+function M.PruneDeadOwners()
+	local removed = 0
+	for _, list in pairs(Listeners) do
+		for i = #list, 1, -1 do
+			local token = list[i]
+			if OwnerIsDead(token.Owner) then
+				if RemoveToken(token) then
+					removed = removed + 1
+				end
+			end
+		end
+	end
+	return removed
+end
+
 --- 广播。返回实际触发的监听者数量。
 --- 快照后再逐个 pcall：广播中 On/Off 不会漏发或重发，单个监听者报错不影响别人。
 function M.Emit(name, ...)
+	-- 忘记 UnbindOwner 的监听者不能一直抓着已销毁的 UObject。快照之前先清，
+	-- RemoveToken 会把 token.Fn 置空，本次广播自然跳过它们。
+	M.PruneDeadOwners()
+
 	local list = Listeners[name]
 	if not list or #list == 0 then
 		return 0

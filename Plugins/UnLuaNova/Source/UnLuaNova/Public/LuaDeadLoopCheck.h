@@ -44,7 +44,14 @@ namespace UnLuaNova
     {
     public:
         static int32 Timeout; // in seconds
-        
+
+        /**
+         * How many times the watchdog has actually interrupted a script. Detection alone
+         * is not evidence that cancellation happens; this makes the cancellation
+         * observable to the console and to automation.
+         */
+        static int32 GetTimeoutCount();
+
         class FGuard final
         {
         public:
@@ -56,9 +63,29 @@ namespace UnLuaNova
 
             FDeadLoopCheck* GetOwner() const { return Owner; }
 
+            /**
+             * How many times the safe-point budget (lua.maxsafepoints), rather than the
+             * time watchdog, interrupted a script. Observable for the same reason as
+             * GetTimeoutCount(): a configured cap is not evidence that it ever fired.
+             */
+            static int32 GetSafePointInterruptCount();
+
         private:
 
             FDeadLoopCheck* Owner;
+
+            // A separate owner tag for the hook listener. SetTimeout() registers its own
+            // listener under `this`; reusing that pointer would let RemoveOwner() take
+            // both listeners out at once.
+            uint8 BudgetOwner = 0;
+
+            std::atomic<int32> SafePoints{0};
+
+            bool bBudgetInstalled = false;
+
+            // MakeGuard() creates a guard even when the polling thread is off, so the
+            // destructor must only call GuardLeave() when GuardEnter() actually ran.
+            bool bRegisteredWithRunner = false;
         };
 
         class FRunner final : public FRunnable
@@ -72,7 +99,8 @@ namespace UnLuaNova
 
             void GuardEnter(FGuard* Guard);
 
-            void GuardLeave();
+            /** Disarm this specific guard; a finished guard must never be fired later. */
+            void GuardLeave(FGuard* Guard);
 
             /**
              * Forget a guard that is still armed for an environment which is being destroyed.

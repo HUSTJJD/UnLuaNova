@@ -330,8 +330,14 @@ void FLuaDebugAdapter::PumpStoppedState()
         bPausedReported = true;
 
         const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
-        Body->SetStringField(TEXT("reason"), TEXT("breakpoint"));
+        const FString Reason = Service.GetStopReason();
+        Body->SetStringField(TEXT("reason"), Reason);
         Body->SetNumberField(TEXT("threadId"), 1);
+        if (Reason == TEXT("exception"))
+        {
+            Body->SetStringField(TEXT("text"), Service.GetLastException());
+            Body->SetBoolField(TEXT("allThreadsStopped"), true);
+        }
         SendEvent(TEXT("stopped"), Body);
     }
     else if (!bPaused && bPausedReported)
@@ -379,8 +385,24 @@ void FLuaDebugAdapter::OnInitialize(const TSharedRef<FJsonObject>& Request)
     Body->SetBoolField(TEXT("supportsFunctionBreakpoints"), false);
     Body->SetBoolField(TEXT("supportsStepInTargetsRequest"), false);
     Body->SetBoolField(TEXT("supportsLoadedSourcesRequest"), false);
-    Body->SetBoolField(TEXT("supportsExceptionInfoRequest"), false);
+    // exceptionInfo reads the error recorded by the shared Lua error handler; the two
+    // filters are the ones that handler can actually arm. Anything else is refused by
+    // setExceptionBreakpoints with verified=false rather than silently ignored.
+    Body->SetBoolField(TEXT("supportsExceptionInfoRequest"), true);
     Body->SetBoolField(TEXT("supportsRestartRequest"), false);
+
+    TArray<TSharedPtr<FJsonValue>> ExceptionFilters;
+    auto AddFilter = [&ExceptionFilters](const TCHAR* Id, const TCHAR* Label)
+    {
+        const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+        Entry->SetStringField(TEXT("filter"), Id);
+        Entry->SetStringField(TEXT("label"), Label);
+        Entry->SetBoolField(TEXT("default"), false);
+        ExceptionFilters.Add(MakeShared<FJsonValueObject>(Entry));
+    };
+    AddFilter(TEXT("raised"), TEXT("Raised Lua errors"));
+    AddFilter(TEXT("uncaught"), TEXT("Uncaught Lua errors"));
+    Body->SetArrayField(TEXT("exceptionBreakpointFilters"), ExceptionFilters);
 
     const TSharedRef<FJsonObject> Response = MakeShared<FJsonObject>();
     Response->SetNumberField(TEXT("seq"), ++Seq);
@@ -449,17 +471,95 @@ void FLuaDebugAdapter::OnConfigurationDone(const TSharedRef<FJsonObject>& Reques
 
 void FLuaDebugAdapter::OnSetExceptionBreakpoints(const TSharedRef<FJsonObject>& Request)
 {
-    // Exception filters are not wired into the VM hook. Answer with an honest empty set
-    // rather than claiming the requested filters are active.
+    // The shared ReportLuaCallError handler forwards every uncaught error to the debug
+    // service; enabling a filter arms the line hook so the VM stops with reason
+    // "exception" on the next line. Unknown filters are reported verified=false instead
+    // of being quietly accepted.
+    const TSharedPtr<FJsonObject> Args = Request->GetObjectField(TEXT("arguments"));
+    const TArray<TSharedPtr<FJsonValue>>* Filters = nullptr;
+    TArray<FString> Enabled;
+    TArray<TSharedPtr<FJsonValue>> Out;
+
+    if (Args.IsValid() && Args->TryGetArrayField(TEXT("filters"), Filters))
+    {
+        for (const TSharedPtr<FJsonValue>& Value : *Filters)
+        {
+            const FString Filter = Value.IsValid() ? Value->AsString() : FString();
+            const bool bSupported = Filter == TEXT("raised") || Filter == TEXT("uncaught");
+            if (bSupported)
+                Enabled.Add(Filter);
+
+            const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+            Entry->SetBoolField(TEXT("verified"), bSupported);
+            if (!bSupported)
+                Entry->SetStringField(TEXT("message"),
+                    FString::Printf(TEXT("unsupported exception filter '%s'"), *Filter));
+            Out.Add(MakeShared<FJsonValueObject>(Entry));
+        }
+    }
+
+    // VM-side state belongs on the game thread; the adapter thread never touches lua_State.
+    const uint64 Generation = ServerGeneration.load();
+    AsyncTask(ENamedThreads::GameThread, [this, Generation, Enabled]()
+    {
+        if (bStopping || ServerGeneration.load() != Generation) return;
+        UnLuaNova::FLuaDebugService::Get().SetExceptionFilters(Enabled);
+    });
+
     const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
-    Body->SetArrayField(TEXT("breakpoints"), TArray<TSharedPtr<FJsonValue>>());
+    Body->SetArrayField(TEXT("breakpoints"), Out);
+    SendSimpleResponse(Request, Body);
+}
+
+void FLuaDebugAdapter::OnExceptionInfo(const TSharedRef<FJsonObject>& Request)
+{
+    const FString Message = UnLuaNova::FLuaDebugService::Get().GetLastException();
+    const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
+    Body->SetStringField(TEXT("exceptionId"), Message.IsEmpty() ? TEXT("none") : TEXT("luaError"));
+    Body->SetStringField(TEXT("description"), Message.IsEmpty()
+        ? TEXT("No Lua error has been recorded in this session.") : Message);
+    Body->SetStringField(TEXT("breakMode"), Message.IsEmpty() ? TEXT("never") : TEXT("always"));
     SendSimpleResponse(Request, Body);
 }
 
 void FLuaDebugAdapter::OnSetFunctionBreakpoints(const TSharedRef<FJsonObject>& Request)
 {
+    // The service matches these names against lua_getinfo("n") in its line hook, so a
+    // function breakpoint stops on the first line of a matching frame. Empty names are
+    // reported verified=false rather than silently accepted.
+    const TSharedPtr<FJsonObject> Args = Request->GetObjectField(TEXT("arguments"));
+    const TArray<TSharedPtr<FJsonValue>>* Breakpoints = nullptr;
+    TArray<FString> Names;
+    TArray<TSharedPtr<FJsonValue>> Out;
+
+    if (Args.IsValid() && Args->TryGetArrayField(TEXT("breakpoints"), Breakpoints))
+    {
+        for (const TSharedPtr<FJsonValue>& Value : *Breakpoints)
+        {
+            const TSharedPtr<FJsonObject> Bp = Value.IsValid() ? Value->AsObject() : nullptr;
+            const FString Name = Bp.IsValid() ? Bp->GetStringField(TEXT("name")) : FString();
+            const bool bVerified = !Name.IsEmpty();
+            if (bVerified)
+                Names.Add(Name);
+
+            const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+            Entry->SetBoolField(TEXT("verified"), bVerified);
+            if (!bVerified)
+                Entry->SetStringField(TEXT("message"), TEXT("a function name is required"));
+            Out.Add(MakeShared<FJsonValueObject>(Entry));
+        }
+    }
+
+    // VM-side state is only touched on the game thread.
+    const uint64 Generation = ServerGeneration.load();
+    AsyncTask(ENamedThreads::GameThread, [this, Generation, Names]()
+    {
+        if (bStopping || ServerGeneration.load() != Generation) return;
+        UnLuaNova::FLuaDebugService::Get().SetFunctionBreakpoints(Names);
+    });
+
     const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
-    Body->SetArrayField(TEXT("breakpoints"), TArray<TSharedPtr<FJsonValue>>());
+    Body->SetArrayField(TEXT("breakpoints"), Out);
     SendSimpleResponse(Request, Body);
 }
 
@@ -507,20 +607,43 @@ void FLuaDebugAdapter::OnSource(const TSharedRef<FJsonObject>& Request)
 
 void FLuaDebugAdapter::OnModules(const TSharedRef<FJsonObject>& Request)
 {
-    // package.loaded belongs to the VM; the adapter thread must not read it. This is a
-    // static view, reported with the full DAP shape rather than invented VM state.
+    // Real package.loaded keys, snapshotted on the VM thread at attach and at every stop.
+    // The adapter thread reads the copy kept by the service - it must never read the
+    // lua_State itself. An unattached VM yields an empty list, which is the truth, not a
+    // placeholder module invented to make the response look populated.
+    const TArray<FString> Names = UnLuaNova::FLuaDebugService::Get().GetLoadedModules();
+
+    const TSharedPtr<FJsonObject> Args = Request->GetObjectField(TEXT("arguments"));
+    double StartValue = 0.0;
+    double CountValue = (double)Names.Num();
+    if (Args.IsValid())
+    {
+        Args->TryGetNumberField(TEXT("startModule"), StartValue);
+        Args->TryGetNumberField(TEXT("moduleCount"), CountValue);
+    }
+    const int32 Start = FMath::Clamp((int32)StartValue, 0, Names.Num());
+    // A missing / zero moduleCount means "all remaining", as DAP specifies.
+    int32 Count = (int32)CountValue;
+    if (Count <= 0)
+        Count = Names.Num() - Start;
+    const int32 End = FMath::Clamp(Start + Count, Start, Names.Num());
+
     TArray<TSharedPtr<FJsonValue>> Modules;
-    const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
-    Entry->SetNumberField(TEXT("id"), 1);
-    Entry->SetStringField(TEXT("name"), TEXT("UnLuaNova"));
-    Entry->SetStringField(TEXT("path"), FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Script")));
-    Entry->SetBoolField(TEXT("isOptimized"), false);
-    Entry->SetBoolField(TEXT("isUserCode"), true);
-    Modules.Add(MakeShared<FJsonValueObject>(Entry));
+    for (int32 Index = Start; Index < End; ++Index)
+    {
+        const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+        Entry->SetNumberField(TEXT("id"), Index + 1);
+        Entry->SetStringField(TEXT("name"), Names[Index]);
+        // The host loader names modules by dotted name; that is the only path it has.
+        Entry->SetStringField(TEXT("path"), Names[Index]);
+        Entry->SetBoolField(TEXT("isOptimized"), false);
+        Entry->SetBoolField(TEXT("isUserCode"), !Names[Index].StartsWith(TEXT("_")));
+        Modules.Add(MakeShared<FJsonValueObject>(Entry));
+    }
 
     const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
     Body->SetArrayField(TEXT("modules"), Modules);
-    Body->SetNumberField(TEXT("totalModules"), Modules.Num());
+    Body->SetNumberField(TEXT("totalModules"), Names.Num());
     SendSimpleResponse(Request, Body);
 }
 
@@ -547,7 +670,22 @@ void FLuaDebugAdapter::OnSetBreakpoints(const TSharedRef<FJsonObject>& Request)
 
     RequestBreakpointSync();
 
-    // 回包按我们实际持有的断点集合构造（不谎报 verified）
+    // A breakpoint is verified when its source resolves to a real script on disk and the
+    // line exists in that file. Source lookup is the same resolver `source` uses, so a
+    // dotted module name and an absolute path agree on what is breakable.
+    FString Script;
+    const bool bSourceFound = FindLuaScript(Path, Script);
+    int32 LineCount = 0;
+    if (bSourceFound)
+    {
+        LineCount = 1;
+        for (int32 Index = 0; Index < Script.Len(); ++Index)
+        {
+            if (Script[Index] == TEXT('\n'))
+                ++LineCount;
+        }
+    }
+
     TArray<TSharedPtr<FJsonValue>> Out;
     {
         FScopeLock Lock(&PendingLock);
@@ -555,9 +693,16 @@ void FLuaDebugAdapter::OnSetBreakpoints(const TSharedRef<FJsonObject>& Request)
         {
             if (Bp.Source != Path)
                 continue;
+            const bool bVerified = bSourceFound && Bp.Line >= 1 && Bp.Line <= LineCount;
             const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
             Entry->SetNumberField(TEXT("line"), Bp.Line);
-            Entry->SetBoolField(TEXT("verified"), false);
+            Entry->SetBoolField(TEXT("verified"), bVerified);
+            if (!bVerified)
+            {
+                Entry->SetStringField(TEXT("message"), bSourceFound
+                    ? FString::Printf(TEXT("line %d is outside the %d-line source"), Bp.Line, LineCount)
+                    : TEXT("source could not be resolved to a Lua script on disk"));
+            }
             Out.Add(MakeShared<FJsonValueObject>(Entry));
         }
     }
@@ -657,16 +802,39 @@ void FLuaDebugAdapter::OnScopes(const TSharedRef<FJsonObject>& Request)
 void FLuaDebugAdapter::OnVariables(const TSharedRef<FJsonObject>& Request)
 {
     auto& Service = UnLuaNova::FLuaDebugService::Get();
-    const TArray<UnLuaNova::FLuaDebugVariable>& Locals = Service.GetLocals();
+
+    const TSharedPtr<FJsonObject> Args = Request->GetObjectField(TEXT("arguments"));
+    double Requested = Service.GetLocalsReferenceId();
+    if (Args.IsValid())
+        Args->TryGetNumberField(TEXT("variablesReference"), Requested);
+    const int32 ReferenceId = (int32)Requested;
+
+    // Reference 1 is the Locals scope. Anything above that is a table captured at the
+    // last stop; GetChildren refuses stale or unpaused handles instead of returning a
+    // plausible-looking empty list.
+    TArray<UnLuaNova::FLuaDebugVariable> Vars;
+    if (ReferenceId <= Service.GetLocalsReferenceId())
+    {
+        Vars = Service.GetLocals();
+    }
+    else
+    {
+        FString Error;
+        if (!Service.GetChildren(ReferenceId, Vars, Error))
+        {
+            Unsupported(Request, Error);
+            return;
+        }
+    }
 
     TArray<TSharedPtr<FJsonValue>> Out;
-    for (const UnLuaNova::FLuaDebugVariable& Var : Locals)
+    for (const UnLuaNova::FLuaDebugVariable& Var : Vars)
     {
         const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
         Entry->SetStringField(TEXT("name"), Var.Name);
         Entry->SetStringField(TEXT("value"), Var.Value);
         Entry->SetStringField(TEXT("type"), Var.Type);
-        Entry->SetNumberField(TEXT("variablesReference"), 0);
+        Entry->SetNumberField(TEXT("variablesReference"), Var.VariablesReference);
         Out.Add(MakeShared<FJsonValueObject>(Entry));
     }
 
@@ -780,6 +948,9 @@ void FLuaDebugAdapter::OnDisconnect(const TSharedRef<FJsonObject>& Request)
         if (bStopping || ServerGeneration.load() != Generation) return;
         auto& Service2 = UnLuaNova::FLuaDebugService::Get();
         Service2.SetBlocking(false);
+        Service2.SetExceptionFilters(TArray<FString>());
+        Service2.SetFunctionBreakpoints(TArray<FString>());
+        Service2.ClearException();
         Service2.Detach();
     });
 
@@ -804,6 +975,7 @@ void FLuaDebugAdapter::Dispatch(const TSharedRef<FJsonObject>& Request)
     if (Command == TEXT("configurationDone"))           { OnConfigurationDone(Request); return; }
     if (Command == TEXT("setBreakpoints"))              { OnSetBreakpoints(Request); return; }
     if (Command == TEXT("setExceptionBreakpoints"))     { OnSetExceptionBreakpoints(Request); return; }
+    if (Command == TEXT("exceptionInfo"))               { OnExceptionInfo(Request); return; }
     if (Command == TEXT("setFunctionBreakpoints"))      { OnSetFunctionBreakpoints(Request); return; }
     if (Command == TEXT("setVariable"))                 { OnSetVariable(Request); return; }
     if (Command == TEXT("source"))                      { OnSource(Request); return; }

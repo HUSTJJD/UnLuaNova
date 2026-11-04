@@ -165,9 +165,16 @@ namespace UnLuaNova
     protected:
         lua_State* L;
 
-        // The preloader goes at index 1, which is where plain Lua keeps it: it is
-        // consulted before any file is looked at, and it is how a host hands a module
-        // over without there being a file for it at all.
+        // package.aliases[name] = target: resolved before every other searcher, on both
+        // backends (plain Lua's require walks package.searchers too). The alias loader
+        // calls require(target), so alias and target share one cached module instance.
+        static int LoadFromAlias(lua_State* L);
+
+        // Loader returned by LoadFromAlias. Upvalue 1 = target module name.
+        static int AliasLoader(lua_State* L);
+
+        // package.preload[name] - how a host hands a module over without there being a
+        // file for it at all. Consulted before any file is looked at.
         static int LoadFromPreload(lua_State* L);
 
         static int LoadFromBuiltinLibs(lua_State* L);

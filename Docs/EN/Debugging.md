@@ -26,9 +26,9 @@ lua.dap stop
 
 From VSCode, **attach** to `127.0.0.1:5699` (`request: "attach"`). The command surface is
 complete: `initialize` / `attach` / `launch` (explicit refusal) / `configurationDone` /
-`setBreakpoints` / `setExceptionBreakpoints` / `setFunctionBreakpoints` / `threads` /
-`stackTrace` / `scopes` / `variables` / `setVariable` / `source` / `modules` / `pause` /
-`evaluate` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`.
+`setBreakpoints` / `setExceptionBreakpoints` / `exceptionInfo` / `setFunctionBreakpoints` /
+`threads` / `stackTrace` / `scopes` / `variables` / `setVariable` / `source` / `modules` /
+`pause` / `evaluate` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`.
 
 The listener binds only to loopback. Port `0` selects an OS-assigned port, shown by
 `lua.dap status`. Start and stop are serialized; queued work from a stopped server
@@ -58,13 +58,34 @@ Behaviour worth knowing before you conclude it is broken:
 * **`source`** reads from disk: an absolute path, or a dotted module name resolved against
   the project / plugin `Content/Script` roots. Unreadable files return an error; the adapter
   thread never touches the `lua_State`.
-* **`modules`** is a static view (the `UnLuaNova` script root), not a `package.loaded`
-  snapshot.
-* **`setExceptionBreakpoints` / `setFunctionBreakpoints`** return an empty `breakpoints`
-  set: exception filters and function breakpoints are not wired into the VM hook. `launch`
-  is refused with a hint to use attach. `supportsConfigurationDoneRequest`,
-  `supportsSetVariable`, `supportsModulesRequest` and `supportsEvaluateRequest` are true;
-  every other unsupported capability bit is explicitly false.
+* **`setBreakpoints` verifies for real**: the same resolver as `source` finds the script on
+  disk and the line is checked against its actual line count; an unresolvable source or an
+  out-of-range line gets `verified=false` plus a `message`. It no longer always reports false.
+* **Exception filters are wired into the VM**: `setExceptionBreakpoints` accepts `raised`
+  and `uncaught`; anything else reports `verified=false`. The shared `ReportLuaCallError`
+  handler forwards every uncaught Lua error to the debug service, which arms the line hook
+  when a filter is on. The next stop reports `reason=exception` with the error text, and
+  `exceptionInfo` returns the most recent error. With filters off the hook is untouched.
+* **`variables` expands nested tables**: tables in the `Locals` scope get a handle that a
+  follow-up `variables` request can expand, with depth (4), count (100) and cycle guards;
+  handles are released at the next stop or `Detach()`. Asking for a nested handle with no
+  paused frame is an explicit error, not an empty list.
+* **`modules` is a real snapshot**: keys of `package.loaded` are captured on the VM thread at
+  `Attach()` and at every stop; the adapter thread reads the copy and never touches
+  `lua_State`. `startModule` / `moduleCount` paging is supported, and an unattached VM
+  returns an honest empty list instead of a placeholder module.
+* **`setFunctionBreakpoints` is implemented**: names are matched against `lua_getinfo('n')`
+  (exact, or `Foo` matching `Table.Foo` / `Table:Foo`) by the line hook, which stops on the
+  first line of a matching frame. Empty names report `verified=false`. This is hook-based
+  matching, not a native function breakpoint; `launch` is still refused with an attach hint.
+* **`stopped.reason`** comes from the VM thread (`breakpoint` / `step` / `pause` /
+  `exception`) instead of a hard-coded `breakpoint`. `supportsExceptionInfoRequest` and
+  `exceptionBreakpointFilters` are advertised; every other unsupported capability bit is
+  explicitly false.
+* **The `debug` compatibility subset** is exact, not a placeholder: on Luau
+  `getregistry` raises, `getuservalue` is always nil, `setuservalue` returns false, and
+  `upvalueid` is value identity (never proof of scalar aliasing). See
+  `LuaScriptCompat.spec.cpp`.
 
 ### pause and evaluate
 

@@ -30,6 +30,10 @@ static const char IoPosField[] = "__pos";
 static const char IoPathField[] = "__path";
 static const char IoModeField[] = "__mode";
 static const char IoOpenField[] = "__open";
+// io.tmpfile() has no disk path; flushing it must be a no-op rather than an attempt to
+// write an empty filename through ResolvePath. Kept as a field instead of a path sentinel
+// so a script cannot confuse a real file with a temporary one by editing __path.
+static const char IoTmpField[] = "__tmp";
 
 namespace
 {
@@ -55,6 +59,36 @@ namespace
             ECVF_Default);
 
         return CVar->GetInt() != 0;
+    }
+
+    /**
+     * Hard cap on how much a single file may be read or buffered. The io implementation
+     * keeps the whole file in a Lua string, so without this a script can turn one
+     * io.open / repeated file:write into an unbounded allocation. 0 disables the cap.
+     */
+    int64 IoMaxBytes()
+    {
+        static auto CVar = IConsoleManager::Get().RegisterConsoleVariable(
+            TEXT("lua.iomaxbytes"),
+            16 * 1024 * 1024,
+            TEXT("Maximum bytes a lua.io file may read or buffer in one handle. "
+                 "0 = unlimited. Applies on open, write and flush."),
+            ECVF_Default);
+        return int64(CVar->GetInt());
+    }
+
+    /** Fail before allocating a buffer that would cross the cap. */
+    void CheckBufferSize(lua_State* L, size_t Size)
+    {
+        const int64 Max = IoMaxBytes();
+        if (Max > 0 && int64(Size) > Max)
+        {
+            // lua_pushfstring only understands a small format set; build the numbers here.
+            const FString Message = FString::Printf(
+                TEXT("io: buffer would be %lld bytes, exceeding lua.iomaxbytes (%lld)"),
+                (long long)Size, (long long)Max);
+            luaL_error(L, "%s", TCHAR_TO_UTF8(*Message));
+        }
     }
 
     /**
@@ -140,6 +174,9 @@ namespace
             luaL_error(L, "io: invalid file position");
     }
 
+    void ReadCount(lua_State* L, const char* Data, size_t Len, int64& Pos, int64 Count);
+    void ReadFormat(lua_State* L, const char* Data, size_t Len, int64& Pos, const char* RawFormat);
+
     int FileRead(lua_State* L);
     int FileWrite(lua_State* L);
     int FileLines(lua_State* L);
@@ -147,6 +184,9 @@ namespace
     int FileFlush(lua_State* L);
     int FileClose(lua_State* L);
     int FileToString(lua_State* L);
+
+    int IoTmpFile(lua_State* L);
+    int IoPopen(lua_State* L);
 
     int LinesIterator(lua_State* L)
     {
@@ -163,21 +203,43 @@ namespace
         if (!Data || Pos >= int64(Len))
             return 0; // no more lines; the iterator returning nothing ends the loop
 
-        const char* Start = Data + Pos;
-        const char* Newline = static_cast<const char*>(memchr(Start, '\n', size_t(int64(Len) - Pos)));
+        // Upvalue 1 is the format list passed to file:lines(...) / io.lines(...).
+        // An empty list means the default "one line per iteration".
+        lua_pushvalue(L, lua_upvalueindex(1));
+        const int Formats = lua_gettop(L);
+        const int NumFormats = int(lua_rawlen(L, Formats));
 
-        size_t LineLen = Newline ? size_t(Newline - Start) : size_t(int64(Len) - Pos);
-        // Strip a trailing \r so CRLF files do not hand scripts a stray byte.
-        if (LineLen > 0 && Start[LineLen - 1] == '\r')
-            --LineLen;
+        int Results = 0;
+        if (NumFormats == 0)
+        {
+            ReadFormat(L, Data, Len, Pos, "l");
+            Results = 1;
+        }
+        else
+        {
+            for (int i = 1; i <= NumFormats; ++i)
+            {
+                lua_rawgeti(L, Formats, i);
+                const int FmtIdx = lua_gettop(L);
+                if (lua_type(L, FmtIdx) == LUA_TNUMBER)
+                    ReadCount(L, Data, Len, Pos, int64(lua_tointeger(L, FmtIdx)));
+                else
+                {
+                    const char* Fmt = lua_tostring(L, FmtIdx);
+                    if (!Fmt)
+                        return luaL_error(L, "io: invalid read format");
+                    ReadFormat(L, Data, Len, Pos, Fmt);
+                }
+                lua_remove(L, FmtIdx);
+                ++Results;
+            }
+        }
+        lua_remove(L, Formats);
 
-        lua_pushlstring(L, Start, LineLen);
-
-        const int64 Next = Newline ? int64(Newline - Data) + 1 : int64(Len);
-        lua_pushinteger(L, lua_Integer(Next));
+        // generic-for stops on the first nil, so an exhausted format list ends the loop.
+        lua_pushinteger(L, lua_Integer(Pos));
         lua_setfield(L, 1, IoPosField);
-
-        return 1;
+        return Results;
     }
 
     /** Slice one line out of the buffer, advancing Pos past it. */
@@ -198,6 +260,112 @@ namespace
         OutLen = LineLen;
         Pos = Newline ? int64(Newline - Data) + 1 : int64(Len);
         return true;
+    }
+
+    // One read format -> exactly one pushed result, with Pos advanced. Shared by
+    // file:read and the lines() iterator so both accept the same format list instead
+    // of the iterator silently ignoring its arguments.
+    void ReadCount(lua_State* L, const char* Data, size_t Len, int64& Pos, int64 Count)
+    {
+        if (Count < 0)
+        {
+            luaL_error(L, "io: read count must be non-negative");
+            return;
+        }
+        if (Count == 0)
+        {
+            // Reading zero bytes is the documented end-of-file test: an empty string
+            // when there is more to read, nil at the end.
+            if (!Data || Pos >= int64(Len))
+                lua_pushnil(L);
+            else
+                lua_pushliteral(L, "");
+            return;
+        }
+
+        if (!Data || Pos >= int64(Len))
+        {
+            lua_pushnil(L);
+            return;
+        }
+
+        const int64 Available = int64(Len) - Pos;
+        const int64 Take = FMath::Min(Count, Available);
+        lua_pushlstring(L, Data + Pos, size_t(Take));
+        Pos += Take;
+    }
+
+    void ReadFormat(lua_State* L, const char* Data, size_t Len, int64& Pos, const char* RawFormat)
+    {
+        const char* Format = RawFormat;
+        if (Format[0] == '*')
+            ++Format;
+        if (Format[0] == '\0' || Format[1] != '\0')
+        {
+            luaL_error(L, "io: invalid read format '%s'", RawFormat);
+            return;
+        }
+
+        if (Format[0] == 'a')
+        {
+            if (!Data || Pos >= int64(Len))
+                lua_pushliteral(L, "");
+            else
+                lua_pushlstring(L, Data + Pos, size_t(int64(Len) - Pos));
+            Pos = int64(Len);
+            return;
+        }
+
+        if (Format[0] == 'l' || Format[0] == 'L')
+        {
+            if (!Data || Pos >= int64(Len))
+            {
+                lua_pushnil(L);
+                return;
+            }
+
+            const char* Start = Data + Pos;
+            const char* Newline = static_cast<const char*>(memchr(Start, '\n', size_t(int64(Len) - Pos)));
+            size_t LineLen = Newline ? size_t(Newline - Start) : size_t(int64(Len) - Pos);
+
+            // "L" keeps the newline, "l" does not - that is the only difference.
+            if (Format[0] == 'l' && LineLen > 0 && Start[LineLen - 1] == '\r')
+                --LineLen;
+            if (Format[0] == 'L' && Newline)
+                ++LineLen;
+
+            lua_pushlstring(L, Start, LineLen);
+            Pos = Newline ? int64(Newline - Data) + 1 : int64(Len);
+            return;
+        }
+
+        if (Format[0] == 'n')
+        {
+            // Skip whitespace, then let the number parser decide where it stops.
+            while (Data && Pos < int64(Len) && isspace(static_cast<unsigned char>(Data[Pos])))
+                ++Pos;
+
+            if (!Data || Pos >= int64(Len))
+            {
+                lua_pushnil(L);
+                return;
+            }
+
+            const char* Start = Data + Pos;
+            char* End = nullptr;
+            const double Value = strtod(Start, &End);
+            if (End == Start)
+            {
+                lua_pushnil(L);
+                return;
+            }
+
+            lua_pushnumber(L, Value);
+            Pos += int64(End - Start);
+            return;
+        }
+
+        luaL_error(L, "io: invalid read format '%s'", RawFormat);
     }
 
     int FileRead(lua_State* L)
@@ -232,120 +400,19 @@ namespace
         }
         else
         {
-        for (int i = 2; i <= NumArgs; ++i)
-        {
-            if (lua_type(L, i) == LUA_TNUMBER)
+            for (int i = 2; i <= NumArgs; ++i)
             {
-                const int64 Count = int64(luaL_checkinteger(L, i));
-                if (Count < 0)
-                    return luaL_error(L, "io: read count must be non-negative");
-                if (Count == 0)
-                {
-                    // Reading zero bytes is the documented end-of-file test: an empty
-                    // string when there is more to read, nil at the end.
-                    if (!Data || Pos >= int64(Len))
-                    {
-                        lua_pushnil(L);
-                        ++Results;
-                    }
-                    else
-                    {
-                        lua_pushliteral(L, "");
-                        ++Results;
-                    }
-                    continue;
-                }
-
-                if (!Data || Pos >= int64(Len))
-                {
-                    lua_pushnil(L);
-                    ++Results;
-                    continue;
-                }
-
-                const int64 Available = int64(Len) - Pos;
-                const int64 Take = FMath::Min(Count, Available);
-                lua_pushlstring(L, Data + Pos, size_t(Take));
-                Pos += Take;
-                ++Results;
-                continue;
-            }
-
-            const char* Format = lua_tostring(L, i);
-            if (!Format)
-                return luaL_error(L, "io: invalid read format");
-            if (Format[0] == '*')
-                ++Format;
-            if (Format[0] == '\0' || Format[1] != '\0')
-                return luaL_error(L, "io: invalid read format");
-
-            if (Format[0] == 'a')
-            {
-                if (!Data || Pos >= int64(Len))
-                    lua_pushliteral(L, "");
+                if (lua_type(L, i) == LUA_TNUMBER)
+                    ReadCount(L, Data, Len, Pos, int64(luaL_checkinteger(L, i)));
                 else
-                    lua_pushlstring(L, Data + Pos, size_t(int64(Len) - Pos));
-                Pos = int64(Len);
-                ++Results;
-                continue;
-            }
-
-            if (Format[0] == 'l' || Format[0] == 'L')
-            {
-                if (!Data || Pos >= int64(Len))
                 {
-                    lua_pushnil(L);
-                    ++Results;
-                    continue;
+                    const char* Format = lua_tostring(L, i);
+                    if (!Format)
+                        return luaL_error(L, "io: invalid read format");
+                    ReadFormat(L, Data, Len, Pos, Format);
                 }
-
-                const char* Start = Data + Pos;
-                const char* Newline = static_cast<const char*>(memchr(Start, '\n', size_t(int64(Len) - Pos)));
-                size_t LineLen = Newline ? size_t(Newline - Start) : size_t(int64(Len) - Pos);
-
-                // "L" keeps the newline, "l" does not - that is the only difference.
-                if (Format[0] == 'l' && LineLen > 0 && Start[LineLen - 1] == '\r')
-                    --LineLen;
-                if (Format[0] == 'L' && Newline)
-                    ++LineLen;
-
-                lua_pushlstring(L, Start, LineLen);
-                Pos = Newline ? int64(Newline - Data) + 1 : int64(Len);
                 ++Results;
-                continue;
             }
-
-            if (Format[0] == 'n')
-            {
-                // Skip whitespace, then let the number parser decide where it stops.
-                while (Pos < int64(Len) && isspace(static_cast<unsigned char>(Data[Pos])))
-                    ++Pos;
-
-                if (Pos >= int64(Len))
-                {
-                    lua_pushnil(L);
-                    ++Results;
-                    continue;
-                }
-
-                const char* Start = Data + Pos;
-                char* End = nullptr;
-                const double Value = strtod(Start, &End);
-                if (End == Start)
-                {
-                    lua_pushnil(L);
-                    ++Results;
-                    continue;
-                }
-
-                lua_pushnumber(L, Value);
-                Pos += int64(End - Start);
-                ++Results;
-                continue;
-            }
-
-            return luaL_error(L, "io: invalid read format");
-        }
         }
 
         lua_pushinteger(L, lua_Integer(Pos));
@@ -359,15 +426,31 @@ namespace
     {
         CheckOpen(L, 1);
 
-        if ((GetModeField(L, 1) & IoModeWrite) == 0)
+        const int32 Mode = GetModeField(L, 1);
+        if ((Mode & IoModeWrite) == 0)
             return luaL_error(L, "io: file was not opened for writing");
 
         const int NumArgs = lua_gettop(L);
 
-        // The existing buffer plus every argument, concatenated in one go. No luaL_Buffer:
-        // it keeps its own bookkeeping value on the stack, which makes every index below
-        // it stale - and no C++ buffer either, since Luau cannot call a destructor.
-        lua_getfield(L, 1, IoDataField);
+        // A write starts at __pos and overwrites, it does not append. The old code always
+        // concatenated the whole buffer with the arguments, which made every "r+" seek
+        // useless: the data landed at the end regardless of where the position was.
+        // No luaL_Buffer: it keeps its own bookkeeping value on the stack, which makes
+        // every index below it stale - and no C++ buffer either, since Luau has no __gc.
+        lua_getfield(L, 1, IoDataField);              // [file, args..., buffer]
+        size_t OldLen = 0;
+        const char* OldData = lua_tolstring(L, -1, &OldLen);
+
+        lua_getfield(L, 1, IoPosField);
+        int64 Pos = int64(lua_tointeger(L, -1));
+        lua_pop(L, 1);
+        // Lua's append mode always writes at the end even after a seek.
+        if ((Mode & IoModeAppend) != 0)
+            Pos = int64(OldLen);
+        else
+            Pos = FMath::Clamp(Pos, int64(0), int64(OldLen));
+
+        lua_pushlstring(L, OldData ? OldData : "", size_t(Pos)); // prefix
 
         for (int i = 2; i <= NumArgs; ++i)
         {
@@ -383,10 +466,35 @@ namespace
             lua_pushlstring(L, Text, Len);
         }
 
-        lua_concat(L, NumArgs);
+        // No arguments means an empty write; do it explicitly rather than relying on the
+        // exact behaviour of lua_concat(L, 0) across the two backends.
+        if (NumArgs > 1)
+            lua_concat(L, NumArgs - 1);               // [.., buffer, prefix, text]
+        else
+            lua_pushliteral(L, "");
+        size_t TextLen = 0;
+        lua_tolstring(L, -1, &TextLen);
+
+        // Bytes past the overwritten region survive, exactly as they would on disk.
+        const size_t OverwriteEnd = size_t(Pos) + TextLen;
+        const size_t Tail = OverwriteEnd < OldLen ? OldLen - OverwriteEnd : 0;
+        if (Tail > 0)
+            lua_pushlstring(L, OldData + OverwriteEnd, Tail);
+        else
+            lua_pushliteral(L, "");
+
+        lua_concat(L, 3);                             // [.., buffer, result]
+
+        size_t NewLen = 0;
+        lua_tolstring(L, -1, &NewLen);
+        CheckBufferSize(L, NewLen);
 
         lua_pushvalue(L, -1);
         lua_setfield(L, 1, IoDataField);
+
+        // The position advances by what was written, not by the resulting file length.
+        lua_pushinteger(L, lua_Integer(Pos + int64(TextLen)));
+        lua_setfield(L, 1, IoPosField);
 
         // Lua's file:write returns the file, so calls can be chained.
         lua_pushvalue(L, 1);
@@ -400,6 +508,14 @@ namespace
         const char* Whence = luaL_optstring(L, 2, "cur");
         const int64 Offset = int64(luaL_optinteger(L, 3, 0));
 
+        // Lua accepts exactly "set", "cur" and "end". Matching only the first character
+        // used to turn "nonsense" into a silent relative seek.
+        const bool bSet = FCStringAnsi::Strcmp(Whence, "set") == 0;
+        const bool bCur = FCStringAnsi::Strcmp(Whence, "cur") == 0;
+        const bool bEnd = FCStringAnsi::Strcmp(Whence, "end") == 0;
+        if (!bSet && !bCur && !bEnd)
+            return luaL_error(L, "io: invalid seek option '%s' (expected set, cur or end)", Whence);
+
         lua_getfield(L, 1, IoDataField);
         size_t Len = 0;
         lua_tolstring(L, -1, &Len);
@@ -409,13 +525,11 @@ namespace
         int64 Pos = int64(lua_tointeger(L, -1));
         lua_pop(L, 1);
 
-        int64 Base = Pos;
-        if (Whence[0] == 's')
-            Base = 0;
-        else if (Whence[0] == 'e')
-            Base = int64(Len);
-
-        const int64 Next = FMath::Max(int64(0), Base + Offset);
+        const int64 Base = bSet ? int64(0) : (bEnd ? int64(Len) : Pos);
+        // This is an in-memory file: there is no sparse hole to seek into, so positions
+        // outside the buffer are clamped instead of returning a position that every
+        // subsequent read would report as EOF anyway.
+        const int64 Next = FMath::Clamp(Base + Offset, int64(0), int64(Len));
         lua_pushinteger(L, lua_Integer(Next));
         lua_setfield(L, 1, IoPosField);
 
@@ -437,6 +551,18 @@ namespace
         size_t Len = 0;
         const char* Data = lua_tolstring(L, -1, &Len);
         lua_pop(L, 1);
+        CheckBufferSize(L, Len);
+
+        // io.tmpfile() lives only in the Lua string on this handle. Lua says the file is
+        // removed when closed; here it was never on disk, so flushing is simply a no-op.
+        lua_getfield(L, 1, IoTmpField);
+        const bool bTemporary = lua_toboolean(L, -1) != 0;
+        lua_pop(L, 1);
+        if (bTemporary)
+        {
+            lua_pushboolean(L, 1);
+            return 1;
+        }
 
         lua_getfield(L, 1, IoPathField);
         const FString RelativePath = UTF8_TO_TCHAR(luaL_checkstring(L, -1));
@@ -516,9 +642,56 @@ namespace
     int FileLines(lua_State* L)
     {
         CheckOpen(L, 1);
-        lua_pushcfunction(L, &LinesIterator);
+        const int NumFormats = lua_gettop(L) - 1;
+
+        // Formats travel as a single upvalue so the iterator knows how many values to
+        // return per line: file:lines("l", "n") is a multi-value iterator in Lua.
+        lua_newtable(L);
+        const int Formats = lua_gettop(L);
+        for (int i = 2; i <= NumFormats + 1; ++i)
+        {
+            lua_pushvalue(L, i);
+            lua_rawseti(L, Formats, i - 1);
+        }
+        lua_pushcclosure(L, &LinesIterator, 1);
         lua_pushvalue(L, 1);
         return 2;
+    }
+
+    int IoTmpFile(lua_State* L)
+    {
+        // An in-memory, read/write handle. There is no OS temp file and no path: the
+        // buffer is the file, and closing it discards the buffer. This is the honest
+        // subset of io.tmpfile() the rooted library can offer without a writable
+        // scratch directory or a destructor to remove a real file.
+        lua_newtable(L);
+        const int File = lua_gettop(L);
+
+        lua_pushliteral(L, "");
+        lua_setfield(L, File, IoPathField);
+        lua_pushinteger(L, IoModeRead | IoModeWrite);
+        lua_setfield(L, File, IoModeField);
+        lua_pushboolean(L, 1);
+        lua_setfield(L, File, IoOpenField);
+        lua_pushliteral(L, "");
+        lua_setfield(L, File, IoDataField);
+        lua_pushinteger(L, 0);
+        lua_setfield(L, File, IoPosField);
+        lua_pushboolean(L, 1);
+        lua_setfield(L, File, IoTmpField);
+
+        luaL_getmetatable(L, IoFileMeta);
+        lua_setmetatable(L, File);
+        return 1;
+    }
+
+    int IoPopen(lua_State* L)
+    {
+        // Process execution is deliberately outside this library's capability set.
+        // Saying so is better than an empty stub that scripts mistake for a working pipe.
+        return luaL_error(L,
+            "io.popen is not supported by UnLuaNova's rooted io library: "
+            "scripts cannot start processes");
     }
 
     int IoOpen(lua_State* L)
@@ -537,14 +710,34 @@ namespace
                 Mode |= IoModeWrite | IoModeAppend;
             else if (*C == '+')
                 Mode |= IoModeRead | IoModeWrite;
+            else if (*C == 'b')
+            {
+                // Binary mode is a no-op here: the buffer is bytes, there is no text
+                // translation to disable. Accepting the flag keeps "rb"/"wb" scripts
+                // working instead of silently treating them as a different mode.
+            }
+            else
+                return luaL_error(L, "io: invalid mode '%s' (expected r, w, a, + or b)", ModeArg);
         }
 
-        if (Mode == 0)
-            Mode = IoModeRead;
+        // Silently defaulting an unrecognised mode to "r" used to make a typo open a
+        // readable handle where the script expected to write.
+        if ((Mode & (IoModeRead | IoModeWrite)) == 0)
+            return luaL_error(L, "io: invalid mode '%s' (no read or write access)", ModeArg);
 
         FString Full;
         if (!ResolvePath(L, UTF8_TO_TCHAR(PathArg), Full))
             return luaL_error(L, "%s", lua_tostring(L, -1));
+
+        const int64 Max = IoMaxBytes();
+        const int64 FileSize = IFileManager::Get().FileSize(*Full);
+        if (Max > 0 && FileSize > Max)
+        {
+            const FString Message = FString::Printf(
+                TEXT("io: '%s' is %lld bytes, exceeding lua.iomaxbytes (%lld)"),
+                UTF8_TO_TCHAR(PathArg), (long long)FileSize, (long long)Max);
+            return luaL_error(L, "%s", TCHAR_TO_UTF8(*Message));
+        }
 
         lua_newtable(L);
         const int File = lua_gettop(L);
@@ -594,6 +787,7 @@ namespace
     int IoLines(lua_State* L)
     {
         const int Top = lua_gettop(L);
+        const int NumFormats = Top - 1;
 
         lua_pushcfunction(L, &IoOpen);
         lua_pushvalue(L, 1);
@@ -604,8 +798,16 @@ namespace
             return luaL_error(L, "%s", lua_tostring(L, -1));
 
         lua_pop(L, 1); // the second result is always nil on success
+        // Stack is now [filename, formats..., file]; the original indices are unchanged.
 
-        lua_pushcfunction(L, &LinesIterator);
+        lua_newtable(L);
+        const int Formats = lua_gettop(L);
+        for (int i = 2; i <= NumFormats + 1; ++i)
+        {
+            lua_pushvalue(L, i);
+            lua_rawseti(L, Formats, i - 1);
+        }
+        lua_pushcclosure(L, &LinesIterator, 1);
         lua_insert(L, -2); // iterator below the file
         return 2;
     }
@@ -713,6 +915,10 @@ namespace UnLuaNova
         lua_newtable(L);
         lua_pushcfunction(L, &IoOpen);
         lua_setfield(L, -2, "open");
+        lua_pushcfunction(L, &IoTmpFile);
+        lua_setfield(L, -2, "tmpfile");
+        lua_pushcfunction(L, &IoPopen);
+        lua_setfield(L, -2, "popen");
         lua_pushcfunction(L, &IoLines);
         lua_setfield(L, -2, "lines");
         lua_pushcfunction(L, &IoWrite);

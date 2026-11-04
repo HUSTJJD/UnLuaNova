@@ -120,11 +120,13 @@ namespace UnLuaNova
         {
 #if UNLUANOVA_HAS_HOOK_EVENT
             FLuaVmHooks::Get().Add(Attached, LUA_MASKCALL | LUA_MASKRET, this,
-                [](lua_State* L, lua_Debug* Ar) { FLuaProfiler::Hook(L, Ar); });
+                [](lua_State* L, lua_Debug* Ar, int) { FLuaProfiler::Hook(L, Ar); });
 #else
             // Luau routes safe points through lua_Callbacks rather than lua_sethook.
+            // The GC flag used to be hardcoded to 0 here, so collector time was always
+            // charged to whatever Lua function happened to be on the stack.
             FLuaVmHooks::Get().Add(Attached, 0, this,
-                [](lua_State* L, lua_Debug*) { FLuaProfiler::Interrupt(L, 0); });
+                [](lua_State* L, lua_Debug*, int GC) { FLuaProfiler::Interrupt(L, GC); });
 
             // Coroutines are the one thing a sampled profiler gets wrong by construction:
             // a coroutine that is abandoned mid-call never returns, and its frame would
@@ -177,12 +179,21 @@ namespace UnLuaNova
         for (const FTraceSample& Sample : TraceSamples)
             Out += FString::Printf(TEXT("%llu %s\n"), Sample.Us, *Sample.Stack);
 
-        IFileManager::Get().MakeDirectory(*FPaths::GetPath(Path), true);
-        if (!FFileHelper::SaveStringToFile(Out, *Path))
+        // Match DumpToFile: a bare filename belongs under Saved/Profiling, not in the
+        // process working directory. The console command defaults to an absolute path,
+        // but a caller passing "profile.out" used to hand GetPath() an empty string and
+        // leave the dump somewhere the renderer would never find it.
+        const FString FullPath = FPaths::IsRelative(Path)
+            ? FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Profiling"), Path)
+            : Path;
+
+        IFileManager::Get().MakeDirectory(*FPaths::GetPath(FullPath), true);
+        if (!FFileHelper::SaveStringToFile(Out, *FullPath))
             return false;
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("Wrote %d samples to '%s'. Convert with Tools/perfgraph.py (Luau's own tool)."),
-            TraceSamples.Num(), *Path);
+        UE_LOG(LogUnLuaNova, Log,
+            TEXT("Wrote %d samples to '%s'. Convert with Tools/LuauPerfgraph/perfgraph.py (Luau's own tool)."),
+            TraceSamples.Num(), *FullPath);
         return true;
     }
 

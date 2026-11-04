@@ -15,6 +15,7 @@
 |---|---|
 | [WORKLOAD.md](WORKLOAD.md) | 工作负载契约与用例表。改任何一条都要 bump `revision` |
 | `runner.py` | 归一化 + 对齐检查 + 出对比表 |
+| `metrics.py` | 单项目多轮原始分布（min / median / mean / p95 / max / stddev），fail-closed 对齐检查 |
 | `workload/unluanova/cases.lua` | UnLuaNova 侧实现（可直接跑） |
 | `workload/external/cases.lua` | 外部绑定通用适配器，slua-unreal / FUnLua 各配一次项目名即可 |
 | `results/` | runner 产出的归一化 JSON 与 `comparison.md`（首次运行时生成） |
@@ -70,6 +71,19 @@ python Tools/CrossProject/runner.py --baseline UnLuaNova Saved\Logs\*.log
 
 产物落在 `Tools/CrossProject/results/`：`unluanova-luau.json`、`comparison.md`。
 
+## 出表之前先看方差（单项目多轮分布）
+
+`runner.py` 给每个用例一个中位数；一个中位数不足以支撑"快 X 倍"。`metrics.py` 把同一个
+project / backend 的所有轮次的 `samples` 合并成原始分布：
+
+```powershell
+python Tools\CrossProject\metrics.py Tools\CrossProject\results\*.json -o Tools\CrossProject\results\metrics.md
+```
+
+输出 min / median / mean / p95 / max / stddev 与 per-run median。机器、CPU、引擎、配置、
+载体、workload revision、project、backend、用例集或迭代数不一致时拒绝合并；某个用例没有
+样本也拒绝，不会发明一个平滑但无意义的分布。这是**单项目**分布，不是跨项目结论。
+
 ## 跑 slua-unreal / FUnLua 那两侧
 
 把 `workload/external/cases.lua` 复制到目标工程的脚本目录（例如
@@ -100,6 +114,7 @@ revision、meta 字段与失败上报由 `Tools/tests/test_crossproject_workload
 |---|---|
 | 契约与用例表 | ✅ revision 1 |
 | runner（归一化 / 对齐检查 / 对比表） | ✅ 已自测：缺用例、machine 不一致、GBK 控制台、占位身份拒绝（6 项对齐回归） |
+| `metrics.py`（单项目多轮分布） | ✅ 已写，10 项回归通过；待真实多轮日志产生分布 |
 | UnLuaNova 侧实现 | ✅ 已写，待在真实工程里跑一遍确认每个 UE 调用可达 |
 | 外部绑定通用适配器 | ✅ 已写（UE 调用自适应 + fail-fast），静态契约 6 项回归通过；待在目标工程核对 API |
 | workload 静态契约 | ✅ 用例集 / 迭代数 / revision / meta 字段 / 失败上报 / 无占位身份（6 项回归） |

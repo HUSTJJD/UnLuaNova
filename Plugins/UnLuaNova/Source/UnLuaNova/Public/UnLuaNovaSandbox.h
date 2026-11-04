@@ -35,6 +35,23 @@ namespace UnLuaNova
     UNLUANOVA_API void RestoreTablesAfterSandbox(lua_State* L);
 
     /**
+     * Remove selected host capabilities from the globals, before luaL_sandbox freezes
+     * them (the global table is read-only afterwards, so this cannot be done later).
+     *
+     * `lua.sandboxdeny` is a comma-separated list such as "debug,io,socket,os". Globals
+     * the host itself writes to after startup (UE.*, Lua.*, package.loaded, require) are
+     * protected: removing those would break type registration and require(), not harden
+     * anything. Returns the number of globals actually removed, so a spec or a console
+     * command can tell "policy applied" from "policy silently did nothing".
+     *
+     * This is capability trimming, NOT a complete untrusted-code permission model: a
+     * script can still reach anything the host deliberately exposes through UE/io/socket
+     * unless those names are denied too, and the deny list is a host decision, not a
+     * per-script grant.
+     */
+    UNLUANOVA_API int32 ApplyCapabilityPolicy(lua_State* L);
+
+    /**
      * Sandbox every coroutine as it is created, by claiming Luau's userthread callback.
      *
      * luaL_sandbox hardens the *global* table, which is one table shared by the main

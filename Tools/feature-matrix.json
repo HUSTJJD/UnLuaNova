@@ -328,8 +328,8 @@
       "examples": [
         "Content/Script/Examples/RuntimeContracts.lua"
       ],
-      "gap": "Tokens retain owner until explicit unsubscribe; not automatic UObject lifecycle cleanup.",
-      "acceptance": "Run recursive Once and cleanup tests; add exception/reload/owner destruction scenarios.",
+      "gap": "Owner lifecycle cleanup is now automatic as well as explicit: before taking its broadcast snapshot, Emit prunes tokens whose owner reports IsValid()==false; SetOwnerValidator allows a project-accurate predicate and PruneDeadOwners is a manual entry point. UnbindOwner remains the recommended explicit path for hot reload. Runtime evidence for real UObject destruction, exception/reload scenarios and recursive Once is pending.",
+      "acceptance": "Run recursive Once and cleanup tests; RuntimeContracts.spec.lua now covers dead-owner pruning, live-owner retention and validator replacement; a real UObject destruction scenario still needs a live run.",
       "upstream": [
         "FUnLua"
       ],
@@ -469,7 +469,8 @@
         "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp"
       ],
       "tests": [
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp",
+        "Content/Script/Tests/Lua/LuauConformance.spec.lua"
       ],
       "examples": [
         "Content/Script/Luau/04_LuauSyntax.lua",
@@ -492,7 +493,8 @@
         "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp"
       ],
       "tests": [
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp",
+        "Content/Script/Tests/Lua/LuauConformance.spec.lua"
       ],
       "examples": [
         "Content/Script/Luau/04_LuauSyntax.lua"
@@ -515,7 +517,8 @@
       ],
       "tests": [
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp",
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_FVector.spec.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaLib_FVector.spec.cpp",
+        "Content/Script/Tests/Lua/LuauConformance.spec.lua"
       ],
       "examples": [
         "Content/Script/Luau/05_VectorInterop.lua"
@@ -539,7 +542,8 @@
       ],
       "tests": [
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/RuntimeModules.spec.cpp",
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp",
+        "Content/Script/Tests/Lua/LuauConformance.spec.lua"
       ],
       "examples": [
         "Content/Script/Luau/06_BufferInterop.lua"
@@ -564,7 +568,7 @@
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp"
       ],
       "examples": [],
-      "gap": "VM-scoped initialization fixed; request counter is not success count; platform acceptance absent.",
+      "gap": "VM-scoped initialization fixed. The counter is now explicitly a REQUEST count: GetNativeCodeGenRequestCount() plus a `lua.codegen` console line that states luau_codegen_compile() exposes no success signal, with the old getter kept as a documented alias. Platform acceptance, executable-memory policy and any per-chunk success signal remain absent (upstream API limitation, not a missing gate).",
       "acceptance": "Test VM/coroutine lifecycle, supported architectures, debug attachment, failures and executable-memory policy.",
       "upstream": [
         "Luau"
@@ -601,16 +605,19 @@
       "priority": "P1",
       "source": [
         "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaEnv.cpp",
-        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp"
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaLib.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaSandbox.h"
       ],
       "tests": [
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp"
       ],
       "examples": [
         "Content/Script/Luau/02_SandboxBoundary.lua"
       ],
-      "gap": "Default off; host UE/debug/io/socket capabilities remain; not an untrusted-code permission model.",
-      "acceptance": "Define capability policy and verify writable escape paths, new threads, imports and host limits.",
+      "gap": "Capability trimming delivered: lua.sandboxdeny removes named globals before luaL_sandbox freezes _G, protects host-written globals (UE.*/Lua/package.loaded/require) and returns the removal count so a spec can tell 'policy applied' from a no-op. Still default off, still not an untrusted-code permission model: host UE/debug/io/socket capabilities remain unless explicitly denied, and there is no per-script grant. Runtime evidence for writable escape paths, new threads and host limits pending.",
+      "acceptance": "Define capability policy and verify writable escape paths, new threads, imports and host limits; LuauIntegration.spec.cpp asserts that denied globals disappear while protected ones survive.",
       "upstream": [
         "Luau"
       ],
@@ -651,13 +658,14 @@
       ],
       "tests": [
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaEnv.spec.cpp",
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp"
       ],
       "examples": [
         "Content/Script/Tutorials/12_CustomLoader.lua"
       ],
-      "gap": "Host searchers/preload differ from upstream Require relative paths/aliases/config.",
-      "acceptance": "Document resolution/cycle/cache contract and add alias/case/cook tests or explicit unsupported errors.",
+      "gap": "Host searchers/preload still differ from upstream Require config semantics. Delivered: relative-path mangling fixed (LoadFromFileSystem only rewrites dots for dotted module names, so './Foo' / 'Foo.lua' / explicit paths keep their dots), package.aliases redirects require on both backends via a searcher placed before preload (alias and target share one cached module instance, self-aliases raise instead of recursing), and the Luau-side FLuaEnv::Require now detects cyclic dependencies with a dedicated 'loading' upvalue - it names the module in the error and clears the marks on success and failure so one failed load cannot poison later requires. Plain Lua keeps its native require (no cycle detection). Upstream @alias config files, case sensitivity, cooked-build resolution and the full cache/reload contract remain unproven.",
+      "acceptance": "Document resolution/cycle/cache contract and add case/cook tests or explicit unsupported errors; LuaEnv.spec.cpp and LuauIntegration.spec.cpp cover alias redirection, self-alias rejection, cycle rejection and post-failure reuse. A real-run relative-path resolution case is still pending.",
       "upstream": [
         "Luau"
       ],
@@ -719,8 +727,8 @@
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp"
       ],
       "examples": [],
-      "gap": "Registry/uservalue placeholders and approximate upvalue identity.",
-      "acceptance": "Reject unsupported operations or implement exact subset; test closure identity and error cases.",
+      "gap": "Exact subset delivered and documented: debug.getregistry rejects explicitly instead of returning a misleading empty table; getuservalue is the documented nil-only subset HotReload.lua relies on; setuservalue returns false instead of a pretend success; upvalueid is value identity (exact for shared references, slot identity for scalars, never a scalar-aliasing proof). Backend-specific spec cases cover all four. Full Lua 5.x debug parity is not claimed.",
+      "acceptance": "Reject unsupported operations or implement exact subset; test closure identity and error cases. Both backends must keep their own exact semantics (Luau compat layer vs plain Lua native debug table).",
       "upstream": [
         "Luau"
       ],
@@ -739,8 +747,8 @@
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuauIntegration.spec.cpp"
       ],
       "examples": [],
-      "gap": "CRLF/path/read checks improved; modes/seek/errors/links/quotas remain incomplete; not Lua io parity.",
-      "acceptance": "Compare subset against Lua, including binary/large files, mutated handles, failure and root changes.",
+      "gap": "Delivered: CRLF/path/read checks, strict mode validation (r/w/a/+/b, unknown or empty modes refused), strict seek whence ('set'/'cur'/'end', clamped to the in-memory buffer), format lists for file:lines() and io.lines() (shared reader for 'a'/'l'/'L'/'n' and numeric counts), a lua.iomaxbytes quota on open/write/flush, writes that overwrite at __pos and advance the position (append mode still forces the end), an in-memory io.tmpfile() whose flush never touches disk, and an explicit io.popen() refusal. Still not Lua io parity: there is no OS stream or sparse file, hard links / symlinks are outside the capability set, and binary/large-file comparisons need a real run.",
+      "acceptance": "Compare subset against Lua, including binary/large files, mutated handles, failure and root changes; LuauIntegration.spec.cpp covers mode/seek rejection, multi-format iterators, overwrite and append positions, tmpfile, popen refusal, the byte quota and sandbox capability trimming.",
       "upstream": [
         "Luau"
       ],
@@ -758,11 +766,12 @@
       ],
       "tests": [
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaBackend.spec.cpp",
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaScriptCompat.spec.cpp",
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/ErrorHandling.spec.cpp"
       ],
       "examples": [],
-      "gap": "No language-level equivalence; source-only load mode and bytecode/version policy incomplete.",
-      "acceptance": "Publish migration contracts and explicit failures; verify int64, close alternatives and trusted bytecode.",
+      "gap": "Delivered: source-only load is now an explicit contract - load() validates its mode (pure 'b', unknown letters and empty modes fail with a clear error), accepts 't' (including Lua's default 'bt') and always passes 't' to luaL_loadbufferx, so bytecode is never fed to Luau's source compiler nor accepted on plain Lua. Still no language-level equivalence: int64/close/goto differences, bytecode version policy and trusted-bytecode loading need an execution-backed migration contract.",
+      "acceptance": "Publish the int64/close/goto migration contract and verify trusted bytecode; ErrorHandling.spec.cpp, LuaBackend.spec.cpp and LuaScriptCompat.spec.cpp assert mode rejection, 't'/'bt' acceptance and the env argument on both backends.",
       "upstream": [
         "Luau",
         "UnLua"
@@ -778,6 +787,7 @@
       "source": [
         "Plugins/UnLuaNova/Source/UnLuaNova/Public/LuaDebugService.h",
         "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaDebugService.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaBase.cpp",
         "Plugins/UnLuaNova/Source/UnLuaNovaEditor/Public/LuaDebugAdapter.h",
         "Plugins/UnLuaNova/Source/UnLuaNovaEditor/Private/LuaDebugAdapter.cpp"
       ],
@@ -788,8 +798,8 @@
       "examples": [
         "Content/Script/Luau/03_NativeDebug.lua"
       ],
-      "gap": "Command surface delivered: launch (explicit refusal), configurationDone, setExceptionBreakpoints, setFunctionBreakpoints, setVariable (real lua_setlocal on a paused frame), source (disk read with dotted module resolution), modules (static view) and honest capability bits. next/stepIn/stepOut now use stack depth through FLuaDebugService::BeginStep instead of one persistent single-step switch. Remaining: exception filters are acknowledged but not wired into the VM hook, setBreakpoints still reports verified=false, scopes/variables do not expand nested references, and packaged remote support/authorization/reconnect are unverified. Runtime evidence pending.",
-      "acceptance": "DebugAdapter.spec.cpp drives every new command through a real DAP session (per-command probe) and asserts capability bits; DebugService.spec.cpp covers breakpoints, stack, locals and evaluate. Break/step behaviour still needs a paused-frame multi-Env/coroutine run.",
+      "gap": "Full command surface delivered and verified against real state: setBreakpoints verifies each line against the resolved script's real line count; exception filters (raised/uncaught) are wired into the shared ReportLuaCallError handler, arm the line hook, stop with reason=exception and answer exceptionInfo; variables expands nested tables through registry-backed handles with depth/cycle/count budgets and releases them at the next stop or Detach. setFunctionBreakpoints now matches lua_getinfo('n') names (exact or '.'/':' qualified suffix) in the line hook with explicit verified=false for empty names; modules is a real package.loaded snapshot taken on the VM thread at attach and every stop, with startModule/moduleCount paging, instead of a static placeholder. launch is still an explicit refusal. Remaining: packaged remote support, authorization, reconnect and a paused-frame multi-Env/coroutine run are unverified. Runtime evidence pending.",
+      "acceptance": "DebugAdapter.spec.cpp drives every command through a real DAP session and asserts verified breakpoints, exception capabilities/filters, function-breakpoint verification/rejection, modules paging consistency and nested-variable failure paths; DebugService.spec.cpp covers filters, last-error recording, stop reason, nested expansion refusal, function-name dedup and the package.loaded snapshot. Break/step behaviour still needs a paused-frame multi-Env/coroutine run.",
       "upstream": [
         "slua",
         "Luau"
@@ -810,8 +820,8 @@
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Observability.spec.cpp"
       ],
       "examples": [],
-      "gap": "Sampled/measured attribution differs; tool wrapper requires initialized pinned VM tools.",
-      "acceptance": "Validate stack/yield/GC attribution, overhead and malformed dumps; produce an end-to-end example.",
+      "gap": "Sampled/measured attribution still differs: plain Lua pairs call/return for exact self time, Luau charges the interval between safe points to whatever was running (the GC flag is now forwarded to the profiler instead of hardcoded to 0). Delivered: lua.profiler trace on/off/reset/dump writes Luau's profile.out (relative dump paths now land under Saved/Profiling), the perfgraph.py wrapper documents an end-to-end flow and fails with an actionable submodule hint, and CN/EN console docs carry the collect -> dump -> render example. The renderer itself is upstream pinned code, so it needs the Luau submodule; stack/yield/GC attribution, overhead and malformed dumps still need execution evidence.",
+      "acceptance": "Validate stack/yield/GC attribution, overhead and malformed dumps; follow the end-to-end example in Docs/{CN,EN}/ConsoleCommand.md and render with Tools/LuauPerfgraph/perfgraph.py once the pinned submodule is initialized.",
       "upstream": [
         "slua",
         "Luau"
@@ -825,15 +835,17 @@
       "status": "partial",
       "priority": "P1",
       "source": [
-        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaCoroutineTracker.cpp"
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaCoroutineTracker.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaDeadLoopCheck.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/LuaVmHooks.h"
       ],
       "tests": [
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaDeadLoopCheck.spec.cpp",
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/ErrorHandling.spec.cpp"
       ],
       "examples": [],
-      "gap": "Detection exists; quotas and cancellation are not complete hostile-code controls.",
-      "acceptance": "Test timeout/reset/teardown, native callbacks and abandoned coroutine attribution.",
+      "gap": "Delivered: cancellation is correct and observable (GuardLeave disarms the guard that actually finished, nested guards take over the armed slot, GetTimeoutCount() counts real interruptions), plus a deterministic safe-point budget lua.maxsafepoints counted through FLuaVmHooks - LUA_MASKCOUNT instructions on plain Lua, Luau interrupts on Luau - with GetSafePointInterruptCount() and a guard that exists even when the polling thread is off. GC interrupts are passed through to listeners: the profiler uses the flag (no longer hardcoded to 0) while the watchdog and budget skip them rather than longjmp out of the collector. Still not a complete hostile-code control: no memory quota, native callback and abandoned-coroutine attribution unproven, and a Luau safe point is not an instruction.",
+      "acceptance": "Test timeout/reset/teardown, nested guards, native callbacks and abandoned coroutine attribution; LuaDeadLoopCheck.spec.cpp now also asserts the safe-point budget interrupts a real loop and does not cap the next call with a stale counter. Memory quotas remain out of scope.",
       "upstream": [
         "slua"
       ],
@@ -897,6 +909,7 @@
       "source": [
         "Tools/RunTests.ps1",
         "Tools/CrossProject/runner.py",
+        "Tools/CrossProject/metrics.py",
         "Tools/CrossProject/workload/unluanova/cases.lua",
         "Tools/CrossProject/workload/external/cases.lua"
       ],
@@ -904,13 +917,14 @@
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Benchmark.spec.cpp",
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/BenchmarkParity.spec.cpp",
         "Tools/tests/test_crossproject_runner.py",
-        "Tools/tests/test_crossproject_workloads.py"
+        "Tools/tests/test_crossproject_workloads.py",
+        "Tools/tests/test_crossproject_metrics.py"
       ],
       "examples": [
         "Content/Script/Tests/Benchmark/BP_UnLuaNovaBenchmark.lua",
         "Tools/CrossProject/README.md"
       ],
-      "gap": "Workload contract (revision 1), UnLuaNova workload, adaptive slua-unreal/FUnLua adapter, fail-closed alignment gate and 12 static regressions are delivered; the hardware-identity placeholders are gone and the runner rejects them. Still absent: same-machine runs in the two external projects, raw multi-run distributions and any cross-project conclusion.",
+      "gap": "Workload contract (revision 1), UnLuaNova workload, adaptive slua-unreal/FUnLua adapter, fail-closed alignment gate and 22 static regressions delivered. Tools/CrossProject/metrics.py now produces raw multi-run distributions (min/median/mean/p95/max/stddev plus per-run medians) for one aligned project/backend, refusing mismatched hardware, project, backend, case sets or empty samples. Still absent: same-machine runs in the two external projects, memory/startup/GC/code-size metrics and any cross-project conclusion.",
       "acceptance": "Same hardware/UE/config, identical 10-case sets and iteration counts (checked statically), raw multi-run distributions, memory/startup/GC/code-size metrics, and real logs from both external bindings before any comparison is published.",
       "upstream": [
         "slua",

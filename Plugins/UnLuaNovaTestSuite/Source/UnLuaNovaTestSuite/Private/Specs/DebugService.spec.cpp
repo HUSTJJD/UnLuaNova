@@ -79,6 +79,9 @@ void FDebugServiceSpec::Define()
         Debug.Continue();
         Debug.SetSingleStep(false);
         Debug.ClearBreakpoints();
+        Debug.SetFunctionBreakpoints(TArray<FString>());
+        Debug.SetExceptionFilters(TArray<FString>());
+        Debug.ClearException();
         Debug.Detach();
         Env.Reset();
         L = nullptr;
@@ -276,6 +279,91 @@ void FDebugServiceSpec::Define()
 #else
             TEST_FALSE(bQueried);
 #endif
+        });
+    });
+
+    Describe(TEXT("异常过滤器与嵌套变量"), [this]()
+    {
+        It(TEXT("只登记已知 filter，未知 filter 不会变成启用状态"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Debug = UnLuaNova::FLuaDebugService::Get();
+            TArray<FString> Filters;
+            Filters.Add(TEXT("uncaught"));
+            Filters.Add(TEXT("not-a-filter"));
+            Debug.SetExceptionFilters(Filters);
+            TEST_TRUE(Debug.GetExceptionFilters().Contains(FString(TEXT("uncaught"))));
+            TEST_FALSE(Debug.GetExceptionFilters().Contains(FString(TEXT("not-a-filter"))));
+
+            Debug.SetExceptionFilters(TArray<FString>());
+            TEST_TRUE(Debug.GetExceptionFilters().Num() == 0);
+        });
+
+        It(TEXT("异常信息可记录与清除，默认 stop reason 是 breakpoint"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Debug = UnLuaNova::FLuaDebugService::Get();
+            Debug.ClearException();
+            TEST_TRUE(Debug.GetLastException().IsEmpty());
+            TEST_TRUE(Debug.GetStopReason() == FString(TEXT("breakpoint")));
+
+            Debug.RecordException(FString(TEXT("boom")));
+            TEST_TRUE(Debug.GetLastException() == FString(TEXT("boom")));
+            Debug.ClearException();
+            TEST_TRUE(Debug.GetLastException().IsEmpty());
+        });
+
+        It(TEXT("未暂停时嵌套变量请求失败而不是返回貌似合理的空列表"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Debug = UnLuaNova::FLuaDebugService::Get();
+            Debug.Continue();
+            Debug.Detach();
+
+            TArray<UnLuaNova::FLuaDebugVariable> Children;
+            FString Error;
+            TEST_FALSE(Debug.GetChildren(999, Children, Error));
+            TEST_TRUE(Error.Contains(TEXT("no paused frame")));
+            TEST_TRUE(Children.Num() == 0);
+            TEST_TRUE(Debug.GetLocalsReferenceId() == 1);
+        });
+    });
+
+    Describe(TEXT("函数断点与真实模块快照"), [this]()
+    {
+        It(TEXT("空函数名被丢弃、重复名去重，清空后不再武装 hook"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Debug = UnLuaNova::FLuaDebugService::Get();
+            TArray<FString> Names;
+            Names.Add(TEXT("DoSomething"));
+            Names.Add(FString());
+            Names.Add(TEXT("DoSomething"));
+            Debug.SetFunctionBreakpoints(Names);
+            TEST_TRUE(Debug.GetFunctionBreakpoints().Num() == 1);
+            TEST_TRUE(Debug.GetFunctionBreakpoints().Contains(FString(TEXT("DoSomething"))));
+
+            Debug.SetFunctionBreakpoints(TArray<FString>());
+            TEST_TRUE(Debug.GetFunctionBreakpoints().Num() == 0);
+        });
+
+        It(TEXT("未 attach 时模块快照为空，不伪造模块"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            auto& Debug = UnLuaNova::FLuaDebugService::Get();
+            Debug.Detach();
+            TEST_TRUE(Debug.GetLoadedModules().Num() == 0);
+        });
+
+        It(TEXT("attach 时快照取自 package.loaded 的真实键"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            Env->DoString(TEXT("package.loaded['Spec.SyntheticModule'] = {}"));
+
+            auto& Debug = UnLuaNova::FLuaDebugService::Get();
+            Debug.Detach();
+            Debug.Attach(L);
+
+            const TArray<FString> Modules = Debug.GetLoadedModules();
+            TEST_TRUE(Modules.Contains(FString(TEXT("Spec.SyntheticModule"))));
+            TEST_FALSE(Modules.Contains(FString(TEXT("Spec.NeverLoaded"))));
+
+            Env->DoString(TEXT("package.loaded['Spec.SyntheticModule'] = nil"));
+            Debug.Detach();
         });
     });
 }

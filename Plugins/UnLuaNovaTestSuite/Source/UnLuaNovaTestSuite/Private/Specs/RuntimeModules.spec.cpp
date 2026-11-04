@@ -287,6 +287,26 @@ void FRuntimeModulesSpec::Define()
             )");
             TEST_TRUE(lua_toboolean(L, -1));
         });
+
+        It(TEXT("失效 owner 在广播前自动摘除，不必显式 UnbindOwner"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::RunChunk(L, R"(
+                local M = require('UnLuaNova.Event')
+                M.Clear()
+                local Owner = { Alive = true }
+                local N = 0
+                M.On("A", function() N = N + 1 end, Owner)
+                M.SetOwnerValidator(function(o) return o.Alive end)
+                M.Emit("A")
+                Owner.Alive = false
+                M.Emit("A")
+                local Result = N == 1 and M.Count("A") == 0
+                M.SetOwnerValidator(nil)
+                M.Clear()
+                return Result
+            )");
+            TEST_TRUE(lua_toboolean(L, -1));
+        });
     });
 
     Describe(TEXT("OOP"), [this]()

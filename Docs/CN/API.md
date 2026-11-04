@@ -200,8 +200,14 @@ FUnLuaNovaDelegates
     `UnLuaNova.API.RuntimeModules` 这条用例就是断言"文件在插件目录里"，防止再犯。
 
 !!! note "Timer 没有 .lua 文件"
-    `Timer` 是内建模块，由 `FLuaEnv::AddBuiltInLoader` 提供加载器（`require` 的第四个 searcher），
+    `Timer` 是内建模块，由 `FLuaEnv::AddBuiltInLoader` 提供加载器（`require` 的第五个 searcher），
     所以它在文件系统里找不到 —— 这是有意的：到期时间必须由 C++ 用世界时间算。
+
+!!! note "模块别名"
+    `package.aliases['短名'] = '真实模块名'` 会在所有 searcher 之前重定向 `require`，
+    两个后端行为一致：`require('短名')` 与 `require('真实模块名')` 拿到同一个缓存实例。
+    自引用别名直接报错；更长的别名环由 VM 的栈保护兜住。上游 Luau Require 的
+    `@alias` 配置文件语义不在此范围内。
 
 ## 宏定义
 以下宏定义可通过 `UnLuaNova.Build.cs` 修改：

@@ -37,7 +37,11 @@ namespace UnLuaNova
     class FLuaVmHooks
     {
     public:
-        using FListener = TFunction<void(lua_State* L, lua_Debug* Ar)>;
+        // GC is non-zero on Luau when the interrupt came from the collector. Listeners
+        // that can raise a Lua error must skip those (a longjmp out of the GC is not
+        // safe); the profiler needs the flag to attribute collector time correctly.
+        // It is always 0 on plain Lua, where lua_sethook has no such channel.
+        using FListener = TFunction<void(lua_State* L, lua_Debug* Ar, int GC)>;
 
         /**
          * Called when a (co)routine is created or destroyed.
@@ -125,7 +129,7 @@ namespace UnLuaNova
             TArray<FThreadEntry> ThreadListeners;
         };
 
-        static void Dispatch(lua_State* L, lua_Debug* Ar)
+        static void Dispatch(lua_State* L, lua_Debug* Ar, int GC)
         {
             FSlot* Slot = Get().Slots.Find(L);
             if (!Slot)
@@ -143,8 +147,14 @@ namespace UnLuaNova
                 if (Bit != 0 && (E.Mask & Bit) == 0)
                     continue;
 #endif
-                E.Fn(L, Ar);
+                E.Fn(L, Ar, GC);
             }
+        }
+
+        /** lua_sethook's callback has no GC flag; plain Lua always reports 0. */
+        static void OnHook(lua_State* L, lua_Debug* Ar)
+        {
+            Dispatch(L, Ar, 0);
         }
 
         void Refresh(lua_State* L, FSlot& Slot)
@@ -156,7 +166,12 @@ namespace UnLuaNova
             for (const FEntry& E : Slot.Listeners)
                 Mask |= E.Mask;
 
-            lua_sethook(L, bAny ? &Dispatch : nullptr, Mask, 0);
+            // LUA_MASKCOUNT never fires with a zero count. A listener that asks for it
+            // (the execution budget) needs count=1 to see every instruction; Dispatch
+            // filters by event bit, so the extra calls do not become extra samples for
+            // the line/call listeners sharing the slot.
+            const int Count = (Mask & LUA_MASKCOUNT) != 0 ? 1 : 0;
+            lua_sethook(L, bAny ? &OnHook : nullptr, Mask, Count);
 #else
             lua_callbacks(L)->interrupt = bAny ? &OnInterrupt : nullptr;
 #endif
@@ -165,8 +180,11 @@ namespace UnLuaNova
 #if !UNLUANOVA_HAS_HOOK_EVENT
         static void OnInterrupt(lua_State* L, int GC)
         {
-            (void)GC;
-            Dispatch(L, nullptr);
+            // GC is passed through rather than filtered here: the profiler uses it to
+            // separate collector time from script time. Listeners that may raise a Lua
+            // error (watchdog, execution budget) skip GC events themselves - a longjmp
+            // out of the collector is not safe.
+            Dispatch(L, nullptr, GC);
         }
 #endif
 

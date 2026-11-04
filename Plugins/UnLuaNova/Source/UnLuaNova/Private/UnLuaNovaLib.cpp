@@ -13,6 +13,7 @@
 #include "Registries/PropertyRegistry.h"
 
 #include "Interfaces/IPluginManager.h"
+#include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
 
 namespace UnLuaNova
@@ -619,5 +620,58 @@ namespace UnLuaNova
             lua_pop(L, 1);
         }
         lua_pop(L, 1);
+    }
+
+    int32 ApplyCapabilityPolicy(lua_State* L)
+    {
+        static auto CVar = IConsoleManager::Get().RegisterConsoleVariable(
+            TEXT("lua.sandboxdeny"),
+            TEXT(""),
+            TEXT("Comma-separated globals to remove before lua.sandbox freezes the global "
+                 "table, e.g. 'debug,io,socket,os'. Empty keeps the host defaults. "
+                 "Capability trimming, not a full untrusted-code permission model."),
+            ECVF_Default);
+
+        if (!L)
+            return 0;
+        const FString List(CVar->GetString());
+        if (List.IsEmpty())
+            return 0;
+
+        TArray<FString> Names;
+        List.ParseIntoArray(Names, TEXT(","), true);
+
+        // Same set RestoreTablesAfterSandbox has to un-freeze. Removing one of these
+        // would not harden anything: it would make lazy UE type registration, the Lua
+        // module index or require itself fail for every later script.
+        static const TCHAR* const Protected[] = {
+            TEXT("_G"), TEXT("package"), TEXT("require"), TEXT("Lua"), TEXT("UnLua"),
+            TEXT("UnLuaNova"), TEXT("UE"), TEXT("UE4")
+        };
+
+        int32 Removed = 0;
+        for (FString& Name : Names)
+        {
+            Name.TrimStartAndEndInline();
+            if (Name.IsEmpty())
+                continue;
+
+            bool bProtected = false;
+            for (const TCHAR* Keep : Protected)
+            {
+                if (Name == Keep)
+                {
+                    bProtected = true;
+                    break;
+                }
+            }
+            if (bProtected)
+                continue;
+
+            lua_pushnil(L);
+            lua_setglobal(L, TCHAR_TO_UTF8(*Name));
+            ++Removed;
+        }
+        return Removed;
     }
 }

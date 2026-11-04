@@ -187,10 +187,11 @@ namespace UnLuaNova
         lua_pop(L, 1);
         if (!bHasRequire)
         {
-            lua_newtable(L);                     // the module cache
-            lua_pushcclosure(L, &FLuaEnv::Require, 1);
+            lua_newtable(L);                     // upvalue 1: the module cache
+            lua_newtable(L);                     // upvalue 2: names currently loading
+            lua_pushcclosure(L, &FLuaEnv::Require, 2);
             lua_setglobal(L, "require");
-            // Nothing to pop here. lua_pushcclosure already took the cache as its upvalue
+            // Nothing to pop here. lua_pushcclosure already took both tables as upvalues
             // and lua_setglobal already took the closure, so the stack is back where it
             // started. The extra lua_pop that used to sit here pushed the stack top below
             // the frame base: on Luau lua_gettop() is frame-relative (L->top - L->base), so
@@ -224,6 +225,10 @@ namespace UnLuaNova
             lua_newtable(L);                     // [package, preload]
             lua_setfield(L, -2, "preload");      // package.preload = {}
 
+            // Module aliases, resolved by LoadFromAlias before any other searcher.
+            lua_newtable(L);                     // [package, aliases]
+            lua_setfield(L, -2, "aliases");      // package.aliases = {}
+
             // Directory separator, path separator, the substitution character in a path
             // template, the executable-directory placeholder, and the ignore mark - the
             // five lines plain Lua puts here.
@@ -247,12 +252,31 @@ namespace UnLuaNova
             lua_setglobal(L, "package");
         }
 
+        // Plain Lua already owns a package table, so the branch above did not run there.
+        // Ensure the alias table on both backends rather than only on the one where we
+        // had to build package ourselves.
+        lua_getglobal(L, "package");
+        if (lua_istable(L, -1))
+        {
+            lua_getfield(L, -1, "aliases");
+            const bool bHasAliases = lua_istable(L, -1) != 0;
+            lua_pop(L, 1);
+            if (!bHasAliases)
+            {
+                lua_newtable(L);
+                lua_setfield(L, -2, "aliases");
+            }
+        }
+        lua_pop(L, 1);
+
         // Now that package.searchers exists on both backends, the loaders can go into it -
-        // which is also what makes a searcher added later from script work.
-        AddSearcher(LoadFromPreload, 1);
-        AddSearcher(LoadFromCustomLoader, 2);
-        AddSearcher(LoadFromFileSystem, 3);
-        AddSearcher(LoadFromBuiltinLibs, 4);
+        // which is also what makes a searcher added later from script work. Aliases go
+        // first so a redirect is honoured before preload or the file system are asked.
+        AddSearcher(LoadFromAlias, 1);
+        AddSearcher(LoadFromPreload, 2);
+        AddSearcher(LoadFromCustomLoader, 3);
+        AddSearcher(LoadFromFileSystem, 4);
+        AddSearcher(LoadFromBuiltinLibs, 5);
 
         // Fill in what Luau leaves out - the debug functions (getupvalue, setupvalue,
         // upvalueid, ...) and load(). Has to happen before any script runs, because
@@ -284,6 +308,10 @@ namespace UnLuaNova
 #if UNLUANOVA_HAS_SANDBOX
             if (SandboxCVar->GetInt() != 0)
             {
+                // Trim capabilities while the globals are still writable: luaL_sandbox
+                // freezes the table a moment later, and a read-only _G cannot be edited.
+                UnLuaNova::ApplyCapabilityPolicy(L);
+
                 UNLUANOVA_SANDBOX(L);
 
                 // ...and then give back the tables it froze that we still write to. Without
@@ -981,6 +1009,60 @@ namespace UnLuaNova
         ManualObjectReference.Remove(Object);
     }
 
+    int FLuaEnv::AliasLoader(lua_State* L)
+    {
+        // require() calls this with the ORIGINAL module name; we deliberately ignore it.
+        // The nested require caches under the target, and the outer require caches the
+        // same value under the alias, so both names resolve to one module instance.
+        lua_getglobal(L, "require");
+        lua_pushvalue(L, lua_upvalueindex(1)); // target name
+        lua_call(L, 1, 1);
+        return 1;
+    }
+
+    int FLuaEnv::LoadFromAlias(lua_State* L)
+    {
+        const char* Name = lua_tostring(L, 1);
+        if (!Name)
+            return 0;
+
+        lua_getglobal(L, "package");
+        if (!lua_istable(L, -1))
+        {
+            lua_pop(L, 1);
+            return 0;
+        }
+
+        lua_getfield(L, -1, "aliases");
+        lua_remove(L, -2); // package
+        if (!lua_istable(L, -1))
+        {
+            lua_pop(L, 1);
+            return 0;
+        }
+
+        lua_pushvalue(L, 1);                 // module name
+        lua_rawget(L, -2);                   // aliases[name]
+        lua_remove(L, -2);                   // drop the aliases table
+        if (!lua_isstring(L, -1))
+        {
+            lua_pop(L, 1);
+            return 0;                        // no alias: let the next searcher try
+        }
+
+        // A self-alias would recurse forever without ever reaching the cache. Reject it
+        // here with a clear message; longer cycles are left to the VM's stack guard.
+        const char* Target = lua_tostring(L, -1);
+        if (FCStringAnsi::Strcmp(Name, Target) == 0)
+        {
+            lua_pop(L, 1);
+            return luaL_error(L, "require: alias '%s' points at itself", Name);
+        }
+
+        lua_pushcclosure(L, &FLuaEnv::AliasLoader, 1); // upvalue = target
+        return 1;
+    }
+
     int FLuaEnv::LoadFromPreload(lua_State* L)
     {
         // package.preload[name] - the standard way for a host (or a test) to supply a
@@ -1067,7 +1149,13 @@ namespace UnLuaNova
     int FLuaEnv::LoadFromFileSystem(lua_State* L)
     {
         FString FileName(UTF8_TO_TCHAR(lua_tostring(L, 1)));
-        FileName.ReplaceInline(TEXT("."), TEXT("/"));
+        // A dotted module name ("Foo.Bar") becomes a path. An explicit path must keep
+        // its dots: the old unconditional replace turned "./Foo" into "//Foo" and
+        // "Foo.lua" into "Foo/lua", so relative paths and file names never resolved.
+        const bool bIsPath = FileName.Contains(TEXT("/")) || FileName.Contains(TEXT("\\"))
+            || FileName.Contains(TEXT(":")) || FileName.EndsWith(TEXT(".lua"));
+        if (!bIsPath)
+            FileName.ReplaceInline(TEXT("."), TEXT("/"));
 
         auto& Env = *(FLuaEnv*)lua_touserdata(L, lua_upvalueindex(1));
         TArray<uint8> Data;
@@ -1160,8 +1248,9 @@ namespace UnLuaNova
 
     int FLuaEnv::Require(lua_State* L)
     {
-        // Upvalue 1 is the module cache - the same table published as package.loaded.
-        // The searchers carry their own FLuaEnv upvalue, so this one needs none.
+        // Upvalue 1 is the module cache (published as package.loaded); upvalue 2 is the
+        // set of names whose loader is running right now. The searchers carry their own
+        // FLuaEnv upvalue, so this closure needs no pointer to the environment.
         const int Name = 1;
 
         if (!lua_isstring(L, Name))
@@ -1173,6 +1262,17 @@ namespace UnLuaNova
         if (!lua_isnil(L, 3))
             return 1;                            // already loaded - do not run it again
         lua_pop(L, 2);                           // drop cache and the nil, back to the name
+
+        // A module that requires itself - directly or through a chain - used to recurse
+        // until the VM stack guard fired, with no indication of which module looped.
+        // Checked after the cache so a loader that deliberately seeds package.loaded
+        // still works, and only for our require(): plain Lua keeps its native behaviour.
+        lua_pushvalue(L, lua_upvalueindex(2));   // 2: loading
+        lua_pushvalue(L, Name);                  // 3: name
+        lua_rawget(L, 2);                        // 3: loading[name]
+        if (!lua_isnil(L, 3))
+            return luaL_error(L, "require: cyclic dependency involving '%s'", lua_tostring(L, Name));
+        lua_pop(L, 2);                           // flag and loading table
 
         // Walk package.searchers the way plain Lua's require does, rather than a private
         // list of the same loaders. Two reasons: the order then stays whatever AddSearcher
@@ -1201,10 +1301,27 @@ namespace UnLuaNova
         if (!lua_isfunction(L, Chunk))
             return luaL_error(L, "module '%s' not found", lua_tostring(L, Name));
 
+        // Mark before running the loader so a nested require of the same name is caught.
+        lua_pushvalue(L, lua_upvalueindex(2));   // loading
+        lua_pushvalue(L, Name);
+        lua_pushboolean(L, 1);
+        lua_rawset(L, -3);
+        lua_pop(L, 1);                           // loading
+
         // Run the chunk with the module name as its single argument, so one chunk can be
         // shared by several names the way Lua's own loaders are.
         lua_pushvalue(L, Name);                  // Chunk+1: name
-        if (lua_pcall(L, 1, 1, 0) != 0)
+        const int Status = lua_pcall(L, 1, 1, 0);
+
+        // Clear the mark on success AND on error: one module that raised must not poison
+        // every later require of the same name with a false "cyclic dependency".
+        lua_pushvalue(L, lua_upvalueindex(2));
+        lua_pushvalue(L, Name);
+        lua_pushnil(L);
+        lua_rawset(L, -3);
+        lua_pop(L, 1);
+
+        if (Status != 0)
             return luaL_error(L, "error loading module '%s': %s", lua_tostring(L, Name), lua_tostring(L, -1));
 
         // Cache the result. Lua stores true for a module that returns nothing, so a second
