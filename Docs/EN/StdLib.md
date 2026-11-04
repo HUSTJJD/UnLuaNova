@@ -137,6 +137,8 @@ Timer.IsValid(Handle)
 Timer.ClearAll(WorldContext)
 local Seconds = Timer.Time(bUnscaled, WorldContext)
 local N = Timer.Count(WorldContext)
+local Text = Timer.Describe(Handle)             -- registration site + state, nil if invalid
+local All = Timer.Diagnostics(WorldContext)     -- snapshot for the calling Env only
 ```
 
 | Parameter | Meaning |
@@ -158,6 +160,30 @@ Interval and delay must be finite nonnegative numbers representable as floats; b
 - One-shots are removed before invocation. Cancelling/pausing another due callback takes effect immediately; nested ticks cannot reenter.
 - Pause preserves remaining delay. Repeating timers run at most once per frame, without replaying missed periods.
 - Scaled timers stop while the World is paused; unscaled timers use real world time. Callback errors are logged and other tasks continue.
+
+### Registration-site diagnostics
+
+`Timer.Set` records the Lua `source` / `currentline` via `lua_getinfo` together with the
+owning `DescribeEnv()` label (Env index, name and main-state pointer). Callback errors carry
+the same suffix, so in a multi-Env or multi-PIE session the log says which line of which
+script in which environment failed.
+
+| API | Meaning |
+|---|---|
+| `Timer.Describe(Handle)` | One line: `handle=N source=... line=N env=... loop/… unscaled/… paused/… remaining=…s`; `nil` when the handle is gone or belongs to another Env |
+| `Timer.Diagnostics(WorldContext)` | Table keyed by handle with `handle` / `source` / `line` / `env` / `loop` / `unscaled` / `paused` / `remaining`. **Only the calling Env's timers** are returned; handles a script cannot control are not exposed |
+
+```lua
+for Handle, Info in pairs(Timer.Diagnostics()) do
+    print(Handle, Info.source, Info.line, Info.env, Info.remaining)
+end
+```
+
+Lua call errors in `UnLuaNovaBase.cpp` use the same `DescribeEnv()` label, so logs can be
+joined on `env=...`. Diagnostics are observation only - they never change scheduling - and
+the site is snapshotted at registration, so after a hot reload it still points at the
+original source line. The corresponding `UnLuaNova.API.Timer` specs are source-only and
+await maintainer build and execution.
 
 Example: [TimerLifecycle.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Examples/TimerLifecycle.lua). Regression entry: `UnLuaNova.API.Timer`. Multi-PIE, world pause/time dilation and packaged behavior still require execution.
 
@@ -239,7 +265,7 @@ thing); lifetime hooks (that is a project framework decision).
 | `UnLuaNova.Vector` | Pure-Lua `FVector` arithmetic (no crossing, saves call overhead on hot paths) |
 | `UnLuaNova.Buffer` | Buffers (native on the Luau backend, see `UnLuaNova.HasFeature('buffer')`) |
 | `UnLuaNova.Input` / `UnLuaNova.EnhancedInput` | Input wrappers |
-| `UnLuaNova.HotReload` | Hot reload scripts |
+| `UnLuaNova.HotReload` | Hot reload: two-phase commit with snapshot rollback; `reload()` returns `ok, err` and a failed run can be retried after fixing the source (best-effort, not a transaction) |
 
 Availability and capabilities always go through `UnLuaNova.HasFeature`:
 

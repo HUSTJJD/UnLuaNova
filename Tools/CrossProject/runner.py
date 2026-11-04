@@ -41,6 +41,20 @@ REQUIRED_META = ("project", "backend", "engine", "machine", "cpu", "config",
 
 WORKLOAD_REVISION = "1"
 
+# Optional non-time metrics (revision 1 extension). These travel on their own
+# #metric lines, NOT #case lines, so the case-set / iteration alignment above and
+# the static contract in Tools/tests/test_crossproject_workloads.py stay untouched.
+# A metric's unit is part of its contract: an unknown or mismatched unit is refused,
+# never silently reinterpreted. This block is validated only when a run carries it.
+VALID_UNITS = ("kb", "us", "bytes")
+METRIC_UNITS = {
+    "memory.peak_kb": "kb",
+    "startup.load_us": "us",
+    "gc.pause_us": "us",
+    "code_size.bytes": "bytes",
+}
+DEFAULT_METRICS = ("memory.peak_kb", "startup.load_us", "gc.pause_us", "code_size.bytes")
+
 # A template value or an "unknown" is not a machine identity. Accepting one would make
 # two unrelated runs look aligned, which is exactly the failure mode this script exists
 # to prevent (the UnLuaNova workload used to ship literal "FILL-ME" strings).
@@ -61,6 +75,7 @@ def parse_log(path):
 
         meta = {}
         cases = []
+        metrics = []
         index += 1
         while index < len(lines) and lines[index].strip() != END:
             line = lines[index].strip()
@@ -78,9 +93,18 @@ def parse_log(path):
                         key, _, value = token.partition("=")
                         fields[key.strip()] = value.strip()
                 cases.append(fields)
+            elif line.startswith("#metric "):
+                # Separate line type: no Name=/Iterations= tokens, so CASE_RE cannot
+                # mistake a metric for a case. Values contain no spaces.
+                fields = {}
+                for token in line[len("#metric "):].split():
+                    if "=" in token:
+                        key, _, value = token.partition("=")
+                        fields[key.strip()] = value.strip()
+                metrics.append(fields)
 
         if cases:
-            runs.append({"meta": meta, "cases": cases})
+            runs.append({"meta": meta, "cases": cases, "metrics": metrics})
 
     return runs
 
@@ -99,6 +123,16 @@ def normalize(run, source):
             "Samples": samples,
         })
 
+    # Optional non-time metrics. Kept as raw strings here; metrics.py owns the
+    # fail-closed numeric validation (including the 'unavailable' sentinel).
+    metrics = []
+    for raw in run.get("metrics", []):
+        metrics.append({
+            "Name": raw.get("name", "?"),
+            "Value": raw.get("value", ""),
+            "Unit": raw.get("unit", ""),
+        })
+
     ordered = [
         ("Project", meta.get("project", "?")),
         ("Backend", meta.get("backend", "?")),
@@ -111,6 +145,7 @@ def normalize(run, source):
         ("MeasuredUtc", meta.get("measured_utc", "?")),
         ("SourceLog", source),
         ("Cases", cases),
+        ("Metrics", metrics),
     ]
     return dict(ordered)
 
@@ -156,6 +191,46 @@ def check_alignment(runs):
             if extra:
                 problems.append("%s/%s has extra cases: %s"
                                 % (project, backend, ", ".join("%s(%d)" % c for c in extra)))
+
+    # Optional non-time metric alignment. Triggered ONLY when at least one run carries
+    # a metrics block; logs without it keep the exact previous behaviour. A run that
+    # mixes "has metrics" with "has none" is treated as missing metrics (fail-closed).
+    if any(run.get("metrics") for run in runs):
+        expected_names = set(DEFAULT_METRICS)
+        reference_names = None
+        for run in runs:
+            label = "%s/%s" % (run["meta"].get("project", "?"),
+                               run["meta"].get("backend", "?"))
+            by_name = {}
+            for entry in run.get("metrics") or []:
+                name = entry.get("name")
+                if not name:
+                    problems.append("%s has a #metric line without name=" % label)
+                    continue
+                if name in by_name:
+                    problems.append("%s has duplicate metric '%s'" % (label, name))
+                by_name[name] = entry
+            names = set(by_name.keys())
+            for name in DEFAULT_METRICS:
+                if name not in by_name:
+                    problems.append("%s is missing metric '%s'" % (label, name))
+            for name in sorted(names - expected_names):
+                problems.append("%s has unexpected metric '%s'" % (label, name))
+            if reference_names is None:
+                reference_names = names
+            elif names != reference_names:
+                problems.append("%s has a different metric set than the first run" % label)
+            for name in DEFAULT_METRICS:
+                entry = by_name.get(name)
+                if entry is None:
+                    continue
+                unit = entry.get("unit")
+                if unit not in VALID_UNITS:
+                    problems.append("%s metric '%s' has unknown unit %r; expected one of %s"
+                                    % (label, name, unit, "/".join(VALID_UNITS)))
+                elif unit != METRIC_UNITS[name]:
+                    problems.append("%s metric '%s' uses unit %r, expected %r"
+                                    % (label, name, unit, METRIC_UNITS[name]))
 
     return problems
 
@@ -216,6 +291,11 @@ TEMPLATE = """#UNLUANOVA_BENCH_BEGIN
 #meta project=UnLuaNova backend=Luau engine=5.8.3 machine=<host> cpu=<cpu> config=Development carrier=Editor workload_revision=1 measured_utc=<iso>
 #case name=VM.Arithmetic iterations=200000 peropus=0.005936 samples=0.0059,0.0060,0.0059,0.0059,0.0060
 #case name=UE.CallEmpty iterations=20000 peropus=0.459005 samples=0.459,0.460,0.458,0.459,0.459
+# optional non-time metrics (revision 1 extension); unavailable means "could not measure", never 0
+#metric name=memory.peak_kb value=12345.0 unit=kb
+#metric name=startup.load_us value=812.0 unit=us
+#metric name=gc.pause_us value=2048.0 unit=us
+#metric name=code_size.bytes value=98765 unit=bytes
 #UNLUANOVA_BENCH_END
 """
 

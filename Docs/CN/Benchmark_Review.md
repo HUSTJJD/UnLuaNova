@@ -112,3 +112,24 @@ Iris / push model、结构体数组与 DataTable 行拷贝的内存专项，以�
 阶段失败并连锁阻塞证据阶段；当前工作树未提交的 Net 源码改动使 2 个 `UnLuaNova.API.Net.*`
 用例失败，属需要关闭的真实回归。发布前需冻结工作树、同步能力矩阵，并在无并发 UE 构建的
 环境重跑完整 Release。当前状态见[版本说明](ReleaseNotes.md)。
+
+
+## 第六轮源码补齐（源码已写，未编译、未执行）
+
+上表中「注册点诊断尚缺」「热重载失败回滚」「内存配额缺失」等描述是 2026-11-03 基线轮的
+历史结论，现已在**源码与用例层**补齐，但没有产生任何新的执行证据：
+
+- `WATCHDOG`：per-Env allocator 内存配额（`lua.maxmemorykb` / `lua.memquota`），超限抛可恢复
+  Lua 错误；释放不受限；自定义 allocator 不纳入配额。
+- `LUAU-REQUIRE`：最终 `_G.require` 包装让两个后端都有循环检测，`unrequire` /
+  `reloadmodule` / `package.resolution()` 明确缓存与解析契约，`@alias` 配置文件明确拒绝。
+- `RUNTIME-RELOAD`：两阶段提交 + 快照回滚、`ok, err`、失败不推进 mtime；明确 best-effort 而非事务。
+- `RUNTIME-TIMER` / `LIFE-ENVS`：注册点（source / line / Env 标签）与 `Timer.Describe` /
+  `Timer.Diagnostics`；`DescribeEnv()` 统一 Lua 调用错误与 Timer 回调错误的归属标签；
+  诊断只返回当前 Env 的 timer。
+- `PERFORMANCE`：`#metric` 非时间指标、fail-closed 对齐门禁，30 项新增工具回归（合计 130 项
+  Python 测试通过）。
+
+本轮**没有编译、没有跑 UE 自动化、没有跑 Release**。40 条 `verification` 仍为
+`pending-runtime`，`release-status` 仍 `not-passed`；上表各行的专项缺口（多 PIE、世界暂停/时间膨胀、
+Iris / Cooked、跨项目同机对照、完整 conformance 等）不因源码补齐而关闭。

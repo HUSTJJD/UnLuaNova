@@ -107,7 +107,43 @@ bool UUnLuaNovaTimerSubsystem::IsValid(int32 Handle) const
     return IndexOf(Handle) != INDEX_NONE;
 }
 
-int32 UUnLuaNovaTimerSubsystem::Add(lua_State* InState, int32 CallbackRef, float Interval, bool bLoop, float Delay, bool bUnscaled)
+FString UUnLuaNovaTimerSubsystem::DescribeEntry(int32 Handle) const
+{
+    const int32 Index = IndexOf(Handle);
+    if (Index == INDEX_NONE)
+        return FString();
+
+    const FEntry& Entry = Timers[Index];
+    return FString::Printf(TEXT("handle=%d %s loop=%d unscaled=%d paused=%d remaining=%.3fs"),
+        Handle, *Entry.Site.Describe(), Entry.bLoop ? 1 : 0,
+        Entry.bUnscaled ? 1 : 0, Entry.bPaused ? 1 : 0,
+        FMath::Max(0.0, Entry.Next - Now(Entry.bUnscaled)));
+}
+
+TArray<FUnLuaNovaTimerDiagnostic> UUnLuaNovaTimerSubsystem::GetDiagnostics(lua_State* ForState) const
+{
+    TArray<FUnLuaNovaTimerDiagnostic> Out;
+    for (const FEntry& Entry : Timers)
+    {
+        if (Entry.State != ForState)
+            continue;
+
+        FUnLuaNovaTimerDiagnostic D;
+        D.Handle = Entry.Handle;
+        D.Source = Entry.Site.Source;
+        D.Line = Entry.Site.Line;
+        D.EnvLabel = Entry.Site.EnvLabel;
+        D.bLoop = Entry.bLoop;
+        D.bUnscaled = Entry.bUnscaled;
+        D.bPaused = Entry.bPaused;
+        D.RemainingSeconds = FMath::Max(0.0, Entry.Next - Now(Entry.bUnscaled));
+        Out.Add(D);
+    }
+    return Out;
+}
+
+int32 UUnLuaNovaTimerSubsystem::Add(lua_State* InState, int32 CallbackRef, float Interval, bool bLoop, float Delay, bool bUnscaled,
+                                   const FUnLuaNovaTimerRegisterSite& Site)
 {
     UWorld* World = GetWorld();
     auto* Env = UnLuaNova::FLuaEnv::FindEnv(InState);
@@ -128,6 +164,7 @@ int32 UUnLuaNovaTimerSubsystem::Add(lua_State* InState, int32 CallbackRef, float
     Entry.bLoop = bLoop;
     Entry.bUnscaled = bUnscaled;
     Entry.Next = Now(bUnscaled) + FMath::Max(0.0, static_cast<double>(Delay));
+    Entry.Site = Site;
 
     Timers.Add(Entry);
     TimerOwners.Add(Entry.Handle, this);
@@ -241,8 +278,12 @@ void UUnLuaNovaTimerSubsystem::Tick(float DeltaTime)
             if (lua_pcall(Item.State, 0, 0, 0) != 0)
             {
                 const char* Message = lua_tostring(Item.State, -1);
-                UE_LOG(LogUnLuaNova, Error, TEXT("UnLuaNova.Timer 回调出错：%s"),
-                    Message ? UTF8_TO_TCHAR(Message) : TEXT("(no message)"));
+                // The callback's own stack cannot tell us who registered it. Site is a
+                // snapshot taken at registration, so the log names the real script line
+                // and the owning Env even after the caller's frame is long gone.
+                UE_LOG(LogUnLuaNova, Error, TEXT("UnLuaNova.Timer 回调出错：%s [%s]"),
+                    Message ? UTF8_TO_TCHAR(Message) : TEXT("(no message)"),
+                    *Item.Site.Describe());
                 lua_pop(Item.State, 1);
             }
         }

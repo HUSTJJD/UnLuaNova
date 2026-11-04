@@ -64,12 +64,32 @@ namespace UnLuaNova
         static int HotReload(lua_State* L)
         {
 #if UNLUANOVA_WITH_HOT_RELOAD
-            if (luaL_dostring(L, "require('UnLuaNova.HotReload').reload()") != 0)
+            // HotReload.lua's M.reload() now returns (ok, err) and only advances file
+            // timestamps after a successful commit. Surface that boolean instead of
+            // always looking like a success: callers can choose to assert it, and callers
+            // that ignore the return value keep behaving exactly as before.
+            if (luaL_loadstring(L, "return require('UnLuaNova.HotReload').reload()") != 0)
             {
                 LogError(L);
+                lua_pushboolean(L, 0);
+                return 1;
             }
+            if (lua_pcall(L, 0, 2, 0) != 0)
+            {
+                LogError(L);
+                lua_pushboolean(L, 0);
+                return 1;
+            }
+            const bool bOk = lua_toboolean(L, -2) != 0;
+            lua_settop(L, 0);
+            lua_pushboolean(L, bOk ? 1 : 0);
+            return 1;
+#else
+            // Honest answer when the feature is compiled out, rather than an empty
+            // return that reads as "nothing happened but nothing failed" either.
+            lua_pushboolean(L, 0);
+            return 1;
 #endif
-            return 0;
         }
 
         static int Ref(lua_State* L)

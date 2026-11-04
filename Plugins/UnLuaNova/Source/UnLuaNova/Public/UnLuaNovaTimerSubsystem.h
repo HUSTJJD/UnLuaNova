@@ -20,6 +20,40 @@ struct lua_State;
 namespace UnLuaNova { class FLuaEnv; }
 
 /**
+ * Where a timer was registered from, plus which VM owns it. Two pieces of diagnostic
+ * attribution that used to be missing: an error log only said "callback failed", with no
+ * way to find the registering script line or tell three PIE envs apart.
+ *
+ * Captured at registration, not at failure: by the time a callback raises, the Lua stack
+ * is the callback's, not the caller's.
+ */
+struct FUnLuaNovaTimerRegisterSite
+{
+    FString Source = TEXT("?");
+    int32 Line = INDEX_NONE;
+    FString EnvLabel;
+
+    FString Describe() const
+    {
+        return FString::Printf(TEXT("%s:%d %s"), *Source, Line,
+            EnvLabel.IsEmpty() ? TEXT("env=<unknown>") : *EnvLabel);
+    }
+};
+
+/** A snapshot for Timer.Diagnostics(); never carries a live lua_State or registry ref. */
+struct FUnLuaNovaTimerDiagnostic
+{
+    int32 Handle = INDEX_NONE;
+    FString Source;
+    int32 Line = INDEX_NONE;
+    FString EnvLabel;
+    bool bLoop = false;
+    bool bUnscaled = false;
+    bool bPaused = false;
+    double RemainingSeconds = 0.0;
+};
+
+/**
  * 脚本计时器：把"多久之后回调一次"这件事交给引擎时间，而不是 Lua 自己数。
  *
  * 为什么值得做成 C++ 而不是 Lua 表：不是性能，是**正确性**。脚本侧手写计时器几乎必然踩这四件事：
@@ -55,7 +89,18 @@ public:
      *
      * @return 句柄；INDEX_NONE 表示失败（无世界 / 无 VM）
      */
-    int32 Add(lua_State* InState, int32 CallbackRef, float Interval, bool bLoop, float Delay, bool bUnscaled);
+    int32 Add(lua_State* InState, int32 CallbackRef, float Interval, bool bLoop, float Delay, bool bUnscaled,
+              const FUnLuaNovaTimerRegisterSite& Site = FUnLuaNovaTimerRegisterSite());
+
+    /** One-line human-readable registration site for a handle; empty when unknown. */
+    FString DescribeEntry(int32 Handle) const;
+
+    /**
+     * Diagnostic snapshot for exactly one environment's timers. Timers from another Env
+     * are deliberately excluded - a diagnostics call must not become a way to observe
+     * handles the caller cannot Clear or Pause (see Find()).
+     */
+    TArray<FUnLuaNovaTimerDiagnostic> GetDiagnostics(lua_State* ForState) const;
 
     /** 移除并释放回调引用。返回是否真的移到了。 */
     bool Remove(int32 Handle);
@@ -90,6 +135,8 @@ private:
         bool bLoop = false;
         bool bUnscaled = false;
         bool bPaused = false;
+        /** Registration call site and owning Env, for error logs and Diagnostics(). */
+        FUnLuaNovaTimerRegisterSite Site;
     };
 
     int32 IndexOf(int32 Handle) const;

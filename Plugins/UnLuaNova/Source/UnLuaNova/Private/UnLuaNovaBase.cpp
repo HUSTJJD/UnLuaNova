@@ -15,6 +15,7 @@
 #include "LowLevel.h"
 #include "LuaCore.h"
 #include "LuaDebugService.h"
+#include "LuaEnv.h"
 #include "UnLuaNovaDelegates.h"
 #include "ObjectReferencer.h"
 #include "UnLuaNovaModule.h"
@@ -160,6 +161,11 @@ namespace UnLuaNova
         // `exceptionInfo` and exception filters see the real error object.
         FLuaDebugService::Get().RecordException(L);
 
+        // In a multi-Env session (listen server + PIE clients) an error log without an
+        // owner is not actionable: three VMs can be running the same script. The label
+        // is appended rather than prefixed so log-text assertions keep matching.
+        const FString Owner = DescribeEnv(L);
+
         if (FUnLuaNovaDelegates::ReportLuaCallError.IsBound())
         {
             return FUnLuaNovaDelegates::ReportLuaCallError.Execute(L);      // developers can provide error reporter themselves
@@ -171,7 +177,7 @@ namespace UnLuaNova
             const char *ErrorString = lua_tostring(L, -1);
             luaL_traceback(L, L, ErrorString, 1);
             ErrorString = lua_tostring(L, -1);
-            UE_LOG(LogUnLuaNova, Error, TEXT("Lua error message: %s"), UTF8_TO_TCHAR(ErrorString));
+            UE_LOG(LogUnLuaNova, Error, TEXT("Lua error message: %s [%s]"), UTF8_TO_TCHAR(ErrorString), *Owner);
         }
         else if (Type == LUA_TTABLE)
         {
@@ -181,7 +187,7 @@ namespace UnLuaNova
             while (lua_next(L, -2) != 0)
             {
                 const char *ErrorString = lua_tostring(L, -1);
-                UE_LOG(LogUnLuaNova, Error, TEXT("Lua error message %d : %s"), MessageIndex++, UTF8_TO_TCHAR(ErrorString));
+                UE_LOG(LogUnLuaNova, Error, TEXT("Lua error message %d : %s [%s]"), MessageIndex++, UTF8_TO_TCHAR(ErrorString), *Owner);
                 lua_pop(L, 1);
             }
         }

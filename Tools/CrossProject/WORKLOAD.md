@@ -56,3 +56,47 @@
 
 不一致时 runner 打印原因并**退出码 1**，不会给你一张看起来能用的表。
 "（因为少跑了慢用例）所以看起来更快"是这类对比最常见的自欺方式，所以宁可拒绝。
+
+## 非时间指标（revision 1 的可选扩展字段）
+
+上面 10 个 `#case` 只量时间。PERFORMANCE 还要求 memory / startup / GC / code-size 四个
+**非时间指标**。它们走独立的 `#metric` 行，**不是 `#case`**：行内不含 `Name =` /
+`Iterations =`，所以既不会进入 `CASE_RE` 的用例集，也不参与上面的用例名 / 迭代数对齐。
+
+这是**可选扩展**：`Metrics` 字段可以整块缺失（旧日志），此时 runner 与 metrics.py 的
+默认行为完全不变；因为不改动 revision 1 的用例集与时间契约，**不 bump revision**，
+`WORKLOAD_REVISION` 保持 `1`。要强制采集时用 `metrics.py --require-metrics`。
+
+四项定义（名字与单位都是契约的一部分）：
+
+- `memory.peak_kb`：单位 `kb`。Lua 堆观测峰值，用 `collectgarbage("count")` 在预热 /
+  各用例之间多次采样取最大值；纯 VM 采集，不经过任何引擎绑定钩子。
+- `startup.load_us`：单位 `us`。启动阶段「加载并执行一段初始化 Lua chunk」的 CPU 时间，
+  用 `os.clock()` 前后差 × 1e6；纯 VM 采集。
+- `gc.pause_us`：单位 `us`。全量 `collectgarbage("collect")` 的平均停顿，用 `os.clock()`
+  前后差 × 1e6 / 轮数；纯 VM 采集。
+- `code_size.bytes`：单位 `bytes`。工作负载脚本自身的字节数；只有能从
+  `debug.getinfo` 拿到真实文件路径并读回源码时才成立。
+
+行格式（值不含空格，`#case` 循环之后、`#UNLUANOVA_BENCH_END` 之前打印）：
+
+```
+#metric name=<名字> value=<值> unit=<单位>
+```
+
+单位枚举只有 `kb` / `us` / `bytes`，且每个指标的单位固定（见上）；**未知单位或单位
+串位一律 fail-closed 拒绝**，不会替你换算。
+
+拒绝规则（fail-closed，`metrics.py` 与 runner 的对齐检查共同执行）：
+
+- 拿不到就写 `value=unavailable`，**绝不写 0、空串或任何占位数值**。`unavailable`
+  不参与数值分布，也不会被当成 0。
+- 缺项、指标集跨轮不一致、单位未知 / 与指标不符 / 跨轮漂移、非有限数（NaN / inf）、
+  负值、非数值且不是 `unavailable` —— 一律拒绝，`metrics.py` 抛 `ValueError` /
+  `main` 返回码 1，而不是产出一张好看但无意义的表。
+- `metrics.py` 默认**不强制**这四项；只有 `--require-metrics` 开启时才要求每次运行
+  都带齐，并对多轮做 min / median / mean / p95 / max / stddev 分布。
+
+外部绑定（slua-unreal / FUnLua）的脚本常托管在 UE 资产而非真实文件系统，
+`code_size.bytes` 通常拿不到，此时按规则输出 `value=unavailable unit=bytes`；
+其余三项是纯 VM 采集，与 UnLuaNova 侧同构。详见 `README.md`。

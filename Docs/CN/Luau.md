@@ -13,7 +13,7 @@
 | 原生编译 | CodeGen 显式开启，可按模块筛选 | 目标架构与可执行内存策略有限制；计数是请求数，不等于成功函数数；需验证断点协作 |
 | 调试/诊断 | 原生断点/单步、Profiler、内存分类、协程统计、GC 调节 | 分类统计是分配 churn，不等于分类存活字节；远程/打包验收未完成 |
 | 类型工具 | 编辑器导出声明、外部 luau-lsp | Analysis/Config 不作为游戏运行时类型检查器；声明完整性与跳过行为必须验收 |
-| 模块加载 | 自有 loader 与 package.searchers/preload/aliases | 相对路径解析已修正、`package.aliases` 双后端重定向已交付；不等同于上游 Require 的 `@alias` 配置文件语义；path/cpath 不是自动加载策略 |
+| 模块加载 | 自有 loader、package.searchers/preload/aliases，双后端统一的最终 `require` 包装（循环检测），`unrequire` / `reloadmodule` 与 `package.resolution()` | 上游 `@alias` 配置文件（`.luaurc`）明确拒绝；大小写敏感、无自动大小写回退；cooked 构建需要散脚本 staged 到工程根目录；path/cpath 不是自动加载策略 |
 
 上游 [兼容说明](https://luau.org/compatibility/) 与 [沙盒说明](https://luau.org/sandbox/) 是语义边界的来源；本插件补充 API 不改变 Luau 的全部语言语义。
 
@@ -27,12 +27,40 @@
 | debug/upvalue | 精确子集：`getregistry` 明确拒绝，`getuservalue` 恒 nil，`setuservalue` 返回 false，`upvalueid` 是值身份（不能证明标量别名）；不承诺 Lua 5.x debug 全兼容 |
 | load/字节码 | 宿主只编译源码：`load` 的 mode 现在显式校验，纯 `b`、未知字母与空模式都明确失败，`t`（含 `bt`）走源码编译并以 `"t"` 交给加载器；不接受字节码输入，字节码 / 版本兼容不承诺 |
 | io / os | 可选的 rooted 缓冲文件 io：模式 / seek / lines 格式校验、`lua.iomaxbytes` 配额、按 `__pos` 覆盖写、`io.tmpfile()` 内存句柄；`io.popen` 明确拒绝，链接 / 进程 / 原生流不在能力集内 |
-| package | 提供 preload / searchers / aliases 子集与双后端一致的 require 缓存；Luau 后端的自有 `require` 会检测循环依赖并明确报错（失败后清理加载标记，名字不会被毒化），别名自环同样拒绝；不提供任意原生动态库加载保证；上游 Require 的 config / 路径别名语义仍不承诺 |
+| package | 提供 preload / searchers / aliases 子集与双后端一致的 require 缓存；**最终 `_G.require` 被统一包装**（在 HotReload 替换 `require` 之后安装），因此 Luau 自有 require、plain Lua 原生 require、`FLuaEnv::Require` 与热重载后的替换版本都有循环依赖检测，明确报 `cyclic dependency involving 'X'` 且失败后清理标记、不毒化后续 require；别名自环同样拒绝；`unrequire` / `reloadmodule` 提供显式缓存契约；不提供任意原生动态库加载保证；上游 Require 的 config / `@alias` 语义明确拒绝而不是静默降级 |
 | yield / coroutine | 跨 C/元方法边界受 VM 限制；宿主回调、Latent、Timer 需分别验证 |
 | GC | 增量 GC 与预算调度；不是 Lua 分代 GC，也不是多线程 GC |
 | 迭代 | Luau 使用 __iter；与 __pairs / __ipairs 及容器增删期间行为分别测试 |
 
 VM dtor 只能销毁 C++ 状态，不能操作 Lua 栈。使用 LONGJMP 的路径还需要检查 Lua error/yield 是否跳过 C++ 临时对象清理。安全相关阻塞见 [审计](Benchmark_Review.md)。
+
+## 模块加载与卸载契约
+
+宿主在 `UnLuaNovaLib::Open()` 之后包装**最终**的 `_G.require`，而不是包装某个 searcher 返回的
+chunk：这样既不改变 `package.searchers` 的签名，也不会破坏 `HotReload.lua` 对 chunk 做的
+`setfenv` / `_ENV` 替换，同时覆盖两个后端的原生 `require`、`FLuaEnv::Require` 和 HotReload
+安装后的替换版本。包装器用一张 `loading` 表记录正在加载的模块名，重入即报
+`require: cyclic dependency involving 'X'`，成功与失败都会清除标记。
+
+| API | 契约 |
+|---|---|
+| `require(name)` | 大小写敏感，点分名一对一映射为路径；不做自动大小写回退。5 个宿主 searcher 顺序：aliases → preload → 自定义 loader → 文件系统 → 内建模块 |
+| `package.aliases[name] = target` | 运行时重定向表，别名与目标共享同一缓存实例；自引用直接报错，任意长度的环由最终 `require` 包装的 `loading` 表检测 |
+| `unrequire(name)` | 清 `package.loaded[name]` 与 HotReload 的 `loaded_modules` / `loaded_module_times` / `ignore_modules` 三个私有缓存，返回清理计数。**保留** `package.preload[name]` 与 `package.aliases[name]`（它们是加载器/重定向声明，不是缓存），否则 `reloadmodule` 会重新加载失败 |
+| `reloadmodule(name)` | `unrequire(name)` 后再走当前 `require(name)`，拿到新实例；不改变模块对象身份策略 |
+| `package.resolution()` | 返回机器可读契约：`case_sensitive=true`、`automatic_case_fallback=false`、`alias_config_files=false`、`runtime_alias_table=true`、`cycle_detection=true`、`explicit_unrequire=true`、`cooked_build`（按构建）、`unrequire_scope="exact-name"`、`cleared_caches` |
+
+以 `@` 开头的模块名（上游 Require 的 `@alias` / `.luaurc` 配置文件语义）现在会**明确报错**
+并指向 `package.aliases` 与 `package.resolution()`，不再退化成一句含糊的 "module not found"。
+cooked 构建只有把散 `.lua` 文件 staged 到工程根目录或 `ProjectPersistentDownloadDir` 才能解析；
+`lua.requireresolution 1` 可打开文件系统 searcher 未命中时的诊断日志（默认关，因为 searcher
+正常让位是常态）。完整字段与边界仍见 [能力矩阵](../feature-matrix.md)。
+
+`HotReload.lua` 的 `reload()` / `reload_modules()` 改为两阶段提交：先只加载并计算新模块，
+再用 `xpcall` 提交，失败时按快照回滚旧模块顶层键、`package.loaded` 与两个私有缓存；返回
+`ok, err`，`module_loaded` 钩子只在提交成功后触发，文件时间戳也只在成功后推进，所以修好源码后
+可以直接重试。**这是 best-effort 回滚，不是事务**：`_G`、运行栈局部变量、任意
+table/upvalue/registry 与已被别处持有的引用都不做全量快照。
 
 ## 配置与安全
 
@@ -44,6 +72,17 @@ VM dtor 只能销毁 C++ 状态，不能操作 Lua 栈。使用 LONGJMP 的路�
 | `lua.sandbox` / `lua.sandboxthread` | 0 / 0 | 环境/线程初始化 |
 | `lua.sandbox.freezeclasstables` | 0 | 类注册 |
 | `lua.io` / `lua.ioroot` | 0 / 项目目录 | 环境初始化 / 路径解析 |
+| `lua.maxsafepoints` | 0 | 每次宿主调用的安全点预算（Luau interrupt / plain Lua 指令钩子） |
+| `lua.maxmemorykb` / `lua.memquota` | 0（关） | 新 Env 的 Lua 堆字节配额；命令可在运行时改所有 live Env，单位 KiB |
+| `lua.requireresolution` | 0 | 文件系统 searcher 未命中时的诊断日志 |
+
+`lua.maxmemorykb` 通过默认 allocator 的 userdata 为每个 `FLuaEnv` 独立记账：分配前检查
+`LiveBytes + Delta`，超限返回 `nullptr`，让 VM 抛**可恢复**的 `not enough memory`（`pcall`
+可捕获）；释放永不受限，所以 `lua_close()` 不会卡死。自定义 `lua_Alloc` 不纳入配额。
+`lua.memquota status` 输出每个 Env 的 `limit / live / rejections / last_request`，
+`reset` 只清拒绝计数。它记账的是 allocator 看到的存活字节，不是 VM 分类 churn，
+也不覆盖原生回调分配、GC scratch、被放弃协程的归因 —— **不是完整恶意代码隔离**。
+与 `lua.gc limit <kb>` 的区别：后者只触发一次整轮回收，不拒绝分配。详见[控制台命令](ConsoleCommand.md#lua.memquota)。
 
 沙盒与类表冻结是可选硬化，不是对不可信脚本的完整隔离。UE 对象访问、debug、socket 和 io 是额外宿主能力；必须明确授权范围。文件路径校验不抵御 OS 符号链接/重解析点。Lua 5.5 自带 io 的策略也不由 Luau 的开关控制。
 
@@ -59,7 +98,7 @@ if Examples.Available then
 end
 ```
 
-示例目录包含严格类型、沙盒边界、调试目标、语法、vector 和 buffer。守卫入口可在 Lua 后端加载，Luau 专有语法文件不能绕过守卫加载。尚缺完整的热重载、原生编译、io 错误路径、打包远程调试和跨设备示例验收。
+示例目录包含严格类型、沙盒边界、调试目标、语法、vector 和 buffer。守卫入口可在 Lua 后端加载，Luau 专有语法文件不能绕过守卫加载。热重载失败回滚、内存配额、模块卸载/重载与注册点诊断均已写出源码与自动化用例，但**尚未编译或执行**；原生编译、io 错误路径、打包远程调试和跨设备示例验收仍待维护者实跑。
 
 `lua.profiler trace on` / `trace dump [path]` 产生 profile.out。转换入口调用固定 Luau 子模块内的官方工具及其 svg 依赖：
 

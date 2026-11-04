@@ -65,6 +65,36 @@ namespace UnLuaNova
                 ? static_cast<int32>(Value) : INDEX_NONE;
         }
 
+        /**
+         * Capture the Lua frame that called Timer.Set (level 1) at REGISTRATION time.
+         * Doing it when a callback fails is too late: the stack then belongs to the
+         * callback, not to whoever scheduled it. This is diagnostics, not a control path -
+         * a missing frame degrades to "?" and never fails the registration.
+         */
+        static FUnLuaNovaTimerRegisterSite CaptureSite(lua_State* L)
+        {
+            FUnLuaNovaTimerRegisterSite Site;
+            Site.EnvLabel = DescribeEnv(L);
+
+            lua_Debug Ar = {};
+            bool bHasFrame = false;
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+            bHasFrame = UNLUANOVA_GETINFO(L, 1, "sl", &Ar) != 0;
+#else
+            // plain Lua selects the frame with lua_getstack first; Luau folds the level
+            // into lua_getinfo. Same shape as LuaProfiler.cpp's GetStackFrame().
+            bHasFrame = lua_getstack(L, 1, &Ar) != 0;
+            if (bHasFrame)
+                UNLUANOVA_GETINFO(L, 1, "sl", &Ar);
+#endif
+            if (bHasFrame)
+            {
+                Site.Source = Ar.source ? UTF8_TO_TCHAR(Ar.source) : TEXT("?");
+                Site.Line = Ar.currentline;
+            }
+            return Site;
+        }
+
         static int Set(lua_State* L)
         {
             if (lua_type(L, 1) != LUA_TFUNCTION)
@@ -86,12 +116,16 @@ namespace UnLuaNova
             if (!Subsystem)
                 return luaL_error(L, "UnLuaNova.Timer.Set: 拿不到世界（引擎还没起来？）");
 
+            // Take the registration site before luaL_ref changes the stack. Level 1 is
+            // the script frame that called Timer.Set.
+            const FUnLuaNovaTimerRegisterSite Site = CaptureSite(L);
+
             // 回调交给注册表持有：脚本侧不用自己保活，移除时由子系统 unref
             lua_pushvalue(L, 1);
             const int32 CallbackRef = luaL_ref(L, LUA_REGISTRYINDEX);
 
             const int32 Handle = Subsystem->Add(L, CallbackRef, static_cast<float>(Interval), bLoop,
-                                                static_cast<float>(Delay), bUnscaled);
+                                                static_cast<float>(Delay), bUnscaled, Site);
             if (Handle == INDEX_NONE)
             {
                 luaL_unref(L, LUA_REGISTRYINDEX, CallbackRef);
@@ -153,6 +187,82 @@ namespace UnLuaNova
             return 1;
         }
 
+        /** One-line registration site for a handle, or nil for a handle that is not ours. */
+        static int Describe(lua_State* L)
+        {
+            const int32 Handle = GetHandle(L);
+            auto* Subsystem = UUnLuaNovaTimerSubsystem::Find(L, Handle);
+            if (!Subsystem)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            const FString Text = Subsystem->DescribeEntry(Handle);
+            if (Text.IsEmpty())
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            lua_pushstring(L, TCHAR_TO_UTF8(*Text));
+            return 1;
+        }
+
+        /**
+         * Table keyed by handle for the CALLING env only. Cross-Env handles are left out
+         * on purpose: Find() already refuses them for Clear/Pause, so exposing them here
+         * would give a script a view of timers it cannot control.
+         */
+        static int Diagnostics(lua_State* L)
+        {
+            lua_newtable(L);                                  // [out]
+            auto* Subsystem = GetSubsystem(L, 1);
+            const auto Env = FLuaEnv::FindEnv(L);
+            if (!Subsystem || !Env)
+                return 1;
+
+            for (const FUnLuaNovaTimerDiagnostic& D : Subsystem->GetDiagnostics(Env->GetMainState()))
+            {
+                UNLUANOVA_PUSHINT(L, D.Handle);               // [out, key]
+                lua_newtable(L);                              // [out, key, value]
+
+                lua_pushliteral(L, "handle");
+                UNLUANOVA_PUSHINT(L, D.Handle);
+                lua_rawset(L, -3);
+
+                lua_pushliteral(L, "source");
+                lua_pushstring(L, TCHAR_TO_UTF8(*D.Source));
+                lua_rawset(L, -3);
+
+                lua_pushliteral(L, "line");
+                UNLUANOVA_PUSHINT(L, D.Line);
+                lua_rawset(L, -3);
+
+                lua_pushliteral(L, "env");
+                lua_pushstring(L, TCHAR_TO_UTF8(*D.EnvLabel));
+                lua_rawset(L, -3);
+
+                lua_pushliteral(L, "loop");
+                lua_pushboolean(L, D.bLoop ? 1 : 0);
+                lua_rawset(L, -3);
+
+                lua_pushliteral(L, "unscaled");
+                lua_pushboolean(L, D.bUnscaled ? 1 : 0);
+                lua_rawset(L, -3);
+
+                lua_pushliteral(L, "paused");
+                lua_pushboolean(L, D.bPaused ? 1 : 0);
+                lua_rawset(L, -3);
+
+                lua_pushliteral(L, "remaining");
+                lua_pushnumber(L, D.RemainingSeconds);
+                lua_rawset(L, -3);
+
+                lua_rawset(L, -3);                            // out[key] = value
+            }
+            return 1;
+        }
+
         static const luaL_Reg Functions[] = {
             {"Set", Set},
             {"Clear", Clear},
@@ -161,6 +271,8 @@ namespace UnLuaNova
             {"ClearAll", ClearAll},
             {"Time", Time},
             {"Count", Count},
+            {"Describe", Describe},
+            {"Diagnostics", Diagnostics},
             {nullptr, nullptr}
         };
 

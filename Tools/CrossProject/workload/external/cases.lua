@@ -250,6 +250,89 @@ local function BadIdentity(Value)
     return not Value or Value == "" or Value:find("%s") ~= nil
 end
 
+-- ---------------------------------------------------------------------------
+-- Non-time metrics (revision 1 optional extension).
+--
+-- Pure-VM measurements only: collectgarbage / os.clock / load / debug / io. They
+-- deliberately do NOT go through any engine binding hook (those are only for the
+-- #case engine calls). A value that cannot be measured honestly is printed as
+-- value=unavailable -- never 0, never a placeholder. Scripts hosted inside UE
+-- assets usually cannot be read back from disk, so code_size.bytes is typically
+-- unavailable here; see Tools/CrossProject/README.md.
+-- ---------------------------------------------------------------------------
+
+local function finite_nonneg(x)
+    return type(x) == "number" and x == x and x >= 0 and x < math.huge
+end
+
+local function emit_metric(name, value, unit)
+    print(string.format("#metric name=%s value=%s unit=%s", name, value, unit))
+end
+
+-- peak_kb is sampled by Bench.Run across the case loop; nil means "no measurement".
+local function PrintNonTimeMetrics(peak_kb)
+    -- memory.peak_kb: observed Lua heap peak (collectgarbage("count")), in KB.
+    if finite_nonneg(peak_kb) then
+        emit_metric("memory.peak_kb", string.format("%.3f", peak_kb), "kb")
+    else
+        emit_metric("memory.peak_kb", "unavailable", "kb")
+    end
+
+    -- startup.load_us: os.clock() around loading + running an init chunk, in us.
+    local load_ok, load_us = pcall(function()
+        local loader = rawget(_G, "load") or rawget(_G, "loadstring")
+        if type(loader) ~= "function" then return nil end
+        local rounds = 32
+        local t0 = os.clock()
+        for _ = 1, rounds do
+            local chunk = loader("local t={} for i=1,2000 do t[i]=i end return t")
+            if type(chunk) ~= "function" then return nil end
+            chunk()
+        end
+        return (os.clock() - t0) * 1e6 / rounds
+    end)
+    if load_ok and finite_nonneg(load_us) then
+        emit_metric("startup.load_us", string.format("%.3f", load_us), "us")
+    else
+        emit_metric("startup.load_us", "unavailable", "us")
+    end
+
+    -- gc.pause_us: average os.clock() pause of one full GC, in us.
+    local gc_ok, gc_us = pcall(function()
+        local rounds = 32
+        local t0 = os.clock()
+        for _ = 1, rounds do collectgarbage("collect") end
+        return (os.clock() - t0) * 1e6 / rounds
+    end)
+    if gc_ok and finite_nonneg(gc_us) then
+        emit_metric("gc.pause_us", string.format("%.3f", gc_us), "us")
+    else
+        emit_metric("gc.pause_us", "unavailable", "us")
+    end
+
+    -- code_size.bytes: size of this script, only if its source file can be read back.
+    -- In a packaged / asset-hosted VM this is unavailable -> do NOT fake 0.
+    local size_ok, size_bytes = pcall(function()
+        local dbg = rawget(_G, "debug")
+        local io_lib = rawget(_G, "io")
+        if type(dbg) ~= "table" or type(io_lib) ~= "table" then return nil end
+        local info = dbg.getinfo(1, "S")
+        local source = info and info.source
+        if type(source) ~= "string" or source:sub(1, 1) ~= "@" then return nil end
+        local handle = io_lib.open(source:sub(2), "rb")
+        if not handle then return nil end
+        local data = handle:read("*a")
+        handle:close()
+        if type(data) ~= "string" then return nil end
+        return #data
+    end)
+    if size_ok and finite_nonneg(size_bytes) then
+        emit_metric("code_size.bytes", string.format("%d", size_bytes), "bytes")
+    else
+        emit_metric("code_size.bytes", "unavailable", "bytes")
+    end
+end
+
 function Bench.Run()
     if BadIdentity(Bench.Machine) or BadIdentity(Bench.Cpu)
         or BadIdentity(Bench.Project) or BadIdentity(Bench.Backend)
@@ -258,6 +341,9 @@ function Bench.Run()
         print("-- SetMachineInfo(machine, cpu) with non-empty, space-free real values.")
         return
     end
+
+    local base_ok, mem_peak_kb = pcall(function() return collectgarbage("count") end)
+    if not base_ok or type(mem_peak_kb) ~= "number" then mem_peak_kb = nil end
 
     print("#UNLUANOVA_BENCH_BEGIN")
     print(string.format("#meta project=%s backend=%s engine=%s machine=%s cpu=%s "
@@ -279,10 +365,19 @@ function Bench.Run()
             print(string.format("#case name=%s iterations=%d peropus=%.6f samples=%s",
                 case.Name, case.Iterations, median, table.concat(formatted, ",")))
         end
+        if mem_peak_kb then
+            local cur_ok, cur_kb = pcall(function() return collectgarbage("count") end)
+            if cur_ok and type(cur_kb) == "number" and cur_kb > mem_peak_kb then
+                mem_peak_kb = cur_kb
+            end
+        end
     end
     for _, message in ipairs(failures) do
         print("-- case failed: " .. message)
     end
+
+    -- Optional non-time metrics: separate #metric lines, emitted on their own.
+    PrintNonTimeMetrics(mem_peak_kb)
 
     print("#UNLUANOVA_BENCH_END")
 end

@@ -116,6 +116,8 @@ Timer.IsValid(Handle)
 Timer.ClearAll(WorldContext)
 local Seconds = Timer.Time(bUnscaled, WorldContext)
 local N = Timer.Count(WorldContext)
+local Text = Timer.Describe(Handle)             -- 注册点 + 调度状态，句柄无效返回 nil
+local All = Timer.Diagnostics(WorldContext)     -- 当前 Env 的 timer 快照
 ```
 
 | 参数 | 说明 |
@@ -137,6 +139,27 @@ local N = Timer.Count(WorldContext)
 - 一次性任务先移除再调用；回调中取消或暂停其他到期任务立即生效，递归 Tick 不会重复进入。
 - 暂停保存剩余等待时间，恢复继续等待；循环任务每帧至多调用一次，不补发错过的周期。
 - scaled 任务在世界暂停时不运行；unscaled 使用真实世界时间。回调异常记录日志，其他任务继续。
+
+### 注册点诊断
+
+注册 `Timer.Set` 时，宿主用 `lua_getinfo` 记下 Lua `source` / `currentline`，并打上
+`DescribeEnv()` 的归属标签（Env 序号 / 名称 / 主状态指针）。回调报错的日志会附同一串信息，
+因此多 Env / 多 PIE 下能直接看出"哪个脚本的哪一行、属于哪个环境"。
+
+| API | 说明 |
+|---|---|
+| `Timer.Describe(Handle)` | 返回一行字符串 `handle=N source=... line=N env=... loop/… unscaled/… paused/… remaining=…s`；句柄不存在或不属于当前 Env 时返回 `nil` |
+| `Timer.Diagnostics(WorldContext)` | 返回以 handle 为键的表，字段 `handle` / `source` / `line` / `env` / `loop` / `unscaled` / `paused` / `remaining`。**只包含当前 Env 的 timer**，不泄漏其它环境它无法控制的句柄 |
+
+```lua
+for Handle, Info in pairs(Timer.Diagnostics()) do
+    print(Handle, Info.source, Info.line, Info.env, Info.remaining)
+end
+```
+
+这与 `UnLuaNovaBase.cpp` 的 Lua 调用错误日志共用 `DescribeEnv()` 标签，所以日志里可以直接
+按 `env=...` 串起来。诊断是**观察**，不改变调度；注册点在注册时快照，热重载后仍指向当时的
+源码行。对应自动化用例在 `UnLuaNova.API.Timer`，本轮源码与用例**尚未编译或执行**。
 
 可执行示例：[TimerLifecycle.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Examples/TimerLifecycle.lua)。回归入口：`UnLuaNova.API.Timer`；多 PIE、世界暂停/时间膨胀和打包行为仍需维护者实际验收。
 
@@ -215,7 +238,7 @@ print(Rex)              -- "instance of Dog"
 | `UnLuaNova.Vector` | `FVector` 的纯 Lua 算术（不跨界，热路径省调用开销） |
 | `UnLuaNova.Buffer` | 缓冲区（Luau 后端有 native 实现，见 `UnLuaNova.HasFeature('buffer')`） |
 | `UnLuaNova.Input` / `UnLuaNova.EnhancedInput` | 输入封装 |
-| `UnLuaNova.HotReload` | 热重载脚本 |
+| `UnLuaNova.HotReload` | 热重载脚本：两阶段提交 + 快照回滚，`reload()` 返回 `ok, err`，失败后修好源码可直接重试（best-effort，非事务） |
 
 可用性与能力一律走 `UnLuaNova.HasFeature`：
 

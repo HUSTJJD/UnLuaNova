@@ -31,8 +31,22 @@
 #include "LuaGcScheduler.h"
 #include "LuaModuleLocator.h"
 
+#include <atomic>
+
 namespace UnLuaNova
 {
+    /**
+     * A stable, human-readable owner label for diagnostics that used to be impossible to
+     * attribute in a multi-Env session (listen server + two PIE clients = three VMs).
+     * Index is FLuaEnv::GetAllEnvs() order, which is stable for as long as the env lives;
+     * the name is only a label (Env_10 sorts before Env_2), and the main state pointer is
+     * the identity that never changes while the env is alive.
+     *
+     * Returns "env=<unknown>" when L does not belong to a live environment, so callers can
+     * use it unconditionally from error paths without first proving the env still exists.
+     */
+    UNLUANOVA_API FString DescribeEnv(const lua_State* L);
+
     class UNLUANOVA_API FLuaEnv
         : public FUObjectArray::FUObjectDeleteListener
     {
@@ -126,6 +140,38 @@ namespace UnLuaNova
         FORCEINLINE lua_State* GetMainState() const { return L; }
         bool IsClosing() const { return bClosing; }
 
+        /**
+         * Per-VM allocation budget (lua.maxmemorykb). It is a value member, not a heap
+         * allocation, because DefaultLuaAllocator keeps receiving calls during lua_close()
+         * in ~FLuaEnv - the userdata has to outlive the destructor body.
+         *
+         * This is a live-waterline check made *before* an allocation, not a hard heap cap:
+         * collector scratch allocations count towards LiveBytes, and a rejection makes the
+         * VM run its emergency-GC path, which frees objects and drops the waterline again.
+         * A refused allocation therefore raises a recoverable "not enough memory" error;
+         * it does not poison the environment permanently.
+         *
+         * A caller that supplies its own lua_Alloc keeps its own userdata and is outside
+         * this quota - only UNLUANOVA_NEWSTATE's default allocator path is instrumented.
+         */
+        struct FMemoryQuota
+        {
+            std::atomic<int64> MaxBytes{0};          // 0 = off
+            std::atomic<int64> LiveBytes{0};         // VM-owned bytes tracked by the allocator
+            std::atomic<int32> Rejections{0};        // observable: "did the quota actually fire?"
+            std::atomic<int64> LastRequestedBytes{0};
+        };
+
+        FMemoryQuota& GetMemoryQuota() { return MemoryQuota; }
+        const FMemoryQuota& GetMemoryQuota() const { return MemoryQuota; }
+        int64 GetMemoryQuotaMaxBytes() const { return MemoryQuota.MaxBytes.load(); }
+        int64 GetLiveLuaBytes() const { return MemoryQuota.LiveBytes.load(); }
+        int32 GetMemoryQuotaRejectionCount() const { return MemoryQuota.Rejections.load(); }
+        void SetMemoryQuotaMaxBytes(int64 Bytes) { MemoryQuota.MaxBytes.store(Bytes > 0 ? Bytes : 0); }
+
+        /** Reads lua.maxmemorykb once, in KiB; 0 disables the quota. */
+        static int64 ReadMemoryQuotaCvar();
+
         void AddThread(lua_State* Thread, int32 ThreadRef);
 
         int32 FindOrAddThread(lua_State* Thread);
@@ -188,6 +234,23 @@ namespace UnLuaNova
         // constructor; see the comment there.
         static int Require(lua_State* L);
 
+        // Cycle detection wrapped around whichever require() is finally installed
+        // (native on plain Lua, FLuaEnv::Require on Luau, and HotReload's replacement on a
+        // default build). Wrapping require rather than package.searchers keeps loader
+        // signatures and the compiled-chunk objects HotReload applies setfenv/_ENV to
+        // completely untouched, while covering all three call paths.
+        static int GuardedRequire(lua_State* L);
+
+        // Explicit cache/reload contract. unrequire(name) clears package.loaded /
+        // package.preload for that exact name plus HotReload's three private caches, and
+        // returns how many entries were actually removed. reloadmodule(name) is
+        // unrequire + require. See Docs/{CN,EN}/Luau.md for the alias and case rules.
+        static int Unrequire(lua_State* L);
+        static int ReloadModule(lua_State* L);
+
+        /** package.resolution() - the resolution contract a script or a spec can query. */
+        static int ResolutionInfo(lua_State* L);
+
         static void* DefaultLuaAllocator(void* ud, void* ptr, size_t osize, size_t nsize);
 
         virtual lua_Alloc GetLuaAllocator() const;
@@ -206,6 +269,12 @@ namespace UnLuaNova
 
     private:
         void AddSearcher(lua_CFunction Searcher, int Index) const;
+
+        /** Registers unrequire / reloadmodule / package.resolution before _G is frozen. */
+        void InstallModuleControl();
+
+        /** Wraps the final require(), after HotReload has installed its own replacement. */
+        void InstallRequireGuard();
 
         bool LoadBuffer(lua_State* InL, const char* Buffer, const size_t Size, const char* InName);
 
@@ -245,6 +314,7 @@ namespace UnLuaNova
         TArray<UInputComponent*> CandidateInputComponents;
         FDelegateHandle OnWorldTickStartHandle;
         FString Name = TEXT("Env_0");
+        FMemoryQuota MemoryQuota;
         bool bObjectArrayListenerRegistered;
         bool bStarted;
         bool bClosing = false;

@@ -1,6 +1,6 @@
 ---
 title: "Console Commands"
-description: "lua.do / lua.profiler / lua.memstats / lua.dbg / lua.sandbox"
+description: "lua.do / lua.profiler / lua.memstats / lua.memquota / lua.dbg / lua.sandbox"
 ---
 
 # Console Commands
@@ -116,6 +116,47 @@ lua.memstats reset
 *The breakdown needs Luau's allocation callback (`onallocate`) and is unavailable on the
 Lua 5.5 backend, which says so in the report. It measures allocation volume (churn), not live
 bytes - `onfree` carries no size. Live and peak are in the totals.*
+
+### lua.memquota
+
+A per-VM Lua heap allocation budget, in KiB.
+
+```
+lua.memquota status        -- per-Env limit / live / rejections / last_request
+lua.memquota 8192          -- 8 MiB: updates every live Env and lua.maxmemorykb
+lua.memquota off           -- disable (same as 0)
+lua.memquota reset         -- clear refusal counters only, limits unchanged
+```
+
+No argument means `status`. The startup CVar `lua.maxmemorykb` only **seeds new
+environments** (`0` = off by default, because a quota changes existing script behaviour);
+use this command to change environments that already exist. The check lives in
+`FLuaEnv::DefaultLuaAllocator`: when `LiveBytes + Delta` would exceed the limit the allocator
+returns `nullptr` and the VM raises a **recoverable** `not enough memory` error that `pcall`
+can catch. Frees are never refused, so `lua_close()` cannot wedge, and a custom `lua_Alloc`
+stays outside the quota. The first refusal emits one log line; later ones are counted in
+`rejections` rather than spamming the log.
+
+| Subcommand | Effect |
+|---|---|
+| `<kb>` | Set the limit on all live Envs and sync `lua.maxmemorykb` for new Envs |
+| `off` | Disable the quota |
+| `status` | Env count, CVar value, and each Env's limit / live bytes / refusals / last request |
+| `reset` | Zero the refusal counters |
+
+`lua.gc limit <kb>` only forces a full collection when the heap crosses a threshold; a quota
+actually refuses the allocation. These live bytes are not `lua.memstats`' categorized churn.
+Native callback allocations, GC scratch and abandoned-coroutine attribution are outside the
+quota, and there is no per-script grant - **this is not complete untrusted-code isolation**.
+See the [Luau backend](Luau.md#configuration).
+
+### lua.requireresolution (runtime CVar)
+
+`lua.requireresolution 1` enables a warning when the file-system searcher declines a module
+(default `0`): unresolved name, number of patterns tried, an example path, editor/cooked build
+kind, plus the case-sensitivity and cooked staging rules. It is off by default because a
+searcher declining in favour of the next one is normal. Read the full contract from
+`package.resolution()`; see [module resolution](Luau.md#module-resolution-and-unload-contract).
 
 ### lua.dbg \[subcommand\]
 

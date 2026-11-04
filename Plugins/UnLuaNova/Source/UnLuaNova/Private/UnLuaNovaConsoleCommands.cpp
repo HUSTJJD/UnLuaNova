@@ -7,6 +7,7 @@
 #include "LuaMemoryStats.h"
 #include "LuaProfiler.h"
 #include "Misc/Paths.h"
+#include "HAL/IConsoleManager.h"
 
 #define LOCTEXT_NAMESPACE "UnLuaNovaConsoleCommands"
 
@@ -32,6 +33,11 @@ namespace UnLuaNova
               TEXT("lua.memstats"),
               *LOCTEXT("CommandText_MemStats", "Lua heap usage. Args: on | off | reset, or none for a report.").ToString(),
               FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::MemStats)
+          ),
+          MemoryQuotaCommand(
+              TEXT("lua.memquota"),
+              *LOCTEXT("CommandText_MemoryQuota", "Per-VM Lua heap budget. Args: <kb> | off | status | reset. 0/off disables. Distinct from lua.gc limit, which only forces a full collect.").ToString(),
+              FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::MemoryQuota)
           ),
           ProfilerCommand(
               TEXT("lua.profiler"),
@@ -353,6 +359,68 @@ namespace UnLuaNova
         // Categorized breakdown is Luau-only; on other backends it reports that and stops.
         // Empty until 'lua.memstats on' has been run, since that is what installs the hooks.
         UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Stats.BuildCategoryReport());
+    }
+
+    void FUnLuaNovaConsoleCommands::MemoryQuota(const TArray<FString>& Args) const
+    {
+        const TArray<FLuaEnv*> Envs = FLuaEnv::GetAllEnvs();
+        const FString Sub = Args.Num() > 0 ? Args[0] : TEXT("status");
+
+        if (Sub.Equals(TEXT("status"), ESearchCase::IgnoreCase))
+        {
+            // Force the CVar to exist even on a build where no env has been created yet.
+            const int64 CvarBytes = FLuaEnv::ReadMemoryQuotaCvar();
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.memquota: %d env(s); cvar lua.maxmemorykb = %lld KiB for NEW envs"),
+                Envs.Num(), CvarBytes / 1024);
+            for (int32 Index = 0; Index < Envs.Num(); ++Index)
+            {
+                FLuaEnv* Env = Envs[Index];
+                const int64 Max = Env->GetMemoryQuotaMaxBytes();
+                UE_LOG(LogUnLuaNova, Log,
+                    TEXT("  %d: %s limit=%lld B (%s) live=%lld B rejections=%d last_request=%lld B"),
+                    Index, *Env->GetName(), Max, Max > 0 ? TEXT("on") : TEXT("off"),
+                    Env->GetLiveLuaBytes(), Env->GetMemoryQuotaRejectionCount(),
+                    Env->GetMemoryQuota().LastRequestedBytes.load());
+            }
+            UE_LOG(LogUnLuaNova, Log,
+                TEXT("lua.memquota: a refusal raises a recoverable Lua error; lua.gc limit only forces a collection."));
+            return;
+        }
+
+        if (Sub.Equals(TEXT("reset"), ESearchCase::IgnoreCase))
+        {
+            for (FLuaEnv* Env : Envs)
+                Env->GetMemoryQuota().Rejections.store(0);
+            UE_LOG(LogUnLuaNova, Log, TEXT("lua.memquota: rejection counters cleared for %d env(s); limits unchanged."), Envs.Num());
+            return;
+        }
+
+        int64 Kb = 0;
+        if (Sub.Equals(TEXT("off"), ESearchCase::IgnoreCase))
+        {
+            Kb = 0;
+        }
+        else
+        {
+            Kb = FCString::Atoi64(*Sub);
+            if (Kb < 0 || (!Sub.IsNumeric() && Kb == 0))
+            {
+                UE_LOG(LogUnLuaNova, Warning, TEXT("usage: lua.memquota <kb> | off | status | reset"));
+                return;
+            }
+        }
+
+        const int64 Bytes = Kb > 0 ? Kb * 1024 : 0;
+        (void)FLuaEnv::ReadMemoryQuotaCvar(); // registers the CVar on first use
+        if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.maxmemorykb")))
+            CVar->Set((int32)(Bytes / 1024), ECVF_SetByConsole);
+
+        // Existing envs keep their own context; the CVar only seeds envs created later.
+        for (FLuaEnv* Env : Envs)
+            Env->SetMemoryQuotaMaxBytes(Bytes);
+
+        UE_LOG(LogUnLuaNova, Log, TEXT("lua.memquota: limit = %lld B (%lld KiB) for %d live env(s); new envs inherit lua.maxmemorykb. rejections counters kept."),
+            Bytes, Bytes / 1024, Envs.Num());
     }
 
     void FUnLuaNovaConsoleCommands::Profiler(const TArray<FString>& Args) const

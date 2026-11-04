@@ -1,6 +1,6 @@
 ---
 title: "控制台命令"
-description: "lua.do / lua.profiler / lua.memstats / lua.dbg / lua.sandbox 等运行时调试命令"
+description: "lua.do / lua.profiler / lua.memstats / lua.memquota / lua.dbg / lua.sandbox 等运行时调试命令"
 ---
 
 # 控制台命令
@@ -160,6 +160,44 @@ lua.memstats reset
 ```
 
 *注：分类统计依赖 Luau 后端的分配回调（`onallocate`），在 Lua 5.5 后端不可用，报告中会给出提示。另外分类维度统计的是**分配量（churn）**而不是存活字节 —— 存活与峰值请看总量部分。*
+
+### lua.memquota
+
+每个 Lua 环境（VM）独立的**堆分配硬配额**，单位 KiB。
+
+```
+lua.memquota status        -- 输出每个 Env 的 limit / live / rejections / last_request
+lua.memquota 8192          -- 8 MiB：改动所有已存在的 Env，并写入 lua.maxmemorykb
+lua.memquota off           -- 关闭（等价于 0）
+lua.memquota reset         -- 只清拒绝计数，限额不变
+```
+
+不带参数等价于 `status`。启动期 CVar `lua.maxmemorykb` 只**给新创建的 Env 播种**默认值
+（`0` = 关闭，是行为变更所以默认不启用），运行中改现有 Env 必须用本命令。配额在
+`FLuaEnv::DefaultLuaAllocator` 里按 `LiveBytes + Delta` 检查：超限直接返回 `nullptr`，
+VM 抛**可恢复**的 `not enough memory`，脚本可以用 `pcall` 捕获后自己降级；释放永不被拒绝，
+所以 `lua_close()` 不会卡死；自定义 `lua_Alloc` 不纳入配额。首个拒绝会打一条日志，
+后续累计在 `rejections` 里，不刷屏。
+
+| 子命令 | 说明 |
+|---|---|
+| `<kb>` | 设置所有 live Env 的限额并同步 `lua.maxmemorykb`，新 Env 继承 |
+| `off` | 关闭配额 |
+| `status` | 打印 Env 数、CVar 值、每个 Env 的限额 / 存活字节 / 拒绝次数 / 最后一次请求字节数 |
+| `reset` | 清零所有 Env 的拒绝计数 |
+
+与 `lua.gc limit <kb>` 的区别：后者只在堆超过阈值时**触发一次整轮回收**，不拒绝分配；
+`lua.memquota` 是真的让分配失败。统计口径与 `lua.memstats` 也不同 —— 这里是 allocator
+看到的存活字节，不是分类 churn。它不覆盖原生回调分配、GC scratch、被放弃协程的归因，
+按脚本授权也不存在，**不是完整的不可信代码隔离**。详见 [Luau 后端](Luau.md#配置与安全)。
+
+### lua.requireresolution（运行时 CVar）
+
+`lua.requireresolution 1` 打开文件系统 searcher 未命中时的 Warning 日志（默认 `0`）：
+打印未解析的模块名、尝试过的 pattern 数、示例路径以及 editor / cooked 构建类别，并提示
+名字大小写敏感、cooked 需要把散脚本 staged 到工程根目录。默认关闭，因为某个 searcher
+正常让位给下一个是常态，打开后会刷日志。完整解析契约请用 `package.resolution()`
+读取，见 [Luau 后端](Luau.md#模块加载与卸载契约)。
 
 ### lua.dap \[start \[端口\] \| stop \| status\]
 

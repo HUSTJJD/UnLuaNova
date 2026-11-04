@@ -193,6 +193,74 @@ void FTimerSpec::Define()
             assert(Timer.Count(World) == 0)
         )")));
     });
+
+    It(TEXT("Describe and Diagnostics expose the registration site and owning env"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        TEST_TRUE(Env->DoString(TEXT("H = Timer.Set(function() end, 0, true, 100, false, World)")));
+
+        lua_settop(L, 0);
+        TEST_TRUE(Env->DoString(TEXT("return Timer.Describe(H)")));
+        FString Desc;
+        if (const char* S = lua_tostring(L, 1))
+            Desc = UTF8_TO_TCHAR(S);
+        TEST_TRUE(Desc.Contains(TEXT("handle=")));
+        TEST_TRUE(Desc.Contains(TEXT("env=")));
+        TEST_TRUE(Desc.Contains(TEXT("loop=1")));
+        TEST_TRUE(Desc.Contains(TEXT("remaining=")));
+
+        lua_settop(L, 0);
+        TEST_TRUE(Env->DoString(TEXT(R"(
+            local d = Timer.Diagnostics(World)
+            local count, complete = 0, false
+            for handle, info in pairs(d) do
+                count = count + 1
+                complete = info.env ~= nil and info.source ~= nil
+                           and info.line ~= nil and info.remaining ~= nil
+                           and info.loop == true and info.paused == false
+            end
+            return count, complete
+        )")));
+        TEST_TRUE(lua_tonumber(L, 1) == 1.0);
+        TEST_TRUE(lua_toboolean(L, 2) != 0);
+
+        // A foreign handle must not appear in the diagnostics of this env.
+        lua_settop(L, 0);
+        TEST_TRUE(Env->DoString(TEXT("return Timer.Describe(H + 999999) == nil")));
+        TEST_TRUE(lua_toboolean(L, 1) != 0);
+    });
+
+    It(TEXT("Diagnostics never leaks timers owned by another env"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        TEST_TRUE(Env->DoString(TEXT("H = Timer.Set(function() end, 0, true, 100, false, World)")));
+
+        auto OtherEnv = MakeShared<UnLuaNova::FLuaEnv>();
+        auto* Other = OtherEnv->GetMainState();
+        UnLuaNova::PushUObject(Other, World);
+        lua_setglobal(Other, "World");
+        lua_settop(Other, 0);
+        TEST_TRUE(OtherEnv->DoString(TEXT(R"(
+            local t = require('UnLuaNova.Timer')
+            t.Set(function() end, 0, true, 100, false, World)
+            local n, own = 0, true
+            for handle, info in pairs(t.Diagnostics(World)) do
+                n = n + 1
+                own = own and t.Describe(handle) ~= nil
+            end
+            return n, own
+        )")));
+        TEST_TRUE(lua_tonumber(Other, 1) == 1.0);
+        TEST_TRUE(lua_toboolean(Other, 2) != 0);
+        TEST_EQUAL(Timer->Num(), 2);
+    });
+
+    It(TEXT("Timer.Time exposes both world clocks that the scheduler compares against"), EAsyncExecution::TaskGraphMainThread, [this]
+    {
+        lua_settop(L, 0);
+        TEST_TRUE(Env->DoString(TEXT("return Timer.Time(false, World), Timer.Time(true, World)")));
+        // No Tick between the two reads, so both clocks are exactly reproducible.
+        TEST_TRUE(lua_tonumber(L, 1) == Timer->Now(false));
+        TEST_TRUE(lua_tonumber(L, 2) == Timer->Now(true));
+    });
 }
 
 #endif

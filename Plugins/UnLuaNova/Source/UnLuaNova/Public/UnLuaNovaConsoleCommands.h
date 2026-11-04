@@ -29,6 +29,8 @@ namespace UnLuaNova
 
         FAutoConsoleCommand MemStatsCommand;
 
+        FAutoConsoleCommand MemoryQuotaCommand;
+
         FAutoConsoleCommand ProfilerCommand;
 
         FAutoConsoleCommand DebugCommand;
@@ -48,6 +50,8 @@ namespace UnLuaNova
         void CollectGarbage(const TArray<FString>& Args) const;
 
         void MemStats(const TArray<FString>& Args) const;
+
+        void MemoryQuota(const TArray<FString>& Args) const;
 
         void Profiler(const TArray<FString>& Args) const;
 

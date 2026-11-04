@@ -156,15 +156,30 @@ namespace UnLuaNova
 
         RegisterDelegates();
 
+        // The quota context is a value member of this env, so it is still alive while
+        // lua_close() drains the VM in ~FLuaEnv. Only the default allocator path gets it:
+        // a caller supplying its own lua_Alloc keeps its own userdata and is outside the
+        // quota (documented in LuaEnv.h).
+        const lua_Alloc EffectiveAllocator = Allocator ? Allocator : GetLuaAllocator();
+        void* EffectiveUserdata = AllocatorUserdata;
+        // GetLuaAllocator() is virtual: a subclass may return its own allocator with its
+        // own opaque userdata. Instrument only the exact default allocator, otherwise a
+        // custom one would be handed a pointer it does not own.
+        if (!Allocator && EffectiveAllocator == DefaultLuaAllocator)
+        {
+            MemoryQuota.MaxBytes.store(ReadMemoryQuotaCvar());
+            EffectiveUserdata = &MemoryQuota;
+        }
+
 #if PLATFORM_WINDOWS
         // 防止类似AppleProResMedia插件忘了恢复Dll查找目录
         // https://github.com/Tencent/UnLuaNova/issues/534
         const auto Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("Binaries/Win64"));
         FPlatformProcess::PushDllDirectory(*Dir);
-        L = UNLUANOVA_NEWSTATE(Allocator ? Allocator : GetLuaAllocator(), AllocatorUserdata);
+        L = UNLUANOVA_NEWSTATE(EffectiveAllocator, EffectiveUserdata);
         FPlatformProcess::PopDllDirectory(*Dir);
 #else
-        L = UNLUANOVA_NEWSTATE(Allocator ? Allocator : GetLuaAllocator(), AllocatorUserdata);
+        L = UNLUANOVA_NEWSTATE(EffectiveAllocator, EffectiveUserdata);
 #endif
 
         AllEnvs.Add(L, this);
@@ -284,6 +299,11 @@ namespace UnLuaNova
         // UnLuaNovaLib::Open below.
         UNLUANOVA_SETUP_SCRIPT_COMPAT(L);
 
+        // unrequire / reloadmodule / package.resolution must exist before lua.sandbox
+        // freezes the globals table below. They do not depend on which require() ends up
+        // being installed, only on the package table that was built above.
+        InstallModuleControl();
+
         UELib::Open(L);
 
         // Same reasoning as UELib::Open: anything published as a global has to be in place
@@ -394,6 +414,12 @@ namespace UnLuaNova
 
         UnLuaNovaLib::Open(L);
 
+        // Cycle detection wraps the FINAL require, i.e. after UnLuaNovaLib::Open has
+        // installed HotReload's replacement. Doing it here is what gives plain Lua the
+        // same explicit cycle error Luau already had, without changing any loader or
+        // chunk object that HotReload applies setfenv/_ENV to.
+        InstallRequireGuard();
+
         // 内建（native）模块：require('UnLuaNova.Timer') 走 LoadFromBuiltinLibs 拿到这里注册的
         // 加载器。计时器必须由 C++ 持有到期时间，是因为它要用世界时间 —— 见
         // UUnLuaNovaTimerSubsystem 的头注释。
@@ -488,6 +514,18 @@ namespace UnLuaNova
         });
 
         return Envs;
+    }
+
+    FString DescribeEnv(const lua_State* L)
+    {
+        FLuaEnv* Env = FLuaEnv::FindEnv(L);
+        if (!Env)
+            return TEXT("env=<unknown>");
+
+        const TArray<FLuaEnv*> Envs = FLuaEnv::GetAllEnvs();
+        const int32 Index = Envs.IndexOfByKey(Env);
+        return FString::Printf(TEXT("env=%d/%d(%s, main=0x%p)"),
+            Index, Envs.Num(), *Env->GetName(), Env->GetMainState());
     }
 
     FLuaEnv* FLuaEnv::FindEnv(const lua_State* L)
@@ -917,7 +955,13 @@ namespace UnLuaNova
 
     void FLuaEnv::HotReload()
     {
+        // Lua.HotReload() now returns a boolean (ok / failed). DoString runs with
+        // LUA_MULTRET and leaves results on the main stack, so restore the entry depth
+        // whether the chunk ran or failed to load. A reload failure is reported by
+        // HotReload.lua itself and can be retried - it must not leak a stack slot per F5.
+        const int Top = lua_gettop(L);
         DoString("Lua.HotReload()");
+        lua_settop(L, Top);
     }
 
     int32 FLuaEnv::FindThread(const lua_State* Thread)
@@ -989,6 +1033,24 @@ namespace UnLuaNova
         return DefaultLuaAllocator;
     }
 
+    int64 FLuaEnv::ReadMemoryQuotaCvar()
+    {
+        // KiB, matching `lua.gc limit <kb>`. An int32 CVar times 1024 still describes a
+        // far larger heap than any Lua VM in this project will own. 0 = off (default):
+        // a quota is a behaviour change for existing scripts, so it must be opted into.
+        static auto CVar = IConsoleManager::Get().RegisterConsoleVariable(
+            TEXT("lua.maxmemorykb"),
+            0,
+            TEXT("Per-VM Lua heap allocation budget in KiB. 0 = off (default). When the live "
+                 "allocation waterline would exceed it, the allocator refuses the request and "
+                 "the VM raises a recoverable 'not enough memory' error. Distinct from "
+                 "lua.gc limit, which only triggers a full collect. Change at runtime with "
+                 "lua.memquota <kb>|off|status."),
+            ECVF_Default);
+        const int64 Kb = CVar->GetInt();
+        return Kb > 0 ? Kb * 1024 : 0;
+    }
+
     void FLuaEnv::AddLoader(const FLuaFileLoader Loader)
     {
         CustomLoaders.Add(Loader);
@@ -1009,6 +1071,216 @@ namespace UnLuaNova
         ManualObjectReference.Remove(Object);
     }
 
+    void FLuaEnv::InstallModuleControl()
+    {
+        // Installed before lua.sandbox freezes _G: writing globals afterwards is exactly
+        // what a read-only globals table refuses. These are part of the module contract,
+        // not an opt-in capability, so they exist on both backends and on every build.
+        lua_pushcfunction(L, &FLuaEnv::Unrequire);
+        lua_setglobal(L, "unrequire");
+
+        lua_pushcfunction(L, &FLuaEnv::ReloadModule);
+        lua_setglobal(L, "reloadmodule");
+
+        lua_getglobal(L, "package");
+        if (lua_istable(L, -1))
+        {
+            lua_pushcfunction(L, &FLuaEnv::ResolutionInfo);
+            lua_setfield(L, -2, "resolution");
+        }
+        lua_pop(L, 1);
+    }
+
+    void FLuaEnv::InstallRequireGuard()
+    {
+        // Call this AFTER UnLuaNovaLib::Open, which replaces _G.require with HotReload's
+        // own implementation on a default build. Wrapping the *final* require is what
+        // makes cycle detection cover all three paths simultaneously: plain Lua's native
+        // require, FLuaEnv::Require on Luau, and HotReload's Lua replacement.
+        //
+        // Wrapping package.searchers instead would have been wrong here: HotReload.load()
+        // expects the searcher's result to be the compiled Lua chunk (it applies setfenv
+        // / replaces the _ENV upvalue), and a C wrapper would silently defeat that.
+        lua_getglobal(L, "require");                 // [require]
+        if (!lua_isfunction(L, -1))
+        {
+            lua_pop(L, 1);
+            return;
+        }
+        lua_newtable(L);                             // [require, loading]
+        lua_pushcclosure(L, &FLuaEnv::GuardedRequire, 2);
+
+#if UNLUANOVA_HAS_SANDBOX
+        // luaL_sandbox froze _G earlier in this constructor. lua_setglobal on a read-only
+        // table raises, and this call runs straight from C++ with no pcall around it -
+        // the host's own HotReload replacement is wrapped in a pcall for exactly this
+        // reason (and is therefore a no-op under the sandbox). Give _G write access for
+        // one assignment and put the flag back, so the sandbox keeps its guarantee.
+        const auto SandboxCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("lua.sandbox"));
+        const bool bFrozen = SandboxCVar && SandboxCVar->GetInt() != 0;
+        if (bFrozen)
+            UNLUANOVA_SET_READONLY(L, LUA_GLOBALSINDEX, false);
+#endif
+        lua_setglobal(L, "require");                 // []
+#if UNLUANOVA_HAS_SANDBOX
+        if (bFrozen)
+            UNLUANOVA_SET_READONLY(L, LUA_GLOBALSINDEX, true);
+#endif
+    }
+
+    int FLuaEnv::GuardedRequire(lua_State* L)
+    {
+        // Upvalue 1 = the original require, upvalue 2 = the per-Env set of names whose
+        // loader is running. All arguments and all return values are passed through, so
+        // Lua 5.4's second return value and FLuaEnv::Start's explicit argument table keep
+        // working on the wrapped path.
+        const int NumArgs = lua_gettop(L);
+        if (NumArgs < 1 || !lua_isstring(L, 1))
+            return luaL_error(L, "require: module name expected");
+
+        lua_pushvalue(L, lua_upvalueindex(2));       // loading
+        lua_pushvalue(L, 1);                         // name
+        lua_rawget(L, -2);                           // loading[name]
+        const bool bLoading = lua_isnil(L, -1) == 0;
+        lua_pop(L, 2);
+        if (bLoading)
+        {
+            const char* Name = lua_tostring(L, 1);
+            return luaL_error(L, "require: cyclic dependency involving '%s'", Name ? Name : "?");
+        }
+
+        // Mark before the call, clear on BOTH outcomes. A loader that raises must not
+        // poison every later require of the same name with a false cycle.
+        lua_pushvalue(L, lua_upvalueindex(2));
+        lua_pushvalue(L, 1);
+        lua_pushboolean(L, 1);
+        lua_rawset(L, -3);
+        lua_pop(L, 1);
+
+        lua_pushvalue(L, lua_upvalueindex(1));       // original require
+        for (int i = 1; i <= NumArgs; ++i)
+            lua_pushvalue(L, i);
+        const int Status = lua_pcall(L, NumArgs, LUA_MULTRET, 0);
+        const int Results = lua_gettop(L) - NumArgs;
+
+        lua_pushvalue(L, lua_upvalueindex(2));
+        lua_pushvalue(L, 1);
+        lua_pushnil(L);
+        lua_rawset(L, -3);
+        lua_pop(L, 1);
+
+        if (Status != 0)
+            return lua_error(L);                     // rethrow the original error object
+        return Results;
+    }
+
+    int FLuaEnv::Unrequire(lua_State* L)
+    {
+        (void)luaL_checkstring(L, 1);   // validate the argument before touching caches
+        int32 Removed = 0;
+
+        // Only CACHES are cleared. package.preload and package.aliases are declarations
+        // (the equivalents of a file on disk and a redirect rule): deleting them would
+        // make reloadmodule(name) unable to load the module it was just asked to reload.
+        // A project that wants to withdraw a host-supplied loader sets
+        // package.preload[name] = nil itself. Scoping is exact-name: an alias and its
+        // target share one cached instance, so callers that want both gone call twice.
+        lua_getglobal(L, "package");                 // [package]
+        if (lua_istable(L, -1))
+        {
+            lua_getfield(L, -1, "loaded");            // [package, loaded]
+            lua_remove(L, -2);                       // [loaded]
+            if (lua_istable(L, -1))
+            {
+                // HotReload FIRST: it owns three private caches (loaded_modules,
+                // loaded_module_times, ignore_modules), and without clearing them the
+                // next require silently hands the stale module back. Look it up in
+                // package.loaded instead of require()-ing it, so unloading can never
+                // trigger a module load. Doing this before clearing loaded[name] also
+                // keeps unrequire('UnLuaNova.HotReload') itself well-defined.
+                lua_pushliteral(L, "UnLuaNova.HotReload");
+                lua_rawget(L, -2);                    // [loaded, mod]
+                if (lua_istable(L, -1))
+                {
+                    lua_getfield(L, -1, "unrequire"); // [loaded, mod, fn]
+                    if (lua_isfunction(L, -1))
+                    {
+                        lua_pushvalue(L, 1);
+                        if (lua_pcall(L, 1, 1, 0) == LUA_OK)
+                        {
+                            if (lua_isnumber(L, -1) && lua_tonumber(L, -1) > 0)
+                                ++Removed;
+                        }
+                        lua_pop(L, 1);                // result or error object
+                    }
+                    else
+                    {
+                        lua_pop(L, 1);
+                    }
+                }
+                lua_pop(L, 1);                        // [loaded]
+
+                // Then the public cache. Idempotent when HotReload already cleared it.
+                lua_pushvalue(L, 1);
+                lua_rawget(L, -2);                    // [loaded, old]
+                if (lua_isnil(L, -1) == 0)
+                    ++Removed;
+                lua_pop(L, 1);
+                lua_pushvalue(L, 1);
+                lua_pushnil(L);
+                lua_rawset(L, -3);                    // [loaded]
+            }
+        }
+        lua_pop(L, 1);                                // []
+
+        UNLUANOVA_PUSHINT(L, Removed);
+        return 1;
+    }
+
+    int FLuaEnv::ReloadModule(lua_State* L)
+    {
+        // unrequire() leaves its cleanup count on top; drop it (argument 1 stays put),
+        // then go through whatever require() is current - HotReload's replacement on a
+        // default build - rather than duplicating the searcher walk here.
+        Unrequire(L);
+        lua_pop(L, 1);
+        lua_getglobal(L, "require");
+        lua_pushvalue(L, 1);
+        lua_call(L, 1, 1);
+        return 1;
+    }
+
+    int FLuaEnv::ResolutionInfo(lua_State* L)
+    {
+        // Machine-readable statement of what this resolver does and does NOT do. A spec
+        // or a project script can assert against it instead of guessing from a failed
+        // require, and it is where the cooked/case boundaries are declared explicitly.
+        lua_newtable(L);
+        lua_pushboolean(L, 1);
+        lua_setfield(L, -2, "case_sensitive");
+        lua_pushboolean(L, 0);
+        lua_setfield(L, -2, "automatic_case_fallback");
+        lua_pushboolean(L, 0);
+        lua_setfield(L, -2, "alias_config_files");   // upstream Luau @alias / .luaurc
+        lua_pushboolean(L, 1);
+        lua_setfield(L, -2, "runtime_alias_table");  // package.aliases
+        lua_pushboolean(L, 1);
+        lua_setfield(L, -2, "cycle_detection");
+        lua_pushboolean(L, 1);
+        lua_setfield(L, -2, "explicit_unrequire");
+#if WITH_EDITOR
+        lua_pushboolean(L, 0);
+#else
+        lua_pushboolean(L, 1);
+#endif
+        lua_setfield(L, -2, "cooked_build");
+        lua_pushliteral(L, "exact-name");
+        lua_setfield(L, -2, "unrequire_scope");
+        lua_pushliteral(L, "package.loaded, HotReload caches; preload and aliases are declarations and survive");
+        lua_setfield(L, -2, "cleared_caches");
+        return 1;
+    }
+
     int FLuaEnv::AliasLoader(lua_State* L)
     {
         // require() calls this with the ORIGINAL module name; we deliberately ignore it.
@@ -1025,6 +1297,15 @@ namespace UnLuaNova
         const char* Name = lua_tostring(L, 1);
         if (!Name)
             return 0;
+
+        // Upstream Luau Require resolves @alias names through @alias config files
+        // (.luaurc). UnLuaNova resolves aliases through package.aliases instead. A
+        // leading '@' used to fall through every searcher and surface as a bare
+        // "module not found", which hides that contract rather than declaring it.
+        if (Name[0] == '@')
+            return luaL_error(L,
+                "require: upstream @alias config files are not supported; use "
+                "package.aliases['%s'] = '<target>' instead (see package.resolution())", Name);
 
         lua_getglobal(L, "package");
         if (!lua_istable(L, -1))
@@ -1194,6 +1475,34 @@ namespace UnLuaNova
             FullPath = FPaths::ConvertRelativePathToFull(PathWithProjectDir);
             if (FFileHelper::LoadFileToArray(Data, *FullPath, FILEREAD_Silent))
                 return LoadIt();
+        }
+
+        // Resolution contract, with opt-in diagnostics: a dotted module name maps to a
+        // path one-to-one and is case-sensitive, with no automatic case fallback (which
+        // would hide a real packaging mistake). In a cooked build the loose .lua files
+        // above only resolve if the project staged them under one of those roots.
+        // Off by default: a searcher declining is normal when a later one handles it.
+        static auto DiagCVar = IConsoleManager::Get().RegisterConsoleVariable(
+            TEXT("lua.requireresolution"),
+            0,
+            TEXT("Log a diagnostic when the file-system searcher cannot resolve a module. "
+                 "0 = off (default), 1 = on. Module names are case-sensitive and cooked "
+                 "builds need loose scripts staged under a project root; "
+                 "package.resolution() reports the full contract."),
+            ECVF_Default);
+        if (DiagCVar->GetInt() != 0)
+        {
+#if WITH_EDITOR
+            const TCHAR* BuildKind = TEXT("editor");
+#else
+            const TCHAR* BuildKind = TEXT("cooked");
+#endif
+            const FString Example = Patterns.Num() > 0 ? Patterns[0] : FString();
+            UE_LOG(LogUnLuaNova, Warning,
+                TEXT("require: file-system searcher could not resolve '%s' (%d pattern(s), e.g. '%s'); "
+                     "%s build. Names are case-sensitive, cooked builds need loose scripts staged "
+                     "under ProjectDir or ProjectPersistentDownloadDir. See package.resolution()."),
+                *FileName, Patterns.Num(), *Example, BuildKind);
         }
 
         return 0;
@@ -1416,13 +1725,55 @@ namespace UnLuaNova
     void* FLuaEnv::DefaultLuaAllocator(void* ud, void* ptr, size_t osize, size_t nsize)
     {
         FLuaMemoryStats& Stats = FLuaMemoryStats::Get();
+        // Only the default path passes an FMemoryQuota. A custom allocator's userdata is
+        // opaque, which is why it is never touched here.
+        FMemoryQuota* Quota = static_cast<FMemoryQuota*>(ud);
 
         if (nsize == 0)
         {
-            if (ptr) Stats.TrackFree(osize);
+            if (ptr)
+            {
+                // A free is NEVER subject to the quota: lua_close() drains the whole VM
+                // through this branch, and refusing it would wedge env teardown forever.
+                if (Quota)
+                {
+                    const int64 Live = Quota->LiveBytes.load();
+                    Quota->LiveBytes.store(Live > (int64)osize ? Live - (int64)osize : 0);
+                }
+                Stats.TrackFree(osize);
+            }
             UNLUANOVA_STAT_MEMORY_FREE(ptr, Lua);
             FMemory::Free(ptr);
             return nullptr;
+        }
+
+        // Fresh allocations carry a type tag in osize on some backends rather than a byte
+        // count; only a realloc of a live block has a meaningful old size.
+        const int64 Delta = (int64)nsize - (ptr ? (int64)osize : 0);
+        if (Quota && Delta > 0)
+        {
+            const int64 Max = Quota->MaxBytes.load();
+            const int64 Live = Quota->LiveBytes.load();
+            if (Max > 0 && Live + Delta > Max)
+            {
+                Quota->LastRequestedBytes.store((int64)nsize);
+                Quota->Rejections.fetch_add(1);
+                // One line per env: a tight allocator loop would otherwise bury every
+                // other log in the process. lua.memquota status gives the live totals.
+                if (Quota->Rejections.load() == 1)
+                {
+                    UE_LOG(LogUnLuaNova, Error,
+                        TEXT("Lua memory quota (ctx 0x%p) refused an allocation: live=%lld B, "
+                             "requested=%lld B, limit=%lld B. The VM raises a recoverable "
+                             "'not enough memory' error; raise lua.maxmemorykb or release "
+                             "Lua objects. Rejection count is readable via lua.memquota status."),
+                        Quota, Live, (int64)nsize, Max);
+                }
+                // lua_Alloc contract: nullptr means allocation failed. Both backends turn
+                // this into LUA_ERRMEM; we must NOT luaL_error here (no lua_State, and a
+                // longjmp out of the collector is not safe).
+                return nullptr;
+            }
         }
 
         void* Buffer;
@@ -1439,7 +1790,15 @@ namespace UnLuaNova
 
         // Lua passes a type tag in osize for some fresh allocations. A failed realloc
         // leaves the old block live and must not change accounting.
-        if (Buffer) Stats.TrackAlloc(ptr ? osize : 0, nsize);
+        if (Buffer)
+        {
+            if (Quota)
+            {
+                const int64 Next = Quota->LiveBytes.load() + Delta;
+                Quota->LiveBytes.store(Next > 0 ? Next : 0);
+            }
+            Stats.TrackAlloc(ptr ? osize : 0, nsize);
+        }
         return Buffer;
     }
 }

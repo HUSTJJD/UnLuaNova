@@ -94,3 +94,28 @@ Net source changes in the current worktree now fail two `UnLuaNova.API.Net.*` ca
 regression to close, not a scope statement. Freeze the worktree, refresh the generated matrix and
 re-run the full Release pipeline without concurrent UE builds. See
 [Current Version Status](ReleaseNotes.md).
+
+
+## Sixth source-only pass (written, not compiled, not executed)
+
+The statements above that registration-site diagnostics are missing, that reload rollback
+needs tests, or that no memory quota exists are historical conclusions from the 2026-11-03
+baseline. They are now addressed **in source and specs only**, with no new execution evidence:
+
+- `WATCHDOG`: per-Env allocator heap quota (`lua.maxmemorykb` / `lua.memquota`) raising a
+  recoverable Lua error; frees are never refused, custom allocators are outside the quota.
+- `LUAU-REQUIRE`: a final `_G.require` wrapper gives both backends cycle detection;
+  `unrequire` / `reloadmodule` / `package.resolution()` state the cache and resolution
+  contract; upstream `@alias` config files are explicitly refused.
+- `RUNTIME-RELOAD`: two-phase commit with snapshot rollback, `ok, err`, and timestamps that
+  advance only on success; explicitly best-effort rather than transactional.
+- `RUNTIME-TIMER` / `LIFE-ENVS`: registration sites (source / line / Env label) with
+  `Timer.Describe` / `Timer.Diagnostics`, plus `DescribeEnv()` attribution for Lua call
+  errors and timer callback errors; diagnostics never leak another Env's timers.
+- `PERFORMANCE`: `#metric` non-time metrics with a fail-closed alignment gate and 30 new tool
+  regressions (130 Python tests in total, all passing).
+
+No UE build, UE automation or Release run happened in this pass. All 40 `verification`
+values stay `pending-runtime` and `release-status` stays `not-passed`; the specialised gaps
+in the table above (multi-PIE, world pause / time dilation, Iris / cooked, same-machine
+cross-project runs, full conformance) are **not** closed by source-only work.

@@ -194,7 +194,19 @@ plugin** - they are not part of the sample project. Reach them as `UnLuaNova.<Mo
 | `Buffer` | `buffer` <-> `TArray<uint8>` conversion (`HasBuffer()` / `FromArray` / `ToArray`) |
 | `Input` | input binding |
 | `EnhancedInput` | enhanced input binding |
-| `HotReload` | hot reload: takes over `require` so already loaded modules can be replaced |
+| `HotReload` | hot reload: takes over `require` so loaded modules can be replaced; `reload()` commits in two phases, snapshot-rolls back on failure and returns `ok, err` (best-effort, not a transaction) |
+
+!!! note "Module aliases and cache contract"
+
+    `package.aliases['short'] = 'real.name'` redirects `require` before the other searchers
+    on both backends, and both names share one cached instance. Self-aliases are refused and
+    cycles of any length are caught by the host's final `_G.require` wrapper. Upstream Luau
+    Require `@alias` / `.luaurc` config files are explicitly refused instead of degrading to
+    "module not found". Env startup also installs the globals `unrequire(name)` (clears
+    `package.loaded` plus three HotReload private caches while keeping `preload` and
+    `aliases` declarations) and `reloadmodule(name)` (`unrequire` then `require`).
+    `package.resolution()` reports the case / cooked / cycle / unload contract as data.
+    See [module resolution](Luau.md#module-resolution-and-unload-contract).
 
 !!! warning "Do not put these modules in the project directory"
 

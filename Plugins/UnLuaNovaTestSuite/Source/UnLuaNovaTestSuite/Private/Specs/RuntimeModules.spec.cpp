@@ -404,6 +404,142 @@ void FRuntimeModulesSpec::Define()
             TEST_TRUE(lua_toboolean(L, -1));
         });
     });
+
+    // RUNTIME-RELOAD / failed reload rollback。
+    // 往 package.searchers 注入一个「虚拟模块」，用全局 SpecRollbackSource 切换
+    // 好 / 加载期抛错 / 语法错误 三份源码：全程不落盘、不依赖文件时间戳精度，
+    // Luau 与 plain Lua 两个后端走的是同一段 Lua。每个 It 有独立的 FLuaEnv，
+    // 所以 searcher 注入与全局变量都不会跨用例泄漏。
+    Describe(TEXT("HotReload 失败重载回滚"), [this]()
+    {
+        It(TEXT("成功路径 reload 返回 true"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::RunChunk(L, R"(
+                local Hot = require('UnLuaNova.HotReload')
+                local Name = 'SpecRollbackModule'
+                SpecRollbackSource = "local M = {}; M.Version = 1; function M.Get() return 1 end; return M"
+                table.insert(package.searchers, 1, function(name)
+                    if name == Name then return assert(load(SpecRollbackSource, name)) end
+                end)
+                local Mod = Hot.require(Name)
+                if type(Mod) ~= 'table' or Mod.Get() ~= 1 then return false end
+                SpecRollbackSource = "local M = {}; M.Version = 2; function M.Get() return 2 end; return M"
+                local ok, err = Hot.reload({Name})
+                return ok == true and err == nil and Mod.Get() == 2
+            )");
+            TestTrue(TEXT("回滚用例 chunk 无未捕获错误"), lua_type(L, -1) == LUA_TBOOLEAN);
+            TEST_TRUE(lua_toboolean(L, -1));
+        });
+
+        It(TEXT("加载期抛错：返回 false、旧状态不变、修好后能成功"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            AddExpectedError(TEXT("SpecRollbackBoom"), EAutomationExpectedErrorFlags::Contains, 1);
+            UnLuaNova::RunChunk(L, R"(
+                local Hot = require('UnLuaNova.HotReload')
+                local Name = 'SpecRollbackModule'
+                SpecRollbackSource = "local M = {}; M.Version = 1; function M.Get() return 1 end; return M"
+                table.insert(package.searchers, 1, function(name)
+                    if name == Name then return assert(load(SpecRollbackSource, name)) end
+                end)
+                local Mod = Hot.require(Name)
+                if type(Mod) ~= 'table' then return false end
+                local OldLoaded = package.loaded[Name]
+                -- 加载期 error()：由 xpcall + load_error_handler 捕获，计算阶段即失败
+                SpecRollbackSource = "error('SpecRollbackBoom') return {}"
+                local ok, err = Hot.reload({Name})
+                local failed = (ok == false and type(err) == 'string')
+                local unchanged = (Mod.Get() == 1 and Mod.Version == 1
+                                   and package.loaded[Name] == OldLoaded)
+                -- 修好后再 reload 能成功，新函数生效
+                SpecRollbackSource = "local M = {}; M.Version = 2; function M.Get() return 2 end; return M"
+                local ok2 = Hot.reload({Name})
+                local retried = (ok2 == true and Mod.Get() == 2
+                                 and package.loaded[Name] == OldLoaded)
+                return failed and unchanged and retried
+            )");
+            TestTrue(TEXT("回滚用例 chunk 无未捕获错误"), lua_type(L, -1) == LUA_TBOOLEAN);
+            TEST_TRUE(lua_toboolean(L, -1));
+        });
+
+        It(TEXT("语法错误 + 无参 reload：失败不推进 mtime、修好后自动重试"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::RunChunk(L, R"(
+                local Hot = require('UnLuaNova.HotReload')
+                local Name = 'SpecRollbackModule'
+                SpecRollbackSource = "local M = {}; M.Version = 1; function M.Get() return 1 end; return M"
+                table.insert(package.searchers, 1, function(name)
+                    if name == Name then return assert(load(SpecRollbackSource, name)) end
+                end)
+                local Mod = Hot.require(Name)
+                if type(Mod) ~= 'table' or Mod.Get() ~= 1 then return false end
+                -- 白盒：M.reload 的 upvalue 里，loaded_module_times 是唯一一个
+                -- [Name] 非 nil 且不等于模块表的 table（ignore_modules/config 均无此键）
+                local times
+                local i = 1
+                while true do
+                    local n, v = debug.getupvalue(Hot.reload, i)
+                    if not n then break end
+                    if type(v) == 'table' and v[Name] ~= nil and v[Name] ~= Mod then
+                        times = v
+                        break
+                    end
+                    i = i + 1
+                end
+                if not times then return false end
+                -- 模拟「文件在上次记录之后被改动」：换成必然 != 数值时间戳的哨兵
+                times[Name] = false
+                local OldGet = Mod.Get
+                -- 坏版本（语法错误）：编译期失败，由 pcall(sandbox.load) 捕获
+                SpecRollbackSource = "local M = { this is not valid lua !!!"
+                local ok, err = Hot.reload()
+                local failed = (ok == false and type(err) == 'string')
+                local notAdvanced = (times[Name] == false)   -- 核心：失败不得推进时间戳
+                local unchanged = (Mod.Get == OldGet and Mod.Get() == 1
+                                   and package.loaded[Name] == Mod and Mod.Version == 1)
+                -- 修好；旧实现失败时已把时间戳推进到当前值，这次无参 reload 会静默跳过
+                SpecRollbackSource = "local M = {}; M.Version = 2; function M.Get() return 2 end; return M"
+                local ok2 = Hot.reload()
+                local retried = (ok2 == true and Mod.Get() == 2)
+                local advanced = (times[Name] ~= false)      -- 成功后才推进为当前时间戳
+                return failed and notAdvanced and unchanged and retried and advanced
+            )");
+            TestTrue(TEXT("回滚用例 chunk 无未捕获错误"), lua_type(L, -1) == LUA_TBOOLEAN);
+            TEST_TRUE(lua_toboolean(L, -1));
+        });
+    });
+
+    // M.unrequire 契约：幂等、不抛错、清掉 HotReload 私有记账与 package.loaded，
+    // 返回明确计数。对 package.preload 不做假设（当前实现刻意不清它，以免破坏
+    // reloadmodule 对声明式模块的重载），故只断言「至少清掉 3 项」与关键表为 nil。
+    Describe(TEXT("HotReload unrequire"), [this]()
+    {
+        It(TEXT("卸载模块缓存：幂等、计数、非法参数不抛错"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::RunChunk(L, R"(
+                local Hot = require('UnLuaNova.HotReload')
+                local Name = 'SpecUnrequireModule'
+                SpecUnrequireSource = "local M = {}; function M.Get() return 1 end; return M"
+                table.insert(package.searchers, 1, function(name)
+                    if name == Name then return assert(load(SpecUnrequireSource, name)) end
+                end)
+                local Mod = Hot.require(Name)
+                if type(Mod) ~= 'table' or package.loaded[Name] ~= Mod then return false end
+                Hot.config.ignore_modules[Name] = true
+                local n = Hot.unrequire(Name)
+                local okCount = (type(n) == 'number' and n >= 3)
+                local cleared = (package.loaded[Name] == nil
+                                 and rawget(Hot.config.ignore_modules, Name) == nil)
+                local again = Hot.unrequire(Name)
+                local b1 = Hot.unrequire(nil)
+                local b2 = Hot.unrequire(123)
+                local b3 = Hot.unrequire('')
+                return okCount and cleared and again == 0
+                       and b1 == 0 and b2 == 0 and b3 == 0
+            )");
+            TestTrue(TEXT("unrequire 用例 chunk 无未捕获错误"), lua_type(L, -1) == LUA_TBOOLEAN);
+            TEST_TRUE(lua_toboolean(L, -1));
+        });
+    });
 }
 
 #endif

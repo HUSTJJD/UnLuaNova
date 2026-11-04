@@ -9,6 +9,41 @@ outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
 
 ## Unreleased — source changes, not yet validated
 
+- Sixth source-only capability pass (`WATCHDOG`, `LUAU-REQUIRE`, `RUNTIME-RELOAD`,
+  `RUNTIME-TIMER`, `LIFE-ENVS`, `PERFORMANCE`): a per-Env Lua heap quota (`lua.maxmemorykb`
+  / `lua.memquota <kb>|off|status|reset`) enforced in `FLuaEnv::DefaultLuaAllocator`
+  before each allocation, with live-byte, refusal and last-request counters, one actionable
+  log per env and a recoverable VM error; frees are never refused so `lua_close` cannot
+  wedge, and a custom `lua_Alloc` stays outside the quota. Module resolution gained a
+  require-wrapper cycle guard installed *after* HotReload replaces `_G.require` (covering
+  native require, `FLuaEnv::Require` and HotReload's replacement without changing loader
+  signatures or the chunks HotReload applies `setfenv` / `_ENV` to), an explicit
+  `unrequire(name)` / `reloadmodule(name)` cache contract clearing `package.loaded` and
+  HotReload's three private caches while keeping `package.preload` / `package.aliases`
+  declarations, `package.resolution()` as a machine-readable statement of the case /
+  cooked / `@alias` / cycle / unload contract, an explicit refusal for upstream `@alias`
+  config files, and `lua.requireresolution` for opt-in unresolved-path diagnostics.
+  `HotReload.lua` now commits reloads in two phases with a snapshot rollback, returns
+  `ok, err`, fires `module_loaded` hooks only after a successful commit, guards the
+  `debug.getregistry()` scan and advances file timestamps only on success; `Lua.HotReload()`
+  surfaces that boolean. Rollback is explicitly best-effort, not a transaction (`_G`,
+  live stack locals, arbitrary tables/upvalues and the registry are not snapshotted).
+  Timer registration now records the Lua source/line and owning Env (`Timer.Describe`,
+  `Timer.Diagnostics`, attributable callback errors), and `DescribeEnv()` labels Lua call
+  errors and timer failures with a stable env index, name and main-state pointer.
+- Tooling: `Tools/CrossProject` gained a `#metric` log line type (separate from the ten
+  `#case` timing cases) for `memory.peak_kb`, `startup.load_us`, `gc.pause_us` and
+  `code_size.bytes`; `runner.py` aligns metric sets/units, `metrics.py` adds fail-closed
+  `check_metric_alignment` / `summarize_metrics` behind an opt-in `--require-metrics`
+  switch (old JSON behaviour unchanged), both workload adapters emit the lines and report
+  `unavailable` rather than `0` when a value cannot be measured. 30 new tool regressions
+  pass (130 total without UE). New UE automation: `ModuleContracts.spec.cpp` (memory quota,
+  wrapped require cycle guard, unrequire/reload, resolution contract, env attribution),
+  three `Timer.spec.cpp` cases (site diagnostics, cross-Env isolation, both world clocks)
+  and three `RuntimeModules.spec.cpp` reload-rollback cases driven by an in-memory
+  searcher source switch. **None of the C++ or UE automation in this pass was compiled or
+  executed**; `release-status` stays `not-passed` and all 40 `verification` values stay
+  `pending-runtime` until the maintainer's RunTests run.
 - Source-only loading, require cycles, a deterministic execution budget and the profiler
   end-to-end path (`COMPAT-LANGUAGE`, `LUAU-REQUIRE`, `WATCHDOG`, `PROFILE`): `load()`
   validates its mode (pure `b`, unknown letters and empty modes fail clearly; `t` / `bt`
