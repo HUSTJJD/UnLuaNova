@@ -204,6 +204,33 @@ CVar 本身在两个后端上都存在，所以 `lua.sandbox` 在任何后端都
 "命令不存在"——只是写入在 Lua 5.5 下不产生效果。脚本要判断它是否真的生效，用
 `UnLuaNova.HasFeature('sandbox')`。
 
+### lua.coverage \[dump \[file\]\|status\]
+
+导出 Luau 编译期插桩的行命中计数（仅 Luau 后端；纯 Lua 后端会明确报不支持）。
+
+```
+luau.coverage 1          ; 必须先于脚本加载设置，1=语句，2=语句与表达式
+lua.coverage status
+lua.coverage dump                              ; Saved/Coverage/coverage-Luau.json
+lua.coverage dump D:/work/coverage-run-a.json
+```
+
+`status` 只报告级别；`dump` 写出全量 JSON 快照，包含按可达全局表 / `package.loaded`
+路径命名的 source、每个函数的逐行 `hits`、显式声明的排除项与 totals。没有可达 Lua 函数、
+没有 Env 或写文件失败时报错，不写空报告。计数器不会被导出重置，连续 dump 是累积的。
+
+导出结果必须用门禁判定，不能直接把 JSON 里的 totals 当结论：
+
+```powershell
+python Tools/ValidateCoverage.py --report Saved/Coverage/coverage-Luau.json `
+    --require-source "_G.UnLuaNova.Event" --min-coverage 0.5 `
+    --out Saved/Coverage/coverage-gate.json
+```
+
+*注：已经 `require` 过的 chunk 不追溯生效；C 闭包没有计数器；这是 opt-in 诊断能力，
+不属于 33 个 Release 阶段。完整格式、fail-closed 规则与限制见
+[Luau 覆盖率导出与门禁](LuauCoverage.md)。*
+
 ---
 
 ## 延伸阅读
@@ -211,4 +238,5 @@ CVar 本身在两个后端上都存在，所以 `lua.sandbox` 在任何后端都
 - [调试](Debugging.md) — 断点调试 Lua 脚本
 - [设置项](Settings.md) — 相关设置项（后端、看门狗等）
 - [Luau 后端](Luau.md) — 沙盒、原生断点、分配分类统计等 Luau 专属能力
+- [Luau 覆盖率导出与门禁](LuauCoverage.md) — 导出格式与质量门禁
 - [测试与自动化](Testing.md) — 自动化测试与报告

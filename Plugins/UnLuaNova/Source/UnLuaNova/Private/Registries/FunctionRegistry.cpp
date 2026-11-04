@@ -1,6 +1,7 @@
 #include "Registries/FunctionRegistry.h"
 #include "LuaBackend.h"
 #include "LuaEnv.h"
+#include "UnLuaNovaManager.h"
 
 namespace UnLuaNova
 {
@@ -32,52 +33,74 @@ namespace UnLuaNova
         return SelfRef;
     }
 
+    // Resolve the Lua function from the INSTANCE metatable (module table), following the
+    // Super chain. The returned ref is owned by the caller.
+    static lua_Integer ResolveFuncRef(lua_State* L, int32 SelfRef, const char* FunctionName)
+    {
+        lua_Integer FuncRef = LUA_NOREF;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, SelfRef);
+        if (!lua_getmetatable(L, -1))
+        {
+            lua_pop(L, 1);
+            return LUA_NOREF;
+        }
+        do
+        {
+            lua_pushstring(L, FunctionName);
+            lua_rawget(L, -2);
+            if (lua_isfunction(L, -1))
+            {
+                lua_pushvalue(L, -3);
+                lua_remove(L, -3);
+                lua_remove(L, -3);
+                lua_pushvalue(L, -2);
+                FuncRef = luaL_ref(L, LUA_REGISTRYINDEX);
+                break;
+            }
+            lua_pop(L, 1);
+            lua_pushstring(L, "Super");
+            lua_rawget(L, -2);
+            lua_remove(L, -2);
+        }
+        while (lua_istable(L, -1));
+        lua_pop(L, 2);
+        return FuncRef;
+    }
+
     void FFunctionRegistry::Invoke(ULuaFunction* Function, UObject* Context, FFrame& Stack, RESULT_DECL)
     {
         const auto SelfRef = GetOrBindSelfRef(Env, Context);
-
         const auto L = Env->GetMainState();
-        lua_Integer FuncRef;
-        FFunctionDesc* FuncDesc;
 
-        const auto Exists = LuaFunctions.Find(Function);
-        if (Exists)
+        // Overrides live on the UClass, but an instance-bound object resolves functions
+        // from its own module table. A class-level FuncRef cache would hand every instance
+        // the closure resolved for the first one, so that path resolves per call instead.
+        const bool bPerInstance = Env->GetManager()->HasInstanceBinding(Context);
+
+        auto* Info = LuaFunctions.Find(Function);
+        if (!Info)
         {
-            FuncRef = Exists->LuaRef;
-            FuncDesc = Exists->Desc.Get();
+            FFunctionInfo NewInfo;
+            NewInfo.Desc = TUniquePtr<FFunctionDesc>(new FFunctionDesc(Function, nullptr));
+            Info = &LuaFunctions.Add(Function, MoveTemp(NewInfo));
+        }
+
+        FFunctionDesc* FuncDesc = Info->Desc.Get();
+        lua_Integer FuncRef;
+        bool bTemporaryRef = false;
+        if (bPerInstance || !Info->bResolved)
+        {
+            FuncRef = ResolveFuncRef(L, SelfRef, FuncDesc->GetLuaFunctionName());
+            bTemporaryRef = bPerInstance;
+            if (!bPerInstance)
+            {
+                Info->LuaRef = FuncRef;
+                Info->bResolved = true;
+            }
         }
         else
         {
-            FuncRef = LUA_NOREF;
-            FuncDesc = new FFunctionDesc(Function, nullptr);
-
-            lua_rawgeti(L, LUA_REGISTRYINDEX, SelfRef);
-            lua_getmetatable(L, -1);
-            do
-            {
-                lua_pushstring(L, FuncDesc->GetLuaFunctionName());
-                lua_rawget(L, -2);
-                if (lua_isfunction(L, -1))
-                {
-                    lua_pushvalue(L, -3);
-                    lua_remove(L, -3);
-                    lua_remove(L, -3);
-                    lua_pushvalue(L, -2);
-                    FuncRef = luaL_ref(L, LUA_REGISTRYINDEX);
-                    break;
-                }
-                lua_pop(L, 1);
-                lua_pushstring(L, "Super");
-                lua_rawget(L, -2);
-                lua_remove(L, -2);
-            }
-            while (lua_istable(L, -1));
-            lua_pop(L, 2);
-            
-            FFunctionInfo Info;
-            Info.LuaRef = FuncRef;
-            Info.Desc = TUniquePtr<FFunctionDesc>(FuncDesc);
-            LuaFunctions.Add(Function, MoveTemp(Info));
+            FuncRef = Info->LuaRef;
         }
 
         if (FuncRef == LUA_NOREF)
@@ -91,5 +114,7 @@ namespace UnLuaNova
             return;
         }
         FuncDesc->CallLua(L, FuncRef, SelfRef, Stack, RESULT_PARAM);
+        if (bTemporaryRef)
+            luaL_unref(L, LUA_REGISTRYINDEX, FuncRef);
     }
 }

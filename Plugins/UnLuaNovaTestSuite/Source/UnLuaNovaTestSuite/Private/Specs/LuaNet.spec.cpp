@@ -682,16 +682,21 @@ void FNetSpec::Define()
             auto PushMap = [this](bool bReverse)
             {
                 lua_newtable(L);
-                const char* Names[2] = { "zeta", "alpha" };
+                // Only the *insertion order* may change between calls. The payload has to
+                // stay bound to its key: deriving the integers from the loop index made the
+                // two maps hold different key/value pairs, so the order-independence test
+                // compared two different values instead of two insertion orders.
+                struct FEntry { const char* Name; int32 First; int32 Second; };
+                const FEntry Entries[2] = { { "zeta", 10, 20 }, { "alpha", 11, 21 } };
                 for (int32 Index = 0; Index < 2; ++Index)
                 {
-                    const char* Name = bReverse ? Names[1 - Index] : Names[Index];
+                    const FEntry& Entry = Entries[bReverse ? 1 - Index : Index];
                     lua_newtable(L);
-                    lua_pushinteger(L, 10 + Index);
+                    lua_pushinteger(L, Entry.First);
                     lua_rawseti(L, -2, 1);
-                    lua_pushinteger(L, 20 + Index);
+                    lua_pushinteger(L, Entry.Second);
                     lua_rawseti(L, -2, 2);
-                    lua_setfield(L, -2, Name);
+                    lua_setfield(L, -2, Entry.Name);
                 }
             };
 

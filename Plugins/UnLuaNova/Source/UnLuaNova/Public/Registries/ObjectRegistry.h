@@ -57,6 +57,14 @@ namespace UnLuaNova
         int Bind(UObject* Object);
 
         /**
+         * 把已绑定实例的 INSTANCE 元表换成另一张模块表（实例级绑定用）。
+         * 不会 Unbind：已经 push 到 Lua 的 userdata 与 INSTANCE 表保持有效，只是改元表。
+         * 新模块表会继承旧模块表的 UObject 元表，保证 INSTANCE 的元表链完整。
+         * @return 是否真的完成替换（对象未绑定或表无效时返回 false）。
+         */
+        bool RebindModule(UObject* Object, int32 ModuleTableRef);
+
+        /**
          * 获取一个值，表示UObject是否绑定到了Lua环境。
          */
         bool IsBound(const UObject* Object) const;

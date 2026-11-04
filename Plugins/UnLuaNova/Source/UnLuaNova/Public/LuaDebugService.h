@@ -55,6 +55,9 @@ namespace UnLuaNova
             }
         };
 
+        /** DAP next / stepIn / stepOut. One step stops exactly once. */
+        enum class EStepMode : uint8 { None, Over, In, Out };
+
         static FLuaDebugService& Get();
 
         void Attach(lua_State* L);
@@ -68,6 +71,24 @@ namespace UnLuaNova
         const TArray<FBreakpoint>& GetBreakpoints() const { return Breakpoints; }
 
         void SetSingleStep(bool bInEnabled);
+
+        /**
+         * Start one DAP step. Over stops at the same or a shallower stack depth, In stops
+         * on the next line, Out stops once the stack has unwound. A real breakpoint still
+         * wins, and the mode is cleared as soon as the VM stops so stepping never becomes
+         * the persistent single-step switch the console command uses.
+         */
+        void BeginStep(EStepMode Mode);
+        EStepMode GetStepMode() const { return StepMode; }
+
+        /**
+         * Write a local variable in a paused frame (DAP setVariable). Value is a Lua
+         * expression evaluated against globals, then stored with lua_setlocal. Returns
+         * false with OutError when there is no paused frame, the name is not a local of
+         * that frame, or the expression fails.
+         */
+        bool SetVariable(const FString& Name, const FString& Value, int32 FrameIndex,
+            FString& OutValue, FString& OutError);
 
         // Captured at the last stop; only meaningful while IsPaused().
         bool IsPaused() const { return bPaused; }
@@ -131,6 +152,8 @@ namespace UnLuaNova
         bool bSingleStep = false;
         bool bBlocking = false;
         bool bPauseRequested = false;
+        EStepMode StepMode = EStepMode::None;
+        int32 StepTargetDepth = 0;
         int32 HitCount = 0;
     };
 }

@@ -46,7 +46,13 @@ public class UnLuaNovaTestSuite : ModuleRules
 				"Slate",
 				// Json: UnLuaNovaTestCommon.h carries DescribeRpcs(), which reads the peers'
 				// JSON reports, so every translation unit that includes it needs the DOM.
-				"Json"
+				"Json",
+				// NetCore: UNetConnection::Close() returns ENetCloseResult, whose UEnum
+				// reflection and LexToString overload are exported from NetCore, not
+				// Engine. The net-scenario tests close a connection to drive a real
+				// reconnect, so without this the TestSuite link line has unresolved
+				// StaticEnum<ENetCloseResult>/LexToString(ENetCloseResult) symbols.
+				"NetCore"
 			}
 		);
 

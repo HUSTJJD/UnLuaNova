@@ -37,6 +37,8 @@ namespace UnLuaNova
 
         FAutoConsoleCommand CodeGenCommand;
 
+        FAutoConsoleCommand CoverageCommand;
+
         explicit FUnLuaNovaConsoleCommands(IUnLuaNovaModule* InModule);
 
         void Do(const TArray<FString>& Args) const;
@@ -54,6 +56,8 @@ namespace UnLuaNova
         void Coroutines(const TArray<FString>& Args) const;
 
         void CodeGen(const TArray<FString>& Args) const;
+
+        void Coverage(const TArray<FString>& Args) const;
 
     private:
         // Which of FLuaEnv::GetAllEnvs() the `lua.dbg` sub-commands act on. INDEX_NONE

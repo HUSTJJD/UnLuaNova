@@ -197,15 +197,24 @@
       "id": "BIND-INSTANCE",
       "area": "Binding",
       "title": "Independent modules on same-class instances",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "source": [
-        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaManager.cpp"
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaManager.h",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaManager.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/Registries/ObjectRegistry.h",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/Registries/ObjectRegistry.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/Registries/FunctionRegistry.h",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/Registries/FunctionRegistry.cpp"
       ],
-      "tests": [],
-      "examples": [],
-      "gap": "UClass-keyed cache short-circuits binding; not FUnLua-style per-instance binding.",
-      "acceptance": "Bind A/B modules to same class, verify isolation through inheritance/reload/unbind.",
+      "tests": [
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/InstanceBinding.spec.cpp"
+      ],
+      "examples": [
+        "Docs/CN/InstanceBinding.md"
+      ],
+      "gap": "Delivered: BindInstance/UnbindInstance keep per-instance shallow copies of the module table, RebindModule swaps the INSTANCE metatable without invalidating userdata, class overrides take the union of function names, and instance-bound objects resolve Lua functions per call instead of sharing the class-level FuncRef cache. Requires class-level binding first; runtime evidence still needs a real UE run.",
+      "acceptance": "InstanceBinding.spec.cpp covers two modules on one class, isolation across alternating calls, rebinding, class-default fallback, unbind, query reset and rejected inputs through the real override thunk.",
       "upstream": [
         "FUnLua"
       ],
@@ -658,15 +667,22 @@
       "id": "LUAU-COVERAGE",
       "area": "Luau",
       "title": "Coverage export and quality gates",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "source": [
-        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp"
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaCoverage.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaConsoleCommands.cpp",
+        "Tools/ValidateCoverage.py"
       ],
-      "tests": [],
-      "examples": [],
-      "gap": "Compiler option exists; complete result export, source mapping and gate are absent.",
-      "acceptance": "Produce per-source counts with exclusions, aggregate backend runs, fail on missing data.",
+      "tests": [
+        "Tools/tests/test_validate_coverage.py"
+      ],
+      "examples": [
+        "Docs/CN/LuauCoverage.md"
+      ],
+      "gap": "Exported and gated: per-line Luau counters, declared exclusions, recomputed totals, multi-run aggregation and fail-closed coverage thresholds. Source names come from reachable global/module tables rather than a source map; C closures have no counters; chunks loaded before luau.coverage was set carry none, and only the Luau backend can export.",
+      "acceptance": "lua.coverage dump writes per-source line counters; Tools/ValidateCoverage.py recomputes totals, merges runs by max hits, requires named sources and a threshold, and fails on missing, empty, level-0 or mismatched reports. 15 tooling regressions pass without UE; execution evidence still requires a real run.",
       "upstream": [
         "Luau"
       ],
@@ -760,7 +776,9 @@
       "status": "partial",
       "priority": "P1",
       "source": [
+        "Plugins/UnLuaNova/Source/UnLuaNova/Public/LuaDebugService.h",
         "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaDebugService.cpp",
+        "Plugins/UnLuaNova/Source/UnLuaNovaEditor/Public/LuaDebugAdapter.h",
         "Plugins/UnLuaNova/Source/UnLuaNovaEditor/Private/LuaDebugAdapter.cpp"
       ],
       "tests": [
@@ -770,8 +788,8 @@
       "examples": [
         "Content/Script/Luau/03_NativeDebug.lua"
       ],
-      "gap": "Attach/evaluate/pause exist; packaged remote support, authorization and reconnect unverified.",
-      "acceptance": "Break/step/locals/upvalues across multiple Env and coroutine; malformed frames and disconnect cleanup.",
+      "gap": "Command surface delivered: launch (explicit refusal), configurationDone, setExceptionBreakpoints, setFunctionBreakpoints, setVariable (real lua_setlocal on a paused frame), source (disk read with dotted module resolution), modules (static view) and honest capability bits. next/stepIn/stepOut now use stack depth through FLuaDebugService::BeginStep instead of one persistent single-step switch. Remaining: exception filters are acknowledged but not wired into the VM hook, setBreakpoints still reports verified=false, scopes/variables do not expand nested references, and packaged remote support/authorization/reconnect are unverified. Runtime evidence pending.",
+      "acceptance": "DebugAdapter.spec.cpp drives every new command through a real DAP session (per-command probe) and asserts capability bits; DebugService.spec.cpp covers breakpoints, stack, locals and evaluate. Break/step behaviour still needs a paused-frame multi-Env/coroutine run.",
       "upstream": [
         "slua",
         "Luau"
@@ -877,17 +895,23 @@
       "status": "partial",
       "priority": "P1",
       "source": [
-        "Tools/RunTests.ps1"
+        "Tools/RunTests.ps1",
+        "Tools/CrossProject/runner.py",
+        "Tools/CrossProject/workload/unluanova/cases.lua",
+        "Tools/CrossProject/workload/external/cases.lua"
       ],
       "tests": [
         "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Benchmark.spec.cpp",
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/BenchmarkParity.spec.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/BenchmarkParity.spec.cpp",
+        "Tools/tests/test_crossproject_runner.py",
+        "Tools/tests/test_crossproject_workloads.py"
       ],
       "examples": [
-        "Content/Script/Tests/Benchmark/BP_UnLuaNovaBenchmark.lua"
+        "Content/Script/Tests/Benchmark/BP_UnLuaNovaBenchmark.lua",
+        "Tools/CrossProject/README.md"
       ],
-      "gap": "Threshold code exists; committed perf baselines and controlled external results absent.",
-      "acceptance": "Same hardware/UE/config, raw multi-run distributions, memory/startup/GC/code-size metrics.",
+      "gap": "Workload contract (revision 1), UnLuaNova workload, adaptive slua-unreal/FUnLua adapter, fail-closed alignment gate and 12 static regressions are delivered; the hardware-identity placeholders are gone and the runner rejects them. Still absent: same-machine runs in the two external projects, raw multi-run distributions and any cross-project conclusion.",
+      "acceptance": "Same hardware/UE/config, identical 10-case sets and iteration counts (checked statically), raw multi-run distributions, memory/startup/GC/code-size metrics, and real logs from both external bindings before any comparison is published.",
       "upstream": [
         "slua",
         "FUnLua"
@@ -925,7 +949,7 @@
       ],
       "tests": [],
       "examples": [],
-      "gap": "Root/file scope unresolved; extension notices incomplete; FUnLua license file missing.",
+      "gap": "Root/file MIT scope is resolved and all in-tree version identifiers (LuaSocket 3.0-rc1, RapidJSON 1.1.0, serpent 0.30, lua-rapidjson 'scm') are recorded with file:line evidence. Still outstanding and not assertable from this tree: exact upstream revisions of copied extensions, full shipped-notice texts, sample asset redistribution rights, and FUnLua's missing license file at the pinned commit.",
       "acceptance": "Rights-holder scope decision, file/component provenance, complete notices in distributable artifact.",
       "upstream": [
         "UnLua",

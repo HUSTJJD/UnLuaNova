@@ -84,11 +84,11 @@ criteria. This is not a self-description in feature-list form: every item states
 | Area | Items | Scope |
 |---|---:|---|
 | UE integration: reflection calls, overrides, containers/structs, delegates, input/animation/UI | 5 | 1 complete · 4 partial |
-| Binding: plain C++ template exports, generated marshalling thunks, per-instance modules | 3 | 1 complete · 1 partial · 1 planned |
+| Binding: plain C++ template exports, generated marshalling thunks, per-instance modules | 3 | 2 complete · 1 partial · 0 planned |
 | Lifetime: owned/borrowed and manual finalization, multiple Env/World, coroutines and latent | 3 | 3 partial |
 | Runtime libraries: Timer, Event, OOP, hot reload | 4 | 1 complete · 3 partial |
 | Declarative networking: RPC, replicated properties, replication types | 3 | 3 experimental |
-| **Luau**: language surface, stdlib, vector, buffer, codegen, GC, sandbox, types and LSP, require, coverage, experimental libs | **11** | 2 complete · 6 partial · 2 experimental · 1 planned |
+| **Luau**: language surface, stdlib, vector, buffer, codegen, GC, sandbox, types and LSP, require, coverage, experimental libs | **11** | 3 complete · 6 partial · 2 experimental · 0 planned |
 | Lua compatibility: debug/upvalues, io, language and bytecode differences | 3 | 3 partial |
 | Debugging (DAP) · profiling · watchdog · extensions (socket/protobuf/JSON) | 4 | 4 partial |
 | Quality provenance · performance baseline · packaging and platforms · license | 4 | 4 partial |
@@ -339,7 +339,7 @@ Clear beats flattering. The following are known gaps — a statement of scope, n
 | **Generated thunks** | Final dispatch still goes through `UObject::ProcessEvent` — static binding removes the runtime reflection lookup and marshalling, not the dispatch. A self-baseline and a 25% regression gate are committed; **no same-machine comparison against slua-unreal / FUnLua yet** |
 | **Luau native codegen** | Opt-in: `lua.codegen.enabled=1` (default 0), narrow it with `lua.codegen.modules`. Applies only to chunks loaded after the switch, and only on Luau + x64/arm64 |
 | **Engine versions and platforms** | Verified on UE **5.8.3 / Win64**. Other engine versions, Linux / Mac / iOS / Android and consoles need their own acceptance |
-| **Per-instance binding** | Bindings are cached per `UClass`; two instances of the same class cannot bind to different modules (planned) |
+| **Per-instance binding** | Delivered: `BindInstance` / `UnbindInstance` plus Blueprint entry points (see `Docs/CN/InstanceBinding.md`). Class-level binding is still the default cache and must be established first; overrides form a class-level union of function names and instance-bound objects resolve Lua functions per call. Runtime evidence still needs a real `UnLuaNova.API.InstanceBinding` run |
 | **Sandbox** | `lua.sandbox` is off by default; path checks are not an OS-level sandbox. Untrusted scripts need their own capability policy |
 | **Third-party notices** | Version, provenance and shipped-notice inventory for extensions, tools, binaries and sample assets is not complete yet (independent of the license) |
 

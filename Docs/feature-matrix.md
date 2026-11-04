@@ -122,17 +122,17 @@ Acceptance: Prove generated/fallback equivalence and add a reproducible generati
 
 ### BIND-INSTANCE: Independent modules on same-class instances
 
-Status: **planned**; priority: P1; references: FUnLua.
+Status: **implemented**; priority: P1; references: FUnLua.
 
 Evidence: no execution recorded yet.
 
-- Source: [UnLuaNovaManager.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaManager.cpp)
-- Tests: Missing dedicated evidence.
-- Examples: Missing dedicated evidence.
+- Source: [UnLuaNovaManager.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/UnLuaNovaManager.h), [UnLuaNovaManager.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaManager.cpp), [ObjectRegistry.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/Registries/ObjectRegistry.h), [ObjectRegistry.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/Registries/ObjectRegistry.cpp), [FunctionRegistry.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/Registries/FunctionRegistry.h), [FunctionRegistry.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/Registries/FunctionRegistry.cpp)
+- Tests: [InstanceBinding.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/InstanceBinding.spec.cpp)
+- Examples: [InstanceBinding.md](https://github.com/HUSTJJD/UnLuaNova/blob/master/Docs/CN/InstanceBinding.md)
 
-Boundary: UClass-keyed cache short-circuits binding; not FUnLua-style per-instance binding.
+Boundary: Delivered: BindInstance/UnbindInstance keep per-instance shallow copies of the module table, RebindModule swaps the INSTANCE metatable without invalidating userdata, class overrides take the union of function names, and instance-bound objects resolve Lua functions per call instead of sharing the class-level FuncRef cache. Requires class-level binding first; runtime evidence still needs a real UE run.
 
-Acceptance: Bind A/B modules to same class, verify isolation through inheritance/reload/unbind.
+Acceptance: InstanceBinding.spec.cpp covers two modules on one class, isolation across alternating calls, rebinding, class-default fallback, unbind, query reset and rejected inputs through the real override thunk.
 
 ## Lifetime
 
@@ -410,17 +410,17 @@ Acceptance: Document resolution/cycle/cache contract and add alias/case/cook tes
 
 ### LUAU-COVERAGE: Coverage export and quality gates
 
-Status: **planned**; priority: P1; references: Luau.
+Status: **implemented**; priority: P1; references: Luau.
 
 Evidence: no execution recorded yet.
 
-- Source: [LuaBackend.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp)
-- Tests: Missing dedicated evidence.
-- Examples: Missing dedicated evidence.
+- Source: [LuaBackend.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp), [LuaCoverage.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaCoverage.cpp), [UnLuaNovaConsoleCommands.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaConsoleCommands.cpp), [ValidateCoverage.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/ValidateCoverage.py)
+- Tests: [test_validate_coverage.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/tests/test_validate_coverage.py)
+- Examples: [LuauCoverage.md](https://github.com/HUSTJJD/UnLuaNova/blob/master/Docs/CN/LuauCoverage.md)
 
-Boundary: Compiler option exists; complete result export, source mapping and gate are absent.
+Boundary: Exported and gated: per-line Luau counters, declared exclusions, recomputed totals, multi-run aggregation and fail-closed coverage thresholds. Source names come from reachable global/module tables rather than a source map; C closures have no counters; chunks loaded before luau.coverage was set carry none, and only the Luau backend can export.
 
-Acceptance: Produce per-source counts with exclusions, aggregate backend runs, fail on missing data.
+Acceptance: lua.coverage dump writes per-source line counters; Tools/ValidateCoverage.py recomputes totals, merges runs by max hits, requires named sources and a threshold, and fails on missing, empty, level-0 or mismatched reports. 15 tooling regressions pass without UE; execution evidence still requires a real run.
 
 ### LUAU-EXPERIMENTAL: Experimental integer and user-defined class libraries
 
@@ -488,13 +488,13 @@ Status: **partial**; priority: P1; references: slua, Luau.
 
 Evidence: `2026-11-02-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-02-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 14/14 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 14/14 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 8/8 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 8/8 passed, 0 failed.
 
-- Source: [LuaDebugService.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaDebugService.cpp), [LuaDebugAdapter.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNovaEditor/Private/LuaDebugAdapter.cpp)
+- Source: [LuaDebugService.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Public/LuaDebugService.h), [LuaDebugService.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaDebugService.cpp), [LuaDebugAdapter.h](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNovaEditor/Public/LuaDebugAdapter.h), [LuaDebugAdapter.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNova/Source/UnLuaNovaEditor/Private/LuaDebugAdapter.cpp)
 - Tests: [DebugService.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DebugService.spec.cpp), [DebugAdapter.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/DebugAdapter.spec.cpp)
 - Examples: [03_NativeDebug.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Luau/03_NativeDebug.lua)
 
-Boundary: Attach/evaluate/pause exist; packaged remote support, authorization and reconnect unverified.
+Boundary: Command surface delivered: launch (explicit refusal), configurationDone, setExceptionBreakpoints, setFunctionBreakpoints, setVariable (real lua_setlocal on a paused frame), source (disk read with dotted module resolution), modules (static view) and honest capability bits. next/stepIn/stepOut now use stack depth through FLuaDebugService::BeginStep instead of one persistent single-step switch. Remaining: exception filters are acknowledged but not wired into the VM hook, setBreakpoints still reports verified=false, scopes/variables do not expand nested references, and packaged remote support/authorization/reconnect are unverified. Runtime evidence pending.
 
-Acceptance: Break/step/locals/upvalues across multiple Env and coroutine; malformed frames and disconnect cleanup.
+Acceptance: DebugAdapter.spec.cpp drives every new command through a real DAP session (per-command probe) and asserts capability bits; DebugService.spec.cpp covers breakpoints, stack, locals and evaluate. Break/step behaviour still needs a paused-frame multi-Env/coroutine run.
 
 ### PROFILE: CPU, self time, memory and flamegraphs
 
@@ -562,13 +562,13 @@ Status: **partial**; priority: P1; references: slua, FUnLua.
 
 Evidence: `2026-11-03-editor-lua` Lua/Editor: 2/2 passed, 0 failed; `2026-11-03-editor-luau` Luau/Editor: 2/2 passed, 0 failed; `2026-11-03-baseline-editor-lua` Lua/Editor: 2/2 passed, 0 failed; `2026-11-03-baseline-editor-luau` Luau/Editor: 2/2 passed, 0 failed; `2026-11-03-baseline-game-lua` Lua/Game: 2/2 passed, 0 failed; `2026-11-03-baseline-game-luau` Luau/Game: 2/2 passed, 0 failed.
 
-- Source: [RunTests.ps1](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/RunTests.ps1)
-- Tests: [Benchmark.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Benchmark.spec.cpp), [BenchmarkParity.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/BenchmarkParity.spec.cpp)
-- Examples: [BP_UnLuaNovaBenchmark.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Benchmark/BP_UnLuaNovaBenchmark.lua)
+- Source: [RunTests.ps1](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/RunTests.ps1), [runner.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CrossProject/runner.py), [cases.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CrossProject/workload/unluanova/cases.lua), [cases.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CrossProject/workload/external/cases.lua)
+- Tests: [Benchmark.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/Benchmark.spec.cpp), [BenchmarkParity.spec.cpp](https://github.com/HUSTJJD/UnLuaNova/blob/master/Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/BenchmarkParity.spec.cpp), [test_crossproject_runner.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/tests/test_crossproject_runner.py), [test_crossproject_workloads.py](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/tests/test_crossproject_workloads.py)
+- Examples: [BP_UnLuaNovaBenchmark.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Tests/Benchmark/BP_UnLuaNovaBenchmark.lua), [README.md](https://github.com/HUSTJJD/UnLuaNova/blob/master/Tools/CrossProject/README.md)
 
-Boundary: Threshold code exists; committed perf baselines and controlled external results absent.
+Boundary: Workload contract (revision 1), UnLuaNova workload, adaptive slua-unreal/FUnLua adapter, fail-closed alignment gate and 12 static regressions are delivered; the hardware-identity placeholders are gone and the runner rejects them. Still absent: same-machine runs in the two external projects, raw multi-run distributions and any cross-project conclusion.
 
-Acceptance: Same hardware/UE/config, raw multi-run distributions, memory/startup/GC/code-size metrics.
+Acceptance: Same hardware/UE/config, identical 10-case sets and iteration counts (checked statically), raw multi-run distributions, memory/startup/GC/code-size metrics, and real logs from both external bindings before any comparison is published.
 
 ## Product
 
@@ -598,6 +598,6 @@ Evidence: no execution recorded yet.
 - Tests: Missing dedicated evidence.
 - Examples: Missing dedicated evidence.
 
-Boundary: Root/file scope unresolved; extension notices incomplete; FUnLua license file missing.
+Boundary: Root/file MIT scope is resolved and all in-tree version identifiers (LuaSocket 3.0-rc1, RapidJSON 1.1.0, serpent 0.30, lua-rapidjson 'scm') are recorded with file:line evidence. Still outstanding and not assertable from this tree: exact upstream revisions of copied extensions, full shipped-notice texts, sample asset redistribution rights, and FUnLua's missing license file at the pinned commit.
 
 Acceptance: Rights-holder scope decision, file/component provenance, complete notices in distributable artifact.

@@ -24,9 +24,11 @@ lua.dap status
 lua.dap stop
 ```
 
-From VSCode, **attach** to `127.0.0.1:5699` (`request: "attach"`). Implemented:
-`initialize` / `attach` / `setBreakpoints` / `threads` / `stackTrace` / `scopes` /
-`variables` / `pause` / `evaluate` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`.
+From VSCode, **attach** to `127.0.0.1:5699` (`request: "attach"`). The command surface is
+complete: `initialize` / `attach` / `launch` (explicit refusal) / `configurationDone` /
+`setBreakpoints` / `setExceptionBreakpoints` / `setFunctionBreakpoints` / `threads` /
+`stackTrace` / `scopes` / `variables` / `setVariable` / `source` / `modules` / `pause` /
+`evaluate` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`.
 
 The listener binds only to loopback. Port `0` selects an OS-assigned port, shown by
 `lua.dap status`. Start and stop are serialized; queued work from a stopped server
@@ -42,6 +44,27 @@ Behaviour worth knowing before you conclude it is broken:
 * **With several envs, say which one**: `"arguments": {"env": 1}` (0-based, default 0).
   Under `ULuaEnvLocator_ByGameInstance` a listen server plus two clients is three envs, and
   attaching to the wrong one shows up as breakpoints that never hit, with no error anywhere.
+
+### Limits of the added commands
+
+* **`next` / `stepIn` / `stepOut` are no longer one switch.** `FLuaDebugService::BeginStep`
+  uses stack depth: `next` stops at the same or a shallower frame, `stepIn` on the next
+  line, `stepOut` once the stack unwinds. The mode clears after one stop and a real
+  breakpoint outranks the step filter. The console `lua.dbg step` remains a persistent
+  single-step switch.
+* **`setVariable`** really writes a local via `lua_setlocal` in a paused frame, evaluating
+  the DAP value as a Lua expression. No paused frame, an unknown local name or a failed
+  expression returns an error.
+* **`source`** reads from disk: an absolute path, or a dotted module name resolved against
+  the project / plugin `Content/Script` roots. Unreadable files return an error; the adapter
+  thread never touches the `lua_State`.
+* **`modules`** is a static view (the `UnLuaNova` script root), not a `package.loaded`
+  snapshot.
+* **`setExceptionBreakpoints` / `setFunctionBreakpoints`** return an empty `breakpoints`
+  set: exception filters and function breakpoints are not wired into the VM hook. `launch`
+  is refused with a hint to use attach. `supportsConfigurationDoneRequest`,
+  `supportsSetVariable`, `supportsModulesRequest` and `supportsEvaluateRequest` are true;
+  every other unsupported capability bit is explicitly false.
 
 ### pause and evaluate
 

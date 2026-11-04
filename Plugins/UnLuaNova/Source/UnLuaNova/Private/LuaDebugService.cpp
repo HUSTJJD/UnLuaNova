@@ -124,6 +124,7 @@ namespace UnLuaNova
         Attached = nullptr;
         bPaused = false;
         bSingleStep = false;
+        StepMode = EStepMode::None;
         StackTrace.Empty();
         Locals.Empty();
     }
@@ -156,7 +157,24 @@ namespace UnLuaNova
     void FLuaDebugService::SetSingleStep(bool bInEnabled)
     {
         bSingleStep = bInEnabled;
+        // continue/disconnect end any in-flight DAP step; the console `step` switch is
+        // persistent by design and never carries a StepMode in the first place.
+        if (!bInEnabled)
+            StepMode = EStepMode::None;
         SyncVmBreakpoints();
+    }
+
+    void FLuaDebugService::BeginStep(EStepMode Mode)
+    {
+        if (!Attached || Mode == EStepMode::None)
+            return;
+
+        // StackTrace was captured at the stop that the step resumes from.
+        StepTargetDepth = StackTrace.Num() > 0 ? StackTrace.Num() : 1;
+        StepMode = Mode;
+        bSingleStep = true;
+        SyncVmBreakpoints();
+        Continue();
     }
 
     void FLuaDebugService::DebugHook(lua_State* L, lua_Debug* Ar)
@@ -188,6 +206,37 @@ namespace UnLuaNova
         // bPauseRequested is the fourth way in: `pause` asked for the next line to stop.
         if (!bAtBreakpoint && !bPauseRequested && !bSingleStep && !MatchesBreakpoint(Source, Line))
             return;
+
+        // A pending DAP step must not stop on every line: `next` stays at or above the
+        // current frame, `stepOut` waits for the stack to unwind, `stepIn` stops on the
+        // very next line. A real breakpoint always outranks the step filter.
+        if (StepMode != EStepMode::None)
+        {
+            int32 Depth = 0;
+            for (int32 Level = 0; Level < 128; ++Level)
+            {
+                lua_Debug Frame;
+                if (!FillFrame(L, Level, Frame))
+                    break;
+                ++Depth;
+            }
+
+            bool bStepSatisfied = true;
+            if (StepMode == EStepMode::Over)
+                bStepSatisfied = Depth <= StepTargetDepth;
+            else if (StepMode == EStepMode::Out)
+                bStepSatisfied = Depth < StepTargetDepth;
+
+            if (!bStepSatisfied && !bAtBreakpoint && !bPauseRequested && !MatchesBreakpoint(Source, Line))
+                return;
+
+            StepMode = EStepMode::None;
+            bSingleStep = false;
+#if UNLUANOVA_HAS_BREAKPOINT
+            // Leave the per-line hook armed only if breakpoints still need it.
+            UNLUANOVA_SINGLESTEP(L, Breakpoints.Num() > 0 ? 1 : 0);
+#endif
+        }
 
         ++HitCount;
 
@@ -466,6 +515,103 @@ namespace UnLuaNova
         Value.Build(L, -1, 1);
         OutValue = Value.ToString();
 
+        lua_settop(L, Top);
+        return true;
+    }
+
+    bool FLuaDebugService::SetVariable(const FString& Name, const FString& Value,
+        int32 FrameIndex, FString& OutValue, FString& OutError)
+    {
+        OutValue.Empty();
+        OutError.Empty();
+
+        if (!Attached || !bPaused)
+        {
+            OutError = TEXT("setVariable requires a paused frame");
+            return false;
+        }
+
+        lua_State* L = Attached;
+        const int32 Top = lua_gettop(L);
+        const int32 Level = FMath::Max(0, FMath::Min(FrameIndex, 127));
+#if UNLUANOVA_LUA_BACKEND != UNLUANOVA_BACKEND_LUAU
+        lua_Debug Ar;
+#endif
+
+        int32 Slot = INDEX_NONE;
+        for (int32 Index = 1; Index < 64; ++Index)
+        {
+            const char* LocalName = nullptr;
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+            LocalName = lua_getlocal(L, Level, Index);
+#else
+            if (!lua_getstack(L, Level, &Ar))
+                break;
+            LocalName = lua_getlocal(L, &Ar, Index);
+#endif
+            if (!LocalName)
+                break;
+            const bool bMatch = Name == ANSI_TO_TCHAR(LocalName);
+            lua_pop(L, 1); // lua_getlocal pushes the value along with the name
+            if (bMatch)
+            {
+                Slot = Index;
+                break;
+            }
+        }
+
+        if (Slot == INDEX_NONE)
+        {
+            OutError = FString::Printf(TEXT("'%s' is not a local of frame %d"), *Name, Level);
+            lua_settop(L, Top);
+            return false;
+        }
+
+        // The DAP value is a Lua expression (a debugger sends "1", "'text'", "true"...).
+        const FString Source = FString::Printf(TEXT("return (%s)"), *Value);
+        const FTCHARToUTF8 Bytes(*Source);
+        if (UNLUANOVA_LOAD(L, "=setVariable", Bytes.Get(), Bytes.Length()) != LUA_OK)
+        {
+            OutError = FString::Printf(TEXT("compile error: %s"), ANSI_TO_TCHAR(lua_tostring(L, -1)));
+            lua_settop(L, Top);
+            return false;
+        }
+        if (lua_pcall(L, 0, 1, 0) != LUA_OK)
+        {
+            OutError = FString::Printf(TEXT("runtime error: %s"), ANSI_TO_TCHAR(lua_tostring(L, -1)));
+            lua_settop(L, Top);
+            return false;
+        }
+
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+        const char* Changed = lua_setlocal(L, Level, Slot);
+#else
+        if (!lua_getstack(L, Level, &Ar))
+        {
+            OutError = TEXT("frame is no longer available");
+            lua_settop(L, Top);
+            return false;
+        }
+        const char* Changed = lua_setlocal(L, &Ar, Slot);
+#endif
+        if (!Changed)
+        {
+            OutError = FString::Printf(TEXT("could not assign '%s'"), *Name);
+            lua_settop(L, Top);
+            return false;
+        }
+
+#if UNLUANOVA_LUA_BACKEND == UNLUANOVA_BACKEND_LUAU
+        lua_getlocal(L, Level, Slot);
+#else
+        if (lua_getstack(L, Level, &Ar))
+            lua_getlocal(L, &Ar, Slot);
+        else
+            lua_pushnil(L);
+#endif
+        FLuaDebugValue NewValue;
+        NewValue.Build(L, -1, 1);
+        OutValue = NewValue.ToString();
         lua_settop(L, Top);
         return true;
     }

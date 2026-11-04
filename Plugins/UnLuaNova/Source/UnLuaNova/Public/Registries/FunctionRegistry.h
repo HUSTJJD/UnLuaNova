@@ -34,7 +34,8 @@ namespace UnLuaNova
     private:
         struct FFunctionInfo
         {
-            lua_Integer LuaRef;
+            lua_Integer LuaRef = LUA_NOREF;
+            bool bResolved = false;
             TUniquePtr<FFunctionDesc> Desc;
         };
 

@@ -179,7 +179,14 @@ try {
     $PythonRuntime = (& python -c 'import sys; print(sys.executable)').Trim()
     $PeerProcess = Start-Process -FilePath $PythonRuntime -ArgumentList @('-c', '"import time; time.sleep(30)"') -WindowStyle Hidden -PassThru
     try {
-        $PeerPath = (Get-Process -Id $PeerProcess.Id).Path
+        # A freshly started process can briefly expose an empty Path. Writing that into the
+        # topology makes Stop-ReleasePeers skip the peer, so the assertion below flakes.
+        $PeerPath = ''
+        for ($Attempt = 0; $Attempt -lt 50 -and -not $PeerPath; $Attempt++) {
+            Start-Sleep -Milliseconds 100
+            $PeerPath = (Get-Process -Id $PeerProcess.Id -ErrorAction SilentlyContinue).Path
+        }
+        Assert (-not [string]::IsNullOrEmpty($PeerPath)) 'Peer process exposed no executable path'
         @{ exe = $PowerShellExe; peers = @(@{ pid = $PeerProcess.Id; exe = $PowerShellExe }) } |
             ConvertTo-Json -Depth 4 | Set-Content (Join-Path $PeerRoot 'topology.json')
         Stop-ReleasePeers $PeerRoot $PeerStarted

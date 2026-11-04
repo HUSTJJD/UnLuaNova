@@ -272,13 +272,179 @@ namespace
         double Started = FPlatformTime::Seconds();
         double StepStarted = Started;
     };
+
+    /** One request at a time, so a bad response cannot be mistaken for the next one. */
+    class FDapCommandProbe
+    {
+    public:
+        struct FCase
+        {
+            FString Command;
+            TSharedPtr<FJsonObject> Args;
+            bool bExpectSuccess;
+            FString ExpectedBodyField;
+            bool bExpectNonEmptyString;
+        };
+
+        FDapCommandProbe(int32 Port, TArray<FCase> InCases)
+            : Client(MAX_int32), Cases(MoveTemp(InCases))
+        {
+            bConnected = Client.Connect(Port);
+        }
+
+        bool Tick(FAutomationTestBase& Test)
+        {
+            if (!bConnected)
+            {
+                Test.AddError(TEXT("Could not connect the DAP command probe"));
+                return true;
+            }
+
+            const double Now = FPlatformTime::Seconds();
+            if (Now - Started >= SessionTimeout || Now - StepStarted >= RequestTimeout)
+            {
+                const FString Where = Index < Cases.Num() ? Cases[Index].Command : FString(TEXT("done"));
+                Test.AddError(FString::Printf(TEXT("DAP command probe timeout at '%s'"), *Where));
+                return true;
+            }
+
+            if (!Client.IsConnected() && Index == 0)
+                return false;
+
+            if (!bAwaiting && Index < Cases.Num())
+            {
+                Send();
+                bAwaiting = true;
+                StepStarted = Now;
+            }
+            if (!Client.Pump())
+            {
+                Test.AddError(TEXT("DAP socket send failed"));
+                return true;
+            }
+
+            FString Json;
+            while (Client.Pop(Json))
+            {
+                TSharedPtr<FJsonObject> Reply;
+                if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Json), Reply) || !Reply.IsValid())
+                {
+                    Test.AddError(TEXT("Malformed DAP response"));
+                    return true;
+                }
+                if (Reply->GetStringField(TEXT("type")) != TEXT("response"))
+                    continue;                                    // initialized/stopped events
+                if (static_cast<int32>(Reply->GetNumberField(TEXT("request_seq"))) != Seq)
+                    continue;
+
+                const FCase& Expected = Cases[Index];
+                Test.TestEqual(TEXT("DAP command echoed"), Reply->GetStringField(TEXT("command")), Expected.Command);
+                Test.TestEqual(TEXT("DAP command success"), Reply->GetBoolField(TEXT("success")), Expected.bExpectSuccess);
+
+                const TSharedPtr<FJsonObject> Body = Reply->GetObjectField(TEXT("body"));
+                if (!Expected.ExpectedBodyField.IsEmpty())
+                {
+                    Test.TestTrue(TEXT("DAP body field present"),
+                        Body.IsValid() && Body->HasField(Expected.ExpectedBodyField));
+                    if (Expected.bExpectNonEmptyString && Body.IsValid())
+                        Test.TestTrue(TEXT("DAP body string is not empty"),
+                            !Body->GetStringField(Expected.ExpectedBodyField).IsEmpty());
+                }
+
+                if (Expected.Command == TEXT("initialize"))
+                {
+                    Test.TestTrue(TEXT("configurationDone capability"),
+                        Body.IsValid() && Body->GetBoolField(TEXT("supportsConfigurationDoneRequest")));
+                    Test.TestTrue(TEXT("setVariable capability"),
+                        Body.IsValid() && Body->GetBoolField(TEXT("supportsSetVariable")));
+                    Test.TestTrue(TEXT("modules capability"),
+                        Body.IsValid() && Body->GetBoolField(TEXT("supportsModulesRequest")));
+                    Test.TestTrue(TEXT("evaluate capability"),
+                        Body.IsValid() && Body->GetBoolField(TEXT("supportsEvaluateRequest")));
+                }
+
+                ++Index;
+                bAwaiting = false;
+                StepStarted = Now;
+            }
+            return Index >= Cases.Num();
+        }
+
+    private:
+        void Send()
+        {
+            auto Request = MakeShared<FJsonObject>();
+            Request->SetNumberField(TEXT("seq"), ++Seq);
+            Request->SetStringField(TEXT("type"), TEXT("request"));
+            Request->SetStringField(TEXT("command"), Cases[Index].Command);
+            Request->SetObjectField(TEXT("arguments"),
+                Cases[Index].Args.IsValid() ? Cases[Index].Args.ToSharedRef() : MakeShared<FJsonObject>());
+            FString Json;
+            FJsonSerializer::Serialize(Request, TJsonWriterFactory<>::Create(&Json));
+            Client.Queue(Json);
+        }
+
+        FDapClient Client;
+        TArray<FCase> Cases;
+        bool bConnected = false;
+        bool bAwaiting = false;
+        int32 Index = 0;
+        int32 Seq = 0;
+        double Started = FPlatformTime::Seconds();
+        double StepStarted = Started;
+    };
+
+    TArray<FDapCommandProbe::FCase> MakeDapCommandCases()
+    {
+        TArray<FDapCommandProbe::FCase> Cases;
+        auto Add = [&Cases](const TCHAR* Command, bool bSuccess,
+            TSharedPtr<FJsonObject> Args = nullptr, const TCHAR* BodyField = TEXT(""),
+            bool bNonEmpty = false)
+        {
+            Cases.Add({Command, Args, bSuccess, BodyField, bNonEmpty});
+        };
+
+        Add(TEXT("initialize"), true);
+        Add(TEXT("configurationDone"), true);
+        Add(TEXT("modules"), true, nullptr, TEXT("modules"));
+        Add(TEXT("setExceptionBreakpoints"), true, nullptr, TEXT("breakpoints"));
+        Add(TEXT("setFunctionBreakpoints"), true, nullptr, TEXT("breakpoints"));
+        Add(TEXT("launch"), false);
+
+        auto SourceArgs = MakeShared<FJsonObject>();
+        auto Source = MakeShared<FJsonObject>();
+        Source->SetStringField(TEXT("path"), TEXT("Tests.Specs.Overrides.OverridesStub"));
+        SourceArgs->SetObjectField(TEXT("source"), Source);
+        Add(TEXT("source"), true, SourceArgs, TEXT("content"), true);
+
+        auto MissingArgs = MakeShared<FJsonObject>();
+        auto Missing = MakeShared<FJsonObject>();
+        Missing->SetStringField(TEXT("path"), TEXT("No.Such.Module.Anywhere"));
+        MissingArgs->SetObjectField(TEXT("source"), Missing);
+        Add(TEXT("source"), false, MissingArgs);
+
+        auto SetVarArgs = MakeShared<FJsonObject>();
+        SetVarArgs->SetStringField(TEXT("name"), TEXT("x"));
+        SetVarArgs->SetStringField(TEXT("value"), TEXT("1"));
+        SetVarArgs->SetNumberField(TEXT("frameId"), 0);
+        Add(TEXT("setVariable"), false, SetVarArgs);   // no paused frame
+
+        // Step commands must acknowledge without turning on the persistent console switch.
+        Add(TEXT("next"), true, nullptr, TEXT("allThreadsContinued"));
+        Add(TEXT("stepIn"), true, nullptr, TEXT("allThreadsContinued"));
+        Add(TEXT("stepOut"), true, nullptr, TEXT("allThreadsContinued"));
+        Add(TEXT("continue"), true, nullptr, TEXT("allThreadsContinued"));
+        return Cases;
+    }
 }
 
 BEGIN_DEFINE_SPEC(FDebugAdapterSpec, "UnLuaNova.API.DebugAdapter", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
     FTSTicker::FDelegateHandle PollHandle;
     TSharedPtr<FDapSession> Session;
+    TSharedPtr<FDapCommandProbe> Probe;
     bool bOwnsServer = false;
     void BeginSession(bool bUnknownCommand, const FDoneDelegate& Done, int32 WriteChunkSize = MAX_int32);
+    void BeginProbe(const FDoneDelegate& Done);
 END_DEFINE_SPEC(FDebugAdapterSpec)
 
 void FDebugAdapterSpec::BeginSession(bool bUnknownCommand, const FDoneDelegate& Done, int32 WriteChunkSize)
@@ -307,6 +473,26 @@ void FDebugAdapterSpec::BeginSession(bool bUnknownCommand, const FDoneDelegate& 
     }));
 }
 
+void FDebugAdapterSpec::BeginProbe(const FDoneDelegate& Done)
+{
+    auto& Adapter = FLuaDebugAdapter::Get();
+    bOwnsServer = Adapter.Start(0);
+    if (!bOwnsServer)
+    {
+        AddError(TEXT("Could not start the DAP command probe server"));
+        Done.Execute();
+        return;
+    }
+    TestTrue(TEXT("OS-assigned port is available"), Adapter.GetPort() > 0);
+    Probe = MakeShared<FDapCommandProbe>(Adapter.GetPort(), MakeDapCommandCases());
+    PollHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([this, Done](float)
+    {
+        if (!Probe->Tick(*this)) return true;
+        Done.Execute();
+        return false;
+    }));
+}
+
 void FDebugAdapterSpec::Define()
 {
     BeforeEach([this]
@@ -320,6 +506,7 @@ void FDebugAdapterSpec::Define()
         FTSTicker::GetCoreTicker().RemoveTicker(PollHandle);
         PollHandle.Reset();
         Session.Reset();
+        Probe.Reset();
         if (bOwnsServer)
         {
             FLuaDebugAdapter::Get().StopServer();
@@ -336,6 +523,11 @@ void FDebugAdapterSpec::Define()
     LatentIt(TEXT("未知命令回 error 而不是把连接挂死"), [this](const FDoneDelegate& Done)
     {
         BeginSession(true, Done);
+    });
+
+    LatentIt(TEXT("补齐的 DAP 命令都有明确响应，能力位与 step 语义一致"), [this](const FDoneDelegate& Done)
+    {
+        BeginProbe(Done);
     });
 
     LatentIt(TEXT("DAP session accepts fragmented UTF-8 requests"), [this](const FDoneDelegate& Done)

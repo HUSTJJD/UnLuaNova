@@ -64,6 +64,7 @@ nav:
           - 性能验收: CN/Performance_Parity_slua.md
       - 编程:
           - 编程指南: CN/UnLuaNova_Programming_Guide.md
+          - 实例级模块绑定: CN/InstanceBinding.md
           - Luau 后端: CN/Luau.md
           - API 参考: CN/API.md
           - C++ API 参考: CN/CxxApi.md
@@ -82,6 +83,7 @@ nav:
       - 诊断与质量:
           - 调试: CN/Debugging.md
           - 智能提示: CN/IntelliSense.md
+          - Luau 覆盖率导出与门禁: CN/LuauCoverage.md
           - 测试与自动化: CN/Testing.md
           - 测试架构与验收: CN/Testing_Architecture.md
           - 2026-10-24 回归验证: CN/Regression_20261024.md

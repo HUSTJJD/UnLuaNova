@@ -84,19 +84,30 @@ private:
     void SendJson(const TSharedRef<class FJsonObject>& Payload);
     void SendEvent(const FString& Event, const TSharedPtr<class FJsonObject>& Body);
     void SendError(const TSharedRef<class FJsonObject>& Request, const FString& Message);
+    /** success:true 的通用回包；Body 可为空。 */
+    void SendSimpleResponse(const TSharedRef<class FJsonObject>& Request,
+        const TSharedPtr<class FJsonObject>& Body);
 
     // ── 请求分发 ──
     void Dispatch(const TSharedRef<class FJsonObject>& Request);
     void OnInitialize(const TSharedRef<class FJsonObject>& Request);
     void OnAttach(const TSharedRef<class FJsonObject>& Request);
+    void OnLaunch(const TSharedRef<class FJsonObject>& Request);
+    void OnConfigurationDone(const TSharedRef<class FJsonObject>& Request);
     void OnSetBreakpoints(const TSharedRef<class FJsonObject>& Request);
+    void OnSetExceptionBreakpoints(const TSharedRef<class FJsonObject>& Request);
+    void OnSetFunctionBreakpoints(const TSharedRef<class FJsonObject>& Request);
+    void OnSetVariable(const TSharedRef<class FJsonObject>& Request);
+    void OnSource(const TSharedRef<class FJsonObject>& Request);
+    void OnModules(const TSharedRef<class FJsonObject>& Request);
     void OnThreads(const TSharedRef<class FJsonObject>& Request);
     void OnStackTrace(const TSharedRef<class FJsonObject>& Request);
     void OnScopes(const TSharedRef<class FJsonObject>& Request);
     void OnVariables(const TSharedRef<class FJsonObject>& Request);
     void OnEvaluate(const TSharedRef<class FJsonObject>& Request);
     void OnPause(const TSharedRef<class FJsonObject>& Request);
-    void OnContinue(const TSharedRef<class FJsonObject>& Request, bool bSingleStep);
+    /** StepMode 是 FLuaDebugService::EStepMode 的 uint8 值，避免公开头引入 VM 依赖。 */
+    void OnContinue(const TSharedRef<class FJsonObject>& Request, uint8 StepMode);
     void OnDisconnect(const TSharedRef<class FJsonObject>& Request);
     void Unsupported(const TSharedRef<class FJsonObject>& Request, const FString& Why);
 

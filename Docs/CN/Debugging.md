@@ -23,9 +23,11 @@ lua.dap status
 lua.dap stop
 ```
 
-VSCode 侧用 **attach** 方式连 `127.0.0.1:5699`（`request: "attach"`）。已实现：
-`initialize` / `attach` / `setBreakpoints` / `threads` / `stackTrace` / `scopes` /
-`variables` / `pause` / `evaluate` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`。
+VSCode 侧用 **attach** 方式连 `127.0.0.1:5699`（`request: "attach"`）。命令面已补齐：
+`initialize` / `attach` / `launch`（明确拒绝）/ `configurationDone` / `setBreakpoints` /
+`setExceptionBreakpoints` / `setFunctionBreakpoints` / `threads` / `stackTrace` / `scopes` /
+`variables` / `setVariable` / `source` / `modules` / `pause` / `evaluate` / `continue` /
+`next` / `stepIn` / `stepOut` / `disconnect`。
 
 服务仅监听回环地址。端口 `0` 由系统分配，实际端口可通过 `lua.dap status` 查看。
 启动与停止串行化，停止后排队的旧服务任务不会作用于重启后的服务。
@@ -39,6 +41,21 @@ VSCode 侧用 **attach** 方式连 `127.0.0.1:5699`（`request: "attach"`）。�
 * **多环境时用 `arguments.env` 指定挂到第几个**（下标从 0，缺省 0）：
   `{"arguments": {"env": 1}}`。PIE 下监听服务器 + 两个客户端是三个环境，
   挂错了的表现是断点永远不命中，而没有任何报错
+
+### 补齐命令的边界
+
+* **`next` / `stepIn` / `stepOut` 不再是同一个开关**：`FLuaDebugService::BeginStep` 用栈深度
+  区分三者 —— `next` 停在同层或更浅、`stepIn` 停在下一行、`stepOut` 等栈回退后停，停一次
+  即清除；真实断点优先于单步过滤。控制台的 `lua.dbg step` 仍是持久单步开关。
+* **`setVariable`** 在暂停帧里通过 `lua_setlocal` 真改局部变量，值按 Lua 表达式求值；
+  没有暂停帧、名字不是该帧局部或表达式失败时返回 error。
+* **`source`** 从磁盘读文件：接受绝对路径，或把点分模块名解析到工程 / 插件的
+  `Content/Script`；读不到就返回 error。适配线程不碰 `lua_State`。
+* **`modules`** 是静态视图（`UnLuaNova` 脚本根），不是 `package.loaded` 快照。
+* **`setExceptionBreakpoints` / `setFunctionBreakpoints`** 返回空 `breakpoints` 集，明确表示
+  异常过滤与函数断点未接到 VM hook；`launch` 直接拒绝并提示使用 attach。capabilities 里
+  `supportsConfigurationDoneRequest` / `supportsSetVariable` / `supportsModulesRequest` /
+  `supportsEvaluateRequest` 为 true，其余未支持项显式为 false。
 
 ### 暂停与求值
 

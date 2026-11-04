@@ -25,6 +25,7 @@
 #include "LuaCore.h"
 #include "LuaFunction.h"
 #include "ObjectReferencer.h"
+#include "Registries/ObjectRegistry.h"
 #include "UnLuaNovaNet.h"
 
 
@@ -117,8 +118,158 @@ bool UUnLuaNovaManager::Bind(UObject *Object, const TCHAR *InModuleName, int32 I
     return true;
 }
 
+bool UUnLuaNovaManager::BindInstance(UObject* Object, const TCHAR* InModuleName,
+    int32 InitializerTableRef, FString* OutError)
+{
+    auto Fail = [OutError](const TCHAR* Reason)
+    {
+        if (OutError)
+            *OutError = Reason;
+        UE_LOG(LogUnLuaNova, Warning, TEXT("BindInstance: %s"), Reason);
+        return false;
+    };
+
+    if (!Object || Object->IsA<UClass>() || !InModuleName || !*InModuleName)
+        return Fail(TEXT("a non-UClass object and a nonempty module name are required"));
+    if (!Env)
+        return Fail(TEXT("Lua environment is not available"));
+
+    UClass* Class = Object->GetClass();
+    if (!Classes.Find(Class))
+        return Fail(TEXT("class-level binding must be established before an instance override"));
+
+    lua_State* L = Env->GetMainState();
+    const auto RetValues = UnLuaNova::Call(L, "require", TCHAR_TO_UTF8(InModuleName));
+    if (!RetValues.IsValid() || RetValues.Num() == 0 || RetValues[0].GetType() != LUA_TTABLE)
+        return Fail(TEXT("require() did not return a table"));
+
+    const int Top = lua_gettop(L);
+    const int Type = UnLuaNova::LowLevel::GetLoadedModule(L, TCHAR_TO_UTF8(InModuleName));
+    if (Type != LUA_TTABLE)
+    {
+        lua_settop(L, Top);
+        return Fail(TEXT("module is not present in package.loaded"));
+    }
+
+    // Every instance needs its own copy: FObjectRegistry::Bind sets the module table's
+    // metatable in place, so sharing the class table would mutate the class default.
+    lua_newtable(L);
+    lua_pushnil(L);
+    while (lua_next(L, -3) != 0)
+    {
+        lua_pushvalue(L, -2);
+        lua_insert(L, -2);
+        lua_settable(L, -4);
+    }
+    lua_pushvalue(L, -1);
+    const int32 Ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    lua_settop(L, Top);
+
+    FInstanceBindInfo Info;
+    Info.ModuleName = InModuleName;
+    Info.TableRef = Ref;
+    UnLuaNova::LowLevel::GetFunctionNames(L, Ref, Info.LuaFunctions);
+
+    // Overrides live on the UClass, so a module introducing a new overridable name extends
+    // the class union. ULuaFunction::Override short-circuits on an already-overridden
+    // function, which also makes this idempotent after a blueprint recompile. Instances
+    // whose module does not define that name fall back to the original UFunction.
+    TMap<FName, UFunction*> UEFunctions;
+    ULuaFunction::GetOverridableFunctions(Class, UEFunctions);
+    for (const FName& Name : Info.LuaFunctions)
+    {
+        if (UFunction** Func = UEFunctions.Find(Name))
+            ULuaFunction::Override(*Func, Class, Name);
+    }
+
+    if (FInstanceBindInfo* Existing = Instances.Find(Object))
+    {
+        luaL_unref(L, LUA_REGISTRYINDEX, Existing->TableRef);
+        Existing->ModuleName = MoveTemp(Info.ModuleName);
+        Existing->TableRef = Ref;
+        Existing->LuaFunctions = MoveTemp(Info.LuaFunctions);
+    }
+    else
+    {
+        Instances.Add(Object, MoveTemp(Info));
+    }
+
+    auto* Registry = Env->GetObjectRegistry();
+    if (Registry->IsBound(Object))
+        Registry->RebindModule(Object, Ref);
+    else
+        Registry->Bind(Object);
+
+    int32 FunctionRef = PushFunction(L, Object, "Initialize");
+    if (FunctionRef != LUA_NOREF)
+    {
+        if (InitializerTableRef != LUA_NOREF)
+            lua_rawgeti(L, LUA_REGISTRYINDEX, InitializerTableRef);
+        else
+            lua_pushnil(L);
+        if (!::CallFunction(L, 2, 0))
+            UE_LOG(LogUnLuaNova, Warning, TEXT("BindInstance: failed to call 'Initialize'"));
+        luaL_unref(L, LUA_REGISTRYINDEX, FunctionRef);
+    }
+
+    return true;
+}
+
+bool UUnLuaNovaManager::UnbindInstance(UObject* Object)
+{
+    if (!Object || !Env)
+        return false;
+
+    FInstanceBindInfo Info;
+    if (!Instances.RemoveAndCopyValue(Object, Info))
+        return false;
+
+    lua_State* L = Env->GetMainState();
+    const int32 ClassRef = GetBoundRef(Object->GetClass());
+    auto* Registry = Env->GetObjectRegistry();
+    if (Registry->IsBound(Object) && ClassRef != LUA_NOREF)
+        Registry->RebindModule(Object, ClassRef);
+    luaL_unref(L, LUA_REGISTRYINDEX, Info.TableRef);
+    return true;
+}
+
+bool UUnLuaNovaManager::HasInstanceBinding(const UObject* Object) const
+{
+    return Object && Instances.Contains(const_cast<UObject*>(Object));
+}
+
+int UUnLuaNovaManager::GetInstanceBoundRef(const UObject* Object) const
+{
+    const auto Info = Object ? Instances.Find(const_cast<UObject*>(Object)) : nullptr;
+    return Info ? Info->TableRef : LUA_NOREF;
+}
+
+FString UUnLuaNovaManager::GetInstanceBoundModuleName(const UObject* Object) const
+{
+    const auto Info = Object ? Instances.Find(const_cast<UObject*>(Object)) : nullptr;
+    return Info ? Info->ModuleName : FString();
+}
+
+bool UUnLuaNovaManager::BindObjectToModule(UObject* Object, const FString& ModuleName)
+{
+    return BindInstance(Object, *ModuleName);
+}
+
+bool UUnLuaNovaManager::UnbindObjectFromModule(UObject* Object)
+{
+    return UnbindInstance(Object);
+}
+
 void UUnLuaNovaManager::NotifyUObjectDeleted(const UObjectBase* Object)
 {
+    if (Env)
+    {
+        const auto L = Env->GetMainState();
+        FInstanceBindInfo InstanceInfo;
+        if (Instances.RemoveAndCopyValue(const_cast<UObject*>(static_cast<const UObject*>(Object)), InstanceInfo))
+            luaL_unref(L, LUA_REGISTRYINDEX, InstanceInfo.TableRef);
+    }
+
     const UClass* Class = (UClass*)Object;
     const auto BindInfo = Classes.Find(Class);
     if (!BindInfo)
@@ -139,6 +290,14 @@ void UUnLuaNovaManager::Cleanup()
     // 只清本 Env 声明的：每个 Env 各有自己的 Manager，销毁一个不能把别的 Env 正在用的
     // schema 一起抹掉。
     UnLuaNova::FUnLuaNovaNet::Cleanup(Env);
+
+    if (Env)
+    {
+        const auto L = Env->GetMainState();
+        for (const auto& Pair : Instances)
+            luaL_unref(L, LUA_REGISTRYINDEX, Pair.Value.TableRef);
+    }
+    Instances.Empty();
 
     Env = nullptr;
     Classes.Empty();

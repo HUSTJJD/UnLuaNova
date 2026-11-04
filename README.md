@@ -82,11 +82,11 @@ flowchart LR
 | 域 | 项数 | 实现范围 |
 |---|---:|---|
 | UE 集成：反射双向调用、覆写、容器与结构体、委托、输入/动画/UI | 5 | 1 完整 · 4 部分 |
-| 绑定：纯 C++ 模板导出、生成 marshal thunk、同类实例独立模块 | 3 | 1 完整 · 1 部分 · 1 规划 |
+| 绑定：纯 C++ 模板导出、生成 marshal thunk、同类实例独立模块 | 3 | 2 完整 · 1 部分 · 0 规划 |
 | 生命周期：owned/borrowed 与手工引用终结、多 Env/World、协程与 Latent | 3 | 3 部分 |
 | 运行时库：Timer、Event、OOP、热重载 | 4 | 1 完整 · 3 部分 |
 | 声明式网络：RPC、复制属性、复制类型 | 3 | 3 实验 |
-| **Luau**：语言面、标准库、vector、buffer、CodeGen、GC、沙盒、类型推断与 LSP、require、覆盖率、实验库 | **11** | 2 完整 · 6 部分 · 2 实验 · 1 规划 |
+| **Luau**：语言面、标准库、vector、buffer、CodeGen、GC、沙盒、类型推断与 LSP、require、覆盖率、实验库 | **11** | 3 完整 · 6 部分 · 2 实验 · 0 规划 |
 | Lua 兼容：debug/upvalue、io、语言与字节码差异 | 3 | 3 部分 |
 | 调试（DAP）· 性能诊断（Profiler）· 死循环看门狗 · 扩展库（socket/protobuf/JSON） | 4 | 4 部分 |
 | 质量溯源 · 性能基线 · 打包与平台 · 许可与来源 | 4 | 4 部分 |
@@ -311,7 +311,7 @@ Development / Server / Shipping 三种打包。
 | **生成 thunk** | 最终派发仍经由 `UObject::ProcessEvent`（静态绑定省掉的是反射查找与参数编组）。已提交自比基线与 25% 回退门禁，**尚无与 slua-unreal / FUnLua 的同机对照** |
 | **Luau 原生编译** | 需显式开启：`lua.codegen.enabled=1`（默认 0），可用 `lua.codegen.modules` 限定模块；只对切换后加载的 chunk 生效，且仅 Luau + x64/arm64 |
 | **平台与引擎版本** | 已验证 UE **5.8.3 / Win64**。其他引擎版本、Linux / Mac / iOS / Android、主机平台需各自验收 |
-| **同类实例绑定** | 绑定按 `UClass` 缓存，不支持同一个类的不同实例绑到不同模块（规划中） |
+| **同类实例绑定** | 已交付 `BindInstance` / `UnbindInstance` 与蓝图入口（[文档](Docs/CN/InstanceBinding.md)）。默认仍按 `UClass` 缓存；必须先完成类级绑定，覆写是类级函数名并集，实例路径逐次解析 Lua 函数。执行证据待真实 UE 跑 `UnLuaNova.API.InstanceBinding` |
 | **沙盒** | `lua.sandbox` 默认关闭；路径检查不是 OS 级沙盒，不可信脚本需另定能力策略 |
 | **第三方 notice** | 扩展库 / 工具 / 二进制依赖 / 示例资产的版本、来源与随包 notice 清单尚未补齐（与许可类型无关） |
 

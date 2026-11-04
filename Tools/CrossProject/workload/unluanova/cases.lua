@@ -23,11 +23,12 @@
 
 local Bench = {}
 
--- Fill these in once per machine. They are the fields the runner checks for equality,
--- so leaving them as placeholders is how you get "runs are not aligned" instead of a
--- bogus table.
-Bench.Machine = "FILL-ME"          -- e.g. davidsjian-PC2
-Bench.Cpu = "FILL-ME"              -- e.g. AMD Ryzen 7 4700G
+-- machine / cpu are alignment fields in Tools/CrossProject/runner.py: two runs on
+-- different hardware must never be compared. A literal placeholder would satisfy a
+-- naive "field is present" check and silently produce a bogus table, so there is no
+-- default value at all - a run without real values is refused before it emits a block.
+Bench.Machine = nil
+Bench.Cpu = nil
 Bench.Config = "Development"
 Bench.Carrier = "Editor"           -- or Game
 Bench.Revision = "1"
@@ -171,7 +172,23 @@ function Bench.Measure(fn, iterations)
     return median, per_op
 end
 
+--- Provide the hardware identity once per machine before running. Call it from the
+--- console (`lua.do "require('CrossProjectBench').SetMachineInfo('my-pc','Ryzen 7 4700G')"`)
+--- or from the wrapper that requires this module. Values are printed verbatim into the
+--- #meta line, so they must not contain spaces (the runner tokenises on whitespace).
+function Bench.SetMachineInfo(Machine, Cpu)
+    Bench.Machine = Machine and tostring(Machine) or nil
+    Bench.Cpu = Cpu and tostring(Cpu) or nil
+end
+
 function Bench.Run()
+    if not Bench.Machine or not Bench.Cpu or Bench.Machine == "" or Bench.Cpu == ""
+        or Bench.Machine:find("%s") or Bench.Cpu:find("%s") then
+        print("-- bench refused: call Bench.SetMachineInfo(machine, cpu) with non-empty,")
+        print("-- space-free real values before Bench.Run(); they are alignment fields in runner.py.")
+        return
+    end
+
     print("#UNLUANOVA_BENCH_BEGIN")
     print(string.format("#meta project=UnLuaNova backend=%s engine=%s machine=%s cpu=%s "
         .. "config=%s carrier=%s workload_revision=%s measured_utc=%s",

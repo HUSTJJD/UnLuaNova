@@ -9,6 +9,57 @@ outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
 
 ## Unreleased — source changes, not yet validated
 
+- Per-instance binding (`BIND-INSTANCE`) delivered: `UUnLuaNovaManager::BindInstance` /
+  `UnbindInstance` (plus Blueprint entry points and query API) keep a shallow copy of the
+  module table per object, `FObjectRegistry::RebindModule` swaps the INSTANCE metatable
+  without invalidating pushed userdata, class overrides take the union of function names,
+  and `FFunctionRegistry::Invoke` resolves functions per call for instance-bound objects so
+  the class-level FuncRef cache cannot leak one instance's closure into another. Cleanup
+  unrefs every instance table on object deletion / env shutdown. Five UE automation cases
+  in `InstanceBinding.spec.cpp` cover coexistence, isolation, rebinding, fallback, unbind
+  and rejected inputs; they still need a real UE run. See `Docs/CN/InstanceBinding.md`.
+- DAP (`DEBUG-DAP`) command surface completed: `launch` (explicit refusal),
+  `configurationDone`, `setExceptionBreakpoints`, `setFunctionBreakpoints`, `setVariable`
+  (real `lua_setlocal` on a paused frame), `source` (disk read with dotted module
+  resolution), `modules` (static view) and honest capability bits.
+  `FLuaDebugService::BeginStep` gives `next` / `stepIn` / `stepOut` real stack-depth
+  semantics instead of one persistent single-step switch; `DebugAdapter.spec.cpp` adds a
+  per-command protocol probe. Exception filters, conditional breakpoints and nested
+  variable expansion remain explicit scope limits.
+- Luau coverage (`LUAU-COVERAGE`) delivered: `lua.coverage status|dump` exports per-source,
+  per-line hit counters from `lua_getcoverage` as a self-describing JSON with declared
+  exclusions. `Tools/ValidateCoverage.py` is a fail-closed gate that recomputes totals,
+  merges several runs by maximum hits per line, requires named sources and a coverage
+  threshold, and refuses missing/empty/level-0/mismatched reports. 15 tooling regressions
+  in `Tools/tests/test_validate_coverage.py` pass without UE; the plain Lua backend is
+  explicitly refused. Capability matrix moved from `planned` to `implemented`;
+  `verification` stays `pending-runtime` until a real run is recorded. See
+  [Luau coverage](Docs/CN/LuauCoverage.md).
+- Cross-project external adapter (`PERFORMANCE`): `Tools/CrossProject/workload/external/cases.lua`
+  now implements the full revision-1 workload for slua-unreal / FUnLua. All engine calls go
+  through two adaptive hooks (`UEAPI.Static` / `UEAPI.Vector`) probing `UE` / `UE4` / `slua`
+  globals and `import()`; an unreachable API fails that case with `peropus=0` instead of
+  dropping a slow case. `Tools/tests/test_crossproject_workloads.py` statically enforces
+  identical case sets, iteration counts, revision, meta fields, fail-fast identity and
+  failure reporting (6 regressions). No cross-project conclusion is claimed until both
+  external projects actually run it.
+- Third-party notices: recorded in-tree version identifiers with file:line evidence
+  (LuaSocket 3.0-rc1, MIME/LTN12/URL 1.0.3, serpent 0.30, lua-rapidjson `scm`,
+  RapidJSON 1.1.0). Upstream revisions, full shipped notices and sample-asset rights remain
+  rights-holder decisions and are labelled as such rather than guessed.
+- Net release blockers closed: `UnLuaNovaTestSuite.Build.cs` now links `NetCore` (the
+  net-scenario tests close a `UNetConnection`, and `ENetCloseResult`'s `StaticEnum` /
+  `LexToString` are exported there), fixing LNK2019 on the TestSuite DLL. The generic-payload
+  order-independence spec bound its integers to the loop index instead of the key, so the two
+  maps it compared held different values; it now varies insertion order only. Luau backend
+  build reported `Result: Succeeded`, and a real Luau Editor `UnLuaNova.API.Net` run reported
+  35 succeeded / 3 with warnings / 0 failed. This does not replace the full 33-stage Release.
+- Cross-project workload: removed the literal `FILL-ME` machine/CPU values. The workload
+  refuses to emit a benchmark block until `SetMachineInfo()` is called with real, space-free
+  values, and `runner.py` now rejects placeholder identities during alignment. Six new
+  alignment regressions pass without UE. The slua-unreal / FUnLua adapters are still absent.
+- Demo weapon script: `InstantFire` now passes a real `FHitResult` out parameter and
+  dispatches hits to an overridable `OnInstantHit` instead of an empty `-- todo:`.
 - Declarative networking: replicated fields now support eight lifetime conditions through one
   storage group per condition, because UE decides what to send from the property's own
   registration, which is cached per class. `COND_Custom` / `COND_Dynamic` / `COND_Never` /

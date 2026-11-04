@@ -21,6 +21,8 @@
 #include "Dom/JsonObject.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/RunnableThread.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Misc/ScopeLock.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -29,6 +31,36 @@
 #include "SocketSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "LuaDebugAdapter"
+
+namespace
+{
+    using EStepMode = UnLuaNova::FLuaDebugService::EStepMode;
+
+    // The `source` request is answered from disk: the adapter thread must never touch the
+    // lua_State. Accept an absolute path, else resolve a dotted module name against the
+    // project's and the plugin's Script roots. Missing files are an explicit error.
+    bool FindLuaScript(const FString& InPath, FString& OutContent)
+    {
+        if (InPath.IsEmpty())
+            return false;
+
+        TArray<FString> Candidates;
+        Candidates.Add(InPath);
+
+        FString Module = InPath;
+        Module.ReplaceCharInline(TEXT('.'), TEXT('/'));
+        Candidates.Add(FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Script"), Module + TEXT(".lua")));
+        Candidates.Add(FPaths::Combine(FPaths::ProjectDir(), TEXT("Plugins"), TEXT("UnLuaNova"),
+            TEXT("Plugins"), TEXT("UnLuaNova"), TEXT("Content"), TEXT("Script"), Module + TEXT(".lua")));
+
+        for (const FString& Candidate : Candidates)
+        {
+            if (FPaths::FileExists(Candidate) && FFileHelper::LoadFileToString(OutContent, *Candidate))
+                return true;
+        }
+        return false;
+    }
+}
 
 FLuaDebugAdapter& FLuaDebugAdapter::Get()
 {
@@ -273,6 +305,20 @@ void FLuaDebugAdapter::Unsupported(const TSharedRef<FJsonObject>& Request, const
     SendError(Request, FString::Printf(TEXT("lua.dap: %s"), *Why));
 }
 
+void FLuaDebugAdapter::SendSimpleResponse(const TSharedRef<FJsonObject>& Request,
+    const TSharedPtr<FJsonObject>& Body)
+{
+    const TSharedRef<FJsonObject> Response = MakeShared<FJsonObject>();
+    Response->SetNumberField(TEXT("seq"), ++Seq);
+    Response->SetStringField(TEXT("type"), TEXT("response"));
+    Response->SetNumberField(TEXT("request_seq"), Request->GetNumberField(TEXT("seq")));
+    Response->SetStringField(TEXT("command"), Request->GetStringField(TEXT("command")));
+    Response->SetBoolField(TEXT("success"), true);
+    if (Body.IsValid())
+        Response->SetObjectField(TEXT("body"), Body.ToSharedRef());
+    SendJson(Response);
+}
+
 // ── 暂停状态：阻塞模式下服务不会主动通知，只能轮询 ─────────────────────────
 void FLuaDebugAdapter::PumpStoppedState()
 {
@@ -319,13 +365,22 @@ void FLuaDebugAdapter::RequestBreakpointSync()
 void FLuaDebugAdapter::OnInitialize(const TSharedRef<FJsonObject>& Request)
 {
     const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
-    Body->SetBoolField(TEXT("supportsConfigurationDoneRequest"), false);
+    Body->SetBoolField(TEXT("supportsConfigurationDoneRequest"), true);
     // OnEvaluate is implemented - locals and upvalues of the requested frame are bound as
     // parameters of a wrapper, and the expression runs with them in scope. Declaring it
     // false here is what made IDEs grey out the watch window entirely.
     Body->SetBoolField(TEXT("supportsEvaluateRequest"), true);
-    Body->SetBoolField(TEXT("supportsSetVariable"), false);
+    Body->SetBoolField(TEXT("supportsSetVariable"), true);
     Body->SetBoolField(TEXT("supportsSingleThreadExecutionRequests"), true);
+    Body->SetBoolField(TEXT("supportsModulesRequest"), true);
+    // Declared explicitly so an IDE does not ask for features that are still out of scope.
+    Body->SetBoolField(TEXT("supportsConditionalBreakpoints"), false);
+    Body->SetBoolField(TEXT("supportsHitConditionalBreakpoints"), false);
+    Body->SetBoolField(TEXT("supportsFunctionBreakpoints"), false);
+    Body->SetBoolField(TEXT("supportsStepInTargetsRequest"), false);
+    Body->SetBoolField(TEXT("supportsLoadedSourcesRequest"), false);
+    Body->SetBoolField(TEXT("supportsExceptionInfoRequest"), false);
+    Body->SetBoolField(TEXT("supportsRestartRequest"), false);
 
     const TSharedRef<FJsonObject> Response = MakeShared<FJsonObject>();
     Response->SetNumberField(TEXT("seq"), ++Seq);
@@ -379,6 +434,94 @@ void FLuaDebugAdapter::OnAttach(const TSharedRef<FJsonObject>& Request)
     Response->SetStringField(TEXT("command"), TEXT("attach"));
     Response->SetBoolField(TEXT("success"), true);
     SendJson(Response);
+}
+
+void FLuaDebugAdapter::OnLaunch(const TSharedRef<FJsonObject>& Request)
+{
+    // UE owns the VM and the editor is already running: there is nothing to launch.
+    Unsupported(Request, TEXT("launch is not supported; use 'attach' against a running editor"));
+}
+
+void FLuaDebugAdapter::OnConfigurationDone(const TSharedRef<FJsonObject>& Request)
+{
+    SendSimpleResponse(Request, nullptr);
+}
+
+void FLuaDebugAdapter::OnSetExceptionBreakpoints(const TSharedRef<FJsonObject>& Request)
+{
+    // Exception filters are not wired into the VM hook. Answer with an honest empty set
+    // rather than claiming the requested filters are active.
+    const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
+    Body->SetArrayField(TEXT("breakpoints"), TArray<TSharedPtr<FJsonValue>>());
+    SendSimpleResponse(Request, Body);
+}
+
+void FLuaDebugAdapter::OnSetFunctionBreakpoints(const TSharedRef<FJsonObject>& Request)
+{
+    const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
+    Body->SetArrayField(TEXT("breakpoints"), TArray<TSharedPtr<FJsonValue>>());
+    SendSimpleResponse(Request, Body);
+}
+
+void FLuaDebugAdapter::OnSetVariable(const TSharedRef<FJsonObject>& Request)
+{
+    const TSharedPtr<FJsonObject> Args = Request->GetObjectField(TEXT("arguments"));
+    const FString Name = Args.IsValid() ? Args->GetStringField(TEXT("name")) : FString();
+    const FString Value = Args.IsValid() ? Args->GetStringField(TEXT("value")) : FString();
+    int32 FrameIndex = INDEX_NONE;
+    double FrameId = 0;
+    if (Args.IsValid() && Args->TryGetNumberField(TEXT("frameId"), FrameId))
+        FrameIndex = (int32)FrameId;
+
+    FString OutValue, OutError;
+    if (!UnLuaNova::FLuaDebugService::Get().SetVariable(Name, Value, FrameIndex, OutValue, OutError))
+    {
+        Unsupported(Request, OutError.IsEmpty() ? TEXT("setVariable failed") : OutError);
+        return;
+    }
+
+    const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
+    Body->SetStringField(TEXT("value"), OutValue);
+    Body->SetNumberField(TEXT("variablesReference"), 0);
+    SendSimpleResponse(Request, Body);
+}
+
+void FLuaDebugAdapter::OnSource(const TSharedRef<FJsonObject>& Request)
+{
+    const TSharedPtr<FJsonObject> Args = Request->GetObjectField(TEXT("arguments"));
+    const TSharedPtr<FJsonObject> Source = Args.IsValid() ? Args->GetObjectField(TEXT("source")) : nullptr;
+    const FString Path = Source.IsValid() ? Source->GetStringField(TEXT("path")) : FString();
+
+    FString Content;
+    if (!FindLuaScript(Path, Content))
+    {
+        Unsupported(Request, FString::Printf(TEXT("source '%s' could not be read"), *Path));
+        return;
+    }
+
+    const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
+    Body->SetStringField(TEXT("content"), Content);
+    Body->SetStringField(TEXT("mimeType"), TEXT("text/x-lua"));
+    SendSimpleResponse(Request, Body);
+}
+
+void FLuaDebugAdapter::OnModules(const TSharedRef<FJsonObject>& Request)
+{
+    // package.loaded belongs to the VM; the adapter thread must not read it. This is a
+    // static view, reported with the full DAP shape rather than invented VM state.
+    TArray<TSharedPtr<FJsonValue>> Modules;
+    const TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+    Entry->SetNumberField(TEXT("id"), 1);
+    Entry->SetStringField(TEXT("name"), TEXT("UnLuaNova"));
+    Entry->SetStringField(TEXT("path"), FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Script")));
+    Entry->SetBoolField(TEXT("isOptimized"), false);
+    Entry->SetBoolField(TEXT("isUserCode"), true);
+    Modules.Add(MakeShared<FJsonValueObject>(Entry));
+
+    const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
+    Body->SetArrayField(TEXT("modules"), Modules);
+    Body->SetNumberField(TEXT("totalModules"), Modules.Num());
+    SendSimpleResponse(Request, Body);
 }
 
 void FLuaDebugAdapter::OnSetBreakpoints(const TSharedRef<FJsonObject>& Request)
@@ -595,12 +738,21 @@ void FLuaDebugAdapter::OnPause(const TSharedRef<FJsonObject>& Request)
     SendJson(Response);
 }
 
-void FLuaDebugAdapter::OnContinue(const TSharedRef<FJsonObject>& Request, bool bSingleStep)
+void FLuaDebugAdapter::OnContinue(const TSharedRef<FJsonObject>& Request, uint8 StepModeValue)
 {
     // Continue 必须在适配线程调用：游戏线程正阻塞在断点上，排 AsyncTask 永远等不到
     auto& Service = UnLuaNova::FLuaDebugService::Get();
-    Service.SetSingleStep(bSingleStep);
-    Service.Continue();
+    const EStepMode Mode = static_cast<EStepMode>(StepModeValue);
+    if (Mode == EStepMode::None)
+    {
+        Service.SetSingleStep(false);
+        Service.Continue();
+    }
+    else
+    {
+        // BeginStep resumes the stopped VM too, so it stays on this thread.
+        Service.BeginStep(Mode);
+    }
     bPausedReported = false;
 
     const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
@@ -648,16 +800,24 @@ void FLuaDebugAdapter::Dispatch(const TSharedRef<FJsonObject>& Request)
 
     if (Command == TEXT("initialize"))                  { OnInitialize(Request); return; }
     if (Command == TEXT("attach"))                      { OnAttach(Request); return; }
+    if (Command == TEXT("launch"))                      { OnLaunch(Request); return; }
+    if (Command == TEXT("configurationDone"))           { OnConfigurationDone(Request); return; }
     if (Command == TEXT("setBreakpoints"))              { OnSetBreakpoints(Request); return; }
+    if (Command == TEXT("setExceptionBreakpoints"))     { OnSetExceptionBreakpoints(Request); return; }
+    if (Command == TEXT("setFunctionBreakpoints"))      { OnSetFunctionBreakpoints(Request); return; }
+    if (Command == TEXT("setVariable"))                 { OnSetVariable(Request); return; }
+    if (Command == TEXT("source"))                      { OnSource(Request); return; }
+    if (Command == TEXT("modules"))                     { OnModules(Request); return; }
     if (Command == TEXT("threads"))                     { OnThreads(Request); return; }
     if (Command == TEXT("stackTrace"))                  { OnStackTrace(Request); return; }
     if (Command == TEXT("scopes"))                      { OnScopes(Request); return; }
     if (Command == TEXT("variables"))                   { OnVariables(Request); return; }
     if (Command == TEXT("evaluate"))                    { OnEvaluate(Request); return; }
     if (Command == TEXT("pause"))                       { OnPause(Request); return; }
-    if (Command == TEXT("continue"))                    { OnContinue(Request, false); return; }
-    if (Command == TEXT("next") || Command == TEXT("stepIn") || Command == TEXT("stepOut"))
-                                                        { OnContinue(Request, true); return; }
+    if (Command == TEXT("continue"))                    { OnContinue(Request, (uint8)EStepMode::None); return; }
+    if (Command == TEXT("next"))                        { OnContinue(Request, (uint8)EStepMode::Over); return; }
+    if (Command == TEXT("stepIn"))                      { OnContinue(Request, (uint8)EStepMode::In); return; }
+    if (Command == TEXT("stepOut"))                     { OnContinue(Request, (uint8)EStepMode::Out); return; }
     if (Command == TEXT("disconnect"))                  { OnDisconnect(Request); return; }
 
     Unsupported(Request, FString::Printf(TEXT("command '%s' is not implemented"), *Command));

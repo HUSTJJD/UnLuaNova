@@ -23,12 +23,19 @@ three diagnosed reasons, none of which relaxes a gate:
    `Lua-package-development`, `Lua-server-build` and `Luau-package-development`, which in turn
    blocked test and evidence stages. Those stages pass after the orphan processes are cleaned up;
    a re-run therefore requires a machine with no concurrent UE build.
-3. **The current worktree has uncommitted Net source changes.** `UnLuaNovaNet.cpp`, related headers
-   and `LuaNet.spec.cpp` are modified, and two `UnLuaNova.API.Net.*` cases fail on Luau Editor.
-   This is a real regression to close in development, not a scope statement.
+3. **The Net source regression is closed (this round).** The uncommitted Net changes were committed
+   as `5f2e5f00`; `UnLuaNovaTestSuite.Build.cs` now links `NetCore`, removing the unresolved
+   `StaticEnum<ENetCloseResult>` / `LexToString(ENetCloseResult)` symbols; and the generic-payload
+   order-independence spec was binding its integers to the loop index instead of the key, so the two
+   maps it compared were different values. It now varies insertion order only. The Luau backend
+   build reported `Result: Succeeded`, and a real Luau Editor `UnLuaNova.API.Net` run reported
+   35 succeeded / 3 with warnings / 0 failed
+   (`Saved/TestReports/20261103-234556/luau/index.json`). **This is not a full Release**: the 33
+   stages, four carriers and four release gates still need a run with no concurrent UE build.
 
-**Release remains blocked.** Freeze the worktree (commit or revert the Net changes), refresh the
-generated capability matrix, then run the full `.\Tools\RunTests.ps1` on a machine without
+**Release remains blocked.** There is no passing record for a full `.\Tools\RunTests.ps1` on the
+current tree. Freeze the worktree (commit or revert this round's changes too), refresh the
+generated capability matrix, then run the full pipeline on a machine without
 concurrent UE builds. Only `complete=true`, `passed=true`, 33/33 stages and four green release
 gates can change this page back to passed. Per-run artifacts are archived under
 `Saved/ReleaseTests/`.

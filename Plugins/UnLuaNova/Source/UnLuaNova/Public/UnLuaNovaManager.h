@@ -38,6 +38,30 @@ public:
 
     bool Bind(UObject *Object, const TCHAR *InModuleName, int32 InitializerTableRef = LUA_NOREF);
 
+    /**
+     * 实例级绑定：让同一个 UClass 的单个实例使用与类默认不同的 Lua 模块。
+     *
+     * 类级绑定必须先建立（Bind/TryBind），因为未显式绑定的实例仍要回落到类模块表。
+     * 类上可覆写的 UFunction 是类级资源，所以实例模块带来的新函数名会并入该类的覆写集合；
+     * 未定义该函数的实例由调用分发回落到原 UFunction，不会串线。
+     */
+    bool BindInstance(UObject* Object, const TCHAR* InModuleName,
+        int32 InitializerTableRef = LUA_NOREF, FString* OutError = nullptr);
+
+    /** 撤销实例级绑定，元表回落到类默认模块表。 */
+    bool UnbindInstance(UObject* Object);
+
+    bool HasInstanceBinding(const UObject* Object) const;
+    int GetInstanceBoundRef(const UObject* Object) const;
+    FString GetInstanceBoundModuleName(const UObject* Object) const;
+
+    /** 蓝图入口：把某个对象绑到指定 Lua 模块（返回是否成功）。 */
+    UFUNCTION(BlueprintCallable, Category = "UnLuaNova|Binding")
+    bool BindObjectToModule(UObject* Object, const FString& ModuleName);
+
+    UFUNCTION(BlueprintCallable, Category = "UnLuaNova|Binding")
+    bool UnbindObjectFromModule(UObject* Object);
+
     void NotifyUObjectDeleted(const UObjectBase *Object);
 
     void Cleanup();
@@ -113,6 +137,17 @@ private:
     };
 
     TMap<UClass*, FClassBindInfo> Classes;
+
+    struct FInstanceBindInfo
+    {
+        FString ModuleName;
+        int TableRef = LUA_NOREF;
+        TSet<FName> LuaFunctions;
+    };
+
+    // UObject* 是裸键，与 FObjectRegistry::ObjectRefs 一致；NotifyUObjectDeleted 与
+    // Cleanup 必须逐条 luaL_unref 并移除，否则对象销毁后 ref 会永久泄漏。
+    TMap<UObject*, FInstanceBindInfo> Instances;
 
     TSet<FName> DefaultAxisNames;
     TSet<FName> DefaultActionNames;

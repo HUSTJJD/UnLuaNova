@@ -1,10 +1,12 @@
 #include "UnLuaNovaConsoleCommands.h"
 #include "LuaBackend.h"
 #include "LuaCoroutineTracker.h"
+#include "LuaCoverage.h"
 #include "LuaDebugService.h"
 #include "LuaEnv.h"
 #include "LuaMemoryStats.h"
 #include "LuaProfiler.h"
+#include "Misc/Paths.h"
 
 #define LOCTEXT_NAMESPACE "UnLuaNovaConsoleCommands"
 
@@ -50,6 +52,11 @@ namespace UnLuaNova
               TEXT("lua.codegen"),
               *LOCTEXT("CommandText_CodeGen", "Luau native compiler. Args: on | off | modules <a,b,c> | none for status.").ToString(),
               FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::CodeGen)
+          ),
+          CoverageCommand(
+              TEXT("lua.coverage"),
+              *LOCTEXT("CommandText_Coverage", "Luau script coverage. Args: dump [file] | status. Requires luau.coverage=1 before chunks load; judged by Tools/ValidateCoverage.py.").ToString(),
+              FConsoleCommandWithArgsDelegate::CreateRaw(this, &FUnLuaNovaConsoleCommands::Coverage)
           ),
           Module(InModule)
     {
@@ -569,6 +576,59 @@ namespace UnLuaNova
             UE_LOG(LogUnLuaNova, Log,
                 TEXT("This build cannot emit native code: it needs the Luau backend on x64 or arm64."));
         }
+    }
+
+    void FUnLuaNovaConsoleCommands::Coverage(const TArray<FString>& Args) const
+    {
+        if (!UnLuaNova::IsLuaCoverageAvailable())
+        {
+            UE_LOG(LogUnLuaNova, Warning,
+                TEXT("lua.coverage: unavailable - coverage counters are a Luau compiler feature, and this build uses the plain Lua backend."));
+            return;
+        }
+
+        const FString Sub = Args.Num() > 0 ? Args[0] : TEXT("status");
+
+        if (Sub.Equals(TEXT("status"), ESearchCase::IgnoreCase))
+        {
+            const int32 Level = UnLuaNova::GetLuaCoverageLevel();
+            UE_LOG(LogUnLuaNova, Log,
+                TEXT("lua.coverage: available=1 level=%d. Set luau.coverage=1 before the scripts load, then use 'lua.coverage dump'. "
+                     "Chunks already loaded have no counters; the gate refuses a level-0 export."),
+                Level);
+            return;
+        }
+
+        if (!Sub.Equals(TEXT("dump"), ESearchCase::IgnoreCase))
+        {
+            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.coverage [dump [file] | status]"));
+            return;
+        }
+
+        const FString Path = Args.Num() > 1
+            ? Args[1]
+            : FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Coverage"), TEXT("coverage-Luau.json"));
+
+        auto* Env = Module->GetEnv();
+        if (!Env)
+        {
+            UE_LOG(LogUnLuaNova, Warning, TEXT("lua.coverage: no Lua environment is attached."));
+            return;
+        }
+
+        FString Error;
+        UnLuaNova::FCoverageSummary Summary;
+        if (!UnLuaNova::DumpLuaCoverage(Env->GetMainState(), Path, Error, &Summary))
+        {
+            UE_LOG(LogUnLuaNova, Warning, TEXT("lua.coverage: %s"), *Error);
+            return;
+        }
+
+        UE_LOG(LogUnLuaNova, Log,
+            TEXT("lua.coverage: wrote %s - %d functions, %lld/%lld instrumented lines hit (level=%d). "
+                 "Judge it with Tools/ValidateCoverage.py."),
+            *Path, Summary.Functions, static_cast<int64>(Summary.HitLines),
+            static_cast<int64>(Summary.InstrumentedLines), UnLuaNova::GetLuaCoverageLevel());
     }
 }
 

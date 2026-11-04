@@ -19,12 +19,18 @@
    与编译子进程 `Exit -1` 曾使 `Lua-package-development`、`Lua-server-build`、
    `Luau-package-development` 等阶段失败，并连锁阻塞测试与证据阶段。清理孤儿进程后这些阶段
    可恢复通过；这不是产品代码问题，但要求重跑时机器无并发 UE 构建。
-3. **当前工作树存在未提交的 Net 源码改动**：`UnLuaNovaNet.cpp`、相关头文件与
-   `LuaNet.spec.cpp` 等有改动，Luau Editor 的 2 个 `UnLuaNova.API.Net.*` 用例因此失败。
-   这是需要开发侧关闭的真实回归，不能写成范围声明。
+3. **Net 源码回归已关闭（本轮）**：未提交的网络改动已提交为 `5f2e5f00`；
+   `UnLuaNovaTestSuite.Build.cs` 补 `NetCore` 依赖后消除了
+   `StaticEnum<ENetCloseResult>` / `LexToString(ENetCloseResult)` 的链接错误；
+   `LuaNet.spec.cpp` 的通用 payload 顺序无关性用例修正了键值绑定（原先两次构造的 map
+   内容本身不同，只改插入顺序却把整数绑在循环序号上）。本轮 Luau 后端增量编译
+   `Result: Succeeded`，Luau Editor 以 `UnLuaNova.API.Net` 过滤实测
+   35 成功 / 3 带警告 / 0 失败（`Saved/TestReports/20261103-234556/luau/index.json`）。
+   **这不是完整 Release**：33 个阶段、四种载体与四个 release gate 仍需在无并发构建的机器上重跑。
 
-**发布仍被阻断**：需先冻结工作树（提交或回滚 Net 改动）、同步能力矩阵，再在无并发构建的环境
-跑完整 `.\Tools\RunTests.ps1`，拿到 `complete=true`、`passed=true`、33/33、四个 release gate 全绿，
+**发布仍被阻断**：原因是还没有一次完整 `.\Tools\RunTests.ps1` 的通过记录。需先冻结工作树
+（本轮改动同样要提交或回滚）、同步能力矩阵，再在无并发构建的环境跑完整流程，拿到
+`complete=true`、`passed=true`、33/33、四个 release gate 全绿，
 才能把本页状态改回通过。诊断明细与各轮归档在 `Saved/ReleaseTests/` 下。
 
 ## 2026-11-03 基线轮（已验证）

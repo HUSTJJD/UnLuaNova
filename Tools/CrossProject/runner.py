@@ -41,6 +41,11 @@ REQUIRED_META = ("project", "backend", "engine", "machine", "cpu", "config",
 
 WORKLOAD_REVISION = "1"
 
+# A template value or an "unknown" is not a machine identity. Accepting one would make
+# two unrelated runs look aligned, which is exactly the failure mode this script exists
+# to prevent (the UnLuaNova workload used to ship literal "FILL-ME" strings).
+PLACEHOLDER_VALUES = {"", "?", "fill-me", "unknown", "tbd", "n/a", "none", "unspecified"}
+
 
 def parse_log(path):
     """Return a list of run dicts found in one log file."""
@@ -120,6 +125,13 @@ def check_alignment(runs):
             if not meta.get(field):
                 problems.append("run %s/%s is missing required meta field '%s'"
                                 % (meta.get("project", "?"), meta.get("backend", "?"), field))
+        for field in ("machine", "cpu"):
+            value = str(meta.get(field, "")).strip().lower()
+            if value in PLACEHOLDER_VALUES or (value.startswith("<") and value.endswith(">")):
+                problems.append("run %s/%s has a placeholder %s=%r; set real hardware identity "
+                                "before running (see workload/unluanova/cases.lua)"
+                                % (meta.get("project", "?"), meta.get("backend", "?"),
+                                   field, meta.get(field)))
 
     for field in ALIGNMENT_FIELDS:
         values = sorted({r["meta"].get(field, "?") for r in runs})

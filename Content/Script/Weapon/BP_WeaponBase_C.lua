@@ -74,12 +74,20 @@ function M:InstantFire()
 	local ForwardVector = Transform.Rotation:GetForwardVector()
 	local End = ForwardVector * self.WeaponTraceDistance
 	End.Add(Start)
-	--local HitResult = UE.FHitResult()
-	--local ActorsToIgnore = TArray(AActor)
-	local bResult = UE.UKismetSystemLibrary.LineTraceSingle(self, Start, End, UE.ETraceTypeQuery.Weapon, false, nil, UE.EDrawDebugTrace.None, nil, true)
+	-- 命中结果必须作为 out 参数传进去；传 nil 时即使 bResult 为 true 也拿不到命中点。
+	local HitResult = UE.FHitResult()
+	local bResult = UE.UKismetSystemLibrary.LineTraceSingle(self, Start, End, UE.ETraceTypeQuery.Weapon, false, nil, UE.EDrawDebugTrace.None, HitResult, true)
 	if bResult then
-		-- todo:
+		self:OnInstantHit(HitResult)
 	end
+end
+
+--- 命中处理是示例留给项目的扩展点：这里只保留 HitResult 并给出可观察的输出，
+--- 伤害 / GE / Cue 由项目自己的 OnInstantHit 覆写实现，不在示例里引入额外依赖。
+function M:OnInstantHit(HitResult)
+	self.LastHitResult = HitResult
+	print(string.format("[Weapon] InstantHit impact=%s bone=%s",
+		tostring(HitResult.ImpactPoint), tostring(HitResult.BoneName)))
 end
 
 function M:GetFireInfo()

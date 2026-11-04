@@ -16,6 +16,7 @@
 #include "LowLevel.h"
 #include "LuaEnv.h"
 #include "UnLuaNovaDelegates.h"
+#include "UnLuaNovaManager.h"
 
 namespace UnLuaNova
 {
@@ -158,7 +159,13 @@ namespace UnLuaNova
         // in some case may occur module or object metatable can 
         // not be found problem
         const auto Class = Object->IsA<UClass>() ? static_cast<UClass*>(Object) : Object->GetClass();
-        const auto ClassBoundRef = Env->GetManager()->GetBoundRef(Class);
+        // An explicitly instance-bound object uses its own module table as REQUIRED_MODULE;
+        // everything else keeps the class default. UClass objects never have an instance
+        // override (the class table itself is the default).
+        const auto InstanceBoundRef = Env->GetManager()->GetInstanceBoundRef(Object);
+        const auto ClassBoundRef = InstanceBoundRef != LUA_NOREF
+            ? InstanceBoundRef
+            : Env->GetManager()->GetBoundRef(Class);
         int32 TypeModule = lua_rawgeti(L, LUA_REGISTRYINDEX, ClassBoundRef); // push the required module/table ('REQUIRED_MODULE') to the top of the stack
         int32 TypeMetatable = lua_getmetatable(L, -2); // get the metatable ('METATABLE_UOBJECT') of 'RAW_UOBJECT' 
         if (TypeModule != LUA_TTABLE || TypeMetatable == LUA_TNIL)
@@ -185,6 +192,45 @@ namespace UnLuaNova
         lua_rawset(L, -3);
         lua_pop(L, 1);
         return Ret;
+    }
+
+    bool FObjectRegistry::RebindModule(UObject* Object, int32 ModuleTableRef)
+    {
+        const int32 SelfRef = GetBoundRef(Object);
+        if (SelfRef == LUA_NOREF || ModuleTableRef == LUA_NOREF)
+            return false;
+
+        const auto L = Env->GetMainState();
+        const int Top = lua_gettop(L);
+        lua_rawgeti(L, LUA_REGISTRYINDEX, SelfRef);          // [INSTANCE]
+        if (!lua_istable(L, -1))
+        {
+            lua_settop(L, Top);
+            return false;
+        }
+        // The UObject metatable sits on the current module table. Reuse it instead of
+        // rebuilding the chain, so the new module is a drop-in REQUIRED_MODULE.
+        if (!lua_getmetatable(L, -1))                        // [INSTANCE, OLD_MODULE]
+        {
+            lua_settop(L, Top);
+            return false;
+        }
+        if (!lua_getmetatable(L, -1))                        // [INSTANCE, OLD_MODULE, UOBJECT_MT]
+        {
+            lua_settop(L, Top);
+            return false;
+        }
+        lua_rawgeti(L, LUA_REGISTRYINDEX, ModuleTableRef);   // [INSTANCE, OLD_MODULE, UOBJECT_MT, NEW_MODULE]
+        if (!lua_istable(L, -1))
+        {
+            lua_settop(L, Top);
+            return false;
+        }
+        lua_pushvalue(L, -2);                                // [..., NEW_MODULE, UOBJECT_MT]
+        lua_setmetatable(L, -2);                             // NEW_MODULE.mt = UOBJECT_MT
+        lua_setmetatable(L, -4);                             // INSTANCE.mt = NEW_MODULE
+        lua_settop(L, Top);
+        return true;
     }
 
     bool FObjectRegistry::IsBound(const UObject* Object) const
