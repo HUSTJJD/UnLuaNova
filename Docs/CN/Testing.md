@@ -28,51 +28,84 @@ $env:UNLUANOVA_PYTHON = 'C:\Users\<你>\scoop\apps\python311\current\python.exe'
 
 > 另外请用 **PowerShell 7（`pwsh`）** 运行，不要用 Windows PowerShell 5.1（`powershell.exe`）。
 
-## 后端隔离构建（Development 快速路径）
+## 后端隔离构建（-BackendTargets）
 
-Release 仍然是"改 ini → 重编 → 跑 → 换后端 → 再重编"的完整矩阵，行为未改。
-日常开发/调试用下面这条快路径：**每个后端各编一次，之后切换零编译**。
+不带开关时，Development 与 Release 的行为都和以前一致：改 ini → 重编 → 跑 → 换后端 →
+再重编。加上 `-BackendTargets` 后，**每个后端的 Editor / Game / Server 各编一次，产物按
+`Backends/<后端>/` 分开，之后切换只改模块清单，不编译、不覆盖**。这个开关对 Development、
+Release、`-Carrier Game`、`-NetMatrix` 都生效。
+
+### 一次性构建
 
 ```powershell
-# 一次性：两个后端各编一套独立产物
+# Editor
 Build.bat UnLuaNovaDemoLuaEditor  Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
 Build.bat UnLuaNovaDemoLuauEditor Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
+# Game
+Build.bat UnLuaNovaDemoLua        Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
+Build.bat UnLuaNovaDemoLuau       Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
+# Dedicated Server
+Build.bat UnLuaNovaDemoLuaServer  Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
+Build.bat UnLuaNovaDemoLuauServer Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
+```
 
+只跑 Editor 自动化时编前两条就够；`-Carrier Game`、NetMatrix 或 Release 还需要 Game/Server 两套。
+
+```powershell
 # 之后随意切换（只改模块清单 + ini，不编译、不覆盖）
 .\Tools\SwitchBackend.ps1 -Backend Lua
 .\Tools\SwitchBackend.ps1 -Backend Luau
 .\Tools\SwitchBackend.ps1 -Status                 # 看当前哪套生效
 .\Tools\SwitchBackend.ps1 -Backend Default       # 回到普通单 target 布局
 
-# 两个后端连跑（Development，Editor 载体）
+# Development：Editor 或 Game 载体
 .\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both
+.\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both -Carrier Game
+
+# 联网矩阵（每个 cell 启真实 server/client 进程）
+.\Tools\RunTests.ps1 -Profile Development -NetMatrix -BackendTargets -Backend Both -SkipBuild
+
+# Release 完整 Win64 矩阵（每后端用隔离 target + 独立 stage 目录）
+.\Tools\RunTests.ps1 -Profile Release -BackendTargets
 ```
 
-**为什么需要两个 target**：UBT 给所有 Editor target 同一个 `AppName`（`UnrealEditor`），
-只加一个 `Target.cs` 会写出同名的 `UnrealEditor-UnLuaNova.dll` 和同一份 obj；只加一个
-`.uproject` 也一样，插件模块的产物落在插件自己的 `Binaries/`、`Intermediate/`。
-两个新 target 通过每个 `*.Build.cs` 里的 `[UAK BACKEND LAYOUT]` 块设置
-`ModuleRules.BinariesSubFolder`，把 DLL **和**中间产物一起重定向到
-`Binaries/Win64/Backends/<后端>/` 与 `Intermediate/.../Backends/<后端>/`。
+### 为什么需要六个 target
 
-**为什么需要 SwitchBackend**：引擎会递归扫描 `Binaries/**` 找 `UnrealEditor.modules`
-（`FModuleManager::FindModulePathsInDirectory`）。两套产物并存时两份清单都会被发现，
-模块名冲突、加载哪个后端不确定。脚本把非活动后端的清单改名为 `*.disabled`（引擎不读），
-并把 `Config/DefaultUnLuaNova.ini` 的 `LuaBackend` 写成当前后端。isolated target 的后端
-**由 target 名决定**，ini 只是运行时标签；因此可以在 Luau 生效时预先编 Lua target。
+UBT 给所有 Editor target 同一个 `AppName`（`UnrealEditor`），只加一个 `Target.cs` 会写出
+同名的 `UnrealEditor-UnLuaNova.dll` 和同一份 obj；只加一个 `.uproject` 也一样，插件模块的
+产物落在插件自己的 `Binaries/`、`Intermediate/`。六个隔离 target 通过每个 `*.Build.cs` 里
+完全相同的 `[UAK BACKEND LAYOUT]` 块设置 `ModuleRules.BinariesSubFolder`，把 DLL **和**
+中间产物一起重定向到 `Binaries/Win64/Backends/<后端>/` 与 `Intermediate/.../Backends/<后端>/`。
 
-约束与边界：
+命名契约是 `UnLuaNovaDemo<后端>{Editor,Server,''}`。Editor 是共享构建环境，AppName 恒为
+`UnrealEditor`；Game/Server 不是，AppName 就是 target 名，所以它们的 exe、模块 DLL 前缀、
+中间目录和 `*.modules` 清单名都跟着变（例如 `UnLuaNovaDemoLua.exe`、
+`UnLuaNovaDemoLuaServer.modules`）。`RunTests.ps1` / `ReleasePipeline.ps1` 在隔离模式下按
+carrier 使用对应的名字，不会误拿另一个后端的二进制。
+
+### 为什么需要 SwitchBackend
+
+引擎会递归扫描 `Binaries/**` 找 `*.modules`（`FModuleManager::FindModulePathsInDirectory`）。
+两套产物并存时两份清单都会被发现，模块名冲突、加载哪个后端不确定。脚本**动态发现**所有
+`*.modules`（不再硬编码 `UnrealEditor.modules`），把非活动后端的清单改名为 `*.disabled`
+（引擎不读），并把 `Config/DefaultUnLuaNova.ini` 的 `LuaBackend` 写成当前后端。isolated
+target 的后端**由 target 名决定**，ini 只是运行时标签；因此可以在 Luau 生效时预先编 Lua
+target。某个 Binaries root 如果没有该后端的隔离产物，脚本会保留它的根清单，避免把模块
+整个藏起来。
+
+### 约束与边界
 
 | 项 | 说明 |
 |---|---|
-| 首次成本 | 两个 target 各一次全量编译；磁盘约为原来的两倍。之后切换零编译 |
-| 载体 | 只有 Editor target 被隔离。`-Carrier Game`、`-NetMatrix` 与 `-BackendTargets` 互斥；Game/Server 仍走原来的共享产物 |
-| Release | 不受影响，仍用顺序重编路径；Release 传 `-BackendTargets` 会被拒绝 |
-| 清单 | 编译某个 isolated target 时 UBT 会重写该后端的 `UnrealEditor.modules`。若之后又编了普通 `UnLuaNovaDemoEditor`，根目录会重新出现一份清单，再跑一次 `SwitchBackend.ps1` 即可 |
+| 首次成本 | 六个 target 各一次全量编译；磁盘约为原来的两倍。之后切换零编译 |
+| 载体 | Editor / Game / Server 全部隔离。`-BackendTargets` 可与 `-Carrier Game`、`-NetMatrix`、`-Profile Release` 组合 |
+| Release | 每后端用隔离 Editor/Game/Server target，UAT 加 `-stagingdirectory` 指向 `Saved/StagedBuilds/{Windows,WindowsServer}/Backends/<后端>`（UAT 每次 `-stage` 会清空目标目录，共用目录会删掉另一个后端的 exe）；缓存指纹含 `isolated`/`targets`，结束把清单复位为 Default 并恢复原 ini |
+| 清单 | 编某个 isolated target 时 UBT 会重写该后端的清单。若之后又编了普通 target，根目录会重新出现一份清单，再跑一次 `SwitchBackend.ps1` 即可 |
 | 并发 | 切换仍是全局状态，`Saved/RunTests.lock` 继续生效；不要在切换时另开构建/编辑器 |
-| 上层工程 | UEAbilityKit 的 `Tools/unluanova.ps1 doctor` 只看根目录 DLL，不认识隔离目录；这是上游工具的已知盲区，本仓库不改它 |
+| 上层工程 | `Tools/unluanova.ps1 doctor` 现在认识 `Backends/<后端>/`、live/disabled 清单与示例工程 ini 标签：两套 DLL 并存不再报错，两个后端清单同时 live 才报错 |
 
-静态契约由 `Tools/tests/test_backend_isolation.py` 守住（新增 `Build.cs` 必须带同一段布局块）。
+静态契约由 `Tools/tests/test_backend_isolation.py` 守住：布局块逐字节一致、六个 target 存在、
+脚本参数贯通，并用合成目录对上层 doctor 做功能回归。
 
 ## 默认执行内容
 

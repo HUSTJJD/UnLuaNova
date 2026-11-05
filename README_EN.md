@@ -266,17 +266,21 @@ In a normal project the backend is a **compile-time** choice, in `Config/Default
 LuaBackend=Luau        ; or Lua; rebuild after changing
 ```
 
-The example project has a faster path: `UnLuaNovaDemoLuaEditor` / `UnLuaNovaDemoLuauEditor`
-build into separate trees, so after one build each, switching backends costs **no compile**:
+The example project has a faster path: `UnLuaNovaDemo<Lua|Luau>{Editor,Server,''}` build into
+separate trees, so after one build each, switching backends costs **no compile**.
+`-BackendTargets` works for Editor / Game / Server carriers, `-NetMatrix` and the full
+Release matrix:
 
 ```powershell
+# Editor fast path (Game / Server target commands are in the docs)
 Build.bat UnLuaNovaDemoLuaEditor  Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
 Build.bat UnLuaNovaDemoLuauEditor Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
 .\Tools\SwitchBackend.ps1 -Backend Lua     # or Luau; -Status, -Backend Default
 .\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both
+.\Tools\RunTests.ps1 -Profile Release -BackendTargets
 ```
 
-See [Testing / Backend-isolated builds](Docs/EN/Testing.md#backend-isolated-builds-development-fast-path).
+See [Testing / Backend-isolated builds](Docs/EN/Testing.md#backend-isolated-builds--backendtargets).
 
 Bind a Blueprint to a module from the UnLuaNova toolbar and put scripts in `Content/Script/`.
 Migrating from UnLua is a rename: `UnLua` → `UnLuaNova`.

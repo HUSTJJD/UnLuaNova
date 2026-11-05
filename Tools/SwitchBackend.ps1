@@ -295,4 +295,7 @@ Switching backends never compiles; it only changes which prebuilt manifest is li
 
 if ($Backend -ne "Default") { Set-IniBackend -Value $Backend }
 
+if ($DryRun -and $Backend -ne "Default") {
+    Write-Host "DryRun   : nothing was renamed or written; if Backends/$Backend/*.modules is missing, build the $Backend targets once first."
+}
 Write-Host ("Active   : {0} (no compile, no overwrite)" -f $(if ($Backend -eq "Default") { "ordinary single-target layout" } else { $Backend }))

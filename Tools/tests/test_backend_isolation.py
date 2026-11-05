@@ -1,24 +1,34 @@
-"""Static regression guard for the backend-isolated Editor targets.
+"""Static + functional regression guard for backend-isolated builds.
 
-Nothing here compiles Unreal or reads build products: it checks the *source contract*
-that makes two Lua backends coexist without overwriting each other. A build that
-silently loses one of these invariants is much more expensive to diagnose than a
-failed unit test, so drift is caught here.
+Nothing here compiles Unreal. It checks the source contract that lets both Lua backends
+coexist without overwriting each other, across all three carriers (Editor/Game/Server),
+the Development and Release pipelines, the connected network matrix and the outer
+UEAbilityKit doctor. A build that silently loses one of these invariants is much more
+expensive to diagnose than a failed unit test, so drift is caught here.
 
 Contract:
-  - two targets named UnLuaNovaDemo<Backend>Editor
-  - every module's Build.cs derives backendVariant from Target.Name and sets
-    ModuleRules.BinariesSubFolder = "Backends/" + backendVariant
+  - six targets named UnLuaNovaDemo<Backend>{Editor,Server,''} plus the three ordinary ones
+  - every module's Build.cs carries an *identical* [UAK BACKEND LAYOUT] block that derives
+    backendVariant from Target.Name and sets ModuleRules.BinariesSubFolder
   - every Build.cs that reads LuaBackend from the ini lets backendVariant win
-  - Tools/SwitchBackend.ps1 activates exactly one UnrealEditor.modules manifest
-  - Tools/RunTests.ps1 -BackendTargets looks in the isolated paths
+  - Tools/SwitchBackend.ps1 discovers *.modules dynamically (AppName differs per carrier)
+    and leaves exactly one backend's manifests live
+  - RunTests/RunNetMatrix/ReleasePipeline carry -BackendTargets end to end
+  - Tools/unluanova/{state,doctor}.py in the outer repo understand Backends/<Backend>
 """
 
-from pathlib import Path
+from __future__ import annotations
+
+import sys
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 TOOLS = Path(__file__).resolve().parents[1]
 REPO = TOOLS.parent
+OUTER = REPO.parent.parent
+OUTER_UNLUANOVA = OUTER / "Tools" / "unluanova"
 
 PLUGIN_SOURCE = REPO / "Plugins" / "UnLuaNova" / "Source"
 EXT_SOURCE = REPO / "Plugins" / "UnLuaNovaExtensions"
@@ -29,15 +39,18 @@ LAYOUT_BEGIN = "[UAK BACKEND LAYOUT"
 LAYOUT_END = "[/UAK BACKEND LAYOUT]"
 
 # Fragments that every layout block must carry. Compared as substrings of the stripped
-# lines so that single-statement `if (...) BinariesSubFolder = ...;` and the main module's
-# braced variant both satisfy the contract.
+# code lines (comments are documentation only), so formatting changes do not break it.
 REQUIRED_LAYOUT_FRAGMENTS = (
     'const string backendTargetPrefix = "UnLuaNovaDemo";',
-    'const string backendTargetSuffix = "Editor";',
     'string backendVariant = "";',
-    'if (Target.Name.StartsWith(backendTargetPrefix) && Target.Name.EndsWith(backendTargetSuffix))',
-    'backendVariant = Target.Name.Substring(backendTargetPrefix.Length,',
-    'Target.Name.Length - backendTargetPrefix.Length - backendTargetSuffix.Length);',
+    'if (Target.Name.StartsWith(backendTargetPrefix))',
+    'string backendRest = Target.Name.Substring(backendTargetPrefix.Length);',
+    'string[] backendSuffixes = { "Editor", "Server", "" };',
+    'foreach (string backendSuffix in backendSuffixes)',
+    'if (backendRest.EndsWith(backendSuffix))',
+    'backendVariant = backendRest.Substring(0, backendRest.Length - backendSuffix.Length);',
+    'if (backendVariant != "Lua" && backendVariant != "Luau")',
+    'throw new BuildException(',
     'BinariesSubFolder = "Backends/" + backendVariant;',
 )
 
@@ -52,6 +65,10 @@ INI_READERS = (
     EXT_SOURCE / "LuaProtobuf" / "Source" / "LuaProtobuf.Build.cs",
     PLUGIN_SOURCE / "UnLuaNova" / "UnLuaNova.Build.cs",
 )
+
+BACKENDS = ("Lua", "Luau")
+CARRIERS = (("Editor", "Editor"), ("", "Game"), ("Server", "Server"))
+ORDINARY_TARGETS = ("UnLuaNovaDemo", "UnLuaNovaDemoEditor", "UnLuaNovaDemoServer")
 
 
 def build_cs_files():
@@ -71,6 +88,13 @@ def code_lines(path):
     return lines
 
 
+def layout_block(path):
+    text = path.read_text(encoding="utf-8-sig")
+    start = text.index(LAYOUT_BEGIN)
+    end = text.index(LAYOUT_END, start) + len(LAYOUT_END)
+    return text[start:end]
+
+
 class BackendIsolationTests(unittest.TestCase):
 
     def test_all_build_cs_have_the_layout_block(self):
@@ -80,10 +104,8 @@ class BackendIsolationTests(unittest.TestCase):
             with self.subTest(module=path.name):
                 text = path.read_text(encoding="utf-8-sig")
                 lines = code_lines(path)
-                self.assertTrue(any(LAYOUT_BEGIN in line for line in text.splitlines()),
-                                f"{path.name} lost the layout begin marker")
-                self.assertTrue(any(LAYOUT_END in line for line in text.splitlines()),
-                                f"{path.name} lost the layout end marker")
+                self.assertIn(LAYOUT_BEGIN, text, f"{path.name} lost the layout begin marker")
+                self.assertIn(LAYOUT_END, text, f"{path.name} lost the layout end marker")
                 for fragment in REQUIRED_LAYOUT_FRAGMENTS:
                     self.assertTrue(any(fragment in line for line in lines),
                                     f"{path.name} drifted from the layout contract: {fragment}")
@@ -92,6 +114,10 @@ class BackendIsolationTests(unittest.TestCase):
                     "cross-file helper references are not allowed: UBT may compile "
                     "plugin rules in separate assemblies",
                 )
+
+    def test_layout_blocks_are_byte_identical(self):
+        blocks = {layout_block(p) for p in build_cs_files()}
+        self.assertEqual(1, len(blocks), "every Build.cs must carry the same layout block")
 
     def test_backend_variant_declared_exactly_once(self):
         for path in build_cs_files():
@@ -119,68 +145,270 @@ class BackendIsolationTests(unittest.TestCase):
         self.assertIn("throw new BuildException", text)
         self.assertIn("backend = backendVariant;", text)
 
-    def test_both_backend_targets_exist(self):
-        for backend in ("Lua", "Luau"):
-            path = PROJECT_SOURCE / f"UnLuaNovaDemo{backend}Editor.Target.cs"
-            with self.subTest(backend=backend):
-                self.assertTrue(path.is_file(), f"missing {path.name}")
-                lines = code_lines(path)
-                self.assertIn(f"public class UnLuaNovaDemo{backend}EditorTarget : TargetRules", lines)
-                self.assertIn("Type = TargetType.Editor;", lines)
-                self.assertIn('ExtraModuleNames.Add("UnLuaNovaDemo");', lines)
-                self.assertIn("DefaultBuildSettings = BuildSettingsVersion.Latest;", lines)
-                self.assertFalse(any("GlobalDefinitions" in line for line in lines),
-                                 "GlobalDefinitions is [RequiresUniqueBuildEnvironment]")
+    def test_six_backend_targets_exist(self):
+        for backend in BACKENDS:
+            for suffix, target_type in CARRIERS:
+                name = f"UnLuaNovaDemo{backend}{suffix}"
+                path = PROJECT_SOURCE / f"{name}.Target.cs"
+                with self.subTest(target=name):
+                    self.assertTrue(path.is_file(), f"missing {path.name}")
+                    lines = code_lines(path)
+                    self.assertIn(f"public class {name}Target : TargetRules", lines)
+                    self.assertIn(f"Type = TargetType.{target_type};", lines)
+                    self.assertIn('ExtraModuleNames.Add("UnLuaNovaDemo");', lines)
+                    self.assertIn("DefaultBuildSettings = BuildSettingsVersion.Latest;", lines)
+                    self.assertFalse(any("GlobalDefinitions" in line for line in lines),
+                                     "GlobalDefinitions is [RequiresUniqueBuildEnvironment]")
 
-    def test_ordinary_editor_target_still_exists(self):
-        path = PROJECT_SOURCE / "UnLuaNovaDemoEditor.Target.cs"
-        self.assertTrue(path.is_file())
-        self.assertNotIn("Backends/", path.read_text(encoding="utf-8-sig"),
-                         "the default target must keep the unsuffixed output paths")
+    def test_ordinary_targets_still_exist(self):
+        for name in ORDINARY_TARGETS:
+            path = PROJECT_SOURCE / f"{name}.Target.cs"
+            with self.subTest(target=name):
+                self.assertTrue(path.is_file())
+                self.assertNotIn("Backends/", path.read_text(encoding="utf-8-sig"),
+                                 "the default targets must keep the unsuffixed output paths")
 
-    def test_switch_backend_covers_every_module_root(self):
+    def test_switch_backend_discovers_manifests_dynamically(self):
         text = (TOOLS / "SwitchBackend.ps1").read_text(encoding="utf-8-sig")
         for needle in (
             '"Binaries/$Platform"',
             '"Plugins/UnLuaNovaTestSuite/Binaries/$Platform"',
             '"Plugins/UnLuaNovaExtensions"',
             '"UnLuaNova.uplugin"',
-            '"UnrealEditor.modules"',
-            '".disabled"',
+            '$ManifestPattern = "*.modules"',
+            '$DisabledSuffix = ".disabled"',
+            '$IsolatedDir = "Backends"',
+            'function Get-ManifestEntries',
+            'Path = $LivePath; Zone = $Zone;',
+            '$HasTargetIsolated',
+            'Set-ManifestEnabled -Path $E.Path',
             'LuaBackend=$Value',
-            'UnrealEditor-$Backend.dll',
-            'Build.bat UnLuaNovaDemo${Backend}Editor',
+            'UnLuaNovaDemo${Backend}Server',
+            '*-${Backend}.dll',
             '"Default"',
         ):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
+        self.assertNotIn('$ManifestName = "UnrealEditor.modules"', text,
+                         "Game/Server targets use their own AppName as manifest name")
 
-    def test_runtests_backendtargets_uses_isolated_paths(self):
+    def test_runtests_no_longer_rejects_game_or_netmatrix(self):
         text = (TOOLS / "RunTests.ps1").read_text(encoding="utf-8-sig")
+        self.assertNotIn("-BackendTargets needs the Editor carrier", text)
+        self.assertNotIn("-NetMatrix and -BackendTargets cannot be combined", text)
         for needle in (
             "[switch] $BackendTargets",
             "$script:BackendBuildSubFolder",
+            '$script:BackendGameExeName',
             '"Backends/$B"',
             '"UnLuaNovaDemo${B}Editor"',
-            "SwitchBackend.ps1",
-            "$ThisTargetName",
+            'elseif ($IsGameCarrier) { "UnLuaNovaDemo${B}" }',
+            'Resolve-GameExe -Name $script:BackendGameExeName',
+            '$script:BackendIntermediateFolder = if ($IsGameCarrier) { $ThisTargetName }',
+            'SwitchBackend.ps1',
+            '$ThisTargetName',
             "if ($BackendTargets) { return }",
-            "-BackendTargets needs the Editor carrier",
-            "-NetMatrix and -BackendTargets cannot be combined",
+            "-BackendTargets:$BackendTargets -DryRun:$DryRun",
+            "'Baseline', 'NoCache', 'PruneLegacy', 'BackendTargets'",
         ):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
 
+    def test_runnetmatrix_forwards_isolation(self):
+        text = (TOOLS / "RunNetMatrix.ps1").read_text(encoding="utf-8-sig")
+        for needle in (
+            '[switch] $BackendTargets',
+            '-BackendTargets:$BackendTargets',
+            '"UnLuaNovaDemo$B"',
+            '"UnLuaNovaDemo${B}Server"',
+            'Saved/StagedBuilds/Windows/Backends/$B',
+            'Saved/StagedBuilds/WindowsServer/Backends/$B',
+        ):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_release_pipeline_isolates_every_stage(self):
+        text = (TOOLS / "ReleasePipeline.ps1").read_text(encoding="utf-8-sig")
+        for needle in (
+            '[switch] $BackendTargets',
+            '"UnLuaNovaDemo${B}Editor"',
+            '"UnLuaNovaDemo${B}"',
+            '"UnLuaNovaDemo${B}Server"',
+            '"-stagingdirectory=$StageDir"',
+            '"-stagingdirectory=$ServerStageArg"',
+            '$script:ReleaseDefinitionsSubFolder',
+            '"isolated=$BackendTargets"',
+            "if ($BackendTargets) { $TestArgs += '-BackendTargets' }",
+            "'-Backend', $B",
+            "'-Backend', 'Default'",
+            'restore-backend-layout',
+            'isolated_backends = [bool]$BackendTargets',
+        ):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+        support = (TOOLS / "ReleaseSupport.ps1").read_text(encoding="utf-8-sig")
+        self.assertIn('function Get-ReleaseBuiltBackend([string] $PluginRoot, [string] $BinariesSubFolder',
+                      support)
+        self.assertIn('if ($BinariesSubFolder) { $Rel = "$Rel/$BinariesSubFolder" }', support)
+
+    def test_outer_doctor_understands_isolated_layout(self):
+        state_py = (OUTER_UNLUANOVA / "state.py").read_text(encoding="utf-8-sig")
+        for needle in (
+            'ISOLATED_ROOT = BINARIES_DIR / "Backends"',
+            'MANIFEST_SUFFIX = ".modules"',
+            'DISABLED_SUFFIX = ".disabled"',
+            'def backend_from_demo_ini',
+            'def module_manifests',
+            'def _dll_backends',
+            'def backend_layout',
+            'def built_backends',
+        ):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, state_py)
+        doctor_py = (OUTER_UNLUANOVA / "doctor.py").read_text(encoding="utf-8-sig")
+        for needle in (
+            'state.backend_layout()',
+            'state.backend_from_demo_ini()',
+            'active == "ambiguous"',
+            'backend-manifest',
+            'Backends/<Backend>/',
+        ):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, doctor_py)
+
     def test_braces_balanced_in_edited_csharp(self):
         paths = list(build_cs_files()) + [
-            PROJECT_SOURCE / "UnLuaNovaDemoLuaEditor.Target.cs",
-            PROJECT_SOURCE / "UnLuaNovaDemoLuauEditor.Target.cs",
+            PROJECT_SOURCE / f"UnLuaNovaDemo{b}{s}.Target.cs"
+            for b in BACKENDS for s, _ in CARRIERS
         ]
         for path in paths:
             with self.subTest(module=path.name):
                 text = path.read_text(encoding="utf-8-sig")
                 self.assertEqual(text.count("{"), text.count("}"),
                                  f"unbalanced braces in {path.name}")
+
+
+class OuterDoctorFunctionalTests(unittest.TestCase):
+    """Exercise the outer doctor against synthetic Binaries trees (no Unreal build)."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, str(OUTER_UNLUANOVA))
+        import doctor  # noqa: E402
+        import state  # noqa: E402
+        cls.doctor = doctor
+        cls.state = state
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.binaries = self.root / "Binaries" / "Win64"
+        self.binaries.mkdir(parents=True)
+        self.outer_ini = self.root / "outer.ini"
+        self.demo_ini = self.root / "demo.ini"
+        self._write_ini(self.outer_ini, "Lua")
+        self._write_ini(self.demo_ini, "Lua")
+        patchers = [
+            mock.patch.object(self.state, "BINARIES_DIR", self.binaries),
+            mock.patch.object(self.state, "ISOLATED_ROOT", self.binaries / "Backends"),
+            mock.patch.object(self.state, "UNLUANOVA_INI", self.outer_ini),
+            mock.patch.object(self.state, "DEMO_INI", self.demo_ini),
+        ]
+        for patcher in patchers:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _write_ini(self, path, backend):
+        path.write_text(f"[{self.state.INI_SECTION}]\nLuaBackend={backend}\n", encoding="utf-8")
+
+    def _dll(self, backend, prefix="UnrealEditor"):
+        folder = self.binaries / "Backends" / backend
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{prefix}-{backend}.dll").write_bytes(b"")
+
+    def _manifest(self, backend, name="UnrealEditor.modules", live=True):
+        folder = self.binaries / "Backends" / backend
+        folder.mkdir(parents=True, exist_ok=True)
+        suffix = "" if live else self.state.DISABLED_SUFFIX
+        (folder / f"{name}{suffix}").write_text("{}", encoding="utf-8")
+
+    def _root_dll(self, backend):
+        (self.binaries / f"UnrealEditor-{backend}.dll").write_bytes(b"")
+
+    def _root_manifest(self, live=True):
+        suffix = "" if live else self.state.DISABLED_SUFFIX
+        (self.binaries / f"UnrealEditor.modules{suffix}").write_text("{}", encoding="utf-8")
+
+    def _binary_items(self):
+        return [i for i in self.doctor.inspect().items if i["check"] == "backend-binary"]
+
+    def test_isolated_dlls_are_not_a_fork_error(self):
+        self._dll("Lua")
+        self._dll("Luau")
+        self._manifest("Lua", live=True)
+        self._manifest("Luau", live=False)
+        self.assertEqual(["Luau", "Lua"], self.state.built_backends())
+        self.assertEqual("Lua", self.state.backend_layout()["active"])
+        items = self._binary_items()
+        self.assertEqual(["ok"], [i["level"] for i in items])
+        self.assertIn("产物并存", items[0]["detail"])
+
+    def test_game_target_manifest_names_are_recognised(self):
+        self._dll("Lua", prefix="UnLuaNovaDemoLua")
+        self._dll("Luau", prefix="UnLuaNovaDemoLuau")
+        self._manifest("Lua", name="UnLuaNovaDemoLua.modules", live=True)
+        self._manifest("Luau", name="UnLuaNovaDemoLuau.modules", live=False)
+        self.assertEqual(["Luau", "Lua"], self.state.built_backends())
+        self.assertEqual(["ok"], [i["level"] for i in self._binary_items()])
+
+    def test_two_live_isolated_manifests_are_ambiguous(self):
+        self._dll("Lua")
+        self._dll("Luau")
+        self._manifest("Lua", live=True)
+        self._manifest("Luau", live=True)
+        self.assertEqual("ambiguous", self.state.backend_layout()["active"])
+        self.assertIn("error", [i["level"] for i in self._binary_items()])
+
+    def test_no_live_manifest_is_an_error(self):
+        self._dll("Lua")
+        self._dll("Luau")
+        self._manifest("Lua", live=False)
+        self._manifest("Luau", live=False)
+        self.assertIsNone(self.state.backend_layout()["active"])
+        self.assertIn("error", [i["level"] for i in self._binary_items()])
+
+    def test_demo_ini_label_must_match_live_manifest(self):
+        self._dll("Lua")
+        self._dll("Luau")
+        self._manifest("Lua", live=True)
+        self._manifest("Luau", live=False)
+        self._write_ini(self.demo_ini, "Luau")
+        details = " ".join(i["detail"] for i in self._binary_items() if i["level"] == "error")
+        self.assertIn("分叉", details)
+
+    def test_ordinary_layout_keeps_the_old_rule(self):
+        self._root_dll("Lua")
+        self._root_dll("Luau")
+        self._root_manifest()
+        self.assertEqual(["Luau", "Lua"], self.state.built_backends())
+        self.assertEqual("Default", self.state.backend_layout()["active"])
+        details = " ".join(i["detail"] for i in self._binary_items() if i["level"] == "error")
+        self.assertIn("两个后端 DLL 同时存在", details)
+
+    def test_root_manifest_live_with_isolated_dlls_warns(self):
+        self._dll("Lua")
+        self._dll("Luau")
+        self._manifest("Lua", live=False)
+        self._manifest("Luau", live=False)
+        self._root_manifest()
+        self.assertIn("warn", [i["level"] for i in self._binary_items()])
+
+    def test_disabled_manifests_are_reported(self):
+        self._manifest("Luau", name="UnLuaNovaDemoLuauServer.modules", live=False)
+        layout = self.state.backend_layout()
+        self.assertEqual(["UnLuaNovaDemoLuauServer.modules"],
+                         layout["per_backend"]["Luau"]["disabled"])
 
 
 if __name__ == "__main__":

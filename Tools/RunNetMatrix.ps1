@@ -127,8 +127,12 @@ foreach ($B in $Backends) {
             # pick up a build from the other backend's Release run.
             $GameTarget = if ($BackendTargets) { "UnLuaNovaDemo$B" } else { $ProjectName }
             $ServerTarget = if ($BackendTargets) { "UnLuaNovaDemo${B}Server" } else { "$ProjectName`Server" }
-            $PeerExe = Resolve-StagedExe (Join-Path $RepoRoot 'Saved/StagedBuilds/Windows') "$GameTarget.exe"
-            $ServerExe = Resolve-StagedExe (Join-Path $RepoRoot 'Saved/StagedBuilds/WindowsServer') "$ServerTarget.exe"
+            # ReleasePipeline -BackendTargets stages each backend into its own directory
+            # (UAT cleans the staging directory on every -stage), so look there as well.
+            $DevStage = if ($BackendTargets) { Join-Path $RepoRoot "Saved/StagedBuilds/Windows/Backends/$B" } else { Join-Path $RepoRoot 'Saved/StagedBuilds/Windows' }
+            $ServerStage = if ($BackendTargets) { Join-Path $RepoRoot "Saved/StagedBuilds/WindowsServer/Backends/$B" } else { Join-Path $RepoRoot 'Saved/StagedBuilds/WindowsServer' }
+            $PeerExe = Resolve-StagedExe $DevStage "$GameTarget.exe"
+            $ServerExe = Resolve-StagedExe $ServerStage "$ServerTarget.exe"
         }
         $Scratch = Join-Path $RunDir "scratch/variant-$Variant"
         Invoke-Cell "variant/$B/$Variant" $B $ConnectedFilter $CellArgs $Variant $Scratch $PeerExe $ServerExe

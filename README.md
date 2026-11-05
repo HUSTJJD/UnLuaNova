@@ -244,17 +244,21 @@ RPC 的 `UFunction` 本来就是运行时构造的，可以直接挂 `FStructPro
 LuaBackend=Luau        ; 或 Lua；改完要重新编译
 ```
 
-**示例工程可以不这么折腾**：新增的 `UnLuaNovaDemoLuaEditor` / `UnLuaNovaDemoLuauEditor`
-两个 target 各有一套独立产物，各编一次之后切后端**零编译**：
+**示例工程可以不这么折腾**：`UnLuaNovaDemo<Lua|Luau>{Editor,Server,''}` 六个 target 各有一套
+独立产物，各编一次之后切后端**零编译**。`-BackendTargets` 对 Editor / Game / Server 载体、
+`-NetMatrix` 和完整 Release 矩阵都生效：
 
 ```powershell
+# Editor 快速路径（Game / Server target 见文档）
 Build.bat UnLuaNovaDemoLuaEditor  Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
 Build.bat UnLuaNovaDemoLuauEditor Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
 .\Tools\SwitchBackend.ps1 -Backend Lua     # 或 Luau；-Status 看当前，-Backend Default 回到普通布局
 .\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both
+.\Tools\RunTests.ps1 -Profile Release -BackendTargets
 ```
 
-原理与边界见 [测试与自动化 / 后端隔离构建](Docs/CN/Testing.md#后端隔离构建development-快速路径)。
+原理、六个 target 的构建命令与边界见
+[测试与自动化 / 后端隔离构建](Docs/CN/Testing.md#后端隔离构建-backendtargets)。
 
 用 UnLuaNova 工具栏把蓝图绑到模块，脚本放 `Content/Script/`。
 从 UnLua 迁移只需把全局名 `UnLua` 批量换成 `UnLuaNova`。

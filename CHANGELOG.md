@@ -9,6 +9,30 @@ outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
 
 ## Unreleased — source changes, not yet validated
 
+- **Backend isolation extended to every carrier, Release and the outer doctor (source-level;
+  UE compile/runtime validation pending).** The `[UAK BACKEND LAYOUT]` block in all nine
+  `*.Build.cs` files now parses `UnLuaNovaDemo<Backend>{Editor,Server,''}`, and four new
+  targets (`UnLuaNovaDemoLua/Luau`, `UnLuaNovaDemoLua/LuauServer`) join the two Editor ones.
+  Game/Server targets use `Target.Name` as `AppName`, so their exe, DLL prefix, intermediate
+  folder and `*.modules` name differ per carrier: `Tools/SwitchBackend.ps1` now discovers
+  manifests dynamically instead of hardcoding `UnrealEditor.modules`, keeps one backend live
+  per Binaries root and preserves root manifests where no isolated products exist.
+  `RunTests.ps1` drops the `-Carrier Game` / `-NetMatrix` exclusions and forwards
+  `-BackendTargets` to both `RunNetMatrix.ps1` and `ReleasePipeline.ps1`; the Game carrier
+  uses the isolated exe / intermediate / DLL names. `ReleasePipeline.ps1 -BackendTargets`
+  builds isolated Editor/Game/Server targets, activates each backend after the editor build
+  (also on a cache hit), gives each backend its own UAT `-stagingdirectory` (UAT cleans the
+  stage on every `-stage`), keys caches by `isolated`/`targets`, records
+  `isolated_backends` in the provenance and restores the Default manifest layout at the end.
+  The outer `Tools/unluanova/{state,doctor,setup}.py` now understand
+  `Binaries/Win64/Backends/<backend>/`, live/disabled manifests and the demo project's ini
+  label: two sets of DLLs coexisting is no longer a fork error, while ambiguous or absent
+  live manifests are. `state.uproject_path()` falls back to the demo `.uproject` so doctor
+  can finish in a plugin-only checkout. `Tools/tests/test_backend_isolation.py` grew from 9
+  to 21 tests (12 new, including 8 functional doctor tests against synthetic Binaries
+  trees); the full Python suite is 206 OK; PowerShell parsers and DryRun for
+  Development/Game, NetMatrix and Release isolation all pass. **Still not validated by a
+  real UE build, editor launch or UAT package** - `release-status` stays `not-passed`.
 - **Backend-isolated Editor builds (source-level; UE compile/runtime validation pending).**
   Added `UnLuaNovaDemoLuaEditor` / `UnLuaNovaDemoLuauEditor` targets and a
   `[UAK BACKEND LAYOUT]` block in all nine `*.Build.cs` files: the backend comes from
@@ -19,8 +43,9 @@ outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
   engine scans `Binaries/**` recursively) and pins `LuaBackend` in the ini - switching is a
   rename with no recompile. `Tools/RunTests.ps1 -Profile Development -BackendTargets`
   builds each isolated target once and activates it per backend; Release, `-Carrier Game`
-  and `-NetMatrix` paths are unchanged / explicitly rejected. `Tools/tests/test_backend_isolation.py`
-  (9 static regressions) guards the contract; full Python suite is 194 OK. **Not validated
+  and `-NetMatrix` were left on the ordinary path in this first pass (extended in the entry
+  above). `Tools/tests/test_backend_isolation.py` (9 static regressions) guarded the
+  contract at this point; full Python suite was 194 OK. **Not validated
   by a real UE build or editor launch:** first builds, manifest activation and
   `BinariesSubFolder` behaviour still need one `RunTests.ps1` pass.
 - Seventh source-only release-readiness pass (`DEBUG-DAP`, `QA-PROVENANCE`, `LEGAL`,

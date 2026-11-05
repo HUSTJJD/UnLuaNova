@@ -152,11 +152,16 @@ function Resolve-ReleaseGameExe([string] $Archive, [string] $ProjectName, [strin
     try { return (Get-ReleaseGameExe $Archive $ProjectName $Configuration) } catch { return $null }
 }
 
-function Get-ReleaseBuiltBackend([string] $PluginRoot) {
+function Get-ReleaseBuiltBackend([string] $PluginRoot, [string] $BinariesSubFolder = '') {
     # Which backend the tree currently holds. The definitions header UBT wrote is the only
     # authoritative answer: the ini is an intention, and the run directory is a label. The
     # header is what a build that actually finished compiled in.
-    $Header = Join-Path $PluginRoot 'Intermediate/Build/Win64/x64/UnrealEditor/Development/UnLuaNova/Definitions.UnLuaNova.h'
+    #
+    # ModuleRules.BinariesSubFolder also redirects the intermediate directory, so a
+    # backend-isolated build writes this header under .../Development/Backends/<Backend>/.
+    $Rel = 'Intermediate/Build/Win64/x64/UnrealEditor/Development'
+    if ($BinariesSubFolder) { $Rel = "$Rel/$BinariesSubFolder" }
+    $Header = Join-Path $PluginRoot "$Rel/UnLuaNova/Definitions.UnLuaNova.h"
     if (-not (Test-Path -LiteralPath $Header)) { return $null }
     $Text = [IO.File]::ReadAllText($Header)
     if ($Text -match 'UNLUANOVA_LUA_BACKEND\s+1') { return 'Luau' }
