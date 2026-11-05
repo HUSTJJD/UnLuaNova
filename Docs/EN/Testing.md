@@ -90,6 +90,14 @@ folder and `*.modules` manifest name all change with it (for example
 `ReleasePipeline.ps1` use the matching name for the current carrier so they never pick up
 the other backend's binary.
 
+The two extra isolated Editor targets leave the project with three `*Editor.Target.cs` files.
+UAT's `BuildCookRun` refuses to run when it cannot resolve a default editor target, even
+with `-skipbuildeditor`, so `Config/DefaultEngine.ini` must declare
+`[/Script/BuildSettings.BuildSettings] DefaultEditorTarget=UnLuaNovaDemoEditor`.
+`Tools/tests/test_backend_isolation.py` guards this as a static regression. It does not
+change isolated mode, where the Editor target is selected explicitly per backend by
+`RunTests.ps1` / `ReleasePipeline.ps1`.
+
 ### Why SwitchBackend is needed
 
 The engine scans `Binaries/**` recursively for `*.modules`

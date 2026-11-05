@@ -9,6 +9,14 @@ outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
 
 ## Unreleased — source changes, not yet validated
 
+- **Fix: declare `DefaultEditorTarget` for the multi-target project (found by a real
+  Release run).** Adding `UnLuaNovaDemo{Lua,Luau}Editor.Target.cs` leaves three Editor
+  targets, and UAT `BuildCookRun` aborts with *"Project contains multiple Editor targets
+  ... but no DefaultEditorTarget is set"* even under `-skipbuildeditor`.
+  `Config/DefaultEngine.ini` now sets
+  `[/Script/BuildSettings.BuildSettings] DefaultEditorTarget=UnLuaNovaDemoEditor`;
+  a static regression test keeps the declaration in place. Classic single-slot builds are
+  affected; isolated targets are still chosen explicitly by name.
 - **Backend isolation extended to every carrier, Release and the outer doctor (source-level;
   UE compile/runtime validation pending).** The `[UAK BACKEND LAYOUT]` block in all nine
   `*.Build.cs` files now parses `UnLuaNovaDemo<Backend>{Editor,Server,''}`, and four new

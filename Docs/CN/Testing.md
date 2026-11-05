@@ -83,6 +83,13 @@ UBT 给所有 Editor target 同一个 `AppName`（`UnrealEditor`），只加一�
 `UnLuaNovaDemoLuaServer.modules`）。`RunTests.ps1` / `ReleasePipeline.ps1` 在隔离模式下按
 carrier 使用对应的名字，不会误拿另一个后端的二进制。
 
+多出来的两个隔离 Editor target 让工程同时有三个 `*Editor.Target.cs`。UAT 的
+`BuildCookRun` 在无法确定默认编辑器目标时会直接拒绝执行（即使带了 `-skipbuildeditor`），
+因此 `Config/DefaultEngine.ini` 必须显式声明
+`[/Script/BuildSettings.BuildSettings] DefaultEditorTarget=UnLuaNovaDemoEditor`。
+`Tools/tests/test_backend_isolation.py` 把这条约束作为静态回归守着：它不影响隔离模式，
+隔离模式的 Editor target 由 `RunTests.ps1` / `ReleasePipeline.ps1` 按后端名字显式指定。
+
 ### 为什么需要 SwitchBackend
 
 引擎会递归扫描 `Binaries/**` 找 `*.modules`（`FModuleManager::FindModulePathsInDirectory`）。

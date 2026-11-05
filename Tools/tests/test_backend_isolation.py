@@ -168,6 +168,17 @@ class BackendIsolationTests(unittest.TestCase):
                 self.assertNotIn("Backends/", path.read_text(encoding="utf-8-sig"),
                                  "the default targets must keep the unsuffixed output paths")
 
+    def test_default_editor_target_is_explicit(self):
+        # UAT BuildCookRun refuses to pick an editor target when a project has more than
+        # one *Editor.Target.cs and no DefaultEditorTarget, even with -skipbuildeditor.
+        # The isolated targets add two, so the ordinary one must be named explicitly.
+        ini = (REPO / "Config" / "DefaultEngine.ini").read_text(encoding="utf-8-sig")
+        editor_targets = list(PROJECT_SOURCE.glob("*Editor.Target.cs"))
+        self.assertGreater(len(editor_targets), 1,
+                           "this guard matters only while several editor targets exist")
+        self.assertIn("[/Script/BuildSettings.BuildSettings]", ini)
+        self.assertIn("DefaultEditorTarget=UnLuaNovaDemoEditor", ini)
+
     def test_switch_backend_discovers_manifests_dynamically(self):
         text = (TOOLS / "SwitchBackend.ps1").read_text(encoding="utf-8-sig")
         for needle in (
