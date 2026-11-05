@@ -19,8 +19,8 @@
     a test run is compared against the baseline in release-summary.md.
 
     Development retains selective test/debug options and is not a release verdict.
-    Release accepts only EnginePath, ProjectPath, OutputDir, TimeoutMinutes, DryRun,
-    Baseline, NoCache and PruneLegacy.
+    Release accepts EnginePath, ProjectPath, OutputDir, TimeoutMinutes, DryRun,
+    Baseline, NoCache, PruneLegacy and BackendTargets.
 .PARAMETER Profile
     Release by default. Development permits partial runs, SkipBuild, BuildOnly,
     custom filters/carriers, NullRHI, media/report switches and baseline maintenance.
@@ -58,15 +58,19 @@
 .EXAMPLE
     .\Tools\RunTests.ps1 -Profile Development -NetMatrix -Backend Lua -SkipBuild
 .PARAMETER BackendTargets
-    Development-only. Build UnLuaNovaDemoLuaEditor / UnLuaNovaDemoLuauEditor once each and
-    activate them with Tools/SwitchBackend.ps1 instead of recompiling for every backend.
-    Requires the Editor carrier; the ordinary single-target path stays the default.
+    Opt-in for every profile and carrier. Build the backend-isolated targets once each
+    (UnLuaNovaDemo<Backend>Editor for Editor, UnLuaNovaDemo<Backend> for Game, and their
+    Server counterparts for Release packaging) into Binaries/Win64/Backends/<Backend>, then
+    activate the wanted backend with Tools/SwitchBackend.ps1 - a manifest rename plus an ini
+    label, with no compile and no overwrite. Works with -Carrier Game, -NetMatrix and
+    -Profile Release. Without it, the ordinary single-target path stays the default.
 .PARAMETER NetMatrix
     Development-only opt-in for the connected delivery matrix: eight scenarios (late join,
     process-level reconnect, dormancy, relevancy, join-order swap, packet loss,
     UNetConnection-level reconnect, cross-peer schema mismatch) and Legacy / PushOff / Iris /
     Cooked variants. Each cell launches three real processes and is judged by
     ValidateRelease.py --net-matrix; it is not part of the normal test or Release matrix.
+    Combine with -BackendTargets to run every cell against the prebuilt isolated targets.
 #>
 
 [CmdletBinding()]
@@ -115,10 +119,11 @@ param(
     [switch] $Publish,
     [switch] $NoReport,
     [switch] $SkipBuild,
-    # Development-only: use the prebuilt backend-isolated Editor targets (Lua/Luau) instead
-    # of rewriting the ini and rebuilding between backends. Each target is compiled once
-    # into Binaries/Win64/Backends/<Backend>; switching is Tools/SwitchBackend.ps1, a
-    # manifest rename with no compile. See Docs/CN/Testing.md ("后端隔离构建").
+    # Use the prebuilt backend-isolated targets for every carrier instead of rewriting the
+    # ini and rebuilding between backends. Editor, Game and Server each have a
+    # UnLuaNovaDemo<Backend>{Editor,Server,''} target; they are compiled once into
+    # Binaries/Win64/Backends/<Backend>. Switching is Tools/SwitchBackend.ps1: a manifest
+    # rename plus an ini label, with no compile. See Docs/CN/Testing.md ("后端隔离构建").
     [switch] $BackendTargets,
     # 只编译不跑：编完每个后端就退出，不启动编辑器、不生成报告。给 nightly 与"改完 spec
     # 想先确认能编过"这类场景用；与 -SkipBuild 互斥。
@@ -145,17 +150,16 @@ if ($NetMatrix) {
     if ($Profile -eq "Release") {
         throw "-NetMatrix is a Development-only opt-in: use -Profile Development -NetMatrix. A normal Release must stay complete and must not be replaced by a partial connected matrix."
     }
-    if ($BackendTargets) {
-        throw "-NetMatrix and -BackendTargets cannot be combined: the connected matrix launches -game processes, and only the two Editor targets are backend-isolated."
-    }
+    # The connected matrix launches -game processes; the isolated Game target and its
+    # manifests are activated per backend by RunNetMatrix/RunTests below.
     & (Join-Path $PSScriptRoot 'RunNetMatrix.ps1') -EnginePath $EnginePath -ProjectPath $ProjectPath `
         -OutputDir $OutputDir -Backend $Backend -TimeoutMinutes $TimeoutMinutes `
-        -SkipBuild:$SkipBuild -DryRun:$DryRun
+        -SkipBuild:$SkipBuild -BackendTargets:$BackendTargets -DryRun:$DryRun
     exit $LASTEXITCODE
 }
 if ($Profile -eq "Release") {
     $Allowed = @('Profile', 'EnginePath', 'ProjectPath', 'OutputDir', 'TimeoutMinutes', 'DryRun',
-        'Baseline', 'NoCache', 'PruneLegacy')
+        'Baseline', 'NoCache', 'PruneLegacy', 'BackendTargets')
     foreach ($Key in $PSBoundParameters.Keys) {
         if ($Key -notin $Allowed) {
             throw "-$Key is a Development option. Release always runs the complete Win64 matrix. Use -Profile Development for a partial run."
@@ -163,7 +167,7 @@ if ($Profile -eq "Release") {
     }
     & (Join-Path $PSScriptRoot 'ReleasePipeline.ps1') -EnginePath $EnginePath -ProjectPath $ProjectPath `
         -OutputDir $OutputDir -TimeoutMinutes $TimeoutMinutes -Baseline:$Baseline -NoCache:$NoCache `
-        -PruneLegacy:$PruneLegacy -DryRun:$DryRun
+        -PruneLegacy:$PruneLegacy -BackendTargets:$BackendTargets -DryRun:$DryRun
     exit $LASTEXITCODE
 }
 Write-Host 'Development profile: this result is not a release verdict.' -ForegroundColor Yellow
@@ -415,19 +419,19 @@ $RunFilters = Resolve-RunFilters
 $CarrierChoice = Resolve-Carrier -Requested $Carrier
 $IsGameCarrier = ($CarrierChoice.Carrier -eq "Game")
 
-if ($BackendTargets -and $IsGameCarrier) {
-    throw "-BackendTargets needs the Editor carrier: only UnLuaNovaDemoLuaEditor / UnLuaNovaDemoLuauEditor are backend-isolated. Pass -Carrier Editor (or choose -Carrier Auto with editor-only filters)."
-}
 if ($BackendTargets -and $DryRun) {
-    Write-Host "DryRun   : -BackendTargets would build the two isolated targets and activate them with Tools/SwitchBackend.ps1 (no rebuild between backends)."
+    Write-Host "DryRun   : -BackendTargets builds the isolated Editor/Game/Server targets once and activates them with Tools/SwitchBackend.ps1 (no rebuild between backends)."
 }
 
 function Resolve-GameExe {
     # -game 用项目自己编出来的 exe。源码版引擎把游戏目标的 exe 放在项目的
     # Binaries/Win64 下，安装版/少数布局下在 Engine/Binaries/Win64，两个都找。
+    # 隔离 Game target 以 Target.Name 为 AppName，exe 叫 UnLuaNovaDemo<Backend>.exe；
+    # 照着 <Project>.exe 找会拿到上一个后端留下的二进制，所以调用方必须传名字。
+    param([string] $Name = $ProjectName)
     $Candidates = @(
-        (Join-Path (Split-Path -Parent $ProjectPath) "Binaries/Win64/$ProjectName.exe")
-        (Join-Path $EnginePath "Engine/Binaries/Win64/$ProjectName.exe")
+        (Join-Path (Split-Path -Parent $ProjectPath) "Binaries/Win64/$Name.exe")
+        (Join-Path $EnginePath "Engine/Binaries/Win64/$Name.exe")
     )
     foreach ($C in $Candidates) {
         if (Test-Path $C) { return $C }
@@ -510,12 +514,20 @@ $PluginRoot = Join-Path $RepoRoot "Plugins/UnLuaNova"
 # Empty for the ordinary target. -BackendTargets sets it to Backends/<Backend> inside the
 # loop: BinariesSubFolder moves both the DLL and the Definitions header into that folder,
 # so both checks below have to look there instead of at the root.
+#
+# A Game/Server target uses Target.Name as AppName (UEBuildTarget.cs: AppName = InRules.Name
+# unless the build environment is shared), so an isolated Game target also changes the
+# intermediate folder, the DLL prefix and the .exe name. Editor targets are shared and keep
+# "UnrealEditor" for all three. These script variables carry the per-carrier names.
 $script:BackendBuildSubFolder = ""
+$script:BackendIntermediateFolder = $ProjectName
+$script:BackendDllPrefix = $ProjectName
+$script:BackendGameExeName = $ProjectName
 
 function Get-BuiltBackend {
-    # 中间目录按目标名分层：编辑器目标是 UnrealEditor，游戏目标是 <Project>。
+    # 中间目录按目标名分层：编辑器目标是 UnrealEditor，游戏目标是 <Project> 或隔离 target 名。
     # 只接受当前目标的定义，不能借另一个目标的旧头文件通过后端校验。
-    $Folders = if ($IsGameCarrier) { @($ProjectName) } else { @('UnrealEditor') }
+    $Folders = if ($IsGameCarrier) { @($script:BackendIntermediateFolder) } else { @('UnrealEditor') }
     foreach ($Folder in $Folders) {
         $Rel = "Intermediate/Build/$Platform/x64/$Folder/$Configuration"
         if ($script:BackendBuildSubFolder) { $Rel = "$Rel/$script:BackendBuildSubFolder" }
@@ -535,9 +547,10 @@ function Get-BuiltBackend {
 function Assert-BackendBuilt {
     param([string] $Value)
 
-    # 模块 DLL 的名字带着目标名：编辑器目标是 UnrealEditor-Lua.dll，游戏目标是
-    # <Project>-Lua.dll。跑 -game 时编的是后者，照着编辑器的名字找会永远找不到。
-    $DllPrefix = if ($IsGameCarrier) { $ProjectName } else { "UnrealEditor" }
+    # 模块 DLL 的名字带着 AppName：编辑器目标是 UnrealEditor-Lua.dll，游戏目标是
+    # <Project>-Lua.dll（隔离时是 UnLuaNovaDemoLua-Lua.dll）。跑 -game 时编的是后者，
+    # 照着编辑器的名字找会永远找不到。
+    $DllPrefix = if ($IsGameCarrier) { $script:BackendDllPrefix } else { "UnrealEditor" }
     $DllRel = "Binaries/Win64"
     if ($script:BackendBuildSubFolder) { $DllRel = "$DllRel/$script:BackendBuildSubFolder" }
     $Dll = Join-Path $PluginRoot ("$DllRel/$DllPrefix-" + $Value + ".dll")
@@ -1076,13 +1089,17 @@ if ($DryRun)
         $RunDir = Join-Path $OutputDir $B.ToLower()
         Write-Host ""
         Write-Host "--- $B -> $RunDir"
-        $DryTarget = if ($BackendTargets) { "UnLuaNovaDemo${B}Editor" } else { $TargetName }
+        $DryTarget = if (-not $BackendTargets) { $TargetName }
+            elseif ($IsGameCarrier) { "UnLuaNovaDemo${B}" }
+            else { "UnLuaNovaDemo${B}Editor" }
         Write-Host "Build  : $BuildBat $DryTarget $Platform $Configuration -Project=`"$ProjectPath`""
         if ($BackendTargets) {
             Write-Host "Switch : Tools/SwitchBackend.ps1 -Backend $B (no rebuild between backends)"
         }
         $ArgLine = ((Get-TestArgs -ReportDir $RunDir) | ForEach-Object { Format-EditorArg $_ }) -join ' '
-        Write-Host "Cmd    : $(if ($IsGameCarrier) { Resolve-GameExe } else { $EditorCmd }) $ArgLine"
+        $DryGameName = if ($BackendTargets) { $DryTarget } else { $ProjectName }
+        $DryExe = if ($IsGameCarrier) { Resolve-GameExe -Name $DryGameName } else { $EditorCmd }
+        Write-Host "Cmd    : $DryExe $ArgLine"
     }
     Write-Host ""
     Write-Host "Dry run - nothing was executed."
@@ -1112,11 +1129,18 @@ try {
         Write-Host ""
         Write-Host "=== Backend $B ===" -ForegroundColor Cyan
 
-        # -BackendTargets: each backend owns a named Editor target and an isolated
+        # -BackendTargets: each backend owns a named target per carrier and an isolated
         # Binaries/.../Backends/<B> tree. The ini stops being the compile-time switch and
         # becomes a runtime label owned by Tools/SwitchBackend.ps1.
         $script:BackendBuildSubFolder = if ($BackendTargets) { "Backends/$B" } else { "" }
-        $ThisTargetName = if ($BackendTargets) { "UnLuaNovaDemo${B}Editor" } else { $TargetName }
+        $ThisTargetName = if (-not $BackendTargets) { $TargetName }
+            elseif ($IsGameCarrier) { "UnLuaNovaDemo${B}" }
+            else { "UnLuaNovaDemo${B}Editor" }
+        # A Game target is not shared: its AppName is the target name, which also renames
+        # the intermediate folder, the module DLL prefix and the .exe. Editor stays shared.
+        $script:BackendIntermediateFolder = if ($IsGameCarrier) { $ThisTargetName } else { "UnrealEditor" }
+        $script:BackendDllPrefix = if ($IsGameCarrier) { $ThisTargetName } else { "UnrealEditor" }
+        $script:BackendGameExeName = if ($IsGameCarrier) { $ThisTargetName } else { $ProjectName }
 
         if (-not $BackendTargets -and $CurrentBackend -ne $B) {
             # Switching the backend without rebuilding is the one thing this script must
@@ -1190,7 +1214,7 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         [System.IO.File]::WriteAllText((Join-Path $RunDir "backend.txt"), $B,
             (New-Object System.Text.UTF8Encoding($false)))
         $RunArgLine = ((Get-TestArgs -ReportDir $RunDir) | ForEach-Object { Format-EditorArg $_ }) -join ' '
-        $RunExe = if ($IsGameCarrier) { Resolve-GameExe } else { $EditorCmd }
+        $RunExe = if ($IsGameCarrier) { Resolve-GameExe -Name $script:BackendGameExeName } else { $EditorCmd }
         # $(...) and not just (...): a bare `if` in an argument list is parsed as a command
         # name, which fails at run time with "The term 'if' is not recognized" - inside a
         # subexpression it is an expression, which is what is meant here.

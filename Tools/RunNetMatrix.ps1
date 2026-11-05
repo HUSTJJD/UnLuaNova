@@ -25,6 +25,8 @@
     binaries and a real Dedicated Server launch; none of those are implied by this file.
 .EXAMPLE
     .\Tools\RunNetMatrix.ps1 -Backend Lua -SkipBuild
+.EXAMPLE
+    .\Tools\RunTests.ps1 -Profile Development -NetMatrix -BackendTargets -SkipBuild
 #>
 [CmdletBinding()]
 param(
@@ -36,6 +38,9 @@ param(
     [string] $ScenarioFilter = 'UnLuaNova.Slow.Net.Scenarios',
     [ValidateRange(1, 1440)] [int] $TimeoutMinutes = 60,
     [switch] $SkipBuild,
+    # Run every cell against the prebuilt backend-isolated Game/Server targets instead of
+    # recompiling the ordinary target for whichever backend the ini currently names.
+    [switch] $BackendTargets,
     [switch] $DryRun
 )
 
@@ -86,7 +91,7 @@ function Invoke-Cell([string] $Label, [string] $BackendName, [string] $Filter, [
         Write-Host "NetMatrix: $Label ($Variant) -> $Scratch" -ForegroundColor Cyan
         if ($DryRun) { return }
         & $RunTests -Profile Development -Backend $BackendName -Carrier Game -Tier All -Filter $Filter `
-            -OutputDir $Scratch -ExtraArgs $ExtraArgs -SkipBuild:$SkipBuild `
+            -OutputDir $Scratch -ExtraArgs $ExtraArgs -SkipBuild:$SkipBuild -BackendTargets:$BackendTargets `
             -TimeoutMinutes $TimeoutMinutes -EnginePath $EnginePath -ProjectPath $ProjectPath
         if ($LASTEXITCODE -ne 0) { throw "NetMatrix cell failed: $Label ($LASTEXITCODE)" }
     } finally {
@@ -117,8 +122,13 @@ foreach ($B in $Backends) {
         if ($Variant -eq 'Cooked' -and -not $DryRun) {
             $ProjectFile = if ($ProjectPath) { $ProjectPath } else { Join-Path $RepoRoot 'UnLuaNovaDemo.uproject' }
             $ProjectName = [IO.Path]::GetFileNameWithoutExtension($ProjectFile)
-            $PeerExe = Resolve-StagedExe (Join-Path $RepoRoot 'Saved/StagedBuilds/Windows') "$ProjectName.exe"
-            $ServerExe = Resolve-StagedExe (Join-Path $RepoRoot 'Saved/StagedBuilds/WindowsServer') "$ProjectName`Server.exe"
+            # An isolated Game/Server target is staged under its own target name (AppName),
+            # not the ordinary project name. Looking for the old .exe would either fail or
+            # pick up a build from the other backend's Release run.
+            $GameTarget = if ($BackendTargets) { "UnLuaNovaDemo$B" } else { $ProjectName }
+            $ServerTarget = if ($BackendTargets) { "UnLuaNovaDemo${B}Server" } else { "$ProjectName`Server" }
+            $PeerExe = Resolve-StagedExe (Join-Path $RepoRoot 'Saved/StagedBuilds/Windows') "$GameTarget.exe"
+            $ServerExe = Resolve-StagedExe (Join-Path $RepoRoot 'Saved/StagedBuilds/WindowsServer') "$ServerTarget.exe"
         }
         $Scratch = Join-Path $RunDir "scratch/variant-$Variant"
         Invoke-Cell "variant/$B/$Variant" $B $ConnectedFilter $CellArgs $Variant $Scratch $PeerExe $ServerExe
