@@ -798,8 +798,8 @@
       "examples": [
         "Content/Script/Luau/03_NativeDebug.lua"
       ],
-      "gap": "Full command surface delivered and verified against real state: setBreakpoints verifies each line against the resolved script's real line count; exception filters (raised/uncaught) are wired into the shared ReportLuaCallError handler, arm the line hook, stop with reason=exception and answer exceptionInfo; variables expands nested tables through registry-backed handles with depth/cycle/count budgets and releases them at the next stop or Detach. setFunctionBreakpoints now matches lua_getinfo('n') names (exact or '.'/':' qualified suffix) in the line hook with explicit verified=false for empty names; modules is a real package.loaded snapshot taken on the VM thread at attach and every stop, with startModule/moduleCount paging, instead of a static placeholder. launch is still an explicit refusal. Remaining: packaged remote support, authorization, reconnect and a paused-frame multi-Env/coroutine run are unverified. Runtime evidence pending.",
-      "acceptance": "DebugAdapter.spec.cpp drives every command through a real DAP session and asserts verified breakpoints, exception capabilities/filters, function-breakpoint verification/rejection, modules paging consistency and nested-variable failure paths; DebugService.spec.cpp covers filters, last-error recording, stop reason, nested expansion refusal, function-name dedup and the package.loaded snapshot. Break/step behaviour still needs a paused-frame multi-Env/coroutine run.",
+      "gap": "Full command surface delivered and verified against real state: setBreakpoints verifies each line against the resolved script's real line count; exception filters (raised/uncaught) are wired into the shared ReportLuaCallError handler, arm the line hook, stop with reason=exception and answer exceptionInfo; variables expands nested tables through registry-backed handles with depth/cycle/count budgets and releases them at the next stop or Detach. setFunctionBreakpoints matches lua_getinfo('n') names in the line hook with explicit verified=false for empty names; modules is a real package.loaded snapshot taken on the VM thread at attach and every stop, with startModule/moduleCount paging. Delivered this round: capability declarations now match the implementation - supportsFunctionBreakpoints is true (implementation, dispatch and spec already existed while the bit said false, so IDEs never sent the request), and loadedSources is implemented from that same VM-thread snapshot, resolving module names through the shared script resolver and marking unresolved entries honestly instead of inventing paths, advertised via supportsLoadedSourcesRequest. A known-unsupported command table (restart, restartFrame, terminate, stepInTargets, goto, setExpression, completions, data/instruction breakpoints, readMemory, writeMemory, disassemble, cancel, breakpointLocations, runInTerminal) returns a reason with each refusal instead of a generic 'not implemented'. Conditional / hit-conditional breakpoints, stepInTargets and restart remain declared false. launch is still an explicit refusal. Remaining: packaged remote support, authorization, reconnect and a paused-frame multi-Env/coroutine run are unverified. Runtime evidence pending.",
+      "acceptance": "DebugAdapter.spec.cpp drives every command through a real DAP session and asserts verified breakpoints, exception capabilities/filters, function-breakpoint verification/rejection, modules paging consistency and nested-variable failure paths; it now also asserts the two newly advertised capability bits, an empty-but-successful loadedSources response while unattached, and a reasoned refusal (not a bare 'not implemented') for a known-unsupported command. DebugService.spec.cpp covers filters, last-error recording, stop reason, nested expansion refusal, function-name dedup and the package.loaded snapshot. Break/step behaviour still needs a paused-frame multi-Env/coroutine run; none of this round's C++ or automation was compiled or executed.",
       "upstream": [
         "slua",
         "Luau"
@@ -885,14 +885,20 @@
         "Tools/ReleasePipeline.ps1",
         "Tools/ValidateRelease.py",
         "Tools/GenerateTestReport.py",
-        "Tools/ClassifyTests.py"
+        "Tools/ClassifyTests.py",
+        "Tools/AuditRepository.py",
+        "Tools/RecordEvidence.py",
+        "Tools/ValidateProvenance.py"
       ],
       "tests": [
-        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaSpecs.spec.cpp"
+        "Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs/LuaSpecs.spec.cpp",
+        "Tools/tests/test_audit_repository.py",
+        "Tools/tests/test_validate_provenance.py",
+        "Tools/tests/test_release_validation.py"
       ],
       "examples": [],
-      "gap": "Release orchestration, runtime manifests, strict evidence gates and provenance are implemented but unexecuted; source classification is not code coverage.",
-      "acceptance": "Fail missing/empty/malformed runs; record commit/dirty/dependencies/flags/topology; require type tools.",
+      "gap": "Release orchestration, runtime manifests, strict evidence gates and provenance are implemented but unexecuted; source classification is not code coverage. Delivered this round (static only, no UE run): AuditRepository.py now validates inline AND HTML local links, Markdown anchors against MkDocs heading slugs, and plain-https remote URL syntax, and reports the historical/current-tree evidence split instead of silently counting historical runs as current coverage; ValidateRelease.py writes a schema/versioned release-gate.json carrying commit, run, backend, carrier, net_matrix and a UTC timestamp (a null commit when git is unavailable), and its showcase media gate now requires a real PNG signature and IHDR header; Tools/ValidateProvenance.py is a fail-closed static gate that keeps historical records out of current-tree coverage, checks that all four release gates (2 backends x 2 carriers) exist, are green, belong to one run and agree with release-summary.json, and can demand a non-historical record matching HEAD via --require-current. The four gate files already in the tree are legacy format with no provenance fields, so they still cannot prove they belong to the current checkout. None of this executes UE, fabricates runtime evidence or rewrites release-status.",
+      "acceptance": "Fail missing/empty/malformed runs; record commit/dirty/dependencies/flags/topology; require type tools. Also require: python -B Tools/AuditRepository.py (links, anchors, https syntax), python -B Tools/ValidateProvenance.py --run <run> --summary <summary> --require-current (fails with 'no current-tree execution evidence' while only historical runs exist), the full Tools/tests unittest suite (185 regressions), and four freshly generated gate files whose commit matches the released HEAD. A green static structure check must never be reported as 'the current tree was verified'.",
       "upstream": [
         "UnLua",
         "slua",
@@ -943,8 +949,8 @@
       ],
       "tests": [],
       "examples": [],
-      "gap": "Win64 Development cooked automation, Server build and Shipping packaging are orchestrated; execution, Shipping runtime and other platforms remain unverified.",
-      "acceptance": "Cooked scripts/assets/extensions, DS/client, feature-off, executable-memory targets and upgrade tests.",
+      "gap": "Win64 Development cooked automation, Server build and Shipping packaging are orchestrated; execution, Shipping runtime and other platforms remain unverified. Delivered this round: shipped-notice reproducibility is statically checkable with GenerateNotices.py --check against staged NOTICES.txt, showcase media evidence must be a real PNG (signature + IHDR), and each release-gate.json carries commit/run/backend/carrier/timestamp so gates from different runs cannot be mistaken for one Release. The existing staged NOTICES.txt files are still incomplete and the current gates are legacy format; both need a fresh Release run.",
+      "acceptance": "Cooked scripts/assets/extensions, DS/client, feature-off, executable-memory targets and upgrade tests, plus a fresh four-gate set with matching commit provenance and a passing notice --check for every staged artifact.",
       "upstream": [
         "slua",
         "FUnLua"
@@ -959,12 +965,15 @@
       "priority": "P0",
       "source": [
         "LICENSE",
-        "LICENSE-THIRD-PARTY.md"
+        "LICENSE-THIRD-PARTY.md",
+        "Tools/GenerateNotices.py"
       ],
-      "tests": [],
+      "tests": [
+        "Tools/tests/test_generate_notices.py"
+      ],
       "examples": [],
-      "gap": "Root/file MIT scope is resolved and all in-tree version identifiers (LuaSocket 3.0-rc1, RapidJSON 1.1.0, serpent 0.30, lua-rapidjson 'scm') are recorded with file:line evidence. Still outstanding and not assertable from this tree: exact upstream revisions of copied extensions, full shipped-notice texts, sample asset redistribution rights, and FUnLua's missing license file at the pinned commit.",
-      "acceptance": "Rights-holder scope decision, file/component provenance, complete notices in distributable artifact.",
+      "gap": "Root/file MIT scope is resolved and all in-tree version identifiers (LuaSocket 3.0-rc1, RapidJSON 1.1.0, serpent 0.30, lua-rapidjson 'scm') are recorded with file:line evidence. Delivered this round: Tools/GenerateNotices.py deterministically assembles a shipped NOTICES.txt from license information ALREADY present in the repository and offers --check against staged artifacts, so the two NOTICES.txt files under Saved/StagedBuilds are no longer unreproducible one-line leftovers. Every component whose notice cannot be found is emitted as UNRESOLVED and fails the gate (the real tree currently reports 11 UNRESOLVED and exits 1); no license text, rights holder or scope decision is invented, and the generated file states that explicitly. Still outstanding and not assertable from this tree: exact upstream revisions of copied extensions, sample asset redistribution rights, FUnLua's missing license file at the pinned commit, and the rights-holder scope decision itself. A reproducible manifest is not a legal conclusion.",
+      "acceptance": "Rights-holder scope decision, file/component provenance, complete notices in distributable artifact. Before any release claim, GenerateNotices.py --check must pass against every staged NOTICES.txt with zero UNRESOLVED entries; the staged files are currently known to be incomplete (one FreeType line each) and are deliberately not rewritten by this pass; default GenerateNotices.py is expected to stay FAIL-CLOSED until a rights holder resolves them.",
       "upstream": [
         "UnLua",
         "slua",

@@ -95,6 +95,37 @@ Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混
 
 这些是指定场景的泄漏回归，不是全进程内存安全证明。原生资源检查尚不等于覆盖每一处 C++ 分配；GPU/RHI、Luau CodeGen 可执行页、第三方库和长时间线上工作负载仍需专项检测。进程工作集未下降也不能单独判为泄漏。`FullFix-Release-22` 已通过双后端 Editor/cooked 四组实际运行与证据校验，共 36 份内存报告，关闭后残留及记账错误均为零。
 
+## 静态发布门禁（无需 UE）
+
+下面这些只检查仓库里的文件与 JSON，不编译、不启动 UE，可以在冻结工作树之前先跑：
+
+```powershell
+python -B Tools/AuditRepository.py --write-matrix
+python -B -m unittest discover -s Tools/tests -p "test_*.py"
+python -B Tools/ValidateProvenance.py --run Saved\ReleaseTests\baseline --summary Saved\ReleaseTests\baseline\release-summary.json
+python -B Tools/GenerateNotices.py --check Saved\StagedBuilds\Windows\NOTICES.txt Saved\StagedBuilds\WindowsServer\NOTICES.txt
+```
+
+- `AuditRepository.py` 除证据路径、生成页与 release 标记外，还静态校验 Markdown / HTML
+  本地链接、标题锚点（按 MkDocs 的 slug 规则）与远程链接必须使用纯 https；输出会明确
+  区分历史证据和当前树证据 —— 带 `historical: true` 的记录是过去某次真实运行，
+  **不是当前工作树的证明**。
+- `ValidateProvenance.py` 把这条语义做成 fail-closed 门禁：校验证据索引、四个 release gate
+  （2 后端 × 2 载体）齐全且属于同一轮、`release-summary.json` 与 gate 结论一致；
+  `--require-current` 要求至少一条非历史且 commit 与当前 HEAD 一致的证据，否则明确失败。
+- `GenerateNotices.py` 把仓库里已有的许可信息确定性汇总成随包 `NOTICES.txt`，`--check`
+  比对 staged 产物；查不到的权利人信息列为 `UNRESOLVED` 并让门禁失败，不编造法务结论。
+- `ValidateRelease.py` 的 showcase 截图门禁现在只接受带 PNG 签名与 IHDR 头的文件，
+  改名的文本文件不再能蒙混过关。
+
+这些是**静态结构门禁**：能证明证据文件齐全、自洽、可复现，不能证明 UE 真的跑过。
+运行时行为、真实覆盖率与远程可达性仍由完整 Release 和专项验收负责。
+
+当前仓库里后两条会**如实失败**：`ValidateProvenance.py` 报 0 条当前树证据（加
+`--require-current` 则直接 FAIL），`GenerateNotices.py` 报 11 项 `UNRESOLVED` 且两个
+staged `NOTICES.txt` 与生成清单不一致。这不是脚本故障，而是 release 尚未达标；
+不要为了让命令变绿去改证据索引或伪造 notice 文本。
+
 ## 开发调试
 
 局部测试必须明确指定 `Development`，其结果不能作为 release 总结：

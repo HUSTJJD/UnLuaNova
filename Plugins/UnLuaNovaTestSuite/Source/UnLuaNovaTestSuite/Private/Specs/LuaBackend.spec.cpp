@@ -875,6 +875,49 @@ void FLuaBackendSpec::Define()
     // --- profiler and debugger seams ----------------------------------------------
     Describe(TEXT("Profiler 与调试"), [this]()
     {
+        It(TEXT("普通 VM 安全点不会被误判为 GC 中断"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // Regression: Luau calls lua_Callbacks::interrupt with -1 for every VM
+            // safe point and with the collector stage (>= 0) only from inside the GC.
+            // Cancellation listeners used to test `if (GC)`, which is true for -1, so
+            // both the safe-point budget and the timeout watchdog silently ignored
+            // every real safe point and an infinite Lua loop ran forever.
+            TEST_FALSE(UnLuaNova::FLuaVmHooks::IsGcInterrupt(-1));
+#if UNLUANOVA_HAS_HOOK_EVENT
+            // Plain Lua has no GC channel: lua_sethook always reports 0 here.
+            TEST_FALSE(UnLuaNova::FLuaVmHooks::IsGcInterrupt(0));
+#else
+            TEST_TRUE(UnLuaNova::FLuaVmHooks::IsGcInterrupt(0));
+            TEST_TRUE(UnLuaNova::FLuaVmHooks::IsGcInterrupt(2));
+#endif
+        });
+
+        It(TEXT("Env 销毁后不遗留 VM hook 监听器"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // Regression: FLuaVmHooks keys its slots by lua_State*, and the allocator
+            // commonly hands the same address to the next FLuaEnv. A listener left
+            // behind by one spec then looks like it belongs to the next VM, so the
+            // first RemoveOwner() re-installs a per-safe-point interrupt and every
+            // Lua timing in the benchmark inflates while native timings do not.
+            // MakeShared returns a TSharedRef (no Reset()); an explicit TSharedPtr is
+            // required so the env can be destroyed before the assertions below.
+            TSharedPtr<UnLuaNova::FLuaEnv> Temp = MakeShared<UnLuaNova::FLuaEnv>();
+            lua_State* TempL = Temp->GetMainState();
+            const int32 Before = UnLuaNova::FLuaVmHooks::Get().ListenerCount(TempL);
+            int32 Events = 0;
+            const void* Owner = &Events;
+            UnLuaNova::FLuaVmHooks::Get().Add(TempL, 0, Owner,
+                [&Events](lua_State*, lua_Debug*, int) { ++Events; });
+            TEST_EQUAL(UnLuaNova::FLuaVmHooks::Get().ListenerCount(TempL), Before + 1);
+
+            // Deliberately do NOT withdraw by owner: destruction alone must clear it.
+            Temp.Reset();
+            TEST_EQUAL(UnLuaNova::FLuaVmHooks::Get().ListenerCount(TempL), 0);
+
+            auto Next = MakeShared<UnLuaNova::FLuaEnv>();
+            TEST_EQUAL(UnLuaNova::FLuaVmHooks::Get().ListenerCount(Next->GetMainState()), 0);
+        });
+
         It(TEXT("VM hook 能安装、收到事件并按 owner 撤回"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             const auto L = Env->GetMainState();
@@ -894,7 +937,7 @@ void FLuaBackendSpec::Define()
             int32 Events = 0;
             const void* Owner = &Events;
             UnLuaNova::FLuaVmHooks::Get().Add(L, Mask, Owner,
-                [&Events](lua_State*, lua_Debug*) { ++Events; });
+                [&Events](lua_State*, lua_Debug*, int /* GC */) { ++Events; });
 
             Env->DoString(TEXT("local function f() return 1 end; local s = 0; for i = 1, 16 do s = s + f() end; return s"));
             TEST_EQUAL((int64)lua_tonumber(L, -1), 16ll);

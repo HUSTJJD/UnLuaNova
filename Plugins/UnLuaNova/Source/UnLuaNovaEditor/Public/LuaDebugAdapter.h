@@ -101,6 +101,7 @@ private:
     void OnSetVariable(const TSharedRef<class FJsonObject>& Request);
     void OnSource(const TSharedRef<class FJsonObject>& Request);
     void OnModules(const TSharedRef<class FJsonObject>& Request);
+    void OnLoadedSources(const TSharedRef<class FJsonObject>& Request);
     void OnThreads(const TSharedRef<class FJsonObject>& Request);
     void OnStackTrace(const TSharedRef<class FJsonObject>& Request);
     void OnScopes(const TSharedRef<class FJsonObject>& Request);

@@ -33,7 +33,10 @@ MIT 许可覆盖 UnLuaNova 自身的源码、文档、脚本与示例（即本�
 
 改为 MIT 解决了许可本身的冲突，下面这些仍然需要补齐，与许可类型无关：
 
-- 扩展库、工具、二进制依赖与示例资产仍需要完整的版本、来源与随包 notice 清单。
+- 随包 notice 清单现在可由 `Tools/GenerateNotices.py` 确定性生成，并用 `--check` 比对
+  `Saved/StagedBuilds/*/NOTICES.txt`；扩展库、工具、二进制依赖与示例资产的完整版本、
+  来源和权利人范围仍列为 `UNRESOLVED`，生成器会据此 fail-closed。这些是权利人决定，
+  不能由脚本补齐。
 - 新增第三方代码时要记录准确的 URL / revision、保留原有声明并注明改动。
 - 不要给原创代码错误添加 Tencent 版权，也不要删除上游声明。
 

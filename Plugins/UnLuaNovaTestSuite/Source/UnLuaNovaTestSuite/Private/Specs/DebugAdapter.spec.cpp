@@ -285,6 +285,8 @@ namespace
             bool bExpectSuccess;
             FString ExpectedBodyField;
             bool bExpectNonEmptyString;
+            /** When non-empty, the failure `message` must contain this reason text. */
+            FString ExpectedMessageContains;
         };
 
         FDapCommandProbe(int32 Port, TArray<FCase> InCases)
@@ -352,6 +354,15 @@ namespace
                             !Body->GetStringField(Expected.ExpectedBodyField).IsEmpty());
                 }
 
+                // A refused standard DAP command must explain why, not fall through to the
+                // generic "not implemented" message reserved for truly unknown commands.
+                if (!Expected.ExpectedMessageContains.IsEmpty())
+                {
+                    const FString Message = Reply->GetStringField(TEXT("message"));
+                    Test.TestTrue(TEXT("unsupported command states a concrete reason"),
+                        Message.Contains(Expected.ExpectedMessageContains));
+                }
+
                 if (Expected.Command == TEXT("initialize"))
                 {
                     Test.TestTrue(TEXT("configurationDone capability"),
@@ -364,6 +375,10 @@ namespace
                         Body.IsValid() && Body->GetBoolField(TEXT("supportsEvaluateRequest")));
                     Test.TestTrue(TEXT("exceptionInfo capability"),
                         Body.IsValid() && Body->GetBoolField(TEXT("supportsExceptionInfoRequest")));
+                    Test.TestTrue(TEXT("functionBreakpoints capability"),
+                        Body.IsValid() && Body->GetBoolField(TEXT("supportsFunctionBreakpoints")));
+                    Test.TestTrue(TEXT("loadedSources capability"),
+                        Body.IsValid() && Body->GetBoolField(TEXT("supportsLoadedSourcesRequest")));
                     const TArray<TSharedPtr<FJsonValue>>* Filters = nullptr;
                     Test.TestTrue(TEXT("exception filters advertised"),
                         Body.IsValid() && Body->TryGetArrayField(TEXT("exceptionBreakpointFilters"), Filters)
@@ -409,6 +424,36 @@ namespace
                         && Modules && Modules->Num() <= (int32)Total);
                 }
 
+                if (Expected.Command == TEXT("loadedSources") && Body.IsValid())
+                {
+                    const TArray<TSharedPtr<FJsonValue>>* Sources = nullptr;
+                    const bool bHasArray = Body->TryGetArrayField(TEXT("sources"), Sources) && Sources;
+                    Test.TestTrue(TEXT("loadedSources returns a sources array"), bHasArray);
+                    if (bHasArray)
+                    {
+                        // The adapter mirrors the service's package.loaded snapshot 1:1:
+                        // unattached => empty (never a placeholder), and no real module may
+                        // be dropped. Read the same copy the handler used; injecting modules
+                        // is not convenient here (RefreshLoadedModules is private and the
+                        // probe never attaches), so this also covers the populated case.
+                        const int32 ModuleCount = UnLuaNova::FLuaDebugService::Get().GetLoadedModules().Num();
+                        Test.TestEqual(TEXT("sources count matches the loaded modules snapshot"),
+                            Sources->Num(), ModuleCount);
+                        if (ModuleCount == 0)
+                            Test.TestEqual(TEXT("unattached session returns empty sources, not a placeholder"),
+                                Sources->Num(), (int32)0);
+                        for (const TSharedPtr<FJsonValue>& Value : *Sources)
+                        {
+                            const TSharedPtr<FJsonObject> Source = Value->AsObject();
+                            Test.TestTrue(TEXT("each source has a name and a path"),
+                                Source.IsValid() && Source->HasField(TEXT("name"))
+                                && Source->HasField(TEXT("path"))
+                                && !Source->GetStringField(TEXT("name")).IsEmpty()
+                                && !Source->GetStringField(TEXT("path")).IsEmpty());
+                        }
+                    }
+                }
+
                 ++Index;
                 bAwaiting = false;
                 StepStarted = Now;
@@ -445,9 +490,9 @@ namespace
         TArray<FDapCommandProbe::FCase> Cases;
         auto Add = [&Cases](const TCHAR* Command, bool bSuccess,
             TSharedPtr<FJsonObject> Args = nullptr, const TCHAR* BodyField = TEXT(""),
-            bool bNonEmpty = false)
+            bool bNonEmpty = false, const TCHAR* MessageContains = TEXT(""))
         {
-            Cases.Add({Command, Args, bSuccess, BodyField, bNonEmpty});
+            Cases.Add({Command, Args, bSuccess, BodyField, bNonEmpty, MessageContains});
         };
 
         Add(TEXT("initialize"), true);
@@ -534,7 +579,7 @@ BEGIN_DEFINE_SPEC(FDebugAdapterSpec, "UnLuaNova.API.DebugAdapter", EAutomationTe
     TSharedPtr<FDapCommandProbe> Probe;
     bool bOwnsServer = false;
     void BeginSession(bool bUnknownCommand, const FDoneDelegate& Done, int32 WriteChunkSize = MAX_int32);
-    void BeginProbe(const FDoneDelegate& Done);
+    void BeginProbe(const FDoneDelegate& Done, TArray<FDapCommandProbe::FCase> Cases);
 END_DEFINE_SPEC(FDebugAdapterSpec)
 
 void FDebugAdapterSpec::BeginSession(bool bUnknownCommand, const FDoneDelegate& Done, int32 WriteChunkSize)
@@ -563,7 +608,7 @@ void FDebugAdapterSpec::BeginSession(bool bUnknownCommand, const FDoneDelegate& 
     }));
 }
 
-void FDebugAdapterSpec::BeginProbe(const FDoneDelegate& Done)
+void FDebugAdapterSpec::BeginProbe(const FDoneDelegate& Done, TArray<FDapCommandProbe::FCase> Cases)
 {
     auto& Adapter = FLuaDebugAdapter::Get();
     bOwnsServer = Adapter.Start(0);
@@ -574,7 +619,7 @@ void FDebugAdapterSpec::BeginProbe(const FDoneDelegate& Done)
         return;
     }
     TestTrue(TEXT("OS-assigned port is available"), Adapter.GetPort() > 0);
-    Probe = MakeShared<FDapCommandProbe>(Adapter.GetPort(), MakeDapCommandCases());
+    Probe = MakeShared<FDapCommandProbe>(Adapter.GetPort(), MoveTemp(Cases));
     PollHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([this, Done](float)
     {
         if (!Probe->Tick(*this)) return true;
@@ -617,7 +662,26 @@ void FDebugAdapterSpec::Define()
 
     LatentIt(TEXT("补齐的 DAP 命令都有明确响应，能力位与 step 语义一致"), [this](const FDoneDelegate& Done)
     {
-        BeginProbe(Done);
+        BeginProbe(Done, MakeDapCommandCases());
+    });
+
+    LatentIt(TEXT("loadedSources 与 modules 同源、字段完整，未 attach 时返回空 sources"), [this](const FDoneDelegate& Done)
+    {
+        TArray<FDapCommandProbe::FCase> Cases;
+        Cases.Add({TEXT("initialize"), nullptr, true, TEXT(""), false, TEXT("")});
+        Cases.Add({TEXT("modules"), nullptr, true, TEXT("modules"), false, TEXT("")});
+        Cases.Add({TEXT("loadedSources"), nullptr, true, TEXT("sources"), false, TEXT("")});
+        BeginProbe(Done, MoveTemp(Cases));
+    });
+
+    LatentIt(TEXT("已知不支持的 DAP 命令给出明确原因而非笼统的 not implemented"), [this](const FDoneDelegate& Done)
+    {
+        TArray<FDapCommandProbe::FCase> Cases;
+        Cases.Add({TEXT("initialize"), nullptr, true, TEXT(""), false, TEXT("")});
+        // `restart` is a real DAP request we deliberately reject; its failure message
+        // must carry the reason, not the generic "not implemented" fallback.
+        Cases.Add({TEXT("restart"), nullptr, false, TEXT(""), false, TEXT("the editor owns the VM")});
+        BeginProbe(Done, MoveTemp(Cases));
     });
 
     LatentIt(TEXT("DAP session accepts fragmented UTF-8 requests"), [this](const FDoneDelegate& Done)

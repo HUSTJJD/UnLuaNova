@@ -72,7 +72,8 @@ object invalidation have unit cases. Declarative networking stays experimental b
 connected owner / non-owner acceptance, the non-owner RPC rejection assertion, all **eight**
 connected scenarios and the Legacy / PushOff / Iris / **Cooked** variants have source and gates
 but **none has been executed**; no source-level networking TODO remains. Third-party notices are
-still being completed; non-Win64 platforms, engine-level seamless travel, hot reload,
+now reproducible and statically checkable, but their `UNRESOLVED` entries still need a
+rights-holder decision; non-Win64 platforms, engine-level seamless travel, hot reload,
 authorization checks and a same-machine comparison against slua-unreal / FUnLua each need their
 own acceptance run.
 

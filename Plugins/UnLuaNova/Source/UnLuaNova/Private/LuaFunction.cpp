@@ -14,6 +14,7 @@
 
 
 #include "LuaFunction.h"
+#include "UnLuaNovaBase.h"
 #include "LuaOverrides.h"
 #include "LuaOverridesClass.h"
 #include "UnLuaNovaModule.h"
@@ -69,6 +70,14 @@ ULuaFunction* ULuaFunction::Get(UFunction* Function)
         return nullptr;
 
     return FPlatformMemory::ReadUnaligned<ULuaFunction*>(Data + ScriptMagicHeaderSize);
+}
+
+bool ULuaFunction::IsScriptOverrideThunk(const UFunction* Function)
+{
+    // SetActive(true) installs this thunk on the *original* UFunction while stashing the
+    // owning ULuaFunction in its script data. Compare the thunk rather than re-reading the
+    // magic header: a damaged header is exactly the case we need to detect.
+    return Function && Function->GetNativeFunc() == execScriptCallLua;
 }
 
 bool ULuaFunction::IsOverridable(const UFunction* Function)
@@ -154,15 +163,28 @@ void ULuaFunction::Override(UFunction* Function, UClass* Class, bool bAddNew)
     if (bAddNew && Function->HasAnyFunctionFlags(FUNC_Net) && !Function->GetOuter()->IsA<UClass>())
         DeclaredRpcTemplate = Function;
 
-    if (Function->GetNativeFunc() == execScriptCallLua)
+    if (IsScriptOverrideThunk(Function))
     {
         // 目标UFunction可能已经被覆写过了
         const auto LuaFunction = Get(Function);
         Overridden = LuaFunction ? LuaFunction->GetOverridden() : nullptr;
-        // Both are invariants of the "already overridden" path: the previous
-        // implementation is kept in the function's own script data, so a null here means
-        // that data was rewritten underneath us - not merely an override that is missing.
-        check(LuaFunction && Overridden);
+        if (!LuaFunction || !Overridden)
+        {
+            // The original implementation is kept in the function's own script data.
+            // If that data no longer resolves, installing another thunk would overwrite
+            // the header with a pointer to an override that has nothing to restore, and
+            // Restore() would later leave the UFunction permanently broken. Refuse this
+            // override instead of crashing the editor: the existing thunk still dispatches
+            // through the function registry, which resolves the Lua module per object.
+            // Leave this freshly duplicated ULuaFunction inert - clearing From makes
+            // SetActive(), Restore() and Bind() all take their safe no-op paths.
+            UE_LOG(LogUnLuaNova, Warning,
+                TEXT("ULuaFunction::Override: '%s' is already patched but its original implementation cannot be recovered; keeping the existing thunk"),
+                *Function->GetName());
+            From.Reset();
+            bActivated = true;
+            return;
+        }
     }
     else
     {
@@ -309,7 +331,7 @@ void ULuaFunction::Bind()
     {
         if (bAdded)
             SetNativeFunc(execCallLua);
-        else
+        else if (Overridden)
             SetNativeFunc(Overridden->GetNativeFunc());
     }
     else

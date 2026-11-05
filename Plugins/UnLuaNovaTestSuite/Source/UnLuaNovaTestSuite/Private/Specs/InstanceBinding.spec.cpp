@@ -135,6 +135,30 @@ void FUnLuaNovaInstanceBindingSpec::Define()
             ReleaseStub(Second);
         });
 
+        It(TEXT("类级绑定后再绑实例与重绑都不二次覆写"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            // Regression: BindInstance used to call ULuaFunction::Override again on a
+            // UFunction that the class-level bind had already patched. The second thunk
+            // could not recover the original implementation and hit a fatal assertion.
+            auto* Stub = NewStub();
+            TEST_TRUE(Env->TryBind(Stub));
+
+            UFunction* Func = UUnLuaNovaTestStubForOverrides::StaticClass()->FindFunctionByName(TEXT("Overridable"));
+            TEST_TRUE(Func != nullptr);
+            ULuaFunction* Before = ULuaFunction::Get(Func);
+            TEST_TRUE(Before != nullptr);
+
+            TEST_TRUE(Env->GetManager()->BindInstance(Stub, SpecInstanceModuleA));
+            TEST_EQUAL(ULuaFunction::Get(Func), Before);
+            TEST_EQUAL(Stub->Overridable(), 101);
+
+            TEST_TRUE(Env->GetManager()->BindInstance(Stub, SpecInstanceModuleB));
+            TEST_EQUAL(ULuaFunction::Get(Func), Before);
+            TEST_EQUAL(Stub->Overridable(), 202);
+
+            ReleaseStub(Stub);
+        });
+
         It(TEXT("未显式绑定的实例仍回落类默认模块"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
             auto* Overridden = NewStub();

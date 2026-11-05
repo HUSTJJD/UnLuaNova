@@ -28,7 +28,8 @@ From VSCode, **attach** to `127.0.0.1:5699` (`request: "attach"`). The command s
 complete: `initialize` / `attach` / `launch` (explicit refusal) / `configurationDone` /
 `setBreakpoints` / `setExceptionBreakpoints` / `exceptionInfo` / `setFunctionBreakpoints` /
 `threads` / `stackTrace` / `scopes` / `variables` / `setVariable` / `source` / `modules` /
-`pause` / `evaluate` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`.
+`loadedSources` / `pause` / `evaluate` / `continue` / `next` / `stepIn` / `stepOut` /
+`disconnect`.
 
 The listener binds only to loopback. Port `0` selects an OS-assigned port, shown by
 `lua.dap status`. Start and stop are serialized; queued work from a stopped server
@@ -74,14 +75,29 @@ Behaviour worth knowing before you conclude it is broken:
   `Attach()` and at every stop; the adapter thread reads the copy and never touches
   `lua_State`. `startModule` / `moduleCount` paging is supported, and an unattached VM
   returns an honest empty list instead of a placeholder module.
-* **`setFunctionBreakpoints` is implemented**: names are matched against `lua_getinfo('n')`
-  (exact, or `Foo` matching `Table.Foo` / `Table:Foo`) by the line hook, which stops on the
-  first line of a matching frame. Empty names report `verified=false`. This is hook-based
-  matching, not a native function breakpoint; `launch` is still refused with an attach hint.
+* **`setFunctionBreakpoints` is implemented and advertised**: names are matched against
+  `lua_getinfo('n')` (exact, or `Foo` matching `Table.Foo` / `Table:Foo`) by the line hook,
+  which stops on the first line of a matching frame. Empty names report `verified=false`.
+  This is hook-based matching, not a native function breakpoint. `supportsFunctionBreakpoints`
+  is now `true`: the implementation, dispatch and spec were all present while the capability
+  bit said false, so IDEs never sent the request. `launch` is still refused with an attach
+  hint.
+* **`loadedSources` is implemented**: it uses the same VM-thread `package.loaded` snapshot
+  as `modules` (the adapter thread never touches `lua_State`) and resolves each module name
+  through the same script resolver as `source` / `setBreakpoints`. Unresolved modules are
+  reported honestly as unresolved - no invented paths, no silently dropped entries. An
+  unattached VM returns an empty `sources` array, not a placeholder.
+  `supportsLoadedSourcesRequest` is `true`.
+* **Known-unsupported commands explain themselves**: `restart`, `restartFrame`, `terminate`,
+  `stepInTargets`, `goto`, `setExpression`, `completions`, data breakpoints, `readMemory` and
+  friends hit an explicit refusal table and get a reason, rather than a generic
+  "not implemented" that makes an IDE suspect a broken adapter.
+  `supportsConditionalBreakpoints` / `supportsHitConditionalBreakpoints` /
+  `supportsStepInTargetsRequest` / `supportsRestartRequest` remain honestly false.
 * **`stopped.reason`** comes from the VM thread (`breakpoint` / `step` / `pause` /
-  `exception`) instead of a hard-coded `breakpoint`. `supportsExceptionInfoRequest` and
-  `exceptionBreakpointFilters` are advertised; every other unsupported capability bit is
-  explicitly false.
+  `exception`) instead of a hard-coded `breakpoint`. `supportsExceptionInfoRequest`,
+  `exceptionBreakpointFilters`, `supportsFunctionBreakpoints` and
+  `supportsLoadedSourcesRequest` are advertised.
 * **The `debug` compatibility subset** is exact, not a placeholder: on Luau
   `getregistry` raises, `getuservalue` is always nil, `setuservalue` returns false, and
   `upvalueid` is value identity (never proof of scalar aliasing). See

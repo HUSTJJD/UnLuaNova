@@ -42,7 +42,8 @@ UE 5.8.3 源码引擎 / Win64 / Visual Studio 2026 18.10）：
 
 本轮没有覆盖的范围（范围声明，不是遗漏）：非 Win64 平台、条件复制的**联机验收**
 （owner / 非 owner 及全部八类连接场景）、Legacy / PushOff / Iris / Cooked
-四个变体的真实执行、第三方 notice 清单，以及与 slua-unreal / FUnLua 的同机对照。按条件分组布局
+四个变体的真实执行、第三方 notice 清单里仍需权利人决定的 `UNRESOLVED` 项（生成器与
+`--check` 门禁已交付），以及与 slua-unreal / FUnLua 的同机对照。按条件分组布局
 （8 种条件）、任意 `UStruct` / 容器类型规格、八类连接场景源码、四变体开关、跨 peer 声明指纹、
 多 Env 任意顺序销毁与对象失效单测**已交付但尚未执行**，源码层面已无网络待实现项；
 引擎级 seamless travel、热重载与权限检查明确不在范围内，

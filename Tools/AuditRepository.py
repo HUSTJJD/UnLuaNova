@@ -14,6 +14,9 @@ PAGE = Path("Docs/feature-matrix.md")
 EVIDENCE_DIR = Path("Tools/evidence")
 STATUSES = {"implemented", "partial", "experimental", "planned"}
 LINK = re.compile(r"\[[^\]\n]*\]\(\s*(<[^>]+>|[^\s)]+)(?:\s+[^)]*)?\)")
+HTML_LINK = re.compile(
+    r"<(?:a|img)\b[^>]*?\b(?:href|src)\s*=\s*[\"']([^\"']+)[\"'][^>]*>", re.IGNORECASE)
+HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$", re.M)
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 
 
@@ -100,8 +103,12 @@ def validate_matrix(data, root):
     return errors
 
 
-def markdown_links(text):
-    # Only inline file/image links are checked. Anchors and remote URLs are not verified.
+def all_links(text):
+    """Yield (href, kind) for inline Markdown and HTML links outside code fences.
+
+    Both syntaxes appear in published pages: the README uses <img src="..."> while the
+    docs use [text](target). A broken link in either one breaks the same published site.
+    """
     fence = None
     for line in text.splitlines():
         match = FENCE.match(line)
@@ -114,31 +121,72 @@ def markdown_links(text):
             continue
         if fence is None:
             for match in LINK.finditer(line):
-                yield match.group(1).strip("<>")
+                yield match.group(1).strip("<>"), "markdown"
+            for match in HTML_LINK.finditer(line):
+                yield match.group(1), "html"
+
+
+def markdown_links(text):
+    for href, kind in all_links(text):
+        if kind == "markdown":
+            yield href
+
+
+def slugify(text):
+    """MkDocs/Python-Markdown's default toc slug: lowercase, drop punctuation, spaces -> '-'."""
+    value = text.strip().lower()
+    value = re.sub(r"[^\w\s-]", "", value, flags=re.UNICODE)
+    return re.sub(r"\s+", "-", value).strip("-")
+
+
+def heading_slugs(text):
+    return set(slugify(match.group(1)) for match in HEADING.finditer(text))
 
 
 def validate_docs(root):
     errors = []
     docs = (root / "Docs").resolve()
     pages = sorted((root / "Docs").rglob("*.md")) + sorted(root.glob("*.md"))
+    slug_cache = {}
+
+    def slugs_for(path):
+        key = path.resolve()
+        if key not in slug_cache:
+            try:
+                slug_cache[key] = heading_slugs(path.read_text(encoding="utf-8-sig"))
+            except (OSError, UnicodeError):
+                slug_cache[key] = set()
+        return slug_cache[key]
+
     for page in pages:
         # Pages under Docs/ are the ones MkDocs publishes; the ones at the repository root are
         # rendered by GitHub, where a link into the source tree is perfectly fine.
         published = docs in page.resolve().parents
-        for href in markdown_links(page.read_text(encoding="utf-8-sig")):
+        for href, kind in all_links(page.read_text(encoding="utf-8-sig")):
             url = urlsplit(href)
-            if url.scheme or url.netloc or not url.path:
+            if url.scheme or url.netloc:
+                # Remote links: syntax and transport are static properties, reachability is
+                # not. Never fetch anything - CI has no business making network calls here.
+                if url.scheme != "https" or not url.netloc or re.search(r"\s", href):
+                    errors.append(f"{page.relative_to(root)}: {href}: remote link must be a plain https URL")
+                continue
+            if not url.path and not url.fragment:
                 continue
             try:
-                target = local_path(root, page.parent, unquote(url.path))
-                if not target.exists():
-                    raise ValueError("target does not exist")
-                # A published page can only link to a file MkDocs publishes. `mkdocs build
-                # --strict` fails a link that leaves docs_dir even when the file exists,
-                # because it is never copied into the site - which is a warning on CI and an
-                # error there, while a plain "does the file exist" check says nothing.
-                if published and target != docs and docs not in target.parents:
-                    raise ValueError("link leaves Docs/, which mkdocs --strict rejects")
+                if url.path:
+                    target = local_path(root, page.parent, unquote(url.path))
+                    if not target.exists():
+                        raise ValueError("target does not exist")
+                    # A published page can only link to a file MkDocs publishes. `mkdocs build
+                    # --strict` fails a link that leaves docs_dir even when the file exists,
+                    # because it is never copied into the site - which is a warning on CI and an
+                    # error there, while a plain "does the file exist" check says nothing.
+                    if published and target != docs and docs not in target.parents:
+                        raise ValueError("link leaves Docs/, which mkdocs --strict rejects")
+                else:
+                    target = page.resolve()
+                if url.fragment and unquote(url.fragment).lower() not in slugs_for(target):
+                    raise ValueError(f"anchor #{url.fragment} has no matching heading")
             except (ValueError, OSError) as exc:
                 errors.append(f"{page.relative_to(root)}: {href}: {exc}")
     nav = root / "mkdocs.yml"
@@ -208,6 +256,27 @@ def load_evidence(root):
     return by_capability, runs, problems
 
 
+def evidence_recency(root):
+    """Return (total, historical, not_marked_historical) for Tools/evidence/index.json.
+
+    The rendered matrix keeps historical runs visible because they are real past
+    executions. A release decision must not read them as proof of the current tree, so
+    report the split explicitly. A missing `historical` flag does NOT prove a run matches
+    HEAD - Tools/ValidateProvenance.py --require-current does that comparison.
+    """
+    index_file = root / EVIDENCE_DIR / "index.json"
+    if not index_file.is_file():
+        return 0, 0, 0
+    try:
+        index = json.loads(index_file.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return 0, 0, 0
+    if not isinstance(index, list):
+        return 0, 0, 0
+    historical = len([e for e in index if isinstance(e, dict) and e.get("historical") is True])
+    return len(index), historical, len(index) - historical
+
+
 def render_matrix(data, evidence=None):
     by_capability, runs, _problems = evidence or ({}, [], [])
 
@@ -215,6 +284,8 @@ def render_matrix(data, evidence=None):
         covered = len([r for r in data["features"] if r["id"] in by_capability])
         intro = ("Execution evidence is recorded per capability under `Tools/evidence/` "
                  f"({len(runs)} run(s), covering {covered} of {len(data['features'])} capabilities). "
+                 "Those records include past runs: entries marked `historical` are real "
+                 "executions of an earlier tree and are never proof of the current one. "
                  "`feature-matrix.json` itself never claims execution: its `verification` field "
                  "stays `pending-runtime`, and a status edit there is rejected by this audit.")
     else:
@@ -392,10 +463,16 @@ def main():
     else:
         print(f"Repository audit passed: {len(data['features'])} capability groups; "
               f"runtime verification pending (no evidence recorded).")
-    print("Checked evidence paths, generated matrix, inline local Markdown links and plain MkDocs nav paths.")
+    total, historical, other = evidence_recency(ROOT)
+    if total:
+        print(f"Evidence recency: {historical} of {total} recorded run(s) are marked historical; "
+              f"{other} are not, but a non-historical label alone does not prove the current HEAD. "
+              "Run Tools/ValidateProvenance.py --require-current before a release decision.")
+    print("Checked evidence paths, generated matrix, inline and HTML local links, Markdown "
+          "anchors, remote https URL syntax and plain MkDocs nav paths.")
     print("Checked release status/provenance markers, CN/EN release figures and local release summaries.")
-    print("Not checked: runtime behavior, code coverage, remote URLs, Markdown anchors or HTML links.")
-    print("Not checked: local release evidence when Saved/ReleaseTests/ is absent (as on CI).")
+    print("Not checked: runtime behavior, real code coverage, remote URL reachability or local "
+          "release evidence when Saved/ReleaseTests/ is absent (as on CI).")
     return 0
 
 

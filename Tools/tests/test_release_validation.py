@@ -1,10 +1,13 @@
 import copy
+import contextlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 TOOLS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLS))
@@ -409,14 +412,70 @@ class ReleaseValidationTests(unittest.TestCase):
             (net / "Client2.json").write_text(json.dumps(data))
             self.assertGreaterEqual(len(gate.validate_network(run, "Lua")), 3)
 
+    @staticmethod
+    def png_bytes(width=640, height=480):
+        return (gate.PNG_MAGIC + b"\x00\x00\x00\x0dIHDR"
+                + width.to_bytes(4, "big") + height.to_bytes(4, "big")
+                + b"\x08\x06\x00\x00\x00" + b"\x00" * 4)
+
     def test_media_requires_every_showcase_screenshot(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
             (run / "screenshots").mkdir()
             self.assertEqual(len(gate.validate_media(run)), 4)
             for name in ("Binding", "Override", "Container", "UMG"):
-                (run / f"screenshots/Showcase_{name}.png").write_bytes(b"image")
+                (run / f"screenshots/Showcase_{name}.png").write_bytes(self.png_bytes())
             self.assertEqual(gate.validate_media(run), [])
+
+    def test_media_rejects_placeholder_files_that_are_not_pngs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            (run / "screenshots").mkdir()
+            for name in ("Binding", "Override", "Container", "UMG"):
+                (run / f"screenshots/Showcase_{name}.png").write_bytes(b"image" * 64)
+            errors = gate.validate_media(run)
+            self.assertEqual(len(errors), 4)
+            self.assertTrue(all("not a PNG" in error for error in errors))
+
+    def test_media_rejects_truncated_header_and_zero_dimensions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            (run / "screenshots").mkdir()
+            for name in ("Binding", "Override", "Container", "UMG"):
+                (run / f"screenshots/Showcase_{name}.png").write_bytes(
+                    self.png_bytes()[:8] if name in ("Binding", "Override")
+                    else self.png_bytes(0, 0))
+            errors = gate.validate_media(run)
+            self.assertEqual(len(errors), 4)
+            self.assertEqual(len([e for e in errors if "IHDR" in e]), 2)
+            self.assertEqual(len([e for e in errors if "zero PNG dimensions" in e]), 2)
+
+    def test_gate_file_carries_provenance_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            argv = ["ValidateRelease.py", "--run", str(run), "--backend", "Lua",
+                    "--carrier", "game"]
+            with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(gate.main(), 1)  # no evidence at all -> fail closed
+            written = json.loads((run / "metadata/release-gate.json").read_text(encoding="utf-8"))
+            self.assertFalse(written["passed"])
+            self.assertEqual(written["schema"], "unluanova-release-gate/1")
+            self.assertEqual(written["backend"], "Lua")
+            self.assertEqual(written["carrier"], "game")
+            self.assertFalse(written["net_matrix"])
+            self.assertIn("commit", written)
+            self.assertIn("generated_at", written)
+            self.assertTrue(written["generated_at"].endswith("+00:00"))
+
+    def test_current_commit_is_none_when_git_is_unavailable(self):
+        with mock.patch.object(gate.subprocess, "run", side_effect=OSError("no git")):
+            self.assertIsNone(gate.current_commit(Path(".")))
+        with mock.patch.object(gate.subprocess, "run",
+                               return_value=mock.Mock(returncode=1, stdout=b"")):
+            self.assertIsNone(gate.current_commit(Path(".")))
+        with mock.patch.object(gate.subprocess, "run",
+                               return_value=mock.Mock(returncode=0, stdout=b"cab95a83\n")):
+            self.assertEqual(gate.current_commit(Path(".")), "cab95a83")
 
 
     def scenario_evidence(self, run, variant=""):

@@ -26,8 +26,9 @@ lua.dap stop
 VSCode 侧用 **attach** 方式连 `127.0.0.1:5699`（`request: "attach"`）。命令面已补齐：
 `initialize` / `attach` / `launch`（明确拒绝）/ `configurationDone` / `setBreakpoints` /
 `setExceptionBreakpoints` / `exceptionInfo` / `setFunctionBreakpoints` / `threads` /
-`stackTrace` / `scopes` / `variables` / `setVariable` / `source` / `modules` / `pause` /
-`evaluate` / `continue` / `next` / `stepIn` / `stepOut` / `disconnect`。
+`stackTrace` / `scopes` / `variables` / `setVariable` / `source` / `modules` /
+`loadedSources` / `pause` / `evaluate` / `continue` / `next` / `stepIn` / `stepOut` /
+`disconnect`。
 
 服务仅监听回环地址。端口 `0` 由系统分配，实际端口可通过 `lua.dap status` 查看。
 启动与停止串行化，停止后排队的旧服务任务不会作用于重启后的服务。
@@ -63,12 +64,25 @@ VSCode 侧用 **attach** 方式连 `127.0.0.1:5699`（`request: "attach"`）。�
 * **`modules` 是真实快照**：`package.loaded` 的键在 VM 线程上于 `Attach()` 和每次停下时抓取，
   adapter 线程只读副本，不碰 `lua_State`；支持 `startModule` / `moduleCount` 分页，
   未 attach 时如实返回空列表，不再伪造一个模块占位。
-* **`setFunctionBreakpoints` 已实现**：按 `lua_getinfo('n')` 的函数名匹配（精确匹配，或
-  `Foo` 匹配 `Table.Foo` / `Table:Foo`），命中时停在函数入口行；空名字返回 `verified=false`。
-  它由行 hook 匹配实现，不是原生函数断点。`launch` 仍直接拒绝并提示使用 attach。
+* **`setFunctionBreakpoints` 已实现且会告知 IDE**：按 `lua_getinfo('n')` 的函数名匹配
+  （精确匹配，或 `Foo` 匹配 `Table.Foo` / `Table:Foo`），命中时停在函数入口行；空名字返回
+  `verified=false`。它由行 hook 匹配实现，不是原生函数断点。`supportsFunctionBreakpoints`
+  现在为 `true` —— 之前实现、分发和用例都齐了却声明 false，IDE 根本不会发这个请求。
+  `launch` 仍直接拒绝并提示使用 attach。
+* **`loadedSources` 已实现**：与 `modules` 共用同一份 VM 线程上抓取的 `package.loaded`
+  键快照（adapter 线程不碰 `lua_State`），用与 `source` / `setBreakpoints` 相同的解析器把
+  模块名解析成真实磁盘路径；解析不到的模块如实标注为未解析，**不编造路径、不丢弃条目**。
+  未 attach 时返回空 `sources` 数组而不是占位项。`supportsLoadedSourcesRequest` 为 `true`。
+* **已知不支持的命令会说明原因**：`restart` / `restartFrame` / `terminate` /
+  `stepInTargets` / `goto` / `setExpression` / `completions` / data breakpoint /
+  `readMemory` 等标准命令命中显式拒绝表，返回带原因的 error，而不是笼统一句
+  "not implemented" 让 IDE 误判成适配器坏了。`supportsConditionalBreakpoints` /
+  `supportsHitConditionalBreakpoints` / `supportsStepInTargetsRequest` /
+  `supportsRestartRequest` 仍如实为 false。
 * **`stopped.reason`** 由 VM 线程按真实原因给出：`breakpoint` / `step` / `pause` / `exception`，
-  不再是固定的 `breakpoint`。capabilities 里 `supportsExceptionInfoRequest` 与
-  `exceptionBreakpointFilters` 已声明，其余未支持项仍显式为 false。
+  不再是固定的 `breakpoint`。capabilities 里 `supportsExceptionInfoRequest`、
+  `exceptionBreakpointFilters`、`supportsFunctionBreakpoints` 与
+  `supportsLoadedSourcesRequest` 均已声明。
 * **`debug.getregistry` / `getuservalue` / `setuservalue` / `upvalueid`** 的精确子集语义见
   见本节与 `LuaScriptCompat.spec.cpp`：Luau 下 registry 明确拒绝、
   uservalue 恒 nil、setuservalue 返回 false、upvalueid 是值身份（不能用来证明标量别名）。

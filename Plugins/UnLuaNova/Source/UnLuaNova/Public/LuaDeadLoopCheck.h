@@ -50,7 +50,10 @@ namespace UnLuaNova
          * is not evidence that cancellation happens; this makes the cancellation
          * observable to the console and to automation.
          */
-        static int32 GetTimeoutCount();
+        // Exported: the automation suite is a separate UE module and links against the
+        // UnLuaNova import library, so a non-exported static member resolves to LNK2019
+        // there even though the definition is present in the runtime module.
+        static UNLUANOVA_API int32 GetTimeoutCount();
 
         class FGuard final
         {
@@ -68,7 +71,7 @@ namespace UnLuaNova
              * time watchdog, interrupted a script. Observable for the same reason as
              * GetTimeoutCount(): a configured cap is not evidence that it ever fired.
              */
-            static int32 GetSafePointInterruptCount();
+            static UNLUANOVA_API int32 GetSafePointInterruptCount();
 
         private:
 

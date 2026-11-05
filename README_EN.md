@@ -341,7 +341,7 @@ Clear beats flattering. The following are known gaps — a statement of scope, n
 | **Engine versions and platforms** | Verified on UE **5.8.3 / Win64**. Other engine versions, Linux / Mac / iOS / Android and consoles need their own acceptance |
 | **Per-instance binding** | Delivered: `BindInstance` / `UnbindInstance` plus Blueprint entry points (see `Docs/CN/InstanceBinding.md`). Class-level binding is still the default cache and must be established first; overrides form a class-level union of function names and instance-bound objects resolve Lua functions per call. Runtime evidence still needs a real `UnLuaNova.API.InstanceBinding` run |
 | **Sandbox** | `lua.sandbox` is off by default; path checks are not an OS-level sandbox. Untrusted scripts need their own capability policy |
-| **Third-party notices** | Version, provenance and shipped-notice inventory for extensions, tools, binaries and sample assets is not complete yet (independent of the license) |
+| **Third-party notices** | `Tools/GenerateNotices.py` now deterministically generates and `--check`s the shipped `NOTICES.txt`, but full version, provenance and rights-holder scope for extensions, tools, binaries and sample assets still leave `UNRESOLVED` entries that fail the gate (independent of the license). Code cannot invent those decisions |
 
 Per-item status, source entry points and acceptance criteria live in the
 [capability matrix](Docs/feature-matrix.md) and the [current audit](Docs/EN/Benchmark_Review.md).

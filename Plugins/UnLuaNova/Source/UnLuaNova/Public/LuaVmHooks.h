@@ -37,11 +37,31 @@ namespace UnLuaNova
     class FLuaVmHooks
     {
     public:
-        // GC is non-zero on Luau when the interrupt came from the collector. Listeners
-        // that can raise a Lua error must skip those (a longjmp out of the GC is not
-        // safe); the profiler needs the flag to attribute collector time correctly.
-        // It is always 0 on plain Lua, where lua_sethook has no such channel.
+        // Luau passes the collector stage (>= 0) when lua_Callbacks::interrupt fires
+        // from inside the GC, and -1 for an ordinary VM safe point. Plain Lua's
+        // lua_sethook has no GC channel at all and always reports 0 here. Listeners
+        // that can raise a Lua error must skip collector interrupts (a longjmp out of
+        // the collector is not safe) but MUST NOT skip ordinary safe points: treating
+        // -1 as "GC" silently disables every watchdog/budget on Luau.
         using FListener = TFunction<void(lua_State* L, lua_Debug* Ar, int GC)>;
+
+        /**
+         * True only when the interrupt came from the collector.
+         *
+         * Use this instead of `if (GC)`: Luau's VM safe points arrive as -1, which is
+         * truthy, so a plain truth test suppresses exactly the events a cancellation
+         * hook exists to see. Keeping the distinction here also documents the two
+         * backends' different sentinels in one place.
+         */
+        static bool IsGcInterrupt(int GC)
+        {
+#if UNLUANOVA_HAS_HOOK_EVENT
+            (void)GC;
+            return false;
+#else
+            return GC >= 0;
+#endif
+        }
 
         /**
          * Called when a (co)routine is created or destroyed.
@@ -49,11 +69,13 @@ namespace UnLuaNova
          */
         using FThreadListener = TFunction<void(lua_State* Parent, lua_State* Thread)>;
 
-        static FLuaVmHooks& Get()
-        {
-            static FLuaVmHooks Instance;
-            return Instance;
-        }
+        // Declared here, defined out of line in UnLuaNova.dll. An inline
+        // function-local static would be instantiated once *per module*: the runtime
+        // (dead-loop watchdog, CPU profiler) and any consumer in another DLL -
+        // including the test suite - would each keep a separate Slots map, silently
+        // missing each other's listeners and overwriting each other's lua_sethook /
+        // lua_Callbacks::interrupt. One exported accessor keeps it process-wide.
+        static UNLUANOVA_API FLuaVmHooks& Get();
 
         // Mask is a LUA_MASK* combination and is only honoured on plain Lua. Pass 0 on
         // Luau, where every listener sees every safe point.
@@ -72,6 +94,19 @@ namespace UnLuaNova
 
             Slot->Listeners.RemoveAll([Owner](const FEntry& E) { return E.Owner == Owner; });
             Refresh(L, *Slot);
+        }
+
+        /**
+         * Number of listeners still recorded for L. Zero after an environment is torn
+         * down: ~FLuaEnv() calls RemoveAll() so a recycled lua_State* cannot inherit a
+         * stale hook. Only the pointer is compared, never dereferenced, so calling this
+         * with a state that has already been closed is safe.
+         */
+        int32 ListenerCount(lua_State* L) const
+        {
+            if (const auto* Slot = Slots.Find(L))
+                return Slot->Listeners.Num();
+            return 0;
         }
 
         void RemoveAll(lua_State* L)

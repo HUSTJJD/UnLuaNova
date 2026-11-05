@@ -614,8 +614,11 @@ function Get-ScreenshotDir {
 function Clear-StaleScreenshots {
     $ShotDir = Get-ScreenshotDir
     if (-not (Test-Path $ShotDir)) { return }
+    # Explicit -LiteralPath per item: a bare pipeline `Remove-Item -Force` relies on the
+    # caller binding $_ implicitly, which hardened PowerShell hosts reject as a delete
+    # with no path operand. -LiteralPath also keeps PNG names containing [] intact.
     Get-ChildItem -Path $ShotDir -Filter "*.png" -File -ErrorAction SilentlyContinue |
-        Remove-Item -Force -ErrorAction SilentlyContinue
+        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
 }
 
 function Get-NetTopologyFiles {

@@ -291,11 +291,20 @@ void UUnLuaNovaManager::Cleanup()
     // schema 一起抹掉。
     UnLuaNova::FUnLuaNovaNet::Cleanup(Env);
 
-    if (Env)
+    // Cleanup() is called from ~FLuaEnv() *after* lua_close(L). lua_close frees the
+    // whole registry, so these refs are already gone - trying to luaL_unref them here
+    // is a use-after-free (an EXCEPTION_ACCESS_VIOLATION in lua_unref on cooked
+    // automation as soon as any instance binding had registered a table ref).
+    // Only unref while the owning state is still alive; IsClosing() is set at the very
+    // top of ~FLuaEnv(), before the close.
+    if (Env && !Env->IsClosing())
     {
         const auto L = Env->GetMainState();
-        for (const auto& Pair : Instances)
-            luaL_unref(L, LUA_REGISTRYINDEX, Pair.Value.TableRef);
+        if (L)
+        {
+            for (const auto& Pair : Instances)
+                luaL_unref(L, LUA_REGISTRYINDEX, Pair.Value.TableRef);
+        }
     }
     Instances.Empty();
 

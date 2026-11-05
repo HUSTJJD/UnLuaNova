@@ -313,7 +313,7 @@ Development / Server / Shipping 三种打包。
 | **平台与引擎版本** | 已验证 UE **5.8.3 / Win64**。其他引擎版本、Linux / Mac / iOS / Android、主机平台需各自验收 |
 | **同类实例绑定** | 已交付 `BindInstance` / `UnbindInstance` 与蓝图入口（[文档](Docs/CN/InstanceBinding.md)）。默认仍按 `UClass` 缓存；必须先完成类级绑定，覆写是类级函数名并集，实例路径逐次解析 Lua 函数。执行证据待真实 UE 跑 `UnLuaNova.API.InstanceBinding` |
 | **沙盒** | `lua.sandbox` 默认关闭；路径检查不是 OS 级沙盒，不可信脚本需另定能力策略 |
-| **第三方 notice** | 扩展库 / 工具 / 二进制依赖 / 示例资产的版本、来源与随包 notice 清单尚未补齐（与许可类型无关） |
+| **第三方 notice** | `Tools/GenerateNotices.py` 已能确定性生成并 `--check` 随包 `NOTICES.txt`，但扩展库 / 工具 / 二进制依赖 / 示例资产的完整版本、来源与权利人范围仍有 `UNRESOLVED` 项，门禁会因此失败（与许可类型无关）。清单内容不能由代码编造 |
 
 逐项状态、源码入口与验收条件见 [能力矩阵](Docs/feature-matrix.md) 与 [当前审计](Docs/CN/Benchmark_Review.md)。
 

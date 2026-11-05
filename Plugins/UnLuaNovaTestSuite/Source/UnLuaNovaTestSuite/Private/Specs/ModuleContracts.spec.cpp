@@ -74,16 +74,21 @@ void FModuleContractsSpec::Define()
             const int64 Live = Env->GetLiveLuaBytes();
             Env->SetMemoryQuotaMaxBytes(Live + 64 * 1024);
 
-            // The allocator logs exactly one Error line for the first refusal. pcall keeps
-            // the VM's own "not enough memory" from becoming a second undeclared one.
-            AddExpectedError(TEXT("Lua memory quota"), EAutomationExpectedErrorFlags::Contains);
+            // The allocator reports the first refusal at Error verbosity. Occurrences=0
+            // accepts one or more lines: backends differ in how many allocator steps are
+            // needed to unwind the pcall. pcall itself keeps the VM's own "not enough
+            // memory" from becoming a second, undeclared error.
+            AddExpectedError(TEXT("Lua memory quota"), EAutomationExpectedErrorFlags::Contains, 0);
 
             lua_settop(L, 0);
             TEST_TRUE(Env->DoString(TEXT(
                 "local ok = pcall(function()"
                 "  local t = {}"
                 "  for i = 1, 200000 do t[i] = string.rep('x', 128) end"
-                "  return #t"
+                // Adjacent literals are concatenated with no separator: without this
+                // newline `#t` and `end` merge into the identifier `tend`, which fails
+                // to compile the chunk before the allocator is ever exercised.
+                "  return #t\n"
                 "end) "
                 "return ok")));
             TEST_FALSE(lua_toboolean(L, 1) != 0);
@@ -112,6 +117,11 @@ void FModuleContractsSpec::Define()
     {
         It(TEXT("rejects a named cycle and does not poison later requires"), EAsyncExecution::TaskGraphMainThread, [this]()
         {
+            // The cycle is an expected, pcall-handled Lua error, but ReportLuaCallError
+            // still logs it at Error verbosity and the automation framework treats any
+            // undeclared Error as a failure. Occurrences=0 accepts one or more lines
+            // (the require wrapper rethrows through its own handler).
+            AddExpectedError(TEXT("cyclic dependency"), EAutomationExpectedErrorFlags::Contains, 0);
             lua_settop(L, 0);
             TEST_TRUE(Env->DoString(TEXT(
                 "package.preload.SpecCycleA = function() return require('SpecCycleB') end "

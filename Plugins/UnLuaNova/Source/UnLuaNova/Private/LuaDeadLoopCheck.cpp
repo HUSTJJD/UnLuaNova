@@ -226,8 +226,10 @@ namespace UnLuaNova
             [this, Limit](lua_State* InL, lua_Debug*, int GC)
             {
                 // A GC interrupt executes no script instruction, and raising an error
-                // from inside the collector would longjmp out of it.
-                if (GC)
+                // from inside the collector would longjmp out of it. Luau reports an
+                // ordinary VM safe point as -1, NOT 0: `if (GC)` used to discard every
+                // real safe point and left `while true do end` running forever.
+                if (FLuaVmHooks::IsGcInterrupt(GC))
                     return;
                 if (SafePoints.fetch_add(1) + 1 > Limit)
                 {
@@ -285,7 +287,7 @@ namespace UnLuaNova
                                this,
             [this](lua_State* InL, lua_Debug*, int GC)
             {
-                if (GC)
+                if (FLuaVmHooks::IsGcInterrupt(GC))
                     return; // never longjmp out of the collector
                 FLuaVmHooks::Get().RemoveOwner(InL, this);
                 luaL_error(InL, "lua script exec timeout");

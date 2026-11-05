@@ -96,6 +96,43 @@ No extra command or manual `lua.memstats` toggle is required. Nine reports under
 
 This is scenario-based leak regression, not proof of process-wide memory safety. Native ownership checks do not cover every C++ allocation; GPU/RHI resources, Luau CodeGen executable pages, third-party libraries and long production sessions still need dedicated coverage. Process working-set retention alone is not evidence of a leak. `FullFix-Release-22` passed all four backend/carrier runs and evidence gates: 36 memory reports, with zero residue and accounting errors after closure.
 
+## Static release gates (no UE required)
+
+These check files and JSON only - no compiler, no editor - so they can run before the
+worktree is frozen:
+
+```powershell
+python -B Tools/AuditRepository.py --write-matrix
+python -B -m unittest discover -s Tools/tests -p "test_*.py"
+python -B Tools/ValidateProvenance.py --run Saved\ReleaseTests\baseline --summary Saved\ReleaseTests\baseline\release-summary.json
+python -B Tools/GenerateNotices.py --check Saved\StagedBuilds\Windows\NOTICES.txt Saved\StagedBuilds\WindowsServer\NOTICES.txt
+```
+
+* `AuditRepository.py` also validates inline/HTML local links, Markdown anchors (using
+  MkDocs slug rules) and that remote links use plain https. Its output separates historical
+  from current-tree evidence: a record with `historical: true` is a real run of an earlier
+  tree and is **not proof of the current worktree**.
+* `ValidateProvenance.py` makes that distinction fail-closed: it checks the evidence index,
+  that all four release gates (two backends x two carriers) exist and belong to one run, and
+  that `release-summary.json` agrees with them. `--require-current` fails unless at least one
+  non-historical record matches the current HEAD.
+* `GenerateNotices.py` deterministically assembles the shipped `NOTICES.txt` from license
+  information already present in the repository; `--check` compares staged artifacts.
+  Unresolvable rights-holder information is listed as `UNRESOLVED` and fails the gate rather
+  than being invented.
+* `ValidateRelease.py`'s showcase gate now requires a PNG signature and an IHDR header, so a
+  renamed text file can no longer satisfy it.
+
+These are **static structure gates**. They prove evidence files are complete, consistent and
+reproducible; they do not prove UE actually ran. Runtime behaviour, real coverage and remote
+reachability still belong to the full Release and the specialised acceptance runs.
+
+The last two commands **honestly fail** on the current tree: `ValidateProvenance.py`
+reports zero current-tree records (and fails outright with `--require-current`), while
+`GenerateNotices.py` reports 11 `UNRESOLVED` items and two staged `NOTICES.txt` files that
+disagree with the generated list. That is not a broken script - the release is not ready.
+Do not edit the evidence index or invent notice text just to turn those commands green.
+
 ## Development
 
 Partial runs explicitly select `Development` and are not release evidence:

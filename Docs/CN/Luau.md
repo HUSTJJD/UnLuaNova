@@ -82,7 +82,7 @@ table/upvalue/registry 与已被别处持有的引用都不做全量快照。
 `lua.memquota status` 输出每个 Env 的 `limit / live / rejections / last_request`，
 `reset` 只清拒绝计数。它记账的是 allocator 看到的存活字节，不是 VM 分类 churn，
 也不覆盖原生回调分配、GC scratch、被放弃协程的归因 —— **不是完整恶意代码隔离**。
-与 `lua.gc limit <kb>` 的区别：后者只触发一次整轮回收，不拒绝分配。详见[控制台命令](ConsoleCommand.md#lua.memquota)。
+与 `lua.gc limit <kb>` 的区别：后者只触发一次整轮回收，不拒绝分配。详见[控制台命令](ConsoleCommand.md#luamemquota)。
 
 沙盒与类表冻结是可选硬化，不是对不可信脚本的完整隔离。UE 对象访问、debug、socket 和 io 是额外宿主能力；必须明确授权范围。文件路径校验不抵御 OS 符号链接/重解析点。Lua 5.5 自带 io 的策略也不由 Luau 的开关控制。
 

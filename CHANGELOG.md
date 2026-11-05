@@ -9,6 +9,38 @@ outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
 
 ## Unreleased — source changes, not yet validated
 
+- Seventh source-only release-readiness pass (`DEBUG-DAP`, `QA-PROVENANCE`, `LEGAL`,
+  `PACKAGING`): the DAP `initialize` response now advertises
+  `supportsFunctionBreakpoints` (the handler, dispatch and spec already existed while the
+  bit said false, so IDEs never sent the request) and `supportsLoadedSourcesRequest`,
+  backed by a new `loadedSources` handler that reuses the VM-thread `package.loaded`
+  snapshot and the shared script resolver, marks unresolved modules instead of inventing
+  paths and returns an honest empty array when unattached; a known-unsupported command
+  table gives `restart` / `terminate` / `stepInTargets` / data breakpoints / memory reads
+  and friends a reason instead of a generic "not implemented". Conditional and
+  hit-conditional breakpoints, `stepInTargets` and `restart` remain declared false.
+  `AuditRepository.py` now validates inline AND HTML local links, Markdown anchors against
+  MkDocs heading slugs and plain-https remote URL syntax, reports the
+  historical/current-tree evidence split instead of silently counting historical runs as
+  current coverage. `ValidateRelease.py`
+  emits schema/versioned `release-gate.json` files carrying `commit`, `run`, `backend`,
+  `carrier`, `net_matrix` and a UTC timestamp (a null commit when git is unavailable), and
+  its showcase gate requires a real PNG signature and IHDR header. New
+  `Tools/ValidateProvenance.py` is a fail-closed static gate: historical records never
+  count as current-tree coverage, all four release gates (2 backends x 2 carriers) must
+  exist, be green, belong to one run and agree with `release-summary.json`, and
+  `--require-current` demands a non-historical record matching HEAD. New
+  `Tools/GenerateNotices.py` deterministically assembles a shipped `NOTICES.txt` from
+  license information already in the tree and `--check`s staged artifacts; unresolvable
+  components are emitted as `UNRESOLVED` and fail the gate rather than being invented.
+  CN/EN testing, debugging, license, README and release-note pages were synced, and
+  two broken `#lua.memquota` anchors introduced in the previous pass were fixed.
+  Tool regressions now total 185 (55 new: 9 link/anchor, 4 gate/media provenance,
+  26 evidence provenance, 16 notice generation), all passing without UE.
+  **None of this compiled UE, ran UE automation or produced execution evidence**;
+  `release-status` stays `not-passed` and all 40 `verification` values stay
+  `pending-runtime`. A legal static structure is explicitly not "the current tree was
+  verified".
 - Sixth source-only capability pass (`WATCHDOG`, `LUAU-REQUIRE`, `RUNTIME-RELOAD`,
   `RUNTIME-TIMER`, `LIFE-ENVS`, `PERFORMANCE`): a per-Env Lua heap quota (`lua.maxmemorykb`
   / `lua.memquota <kb>|off|status|reset`) enforced in `FLuaEnv::DefaultLuaAllocator`

@@ -235,6 +235,10 @@ void FLuauIntegrationSpec::Define()
 
     It(TEXT("require reports a cyclic dependency and a failed load does not poison the name"), EAsyncExecution::TaskGraphMainThread, [this]
     {
+        // The cycle is expected and handled by pcall inside the chunk, but the error
+        // still reaches ReportLuaCallError at Error verbosity. Declare it (one or more
+        // lines) so the framework does not count that diagnostic as a test failure.
+        AddExpectedError(TEXT("cyclic dependency"), EAutomationExpectedErrorFlags::Contains, 0);
         TEST_TRUE(UnLuaNova::RunChunk(L, R"(
             package.preload['Spec.CycleA'] = function() return require('Spec.CycleB') end
             package.preload['Spec.CycleB'] = function() return require('Spec.CycleA') end

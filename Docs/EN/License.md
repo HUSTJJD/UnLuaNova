@@ -35,7 +35,7 @@ commercial condition of any kind.
 
 MIT resolves the license conflict itself. These remain, and are independent of the license choice:
 
-- Extensions, tools, binary dependencies and sample assets still need a complete version, provenance and shipped-notice inventory.
+- `Tools/GenerateNotices.py` now deterministically generates the shipped notice inventory and `--check`s it against `Saved/StagedBuilds/*/NOTICES.txt`. Full version, provenance and rights-holder scope for extensions, tools, binaries and sample assets still appear as `UNRESOLVED` entries and fail the gate. Those are rights-holder decisions, not something a script can supply.
 - New third-party imports must record the exact URL / revision, keep the original notices and note modifications.
 - Do not add Tencent copyright to original code, and do not remove upstream notices.
 

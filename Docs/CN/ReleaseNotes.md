@@ -62,7 +62,8 @@ Luau cooked 615。
 owner / 非 owner 联机验收、非 Owner RPC 拒绝、**八类**连接场景（含加入顺序互换、丢包/乱序、
 `UNetConnection` 级重连、跨 peer 声明差异）与 Legacy / PushOff / Iris / **Cooked** 四变体的
 场景源码与门禁均已补齐，**但都尚未执行**；源码层面已无网络待实现项。
-第三方 notice 仍在补齐；非 Win64 平台、引擎级 seamless travel、热重载与权限检查、
+第三方 notice 清单已能确定性生成并静态校验，但 `UNRESOLVED` 项仍需权利人决定；
+非 Win64 平台、引擎级 seamless travel、热重载与权限检查、
 以及与 slua-unreal / FUnLua 的同机对照都需要各自独立的验收运行。
 
 验收方法与门禁见 [测试](Testing.md)，诊断历史见 [2026-10-24 回归记录](Regression_20261024.md)。

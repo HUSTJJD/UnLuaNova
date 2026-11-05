@@ -1,5 +1,6 @@
 #include "LuaOverrides.h"
 #include "LuaFunction.h"
+#include "UnLuaNovaBase.h"
 #include "LuaOverridesClass.h"
 #include "UObject/MetaData.h"
 
@@ -39,6 +40,33 @@ namespace UnLuaNova
 
         ULuaFunction* LuaFunction;
         const auto bAddNew = Function->GetOuter() != Class;
+
+        // Overrides live on the UClass and the function registry resolves the Lua module
+        // per object at call time, so binding another object - or rebinding an instance to
+        // a different module - never needs a second thunk on the same UFunction. An
+        // already-patched UFunction keeps its original Script/native func only inside the
+        // ULuaFunction recorded in its script data; stacking another override there used to
+        // lose that chain and trip a fatal assertion in ULuaFunction::Override.
+        if (ULuaFunction::IsScriptOverrideThunk(Function))
+        {
+            const ULuaFunction* Existing = ULuaFunction::Get(Function);
+            // bAddNew is the legitimate case: a derived class overrides a function that
+            // its parent already patched, and reuses the recorded original implementation.
+            // It still requires a readable header and a recoverable Overridden.
+            if (!bAddNew || !Existing || !Existing->GetOverridden())
+            {
+                if (!bAddNew && Existing)
+                {
+                    // Idempotent rebind: nothing to do, the live thunk stays in place.
+                    return;
+                }
+                UE_LOG(LogUnLuaNova, Warning,
+                    TEXT("FLuaOverrides::Override: refusing to stack an override on '%s' (patched=%d, existing=%d)"),
+                    *Function->GetName(), 1, Existing != nullptr ? 1 : 0);
+                return;
+            }
+        }
+
         if (bAddNew)
         {
             const auto Exists = Class->FindFunctionByName(NewName, EIncludeSuperFlag::ExcludeSuper);

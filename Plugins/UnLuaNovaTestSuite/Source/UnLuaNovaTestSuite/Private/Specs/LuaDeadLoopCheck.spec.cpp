@@ -86,12 +86,18 @@ void FLuaDeadLoopCheckSpec::Define()
 
             const int32 Before = UnLuaNova::FDeadLoopCheck::FGuard::GetSafePointInterruptCount();
             AddExpectedError(TEXT("maxsafepoints"), EAutomationExpectedErrorFlags::Contains);
-            LocalEnv->DoString(TEXT("local n = 0 while true do n = n + 1 end"));
+            // Bounded on purpose. This still crosses the 64-safe-point budget by a wide
+            // margin, but if cancellation ever regresses the chunk simply finishes and
+            // the assertions below fail instead of wedging the editor in a genuine
+            // infinite loop - which takes the whole Release run down with it.
+            const bool bCancelled = !LocalEnv->DoString(
+                TEXT("local n = 0 for i = 1, 1000000 do n = n + 1 end return n"));
             const bool bInterrupted =
                 UnLuaNova::FDeadLoopCheck::FGuard::GetSafePointInterruptCount() > Before;
             const bool bShort = LocalEnv->DoString(TEXT("return 1 + 1"));
 
             Var->Set(Saved, ECVF_SetByCode);
+            TestTrue(TEXT("the budget cancelled the long-running chunk"), bCancelled);
             TestTrue(TEXT("budget recorded a real interruption"), bInterrupted);
             TestTrue(TEXT("the next call is not capped by a stale counter"), bShort);
         });

@@ -156,6 +156,84 @@ class AuditRepositoryTests(unittest.TestCase):
         self.assertTrue(any("do not match baseline commit" in error for error in errors))
         self.assertTrue(any("33/33 claim disagrees" in error for error in errors))
 
+    # ── link / anchor checks added for the seventh release-readiness pass ──
+
+    def _write_page(self, relative, text):
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_slugify_follows_mkdocs_toc_rules(self):
+        self.assertEqual(audit.slugify("lua.memquota"), "luamemquota")
+        # The published CN heading uses full-width parentheses, so no space survives.
+        self.assertEqual(audit.slugify("Timer（C++ 驱动）"), "timerc-驱动")
+        self.assertEqual(audit.slugify("Timer (C++ 驱动)"), "timer-c-驱动")
+        self.assertEqual(audit.slugify("  Module resolution and unload contract  "),
+                         "module-resolution-and-unload-contract")
+
+    def test_cross_page_anchor_must_match_a_real_heading(self):
+        self._write_page("Docs/CN/other.md", "# Other\n\n## Real Heading\n")
+        self._write_page("Docs/CN/page.md",
+                         "[ok](other.md#real-heading)\n[bad](other.md#no-such-heading)\n")
+        errors = audit.validate_docs(self.root)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("no matching heading", errors[0])
+
+    def test_same_page_anchor_is_also_checked(self):
+        self._write_page("Docs/CN/page.md", "# Page\n\n[ok](#page)\n[bad](#absent)\n")
+        errors = audit.validate_docs(self.root)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("#absent", errors[0])
+
+    def test_html_img_and_anchor_links_are_checked_like_markdown(self):
+        self._write_page("Docs/CN/present.png", "")
+        self._write_page("Docs/CN/page.md",
+                         '<img src="present.png">\n'
+                         '<a href="missing.md">gone</a>\n')
+        errors = audit.validate_docs(self.root)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("missing.md", errors[0])
+
+    def test_remote_links_must_use_plain_https(self):
+        self._write_page("Docs/CN/page.md",
+                         "[secure](https://example.com/a)\n[insecure](http://example.com/b)\n")
+        errors = audit.validate_docs(self.root)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("https", errors[0])
+
+    def test_code_fences_also_suppress_html_links(self):
+        # Both syntaxes inside the fence are examples, not links. A real link after the
+        # fence is still checked, which proves the fence actually closed.
+        self._write_page("Docs/CN/present.md", "# Present\n")
+        self._write_page("Docs/CN/page.md",
+                         "```html\n<img src=\"missing.png\">\n[fake](also-missing.md)\n```\n"
+                         "[real](present.md#present)\n")
+        self.assertEqual(audit.validate_docs(self.root), [])
+
+    def test_all_links_reports_both_syntaxes_with_kind(self):
+        kinds = list(audit.all_links('[md](a.md)\n<img src="b.png">'))
+        self.assertEqual(kinds, [("a.md", "markdown"), ("b.png", "html")])
+        self.assertEqual(list(audit.markdown_links('[md](a.md)\n<img src="b.png">')), ["a.md"])
+
+    def test_evidence_recency_counts_historical_without_claiming_current(self):
+        evidence = self.root / "Tools" / "evidence"
+        evidence.mkdir(parents=True)
+        (evidence / "index.json").write_text(json.dumps([
+            {"run_id": "a", "file": "a.json", "commit": "a" * 40},
+            {"run_id": "b", "file": "b.json", "commit": "b" * 40, "historical": True},
+            {"run_id": "c", "file": "c.json", "commit": "c" * 40, "historical": True},
+            {"run_id": "d", "file": "d.json", "commit": "d" * 40},
+        ]), encoding="utf-8")
+        self.assertEqual(audit.evidence_recency(self.root), (4, 2, 2))
+
+    def test_evidence_recency_is_safe_when_index_is_missing_or_broken(self):
+        self.assertEqual(audit.evidence_recency(self.root), (0, 0, 0))
+        evidence = self.root / "Tools" / "evidence"
+        evidence.mkdir(parents=True)
+        (evidence / "index.json").write_text("{not json", encoding="utf-8")
+        self.assertEqual(audit.evidence_recency(self.root), (0, 0, 0))
+
 
 if __name__ == "__main__":
     unittest.main()

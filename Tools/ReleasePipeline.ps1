@@ -68,7 +68,10 @@ if (-not $OutputDir) {
     # A fixed directory has to be emptied: leftover files from the previous run would be
     # published as this run's evidence, and a stale summary is worse than none.
     if (Test-Path -LiteralPath $OutputDir) {
-        Get-ChildItem -LiteralPath $OutputDir -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        # Explicit -LiteralPath per entry instead of relying on implicit pipeline binding:
+        # hardened PowerShell hosts reject a pipeline `Remove-Item` with no path operand.
+        Get-ChildItem -LiteralPath $OutputDir -Force |
+            ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
     }
 }
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)

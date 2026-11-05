@@ -2,9 +2,12 @@
 
 import argparse
 from collections import Counter
+import datetime
 import json
 import math
 from pathlib import Path
+import re
+import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -619,13 +622,39 @@ def validate_network(run, backend):
     return errors
 
 
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
 def validate_media(run):
+    """The showcase gate must see real screenshots, not renamed text files.
+
+    `is_file()` plus a nonzero size used to accept any placeholder. Check the PNG
+    signature and a plausible IHDR header; this is a static integrity check, not an
+    image decode, so it stays cheap and dependency-free on build machines.
+    """
     errors = []
     for name in ("Binding", "Override", "Container", "UMG"):
-        for relative in (f"screenshots/Showcase_{name}.png",):
-            path = run / relative
-            if not path.is_file() or path.stat().st_size == 0:
-                errors.append(f"Missing showcase artifact: {relative}")
+        relative = f"screenshots/Showcase_{name}.png"
+        path = run / relative
+        if not path.is_file() or path.stat().st_size == 0:
+            errors.append(f"Missing showcase artifact: {relative}")
+            continue
+        try:
+            with open(str(path), "rb") as handle:
+                header = handle.read(24)
+        except OSError as exc:
+            errors.append(f"Unreadable showcase artifact: {relative}: {exc}")
+            continue
+        if not header.startswith(PNG_MAGIC):
+            errors.append(f"Showcase artifact is not a PNG: {relative}")
+            continue
+        if len(header) < 24 or header[12:16] != b"IHDR":
+            errors.append(f"Showcase artifact has no IHDR chunk: {relative}")
+            continue
+        width = int.from_bytes(header[16:20], "big")
+        height = int.from_bytes(header[20:24], "big")
+        if width == 0 or height == 0:
+            errors.append(f"Showcase artifact has zero PNG dimensions: {relative}")
     return errors
 
 
@@ -652,6 +681,26 @@ def validate_run(run, backend, carrier, root=ROOT):
     return errors
 
 
+def current_commit(root):
+    """Best-effort HEAD for gate provenance; None when git is unavailable.
+
+    A bare `{"passed": true}` gate cannot be attributed to a build, which is how four
+    gates from different runs could be read as one Release. Record the commit (or its
+    explicit absence) instead of inventing one; Tools/ValidateProvenance.py decides
+    whether a missing commit is acceptable for a release decision.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    value = completed.stdout.decode("ascii", "replace").strip()
+    return value if re.fullmatch(r"[0-9a-f]{7,40}", value) else None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", type=Path, required=True)
@@ -669,7 +718,19 @@ def main():
         output = args.run / "metadata/release-gate.json"
         label = "Release evidence"
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps({"passed": not errors, "errors": errors}, ensure_ascii=False, indent=2), encoding="utf-8")
+    gate = {
+        "passed": not errors,
+        "errors": errors,
+        "schema": "unluanova-release-gate/1",
+        "tool": "ValidateRelease.py",
+        "run": str(args.run),
+        "backend": args.backend,
+        "carrier": args.carrier,
+        "net_matrix": bool(args.net_matrix),
+        "commit": current_commit(ROOT),
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    output.write_text(json.dumps(gate, ensure_ascii=False, indent=2), encoding="utf-8")
     for error in errors:
         print(error)
     print(f"{label}: {'FAILED' if errors else 'passed'} ({len(errors)} errors)")

@@ -35,6 +35,7 @@
 #include "LuaLib_Timer.h"
 #include "LuaMemoryStats.h"
 #include "LuaProfiler.h"
+#include "LuaVmHooks.h"
 #include "UnLuaNovaSandbox.h"
 
 namespace UnLuaNova
@@ -459,6 +460,17 @@ namespace UnLuaNova
         FLuaMemoryStats::Get().Detach(L);
 
         OnDestroyed.Broadcast(*this);
+
+        // FLuaVmHooks keys its listener slots by lua_State*. lua_close() frees the state
+        // but never tells the hook table, and the next FLuaEnv very often gets the exact
+        // same address back. A listener left attached by a profiler/debug/watchdog spec
+        // would then look like it belongs to the new VM, and the first RemoveOwner()
+        // (every DoString guard issues one) installs lua_Callbacks::interrupt on it -
+        // adding a callback at every VM safe point and inflating every Lua timing by
+        // 20-50% while the native control case stays fast. Drop the slot while L is
+        // still valid so no stale listener can be inherited.
+        FLuaVmHooks::Get().RemoveAll(L);
+
         lua_close(L);
         AllEnvs.Remove(L);
 
@@ -1170,7 +1182,15 @@ namespace UnLuaNova
         lua_pop(L, 1);
 
         if (Status != 0)
-            return lua_error(L);                     // rethrow the original error object
+        {
+            // PUC Lua declares lua_error() as `int`, Luau as `[[noreturn]] void`;
+            // both longjmp with the original error object still on top of the stack.
+            // Calling it as a statement keeps one shape that compiles on both backends:
+            // `return lua_error(L)` is a void-to-int error on Luau, while a dead
+            // `return 0` after a noreturn call trips C4702 (an error under V7).
+            lua_error(L);
+        }
+        // Unreachable on the error path - lua_error never returns.
         return Results;
     }
 

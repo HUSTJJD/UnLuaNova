@@ -36,10 +36,12 @@ namespace
 {
     using EStepMode = UnLuaNova::FLuaDebugService::EStepMode;
 
-    // The `source` request is answered from disk: the adapter thread must never touch the
-    // lua_State. Accept an absolute path, else resolve a dotted module name against the
-    // project's and the plugin's Script roots. Missing files are an explicit error.
-    bool FindLuaScript(const FString& InPath, FString& OutContent)
+    // `source`, `setBreakpoints` and `loadedSources` all resolve scripts from disk: the
+    // adapter thread must never touch the lua_State. Accept an absolute path, else resolve
+    // a dotted module name against the project's and the plugin's Script roots. On success
+    // OutResolvedPath (when supplied) is the real file that was loaded; a missing file is
+    // an explicit, non-fabricated result.
+    bool FindLuaScript(const FString& InPath, FString& OutContent, FString* OutResolvedPath = nullptr)
     {
         if (InPath.IsEmpty())
             return false;
@@ -56,9 +58,52 @@ namespace
         for (const FString& Candidate : Candidates)
         {
             if (FPaths::FileExists(Candidate) && FFileHelper::LoadFileToString(OutContent, *Candidate))
+            {
+                if (OutResolvedPath)
+                    *OutResolvedPath = Candidate;
                 return true;
+            }
         }
         return false;
+    }
+
+    // Standard DAP requests this adapter deliberately does not implement. Each maps to a
+    // concrete reason so an IDE (or someone reading the log) can tell "out of scope" from
+    // "forgot to wire it up". The generic "not implemented" fallback below is reserved for
+    // commands that are not part of DAP at all.
+    struct FUnsupportedDapCommand
+    {
+        const TCHAR* Command;
+        const TCHAR* Reason;
+    };
+
+    const TCHAR* FindUnsupportedDapReason(const FString& Command)
+    {
+        static const FUnsupportedDapCommand Known[] = {
+            {TEXT("restart"),                   TEXT("restart is not supported: the editor owns the VM; use disconnect and attach again")},
+            {TEXT("restartFrame"),              TEXT("restartFrame is not supported: Lua frames cannot be rewound; re-run the function instead")},
+            {TEXT("terminate"),                 TEXT("terminate is not supported: the editor owns the VM; use disconnect to detach")},
+            {TEXT("stepInTargets"),             TEXT("stepInTargets is not supported: stepIn resolves its target through the line hook")},
+            {TEXT("goto"),                      TEXT("goto is not supported: Lua execution cannot jump to an arbitrary line")},
+            {TEXT("gotoTargets"),               TEXT("gotoTargets is not supported: goto is not supported")},
+            {TEXT("setExpression"),             TEXT("setExpression is not supported: use setVariable to write a local")},
+            {TEXT("completions"),               TEXT("completions is not supported: there is no symbol table to complete against")},
+            {TEXT("dataBreakpointInfo"),        TEXT("dataBreakpointInfo is not supported: Lua tables have no watchpoint primitive")},
+            {TEXT("setDataBreakpoints"),        TEXT("setDataBreakpoints is not supported: Lua tables have no watchpoint primitive")},
+            {TEXT("setInstructionBreakpoints"), TEXT("setInstructionBreakpoints is not supported: this adapter is source-level only")},
+            {TEXT("readMemory"),                TEXT("readMemory is not supported: the adapter never exposes raw VM memory")},
+            {TEXT("writeMemory"),               TEXT("writeMemory is not supported: the adapter never exposes raw VM memory")},
+            {TEXT("disassemble"),               TEXT("disassemble is not supported: this adapter is source-level only; no bytecode view")},
+            {TEXT("cancel"),                    TEXT("cancel is not supported: requests are handled synchronously, one at a time")},
+            {TEXT("breakpointLocations"),       TEXT("breakpointLocations is not supported: setBreakpoints resolves line locations")},
+            {TEXT("runInTerminal"),             TEXT("runInTerminal is not supported: the editor is already running; nothing to launch")},
+        };
+        for (const FUnsupportedDapCommand& Entry : Known)
+        {
+            if (Command == Entry.Command)
+                return Entry.Reason;
+        }
+        return nullptr;
     }
 }
 
@@ -379,17 +424,22 @@ void FLuaDebugAdapter::OnInitialize(const TSharedRef<FJsonObject>& Request)
     Body->SetBoolField(TEXT("supportsSetVariable"), true);
     Body->SetBoolField(TEXT("supportsSingleThreadExecutionRequests"), true);
     Body->SetBoolField(TEXT("supportsModulesRequest"), true);
-    // Declared explicitly so an IDE does not ask for features that are still out of scope.
+    // Genuinely not implemented: declare false so an IDE never asks for them.
     Body->SetBoolField(TEXT("supportsConditionalBreakpoints"), false);
     Body->SetBoolField(TEXT("supportsHitConditionalBreakpoints"), false);
-    Body->SetBoolField(TEXT("supportsFunctionBreakpoints"), false);
     Body->SetBoolField(TEXT("supportsStepInTargetsRequest"), false);
-    Body->SetBoolField(TEXT("supportsLoadedSourcesRequest"), false);
+    Body->SetBoolField(TEXT("supportsRestartRequest"), false);
+    // OnSetFunctionBreakpoints is implemented, Dispatch routes setFunctionBreakpoints and
+    // the command-probe spec asserts success=true: all three are in place, so declaring
+    // false here was the sole reason IDEs never sent the request.
+    Body->SetBoolField(TEXT("supportsFunctionBreakpoints"), true);
+    // loadedSources is backed by the same FLuaDebugService::GetLoadedModules() snapshot as
+    // `modules` (handler + Dispatch branch + spec case all present), so it is supported.
+    Body->SetBoolField(TEXT("supportsLoadedSourcesRequest"), true);
     // exceptionInfo reads the error recorded by the shared Lua error handler; the two
     // filters are the ones that handler can actually arm. Anything else is refused by
     // setExceptionBreakpoints with verified=false rather than silently ignored.
     Body->SetBoolField(TEXT("supportsExceptionInfoRequest"), true);
-    Body->SetBoolField(TEXT("supportsRestartRequest"), false);
 
     TArray<TSharedPtr<FJsonValue>> ExceptionFilters;
     auto AddFilter = [&ExceptionFilters](const TCHAR* Id, const TCHAR* Label)
@@ -644,6 +694,46 @@ void FLuaDebugAdapter::OnModules(const TSharedRef<FJsonObject>& Request)
     const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
     Body->SetArrayField(TEXT("modules"), Modules);
     Body->SetNumberField(TEXT("totalModules"), Names.Num());
+    SendSimpleResponse(Request, Body);
+}
+
+void FLuaDebugAdapter::OnLoadedSources(const TSharedRef<FJsonObject>& Request)
+{
+    // DAP `loadedSources`: report every package.loaded key as a Source. Like `modules`
+    // this reads the service's VM-thread snapshot - the adapter thread must never touch
+    // lua_State. `modules` reports the dotted name as its path; here we try to resolve a
+    // real disk path with the same resolver `source` / `setBreakpoints` use.
+    const TArray<FString> Names = UnLuaNova::FLuaDebugService::Get().GetLoadedModules();
+
+    TArray<TSharedPtr<FJsonValue>> Sources;
+    for (const FString& Name : Names)
+    {
+        const TSharedRef<FJsonObject> Source = MakeShared<FJsonObject>();
+        Source->SetStringField(TEXT("name"), Name);
+
+        FString Script;
+        FString ResolvedPath;
+        const bool bResolved = FindLuaScript(Name, Script, &ResolvedPath);
+        if (bResolved)
+        {
+            Source->SetStringField(TEXT("path"), ResolvedPath);
+        }
+        else
+        {
+            // No real script on disk: keep the dotted name (the host loader's only
+            // identity for the module) as the path instead of inventing a file, and say
+            // so explicitly. `pathUnresolved` is an adapter-specific hint; DAP clients
+            // ignore unknown Source fields.
+            Source->SetStringField(TEXT("path"), Name);
+            Source->SetBoolField(TEXT("pathUnresolved"), true);
+        }
+        // 0 tells the client to load this Source from `path`, not by sourceReference.
+        Source->SetNumberField(TEXT("sourceReference"), 0);
+        Sources.Add(MakeShared<FJsonValueObject>(Source));
+    }
+
+    const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
+    Body->SetArrayField(TEXT("sources"), Sources);
     SendSimpleResponse(Request, Body);
 }
 
@@ -980,6 +1070,7 @@ void FLuaDebugAdapter::Dispatch(const TSharedRef<FJsonObject>& Request)
     if (Command == TEXT("setVariable"))                 { OnSetVariable(Request); return; }
     if (Command == TEXT("source"))                      { OnSource(Request); return; }
     if (Command == TEXT("modules"))                     { OnModules(Request); return; }
+    if (Command == TEXT("loadedSources"))               { OnLoadedSources(Request); return; }
     if (Command == TEXT("threads"))                     { OnThreads(Request); return; }
     if (Command == TEXT("stackTrace"))                  { OnStackTrace(Request); return; }
     if (Command == TEXT("scopes"))                      { OnScopes(Request); return; }
@@ -992,6 +1083,15 @@ void FLuaDebugAdapter::Dispatch(const TSharedRef<FJsonObject>& Request)
     if (Command == TEXT("stepOut"))                     { OnContinue(Request, (uint8)EStepMode::Out); return; }
     if (Command == TEXT("disconnect"))                  { OnDisconnect(Request); return; }
 
+    // A known DAP request we deliberately do not implement: give the concrete reason from
+    // the table instead of the generic "not implemented" (which reads like a missing hook).
+    if (const TCHAR* Reason = FindUnsupportedDapReason(Command))
+    {
+        Unsupported(Request, Reason);
+        return;
+    }
+
+    // Truly unknown / non-DAP command: original fallback.
     Unsupported(Request, FString::Printf(TEXT("command '%s' is not implemented"), *Command));
 }
 

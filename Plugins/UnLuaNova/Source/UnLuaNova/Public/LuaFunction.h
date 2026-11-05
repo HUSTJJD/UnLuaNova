@@ -40,6 +40,17 @@ public:
     static ULuaFunction* Get(UFunction* Function);
 
     /**
+     * True when Function already carries the script thunk installed by SetActive(true).
+     *
+     * Such a UFunction must not be overridden a second time on the class that owns it:
+     * the original Script bytes and native func live only in the ULuaFunction pointed to
+     * by its script data, and stacking another thunk loses that recovery chain. Rebinding
+     * a class or an instance only changes the function registry's module lookup, so the
+     * existing thunk is always sufficient.
+     */
+    static bool IsScriptOverrideThunk(const UFunction* Function);
+
+    /**
      * 还原指定UClass上所有覆写的UFunction。
      * 在退出PIE时使用。
      * @return 返回一个临时UClass，其中包含了所有被抽出来的ULuaFunction
