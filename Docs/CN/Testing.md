@@ -28,6 +28,52 @@ $env:UNLUANOVA_PYTHON = 'C:\Users\<你>\scoop\apps\python311\current\python.exe'
 
 > 另外请用 **PowerShell 7（`pwsh`）** 运行，不要用 Windows PowerShell 5.1（`powershell.exe`）。
 
+## 后端隔离构建（Development 快速路径）
+
+Release 仍然是"改 ini → 重编 → 跑 → 换后端 → 再重编"的完整矩阵，行为未改。
+日常开发/调试用下面这条快路径：**每个后端各编一次，之后切换零编译**。
+
+```powershell
+# 一次性：两个后端各编一套独立产物
+Build.bat UnLuaNovaDemoLuaEditor  Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
+Build.bat UnLuaNovaDemoLuauEditor Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
+
+# 之后随意切换（只改模块清单 + ini，不编译、不覆盖）
+.\Tools\SwitchBackend.ps1 -Backend Lua
+.\Tools\SwitchBackend.ps1 -Backend Luau
+.\Tools\SwitchBackend.ps1 -Status                 # 看当前哪套生效
+.\Tools\SwitchBackend.ps1 -Backend Default       # 回到普通单 target 布局
+
+# 两个后端连跑（Development，Editor 载体）
+.\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both
+```
+
+**为什么需要两个 target**：UBT 给所有 Editor target 同一个 `AppName`（`UnrealEditor`），
+只加一个 `Target.cs` 会写出同名的 `UnrealEditor-UnLuaNova.dll` 和同一份 obj；只加一个
+`.uproject` 也一样，插件模块的产物落在插件自己的 `Binaries/`、`Intermediate/`。
+两个新 target 通过每个 `*.Build.cs` 里的 `[UAK BACKEND LAYOUT]` 块设置
+`ModuleRules.BinariesSubFolder`，把 DLL **和**中间产物一起重定向到
+`Binaries/Win64/Backends/<后端>/` 与 `Intermediate/.../Backends/<后端>/`。
+
+**为什么需要 SwitchBackend**：引擎会递归扫描 `Binaries/**` 找 `UnrealEditor.modules`
+（`FModuleManager::FindModulePathsInDirectory`）。两套产物并存时两份清单都会被发现，
+模块名冲突、加载哪个后端不确定。脚本把非活动后端的清单改名为 `*.disabled`（引擎不读），
+并把 `Config/DefaultUnLuaNova.ini` 的 `LuaBackend` 写成当前后端。isolated target 的后端
+**由 target 名决定**，ini 只是运行时标签；因此可以在 Luau 生效时预先编 Lua target。
+
+约束与边界：
+
+| 项 | 说明 |
+|---|---|
+| 首次成本 | 两个 target 各一次全量编译；磁盘约为原来的两倍。之后切换零编译 |
+| 载体 | 只有 Editor target 被隔离。`-Carrier Game`、`-NetMatrix` 与 `-BackendTargets` 互斥；Game/Server 仍走原来的共享产物 |
+| Release | 不受影响，仍用顺序重编路径；Release 传 `-BackendTargets` 会被拒绝 |
+| 清单 | 编译某个 isolated target 时 UBT 会重写该后端的 `UnrealEditor.modules`。若之后又编了普通 `UnLuaNovaDemoEditor`，根目录会重新出现一份清单，再跑一次 `SwitchBackend.ps1` 即可 |
+| 并发 | 切换仍是全局状态，`Saved/RunTests.lock` 继续生效；不要在切换时另开构建/编辑器 |
+| 上层工程 | UEAbilityKit 的 `Tools/unluanova.ps1 doctor` 只看根目录 DLL，不认识隔离目录；这是上游工具的已知盲区，本仓库不改它 |
+
+静态契约由 `Tools/tests/test_backend_isolation.py` 守住（新增 `Build.cs` 必须带同一段布局块）。
+
 ## 默认执行内容
 
 | 阶段 | 自动执行内容 |

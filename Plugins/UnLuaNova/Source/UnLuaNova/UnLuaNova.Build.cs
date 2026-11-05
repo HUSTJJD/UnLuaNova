@@ -25,6 +25,39 @@ public class UnLuaNova : ModuleRules
 {
     public UnLuaNova(ReadOnlyTargetRules Target) : base(Target)
     {
+        // [UAK BACKEND LAYOUT - keep this block identical in every Build.cs]
+        // Isolated targets are named UnLuaNovaDemo<Backend>{Editor|Server|''}: one name per
+        // carrier, <Backend> being Lua or Luau. Editor targets share AppName "UnrealEditor";
+        // Game/Server targets use their own name as AppName. Either way a second target alone
+        // would overwrite the same DLLs and object files, so ModuleRules.BinariesSubFolder
+        // redirects both (GetModuleIntermediateDirectory / CreateDynamicLibraryForModule).
+        // Target.Name is the only per-target value a ModuleRules constructor can read without
+        // changing the shared build environment (GlobalDefinitions is
+        // [RequiresUniqueBuildEnvironment]).
+        const string backendTargetPrefix = "UnLuaNovaDemo";
+        string backendVariant = "";
+        if (Target.Name.StartsWith(backendTargetPrefix))
+        {
+            string backendRest = Target.Name.Substring(backendTargetPrefix.Length);
+            string[] backendSuffixes = { "Editor", "Server", "" };
+            foreach (string backendSuffix in backendSuffixes)
+            {
+                if (backendRest.EndsWith(backendSuffix))
+                {
+                    backendVariant = backendRest.Substring(0, backendRest.Length - backendSuffix.Length);
+                    break;
+                }
+            }
+        }
+        if (backendVariant.Length > 0)
+        {
+            if (backendVariant != "Lua" && backendVariant != "Luau")
+                throw new BuildException("Unknown backend target '" + Target.Name
+                    + "': expected UnLuaNovaDemo{,Lua,Luau}{,Editor,Server}.");
+            BinariesSubFolder = "Backends/" + backendVariant;
+        }
+        // [/UAK BACKEND LAYOUT]
+
 #if UE_5_2_OR_LATER
         IWYUSupport = IWYUSupport.None;
 #else
@@ -147,6 +180,19 @@ public class UnLuaNova : ModuleRules
         // Values are matched case-insensitively; anything other than "Lua" selects Luau,
         // which is what LuaBackend.h defaults to when the macro is absent.
         var backend = GetString(section, "LuaBackend", "Luau");
+
+        // A backend-isolated target pins the VM by its name, not by the ini, for every carrier
+        // (Editor, Game and Server). The ini stays the compile-time source for the ordinary
+        // UnLuaNovaDemo* targets and becomes a runtime label for the isolated ones
+        // (Tools/SwitchBackend.ps1 keeps it in sync with whichever manifest is active).
+        // This is what lets every carrier of both backends be built in advance: building a
+        // Lua target while "Luau" is active must still produce Lua binaries.
+        if (backendVariant.Length > 0)
+        {
+            backend = backendVariant;
+            Console.WriteLine("[UnLuaNova] backend-isolated target {0}: products -> Binaries/<Platform>/Backends/{1}",
+                Target.Name, backendVariant);
+        }
 
         // The selected backend's headers must be on disk before anything is compiled.
         // They are submodules, and an uninitialised one used to fail in the worst way

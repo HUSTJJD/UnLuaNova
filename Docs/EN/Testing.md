@@ -29,6 +29,56 @@ $env:UNLUANOVA_PYTHON = 'C:\Users\<you>\scoop\apps\python311\current\python.exe'
 
 > Run it with **PowerShell 7 (`pwsh`)**, not Windows PowerShell 5.1 (`powershell.exe`).
 
+## Backend-isolated builds (Development fast path)
+
+Release is unchanged: it still edits the ini, rebuilds, runs, switches backends, and
+rebuilds again. For day-to-day development there is a faster path: **build each backend
+once, then switch without ever recompiling**.
+
+```powershell
+# Once: give each backend its own build products
+Build.bat UnLuaNovaDemoLuaEditor  Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
+Build.bat UnLuaNovaDemoLuauEditor Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
+
+# From then on (manifest rename + ini label only, no compile, no overwrite)
+.\Tools\SwitchBackend.ps1 -Backend Lua
+.\Tools\SwitchBackend.ps1 -Backend Luau
+.\Tools\SwitchBackend.ps1 -Status                 # which one is live?
+.\Tools\SwitchBackend.ps1 -Backend Default       # back to the ordinary single target
+
+# Both backends in one Development run (Editor carrier)
+.\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both
+```
+
+**Why two targets are needed**: UBT gives every Editor target the same `AppName`
+(`UnrealEditor`), so a second `Target.cs` alone would emit the same
+`UnrealEditor-UnLuaNova.dll` and the same object files. A second `.uproject` alone does not
+help either: plugin build products live in the plugin's own `Binaries/` and
+`Intermediate/`. The `[UAK BACKEND LAYOUT]` block in every `*.Build.cs` sets
+`ModuleRules.BinariesSubFolder`, which redirects **both** the DLL and the intermediate
+directory into `Binaries/Win64/Backends/<backend>/` and
+`Intermediate/.../Backends/<backend>/`.
+
+**Why SwitchBackend is needed**: the engine scans `Binaries/**` recursively for
+`UnrealEditor.modules` (`FModuleManager::FindModulePathsInDirectory`). With two build trees
+both manifests are found, module names collide and which backend loads is undefined.
+The script renames the inactive manifest to `*.disabled` (a name the engine never reads)
+and pins `LuaBackend` in `Config/DefaultUnLuaNova.ini`. An isolated target takes its
+backend from the target name, not the ini, so the Lua target can be built while Luau is
+active.
+
+| Constraint | Detail |
+|---|---|
+| First-run cost | Two full builds and roughly twice the disk space; switching is free afterwards |
+| Carrier | Only Editor targets are isolated. `-BackendTargets` is rejected with `-Carrier Game` or `-NetMatrix`; Game/Server still share the root products |
+| Release | Unchanged sequential rebuild path; Release rejects `-BackendTargets` |
+| Manifests | Building an isolated target rewrites that backend's `UnrealEditor.modules`. Building the ordinary `UnLuaNovaDemoEditor` afterwards recreates a root manifest - run `SwitchBackend.ps1` again |
+| Concurrency | Switching is still global state; `Saved/RunTests.lock` remains in force. Do not build or open the editor during a switch |
+| Host projects | UEAbilityKit's `Tools/unluanova.ps1 doctor` only inspects root DLLs and does not understand the isolated directories; this repository does not change that tool |
+
+`Tools/tests/test_backend_isolation.py` guards the source contract: any new `Build.cs`
+must carry the same layout block.
+
 ## Automatic Stages
 
 | Stage | Work |

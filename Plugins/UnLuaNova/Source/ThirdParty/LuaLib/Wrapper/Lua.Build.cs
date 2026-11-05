@@ -28,6 +28,38 @@ public class Lua : ModuleRules
 {
     public Lua(ReadOnlyTargetRules Target) : base(Target)
     {
+        // [UAK BACKEND LAYOUT - keep this block identical in every Build.cs]
+        // Isolated targets are named UnLuaNovaDemo<Backend>{Editor|Server|''}: one name per
+        // carrier, <Backend> being Lua or Luau. Editor targets share AppName "UnrealEditor";
+        // Game/Server targets use their own name as AppName. Either way a second target alone
+        // would overwrite the same DLLs and object files, so ModuleRules.BinariesSubFolder
+        // redirects both (GetModuleIntermediateDirectory / CreateDynamicLibraryForModule).
+        // Target.Name is the only per-target value a ModuleRules constructor can read without
+        // changing the shared build environment (GlobalDefinitions is
+        // [RequiresUniqueBuildEnvironment]).
+        const string backendTargetPrefix = "UnLuaNovaDemo";
+        string backendVariant = "";
+        if (Target.Name.StartsWith(backendTargetPrefix))
+        {
+            string backendRest = Target.Name.Substring(backendTargetPrefix.Length);
+            string[] backendSuffixes = { "Editor", "Server", "" };
+            foreach (string backendSuffix in backendSuffixes)
+            {
+                if (backendRest.EndsWith(backendSuffix))
+                {
+                    backendVariant = backendRest.Substring(0, backendRest.Length - backendSuffix.Length);
+                    break;
+                }
+            }
+        }
+        if (backendVariant.Length > 0)
+        {
+            if (backendVariant != "Lua" && backendVariant != "Luau")
+                throw new BuildException("Unknown backend target '" + Target.Name
+                    + "': expected UnLuaNovaDemo{,Lua,Luau}{,Editor,Server}.");
+            BinariesSubFolder = "Backends/" + backendVariant;
+        }
+        // [/UAK BACKEND LAYOUT]
         // Upstream aggregation is already one big file; unity would only add indirection.
         bUseUnity = false;
         PCHUsage = PCHUsageMode.NoPCHs;

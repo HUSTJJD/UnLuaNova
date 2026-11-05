@@ -259,12 +259,24 @@ engine, need hot updates, or your team knows Lua**, UnLuaNova is the practical a
 <details>
 <summary><b>② Pick a backend and bind</b></summary>
 
-The backend is a **compile-time** choice, in `Config/DefaultUnLuaNova.ini`:
+In a normal project the backend is a **compile-time** choice, in `Config/DefaultUnLuaNova.ini`:
 
 ```ini
 [/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]
 LuaBackend=Luau        ; or Lua; rebuild after changing
 ```
+
+The example project has a faster path: `UnLuaNovaDemoLuaEditor` / `UnLuaNovaDemoLuauEditor`
+build into separate trees, so after one build each, switching backends costs **no compile**:
+
+```powershell
+Build.bat UnLuaNovaDemoLuaEditor  Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
+Build.bat UnLuaNovaDemoLuauEditor Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
+.\Tools\SwitchBackend.ps1 -Backend Lua     # or Luau; -Status, -Backend Default
+.\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both
+```
+
+See [Testing / Backend-isolated builds](Docs/EN/Testing.md#backend-isolated-builds-development-fast-path).
 
 Bind a Blueprint to a module from the UnLuaNova toolbar and put scripts in `Content/Script/`.
 Migrating from UnLua is a rename: `UnLua` → `UnLuaNova`.

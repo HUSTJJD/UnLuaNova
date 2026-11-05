@@ -57,6 +57,10 @@
     .\Tools\RunTests.ps1 -Profile Development -Backend Luau -BuildOnly
 .EXAMPLE
     .\Tools\RunTests.ps1 -Profile Development -NetMatrix -Backend Lua -SkipBuild
+.PARAMETER BackendTargets
+    Development-only. Build UnLuaNovaDemoLuaEditor / UnLuaNovaDemoLuauEditor once each and
+    activate them with Tools/SwitchBackend.ps1 instead of recompiling for every backend.
+    Requires the Editor carrier; the ordinary single-target path stays the default.
 .PARAMETER NetMatrix
     Development-only opt-in for the connected delivery matrix: eight scenarios (late join,
     process-level reconnect, dormancy, relevancy, join-order swap, packet loss,
@@ -111,6 +115,11 @@ param(
     [switch] $Publish,
     [switch] $NoReport,
     [switch] $SkipBuild,
+    # Development-only: use the prebuilt backend-isolated Editor targets (Lua/Luau) instead
+    # of rewriting the ini and rebuilding between backends. Each target is compiled once
+    # into Binaries/Win64/Backends/<Backend>; switching is Tools/SwitchBackend.ps1, a
+    # manifest rename with no compile. See Docs/CN/Testing.md ("后端隔离构建").
+    [switch] $BackendTargets,
     # 只编译不跑：编完每个后端就退出，不启动编辑器、不生成报告。给 nightly 与"改完 spec
     # 想先确认能编过"这类场景用；与 -SkipBuild 互斥。
     [switch] $BuildOnly,
@@ -135,6 +144,9 @@ $ErrorActionPreference = "Stop"
 if ($NetMatrix) {
     if ($Profile -eq "Release") {
         throw "-NetMatrix is a Development-only opt-in: use -Profile Development -NetMatrix. A normal Release must stay complete and must not be replaced by a partial connected matrix."
+    }
+    if ($BackendTargets) {
+        throw "-NetMatrix and -BackendTargets cannot be combined: the connected matrix launches -game processes, and only the two Editor targets are backend-isolated."
     }
     & (Join-Path $PSScriptRoot 'RunNetMatrix.ps1') -EnginePath $EnginePath -ProjectPath $ProjectPath `
         -OutputDir $OutputDir -Backend $Backend -TimeoutMinutes $TimeoutMinutes `
@@ -403,6 +415,13 @@ $RunFilters = Resolve-RunFilters
 $CarrierChoice = Resolve-Carrier -Requested $Carrier
 $IsGameCarrier = ($CarrierChoice.Carrier -eq "Game")
 
+if ($BackendTargets -and $IsGameCarrier) {
+    throw "-BackendTargets needs the Editor carrier: only UnLuaNovaDemoLuaEditor / UnLuaNovaDemoLuauEditor are backend-isolated. Pass -Carrier Editor (or choose -Carrier Auto with editor-only filters)."
+}
+if ($BackendTargets -and $DryRun) {
+    Write-Host "DryRun   : -BackendTargets would build the two isolated targets and activate them with Tools/SwitchBackend.ps1 (no rebuild between backends)."
+}
+
 function Resolve-GameExe {
     # -game 用项目自己编出来的 exe。源码版引擎把游戏目标的 exe 放在项目的
     # Binaries/Win64 下，安装版/少数布局下在 Engine/Binaries/Win64，两个都找。
@@ -488,13 +507,19 @@ function Release-RunLock {
 # header UBT generated for the plugin module when it compiled: it carries
 # UNLUANOVA_LUA_BACKEND (0 = Lua, 1 = Luau) and it only exists for a build that ran.
 $PluginRoot = Join-Path $RepoRoot "Plugins/UnLuaNova"
+# Empty for the ordinary target. -BackendTargets sets it to Backends/<Backend> inside the
+# loop: BinariesSubFolder moves both the DLL and the Definitions header into that folder,
+# so both checks below have to look there instead of at the root.
+$script:BackendBuildSubFolder = ""
 
 function Get-BuiltBackend {
     # 中间目录按目标名分层：编辑器目标是 UnrealEditor，游戏目标是 <Project>。
     # 只接受当前目标的定义，不能借另一个目标的旧头文件通过后端校验。
     $Folders = if ($IsGameCarrier) { @($ProjectName) } else { @('UnrealEditor') }
     foreach ($Folder in $Folders) {
-        $Definitions = Join-Path $PluginRoot "Intermediate/Build/$Platform/x64/$Folder/$Configuration/UnLuaNova/Definitions.UnLuaNova.h"
+        $Rel = "Intermediate/Build/$Platform/x64/$Folder/$Configuration"
+        if ($script:BackendBuildSubFolder) { $Rel = "$Rel/$script:BackendBuildSubFolder" }
+        $Definitions = Join-Path $PluginRoot "$Rel/UnLuaNova/Definitions.UnLuaNova.h"
         if (Test-Path $Definitions) { break }
         $Definitions = $null
     }
@@ -513,7 +538,9 @@ function Assert-BackendBuilt {
     # 模块 DLL 的名字带着目标名：编辑器目标是 UnrealEditor-Lua.dll，游戏目标是
     # <Project>-Lua.dll。跑 -game 时编的是后者，照着编辑器的名字找会永远找不到。
     $DllPrefix = if ($IsGameCarrier) { $ProjectName } else { "UnrealEditor" }
-    $Dll = Join-Path $PluginRoot ("Binaries/Win64/$DllPrefix-" + $Value + ".dll")
+    $DllRel = "Binaries/Win64"
+    if ($script:BackendBuildSubFolder) { $DllRel = "$DllRel/$script:BackendBuildSubFolder" }
+    $Dll = Join-Path $PluginRoot ("$DllRel/$DllPrefix-" + $Value + ".dll")
     if (-not (Test-Path $Dll)) {
         throw "'$Dll' is missing - the $Value backend has never been built here. Drop -SkipBuild."
     }
@@ -940,6 +967,9 @@ function Set-IniBackend {
 }
 
 function Restore-IniBackend {
+    # -BackendTargets lets Tools/SwitchBackend.ps1 own the ini: it must keep naming the
+    # backend whose manifest is live, otherwise the next -SkipBuild run would relabel it.
+    if ($BackendTargets) { return }
     try {
         if ($IniExisted) {
             [System.IO.File]::WriteAllBytes($IniPath, $IniBackup)
@@ -1046,7 +1076,11 @@ if ($DryRun)
         $RunDir = Join-Path $OutputDir $B.ToLower()
         Write-Host ""
         Write-Host "--- $B -> $RunDir"
-        Write-Host "Build  : $BuildBat $TargetName $Platform $Configuration -Project=`"$ProjectPath`""
+        $DryTarget = if ($BackendTargets) { "UnLuaNovaDemo${B}Editor" } else { $TargetName }
+        Write-Host "Build  : $BuildBat $DryTarget $Platform $Configuration -Project=`"$ProjectPath`""
+        if ($BackendTargets) {
+            Write-Host "Switch : Tools/SwitchBackend.ps1 -Backend $B (no rebuild between backends)"
+        }
         $ArgLine = ((Get-TestArgs -ReportDir $RunDir) | ForEach-Object { Format-EditorArg $_ }) -join ' '
         Write-Host "Cmd    : $(if ($IsGameCarrier) { Resolve-GameExe } else { $EditorCmd }) $ArgLine"
     }
@@ -1078,7 +1112,13 @@ try {
         Write-Host ""
         Write-Host "=== Backend $B ===" -ForegroundColor Cyan
 
-        if ($CurrentBackend -ne $B) {
+        # -BackendTargets: each backend owns a named Editor target and an isolated
+        # Binaries/.../Backends/<B> tree. The ini stops being the compile-time switch and
+        # becomes a runtime label owned by Tools/SwitchBackend.ps1.
+        $script:BackendBuildSubFolder = if ($BackendTargets) { "Backends/$B" } else { "" }
+        $ThisTargetName = if ($BackendTargets) { "UnLuaNovaDemo${B}Editor" } else { $TargetName }
+
+        if (-not $BackendTargets -and $CurrentBackend -ne $B) {
             # Switching the backend without rebuilding is the one thing this script must
             # never do: the ini would name one backend while the DLLs are the other, and
             # every result would be filed - and read - as the wrong backend.
@@ -1108,7 +1148,7 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
         }
 
         if (-not $SkipBuild) {
-            $BuildArgs = @($TargetName, $Platform, $Configuration, "-Project=$ProjectPath", "-WaitMutex")
+            $BuildArgs = @($ThisTargetName, $Platform, $Configuration, "-Project=$ProjectPath", "-WaitMutex")
             Write-Host "Build  : $BuildBat $($BuildArgs -join ' ')"
             $Bsw = [System.Diagnostics.Stopwatch]::StartNew()
             & $BuildBat @BuildArgs
@@ -1125,6 +1165,15 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
                 $ExitCode = 1
                 continue
             }
+        }
+
+        if ($BackendTargets) {
+            # Activation is a manifest rename plus an ini label - no compile, no overwrite.
+            # It runs even with -SkipBuild, because that switch means "do not rebuild",
+            # not "leave whichever backend was active last time".
+            & (Join-Path $PSScriptRoot 'SwitchBackend.ps1') -Backend $B `
+                -ProjectPath $ProjectPath -Platform $Platform
+            $CurrentBackend = $B
         }
 
         # Only now is it safe to name this run's backend: the build produced it and the
@@ -1240,7 +1289,9 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
             # 声明导出走的是编辑器 commandlet。-game 这一轮只编了游戏目标，编辑器那份
             # DLL 可能根本不存在（或者属于另一个后端）—— 与其拿一份来路不明的二进制去
             # 导出声明，不如明说这一步没做。
-            $EditorBackendDll = Join-Path $PluginRoot ("Binaries/Win64/UnrealEditor-" + $B + ".dll")
+            $EditorDllRel = "Binaries/Win64"
+            if ($script:BackendBuildSubFolder) { $EditorDllRel = "$EditorDllRel/$script:BackendBuildSubFolder" }
+            $EditorBackendDll = Join-Path $PluginRoot ("$EditorDllRel/UnrealEditor-" + $B + ".dll")
             if ($IsGameCarrier -and -not (Test-Path $EditorBackendDll)) {
                 Write-Host "TypeCheck : 跳过 —— 本次跑在 -game 上，没有 $B 的编辑器二进制（未编 <Project>Editor 目标）。" -ForegroundColor Yellow
             } else {

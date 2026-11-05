@@ -9,6 +9,20 @@ outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
 
 ## Unreleased — source changes, not yet validated
 
+- **Backend-isolated Editor builds (source-level; UE compile/runtime validation pending).**
+  Added `UnLuaNovaDemoLuaEditor` / `UnLuaNovaDemoLuauEditor` targets and a
+  `[UAK BACKEND LAYOUT]` block in all nine `*.Build.cs` files: the backend comes from
+  `Target.Name` (not `GlobalDefinitions`, which is `[RequiresUniqueBuildEnvironment]`) and
+  `ModuleRules.BinariesSubFolder` redirects both the DLL and the intermediate directory into
+  `Backends/<Lua|Luau>`. Both backends can therefore stay built side by side. New
+  `Tools/SwitchBackend.ps1` activates exactly one `UnrealEditor.modules` manifest (the
+  engine scans `Binaries/**` recursively) and pins `LuaBackend` in the ini - switching is a
+  rename with no recompile. `Tools/RunTests.ps1 -Profile Development -BackendTargets`
+  builds each isolated target once and activates it per backend; Release, `-Carrier Game`
+  and `-NetMatrix` paths are unchanged / explicitly rejected. `Tools/tests/test_backend_isolation.py`
+  (9 static regressions) guards the contract; full Python suite is 194 OK. **Not validated
+  by a real UE build or editor launch:** first builds, manifest activation and
+  `BinariesSubFolder` behaviour still need one `RunTests.ps1` pass.
 - Seventh source-only release-readiness pass (`DEBUG-DAP`, `QA-PROVENANCE`, `LEGAL`,
   `PACKAGING`): the DAP `initialize` response now advertises
   `supportsFunctionBreakpoints` (the handler, dispatch and spec already existed while the
