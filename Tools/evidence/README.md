@@ -18,7 +18,6 @@
 | `feature-matrix.json` 的 `status` | 人工 | 描述**实现范围**（implemented / partial / experimental / planned） |
 | `feature-matrix.json` 的 `verification` | **不许改** | 永远是 `pending-runtime`，它是"这里没有证据"的占位 |
 | `Tools/evidence/*.json` | 由 `RecordEvidence.py` 从真实报告生成 | 描述**执行结果** |
-| `Docs/feature-matrix.md` | 由 `AuditRepository.py` 生成 | 把两者并排渲染出来 |
 
 所以"40 项能力里有多少已经跑过"这个问题的答案，**不在矩阵里，在证据文件里**。
 
@@ -74,8 +73,8 @@ python Tools/RecordEvidence.py --report Saved\ReleaseTests\baseline\luau\game `
 
 ## 边界
 
-- 证据只覆盖**这一轮跑过的组**，且唯一输入是 UE automation 的 `index.json`。当前 9 轮覆盖
-  Lua / Luau × Editor / Game。**打包、联网三进程会话、Perf 不是 `RecordEvidence.py` 的输入**：
+- 证据只覆盖**这一轮跑过的组**，且唯一输入是 UE automation 的 `index.json`。当前 17 轮覆盖
+  Lua / Luau × Editor / Game，合计 36/40 项能力有执行证据。**打包、联网三进程会话、Perf 不是 `RecordEvidence.py` 的输入**：
   DS 会话的 `net/DedicatedServer/*.json` 与 `topology.json` 由 `Tools/ValidateRelease.py` 单独门禁，
   产物在 `Saved/ReleaseTests/**`，两套证据体系互不等价，不能拿一份代替另一份。
 - `Tools/RunNetMatrix.ps1` 产出的 `net/scenarios/<Name>/` 与 `net/variants/<Name>/DedicatedServer/`

@@ -159,7 +159,7 @@ end
 
 这与 `UnLuaNovaBase.cpp` 的 Lua 调用错误日志共用 `DescribeEnv()` 标签，所以日志里可以直接
 按 `env=...` 串起来。诊断是**观察**，不改变调度；注册点在注册时快照，热重载后仍指向当时的
-源码行。对应自动化用例在 `UnLuaNova.API.Timer`，本轮源码与用例**尚未编译或执行**。
+源码行。对应自动化用例在 `UnLuaNova.API.Timer`；当时（第六轮源码补齐时）尚未编译或执行，现已随 2026-11-07 完整 Release 执行。
 
 可执行示例：[TimerLifecycle.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Examples/TimerLifecycle.lua)。回归入口：`UnLuaNova.API.Timer`；多 PIE、世界暂停/时间膨胀和打包行为仍需维护者实际验收。
 

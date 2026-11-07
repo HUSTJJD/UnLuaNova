@@ -52,7 +52,6 @@ extra:
 
 nav:
   - 首页: index.md
-  - 能力与证据矩阵: feature-matrix.md
   - 中文文档:
       - CN/index.md
       - 入门:
@@ -60,8 +59,6 @@ nav:
           - 功能清单: CN/Features.md
           - 相对 UnLua：原理与优势: CN/WhyUnLuaNova.md
           - slua / FUnLua 源码对照: CN/Comparison_sluaunreal.md
-          - 当前审计与路线图: CN/Benchmark_Review.md
-          - 性能验收: CN/Performance_Parity_slua.md
       - 编程:
           - 编程指南: CN/UnLuaNova_Programming_Guide.md
           - 实例级模块绑定: CN/InstanceBinding.md
@@ -86,9 +83,6 @@ nav:
           - Luau 覆盖率导出与门禁: CN/LuauCoverage.md
           - 测试与自动化: CN/Testing.md
           - 测试架构与验收: CN/Testing_Architecture.md
-          - 2026-10-24 回归验证: CN/Regression_20261024.md
-          - 测试报告 Lua: test-lua-report.md
-          - 测试报告 Luau: test-luau-report.md
       - 参考:
           - Showcase 示例: CN/Showcase.md
           - 版本说明: CN/ReleaseNotes.md
@@ -101,8 +95,6 @@ nav:
           - Features: EN/Features.md
           - Why UnLuaNova: EN/WhyUnLuaNova.md
           - slua / FUnLua Source Comparison: EN/Comparison_sluaunreal.md
-          - Current Audit and Roadmap: EN/Benchmark_Review.md
-          - Performance Acceptance: EN/Performance_Parity_slua.md
       - Programming:
           - Programming Guide: EN/UnLuaNova_Programming_Guide.md
           - Luau Backend: EN/Luau.md
@@ -124,11 +116,9 @@ nav:
           - Debugging: EN/Debugging.md
           - IntelliSense: EN/IntelliSense.md
           - Testing and Automation: EN/Testing.md
-          - 2026-10-24 Regression Validation: EN/Regression_20261024.md
-          - Test reports: EN/TestReports.md
       - Reference:
           - Showcase Samples: EN/Showcase.md
-          - Current Version Status: EN/ReleaseNotes.md
+          - Release notes: EN/ReleaseNotes.md
           - License: EN/License.md
           - FAQ: EN/FAQ.md
 

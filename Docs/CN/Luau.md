@@ -1,38 +1,38 @@
 # Luau 后端
 
-当前集成 `6d36d483cb88973276af611198169f76f3ce05b0`（0.743 + 1），通过子模块固定；上游对照为 0.744，未在本轮升级。后端在 `Config/DefaultUnLuaNova.ini` 选择，切换需要编译。源代码与验收入口见 [能力矩阵](../feature-matrix.md)。
+后端集成 Luau（0.743 + 1），通过子模块固定。后端在 `Config/DefaultUnLuaNova.ini` 选择，切换需要编译。
 
 ## 支持范围
 
 | 层 | 当前接入 | 边界 |
 |---|---|---|
-| 语言与编译器 | 类型注解语法、continue、复合赋值、if 表达式、字符串插值、泛型等由固定版本 Compiler 处理 | 语法可编译不代表类型已检查；应导入对应版本 conformance 用例，维护差异清单 |
+| 语言与编译器 | 类型注解语法、continue、复合赋值、if 表达式、字符串插值、泛型等由固定版本 Compiler 处理 | 语法可编译不代表类型已检查；类型检查由外部工具完成 |
 | VM 标准库 | base、coroutine、table、string、math、os 子集、debug 子集、bit32、utf8、vector、buffer | 以 `VM/src/linit.cpp` 注册为准；integer / 用户类等上游实验能力受 feature flag 控制，不作稳定承诺 |
 | UE 数值/容器 | vector ↔ FVector；buffer ↔ TArray 的 C++ 拷贝路径 | vector 为 float，UE5 FVector 为 double；buffer 不借用 UE 外部内存，返回数组类型不保证是 uint8 |
-| 编译配置 | optimize、debuglevel、coverage | coverage 编译插桩存在，导出/汇总/门禁尚未闭环 |
-| 原生编译 | CodeGen 显式开启，可按模块筛选 | 目标架构与可执行内存策略有限制；计数是请求数，不等于成功函数数；需验证断点协作 |
-| 调试/诊断 | 原生断点/单步、Profiler、内存分类、协程统计、GC 调节 | 分类统计是分配 churn，不等于分类存活字节；远程/打包验收未完成 |
-| 类型工具 | 编辑器导出声明、外部 luau-lsp | Analysis/Config 不作为游戏运行时类型检查器；声明完整性与跳过行为必须验收 |
+| 编译配置 | optimize、debuglevel、coverage | coverage 编译插桩存在；导出格式与门禁见 [覆盖率导出](LuauCoverage.md) |
+| 原生编译 | CodeGen 显式开启，可按模块筛选 | 目标架构与可执行内存策略有限制；计数是请求数，不等于成功函数数 |
+| 调试/诊断 | 原生断点/单步、Profiler、内存分类、协程统计、GC 调节 | 分类统计是分配 churn，不等于分类存活字节；远程调试与打包场景需单独接入 |
+| 类型工具 | 编辑器导出声明、外部 luau-lsp | Analysis/Config 不作为游戏运行时类型检查器；声明完整性由使用方自行核对 |
 | 模块加载 | 自有 loader、package.searchers/preload/aliases，双后端统一的最终 `require` 包装（循环检测），`unrequire` / `reloadmodule` 与 `package.resolution()` | 上游 `@alias` 配置文件（`.luaurc`）明确拒绝；大小写敏感、无自动大小写回退；cooked 构建需要散脚本 staged 到工程根目录；path/cpath 不是自动加载策略 |
 
 上游 [兼容说明](https://luau.org/compatibility/) 与 [沙盒说明](https://luau.org/sandbox/) 是语义边界的来源；本插件补充 API 不改变 Luau 的全部语言语义。
 
 ## 与原生 Lua 的差异
 
-| 能力 | 当前处理与缺口 |
+| 能力 | 当前处理与边界 |
 |---|---|
 | Lua 5.3+ 整数、位运算语法、goto、5.4/5.5 close 语义 | 不承诺同语言兼容；bit32 不等于整数/操作符语义；资源需显式 Close/Destroy |
-| int64 | 复制桶已接严格 int64 读写，±2^31 / ±2^53 与坏输入用例已在双后端执行通过；跨端真实传输的极值与不匹配 schema 仍是专项缺口。超出 ±2^53 的精确值使用原生 integer64，不能恢复 number 已丢失的精度 |
-| userdata 终结 | `UNLUANOVA_HAS_GC_METAMETHOD=0`，`UNLUANOVA_HAS_USERDATA_FINALIZER=1`；容器、FText、导出构造、手动代理及已知智能指针路径走 native dtor；强制 GC 与销毁顺序用例已执行通过，结构体数组与 DataTable 行拷贝仍待专项内存验收 |
+| int64 | 复制桶已接严格 int64 读写。超出 ±2^53 的精确值使用原生 integer64，不能恢复 number 已丢失的精度 |
+| userdata 终结 | `UNLUANOVA_HAS_GC_METAMETHOD=0`，`UNLUANOVA_HAS_USERDATA_FINALIZER=1`；容器、FText、导出构造、手动代理及已知智能指针路径走 native dtor |
 | debug/upvalue | 精确子集：`getregistry` 明确拒绝，`getuservalue` 恒 nil，`setuservalue` 返回 false，`upvalueid` 是值身份（不能证明标量别名）；不承诺 Lua 5.x debug 全兼容 |
 | load/字节码 | 宿主只编译源码：`load` 的 mode 现在显式校验，纯 `b`、未知字母与空模式都明确失败，`t`（含 `bt`）走源码编译并以 `"t"` 交给加载器；不接受字节码输入，字节码 / 版本兼容不承诺 |
 | io / os | 可选的 rooted 缓冲文件 io：模式 / seek / lines 格式校验、`lua.iomaxbytes` 配额、按 `__pos` 覆盖写、`io.tmpfile()` 内存句柄；`io.popen` 明确拒绝，链接 / 进程 / 原生流不在能力集内 |
 | package | 提供 preload / searchers / aliases 子集与双后端一致的 require 缓存；**最终 `_G.require` 被统一包装**（在 HotReload 替换 `require` 之后安装），因此 Luau 自有 require、plain Lua 原生 require、`FLuaEnv::Require` 与热重载后的替换版本都有循环依赖检测，明确报 `cyclic dependency involving 'X'` 且失败后清理标记、不毒化后续 require；别名自环同样拒绝；`unrequire` / `reloadmodule` 提供显式缓存契约；不提供任意原生动态库加载保证；上游 Require 的 config / `@alias` 语义明确拒绝而不是静默降级 |
-| yield / coroutine | 跨 C/元方法边界受 VM 限制；宿主回调、Latent、Timer 需分别验证 |
+| yield / coroutine | 跨 C/元方法边界受 VM 限制；宿主回调、Latent、Timer 各有独立边界 |
 | GC | 增量 GC 与预算调度；不是 Lua 分代 GC，也不是多线程 GC |
-| 迭代 | Luau 使用 __iter；与 __pairs / __ipairs 及容器增删期间行为分别测试 |
+| 迭代 | Luau 使用 __iter；与 __pairs / __ipairs 及容器增删期间的行为存在差异 |
 
-VM dtor 只能销毁 C++ 状态，不能操作 Lua 栈。使用 LONGJMP 的路径还需要检查 Lua error/yield 是否跳过 C++ 临时对象清理。安全相关阻塞见 [审计](Benchmark_Review.md)。
+VM dtor 只能销毁 C++ 状态，不能操作 Lua 栈。使用 LONGJMP 的路径需要留意 Lua error/yield 是否跳过 C++ 临时对象清理。
 
 ## 模块加载与卸载契约
 
@@ -54,7 +54,7 @@ chunk：这样既不改变 `package.searchers` 的签名，也不会破坏 `HotR
 并指向 `package.aliases` 与 `package.resolution()`，不再退化成一句含糊的 "module not found"。
 cooked 构建只有把散 `.lua` 文件 staged 到工程根目录或 `ProjectPersistentDownloadDir` 才能解析；
 `lua.requireresolution 1` 可打开文件系统 searcher 未命中时的诊断日志（默认关，因为 searcher
-正常让位是常态）。完整字段与边界仍见 [能力矩阵](../feature-matrix.md)。
+正常让位是常态）。
 
 `HotReload.lua` 的 `reload()` / `reload_modules()` 改为两阶段提交：先只加载并计算新模块，
 再用 `xpcall` 提交，失败时按快照回滚旧模块顶层键、`package.loaded` 与两个私有缓存；返回
@@ -88,7 +88,7 @@ table/upvalue/registry 与已被别处持有的引用都不做全量快照。
 
 ## 类型、示例与剖析
 
-导出智能提示产生 `Plugins/UnLuaNova/IntelliSense/` 下的后端声明。用 `Tools/CheckLuauTypes.ps1 -Require` 明确要求工具存在；发布验收还必须检查报告是否跳过，不能只读退出码。本轮没有构建 LSP 或执行类型检查。
+导出智能提示产生 `Plugins/UnLuaNova/IntelliSense/` 下的后端声明。用 `Tools/CheckLuauTypes.ps1 -Require` 明确要求工具存在；检查报告时不能只读退出码，还需确认分析器没有被跳过。
 
 ```lua
 local Examples = require("Luau.Index")
@@ -98,7 +98,7 @@ if Examples.Available then
 end
 ```
 
-示例目录包含严格类型、沙盒边界、调试目标、语法、vector 和 buffer。守卫入口可在 Lua 后端加载，Luau 专有语法文件不能绕过守卫加载。热重载失败回滚、内存配额、模块卸载/重载与注册点诊断均已写出源码与自动化用例，但**尚未编译或执行**；原生编译、io 错误路径、打包远程调试和跨设备示例验收仍待维护者实跑。
+示例目录包含严格类型、沙盒边界、调试目标、语法、vector 和 buffer。守卫入口可在 Lua 后端加载，Luau 专有语法文件不能绕过守卫加载。
 
 `lua.profiler trace on` / `trace dump [path]` 产生 profile.out。转换入口调用固定 Luau 子模块内的官方工具及其 svg 依赖：
 
@@ -106,4 +106,4 @@ end
 python Tools/LuauPerfgraph/perfgraph.py Saved/Profiling/profile.out > profile.svg
 ```
 
-不支持 `--width`。本轮新增 io/CodeGen/buffer 回归源码，均需维护者编译后执行，详见 [测试](Testing.md)。
+不支持 `--width`。io / CodeGen / buffer 的用法详见 [测试](Testing.md)。

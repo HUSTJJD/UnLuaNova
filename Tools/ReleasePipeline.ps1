@@ -296,6 +296,28 @@ function Run([string] $File, [string[]] $Arguments, [string] $Label, [int] $Minu
 function Run-Script([string] $Script, [string[]] $Arguments, [string] $Label) {
     Run $PowerShellExe (@('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot $Script)) + $Arguments) $Label
 }
+function Get-ReleaseDeclarationDigest([string] $Root) {
+    # One stable digest over both declaration dialects. The cache entry hashes a single
+    # small manifest instead of tens of thousands of generated files, and -Verify still
+    # detects a truncated, stale or hand-edited tree when the stage would be reused.
+    $Normalized = [IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
+    $Sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $Files = @(Get-ChildItem -LiteralPath $Normalized -Recurse -Filter '*.lua' -File -ErrorAction SilentlyContinue |
+            Sort-Object -Property { $_.FullName.Substring($Normalized.Length) })
+        foreach ($File in $Files) {
+            $Relative = $File.FullName.Substring($Normalized.Length).TrimStart('\', '/').Replace('\', '/')
+            $Header = [Text.Encoding]::UTF8.GetBytes("$Relative|$($File.Length)|")
+            # Passing the input array as the output buffer keeps this valid on both
+            # .NET Framework (PowerShell 5.1) and .NET (PowerShell 7).
+            $null = $Sha.TransformBlock($Header, 0, $Header.Length, $Header, 0)
+            $Bytes = [IO.File]::ReadAllBytes($File.FullName)
+            $null = $Sha.TransformBlock($Bytes, 0, $Bytes.Length, $Bytes, 0)
+        }
+        $null = $Sha.TransformFinalBlock([byte[]]@(), 0, 0)
+        return (([BitConverter]::ToString($Sha.Hash)).Replace('-', '').ToLowerInvariant() + " files=$($Files.Count)")
+    } finally { $Sha.Dispose() }
+}
 function Build-Target([string] $Target, [string] $Label) {
     Run $BuildBat @($Target, 'Win64', 'Development', "-Project=$ProjectPath", '-WaitMutex') $Label
 }
@@ -470,6 +492,9 @@ try {
     $ScriptTree = Get-ReleaseTreeFingerprint -Roots @((Join-Path $RepoRoot 'Content/Script'))
     $DeclarationRoot = Join-Path $RepoRoot 'Plugins/UnLuaNova/IntelliSense'
     $DeclarationFile = Join-Path $DeclarationRoot 'Luau/UnLuaNova.d.lua'
+    # Written by the declarations stage; hashing this one file makes both dialects part
+    # of the cache decision without recording 20k generated .lua files in index.json.
+    $DeclarationManifest = Join-Path $DeclarationRoot 'declarations.sha256'
     $DeclarationFingerprint = ConvertTo-ReleaseFingerprint @("engine=$EngineStamp", "code=$CodeTree", "content=$ContentTree")
 
     # --- backend order ---------------------------------------------------------------
@@ -609,33 +634,65 @@ try {
                     '-ProjectPath', $ProjectPath, '-Backend', $B, '-Carrier', 'Editor', '-SkipBuild', '-RenderOffScreen',
                     '-OutputDir', (Join-Path $BackendDir 'editor'), '-TimeoutMinutes', "$TimeoutMinutes")
                 if ($BackendTargets) { $TestArgs += '-BackendTargets' }
+                # The Release is the one place where a changed test inventory must not be
+                # a warning: "all green" after silently dropping half the cases is the
+                # failure mode the baseline comparison exists to catch.
+                $TestArgs += '-FailOnDrift'
                 Run-Script 'RunTests.ps1' $TestArgs "$B-editor-tests"
+                Assert-ReleaseAutomationLog (Join-Path $OutputDir "logs/$B-editor-tests.log")
             } finally { Stop-ReleasePeers $env:UNLUANOVA_TEST_NET_ROOT $EditorStarted }
         } @("$B-package-development", "$B-package-server")
         Invoke-Stage "$B-declarations" {
             $script:DeclarationStarted = [DateTime]::UtcNow
-            $DeclRoot = Join-Path $RepoRoot 'Plugins/UnLuaNova/IntelliSense'
+            $DeclRoot = $DeclarationRoot
             $BackupRoot = Join-Path $BackendDir 'previous-declarations'
             New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null
-            foreach ($Dialect in @('Luau', 'EmmyLua')) {
-                $Source = [IO.Path]::GetFullPath((Join-Path $DeclRoot $Dialect))
-                $Destination = [IO.Path]::GetFullPath((Join-Path $BackupRoot $Dialect))
-                if (-not $Source.StartsWith($RepoRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
-                    -not $Destination.StartsWith($OutputDir + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-                    throw 'Declaration backup paths escaped their expected roots.'
+            $Moved = [Collections.Generic.List[object]]::new()
+            try {
+                foreach ($Dialect in @('Luau', 'EmmyLua')) {
+                    $Source = [IO.Path]::GetFullPath((Join-Path $DeclRoot $Dialect))
+                    $Destination = [IO.Path]::GetFullPath((Join-Path $BackupRoot $Dialect))
+                    if (-not $Source.StartsWith($RepoRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+                        -not $Destination.StartsWith($OutputDir + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+                        throw 'Declaration backup paths escaped their expected roots.'
+                    }
+                    if (Test-Path -LiteralPath $Source) {
+                        Move-Item -LiteralPath $Source -Destination $Destination -ErrorAction Stop
+                        $Moved.Add([pscustomobject]@{ Source = $Source; Destination = $Destination })
+                    }
                 }
-                if (Test-Path -LiteralPath $Source) { Move-Item -LiteralPath $Source -Destination $Destination }
-            }
-            Run $Editor @($ProjectPath, '-run=UnLuaNovaIntelliSense', '-BP=1', '-unattended', '-NoSplash', '-stdout') "$B-declarations"
-            $Files = @((Get-Item "$DeclRoot/Luau/UnLuaNova.d.lua")) + @(Get-ChildItem "$DeclRoot/EmmyLua" -Recurse -Filter '*.lua' -File)
-            if ($Files.Count -lt 2 -or @($Files | Where-Object { $_.Length -eq 0 }).Count) {
-                throw 'Declaration export is empty or contains stale files.'
+                Run $Editor @($ProjectPath, '-run=UnLuaNovaIntelliSense', '-BP=1', '-unattended', '-NoSplash', '-stdout') "$B-declarations"
+                $Files = @((Get-Item "$DeclRoot/Luau/UnLuaNova.d.lua")) + @(Get-ChildItem "$DeclRoot/EmmyLua" -Recurse -Filter '*.lua' -File)
+                if ($Files.Count -lt 2 -or @($Files | Where-Object { $_.Length -eq 0 }).Count) {
+                    throw 'Declaration export is empty or contains stale files.'
+                }
+                [IO.File]::WriteAllText($DeclarationManifest,
+                    (Get-ReleaseDeclarationDigest $DeclRoot), [Text.UTF8Encoding]::new($false))
+            } catch {
+                # A failed export used to leave the shared IntelliSense tree emptied by the
+                # Move-Item above, with no restore anywhere in the pipeline's finally block.
+                # The commandlet can also leave a partial tree behind, so drop that before
+                # moving the archived dialect back; otherwise Move-Item nests inside it.
+                foreach ($Entry in $Moved) {
+                    try {
+                        if (Test-Path -LiteralPath $Entry.Source) {
+                            Remove-Item -LiteralPath $Entry.Source -Recurse -Force -ErrorAction Stop
+                        }
+                        if (Test-Path -LiteralPath $Entry.Destination) {
+                            Move-Item -LiteralPath $Entry.Destination -Destination $Entry.Source -ErrorAction Stop
+                        }
+                    } catch {
+                        Write-Warning "Declaration rollback failed for $($Entry.Source): $($_.Exception.Message)"
+                    }
+                }
+                throw
             }
             # Backend-independent: the commandlet writes both dialects, so the second
             # backend used to pay another editor launch for files it already had.
-        } -Needs @("$B-static-bindings") -CacheKey 'declarations' -Fingerprint $DeclarationFingerprint -Artifacts @($DeclarationFile) -Verify {
-            @(Get-ChildItem -LiteralPath (Join-Path $DeclarationRoot 'EmmyLua') -Recurse -Filter '*.lua' -File -ErrorAction SilentlyContinue |
-                Where-Object { $_.Length -gt 0 }).Count -gt 0
+        } -Needs @("$B-static-bindings") -CacheKey 'declarations-both' -Fingerprint $DeclarationFingerprint `
+            -Artifacts @($DeclarationFile, $DeclarationManifest) -Verify {
+            (Test-Path -LiteralPath $DeclarationManifest -PathType Leaf) -and
+            ([IO.File]::ReadAllText($DeclarationManifest) -ceq (Get-ReleaseDeclarationDigest $DeclarationRoot))
         }
         $Analyzer = if ($B -eq 'Lua') { 'LuaLS' } else { 'LuauLsp' }
         $AnalyzerExe = if ($B -eq 'Lua') { $env:LUA_LANGUAGE_SERVER } else { $env:LUAU_LSP }
@@ -672,6 +729,7 @@ try {
                 Run $Exe @('/UnLuaNovaTestSuite/Tests/Misc/Empty', '-game', '-unattended', '-NoSplash', '-nosound', '-stdout', '-RenderOffScreen',
                     '-ExecCmds=UnLuaNovaTest.ExportManifest, Automation RunTests UnLuaNova; Quit',
                     "-ReportExportPath=$GameDir", "-abslog=$GameDir/Game.log") "$B-game-tests"
+                Assert-ReleaseAutomationLog (Join-Path $OutputDir "logs/$B-game-tests.log")
             } finally {
                 Stop-ReleasePeers $env:UNLUANOVA_TEST_NET_ROOT $GameStarted
                 $PackagedProject = [IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $Exe) '../..'))
@@ -690,7 +748,16 @@ try {
         } @('tool-environment', "$B-game-tests")
         Invoke-Stage "$B-reports" {
             foreach ($Dir in @($EditorDir, $GameDir)) {
-                Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'GenerateTestReport.py'), '--reports', $Dir, '--out', $Dir, '--backend', $B) "$B-report-$(Split-Path $Dir -Leaf)"
+                # Editor and cooked carriers run different case inventories, so each has
+                # its own committed baseline. Both are checked for drift here; before this
+                # the game carrier had no case-set guardrail at all.
+                $CarrierBaseline = if ($Dir -eq $GameDir) {
+                    Join-Path $RepoRoot "Tools/baseline/$($B.ToLower())-game.json"
+                } else {
+                    Join-Path $RepoRoot "Tools/baseline/$($B.ToLower()).json"
+                }
+                Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'GenerateTestReport.py'), '--reports', $Dir, '--out', $Dir,
+                    '--backend', $B, '--baseline', $CarrierBaseline, '--fail-on-drift') "$B-report-$(Split-Path $Dir -Leaf)"
             }
         } @('tool-environment')
         Invoke-Stage "$B-package-shipping" {

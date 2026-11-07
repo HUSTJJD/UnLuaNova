@@ -66,6 +66,28 @@ try {
     Restore-ReleaseStaticBindings $SecondBackup
     Assert ([IO.File]::ReadAllText($Generated) -eq '// newly generated output') 'Recovery overwrote newer output'
 
+    # A stub write that throws leaves no state object for the pipeline's finally block.
+    # Backup-ReleaseStaticBindings must recover the shared source by itself.
+    [IO.File]::WriteAllText($Generated, $OldSource)
+    $ReadOnly = Get-Item -LiteralPath $Generated
+    $ReadOnly.IsReadOnly = $true
+    $Failed = $false
+    try { Backup-ReleaseStaticBindings $Project (Join-Path $Temporary 'failed-bootstrap-backup') | Out-Null }
+    catch { $Failed = $true }
+    finally { $ReadOnly.IsReadOnly = $false }
+    Assert $Failed 'A read-only generated source did not fail the bootstrap'
+    Assert ([IO.File]::ReadAllText($Generated) -eq $OldSource) 'Failed bootstrap left the generated source truncated'
+
+    # Only the cooked game's missing HTML template is an allowed UE automation error.
+    $CleanLog = Join-Path $Temporary 'automation-clean.log'
+    [IO.File]::WriteAllText($CleanLog, "[0]LogAutomationController: Display: Loading results html template...`n[0]LogAutomationController: Error: Failed to load test report html template - No report will be generated.`n")
+    Assert-ReleaseAutomationLog $CleanLog
+    $BadLog = Join-Path $Temporary 'automation-bad.log'
+    [IO.File]::WriteAllText($BadLog, "[0]LogAutomationController: Error: something else broke`n")
+    $Rejected = $false
+    try { Assert-ReleaseAutomationLog $BadLog } catch { $Rejected = $_.Exception.Message -like 'Unexpected UE automation error*' }
+    Assert $Rejected 'An unexpected UE automation error was accepted'
+
     # A tree without the plugin directory still resolves the legacy project-local file.
     $LegacyProject = Join-Path $Temporary 'legacy/Demo.uproject'
     $LegacyDir = Join-Path $Temporary 'legacy/Source/Demo/Generated'

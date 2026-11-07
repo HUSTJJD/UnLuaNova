@@ -13,7 +13,7 @@ MIT 许可覆盖 UnLuaNova 自身的源码、文档、脚本与示例（即本�
 | 部分 | 许可 | 说明 |
 |---|---|---|
 | 继承的 Tencent/UnLua 代码 | MIT，Copyright (C) 2019 Tencent | 保留其原有文件头与版权声明，按其自身条款可用 |
-| Lua 5.5.1（子模块） | MIT，Lua.org / PUC-Rio | 见固定提交 `lua.h` 中的原文 |
+| Lua 5.5.1（子模块） | MIT，Lua.org / PUC-Rio | 见 `lua.h` 中的原文 |
 | Luau（子模块） | MIT，Roblox Corporation / Lua.org | 保留 `LICENSE.txt` 与 `lua_LICENSE.txt` |
 | LuaSocket、lua-protobuf、lua-rapidjson、RapidJSON | MIT（部分含 BSD-3 子组件） | 各自版权人授予 |
 | `Tools/` 下的工具子模块 | 各自许可 | 分发其二进制时需一并携带 |
@@ -29,24 +29,11 @@ MIT 许可覆盖 UnLuaNova 自身的源码、文档、脚本与示例（即本�
 另行授权"这类规模限定，让项目在真正被使用前就多了一道门槛。改为 MIT 后，根许可与上游文件头
 一致，也不再有任何规模或商业授权条件。
 
-## 历史遗留事项
-
-改为 MIT 解决了许可本身的冲突，下面这些仍然需要补齐，与许可类型无关：
-
-- 随包 notice 清单现在可由 `Tools/GenerateNotices.py` 确定性生成，并用 `--check` 比对
-  `Saved/StagedBuilds/*/NOTICES.txt`；扩展库、工具、二进制依赖与示例资产的完整版本、
-  来源和权利人范围仍列为 `UNRESOLVED`，生成器会据此 fail-closed。这些是权利人决定，
-  不能由脚本补齐。
-- 新增第三方代码时要记录准确的 URL / revision、保留原有声明并注明改动。
-- 不要给原创代码错误添加 Tencent 版权，也不要删除上游声明。
-
 ## 对标项目
 
 [slua-unreal](https://github.com/Tencent/sluaunreal/blob/7970ab72fd59118e1b3f86aac2d016828b54b748/LICENSE.TXT)
-为 BSD-3-Clause，不能误写为 MIT。FUnLua README 声称 MIT，但本轮固定提交缺少其链接的许可文件；
-在核实前只记录设计，不复制实现。
+为 BSD-3-Clause，不能误写为 MIT。FUnLua README 声称 MIT，但其链接的许可文件在源码树中未找到；
+本项目只借鉴设计，不复制其实现。
 
 本项目与 slua-unreal、FUnLua 之间只存在设计对照关系：不代表其作者为本项目背书，
 本许可也不授权复制其源码。UnLua、Lua、Luau 的来源与版权声明继续保留。
-
-[当前审计](Benchmark_Review.md)

@@ -60,12 +60,4 @@ return M
 - 类上新增的覆写是类级资源，`ULuaFunction::RestoreOverrides` 会把它们一起撤掉；
   重新绑定实例时会再次补齐。
 
-## 测试
-
-`Plugins/UnLuaNovaTestSuite/.../Private/Specs/InstanceBinding.spec.cpp`
-（`UnLuaNova.API.InstanceBinding`）覆盖：实例覆盖与类默认共存、两个模块交替调用不串线、
-重绑立即生效、未覆盖实例回落、解绑后回落与查询 API 复位、非法输入与缺少类级绑定时拒绝。
-用例通过真实覆写 thunk（`Stub->Overridable()`）驱动，需要在 UE 里跑一次才会产生执行证据。
-
-相关：[控制台命令](ConsoleCommand.md) · [能力矩阵](../feature-matrix.md) ·
-[测试架构](Testing_Architecture.md)
+相关：[控制台命令](ConsoleCommand.md) · [测试架构](Testing_Architecture.md)

@@ -73,8 +73,7 @@ jobs:
       - name: Install MkDocs Material
         run: pip install mkdocs-material
 
-      # --strict is back: Docs/test-lua-report.md and Docs/test-luau-report.md are now
-      # committed placeholders, so a first clone builds clean and any broken link or
-      # missing nav entry turns the job red.
+      # --strict turns warnings into failures: every nav entry and every relative link
+      # in the published docs must resolve on a fresh clone.
       - name: Build docs
         run: mkdocs build --strict --site-dir _site

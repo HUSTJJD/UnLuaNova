@@ -154,8 +154,7 @@ revision、meta 字段与失败上报由 `Tools/tests/test_crossproject_workload
 喂给 runner 即可。非时间指标是纯 VM 采集，不走这两个钩子；`code_size.bytes` 拿不到时
 输出 `unavailable` 而不是 0（见上节）。
 
-在它们跑起来之前，**任何"比 slua 快"的说法都不成立**。README 与
-[Docs/CN/Performance_Parity_slua.md](../Docs/CN/Performance_Parity_slua.md) 目前只陈述
+在它们跑起来之前，**任何"比 slua 快"的说法都不成立**。README 中的性能数据只陈述
 自比数据与实现机制，就是这个原因。
 
 ## 状态

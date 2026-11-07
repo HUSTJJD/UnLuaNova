@@ -2,58 +2,19 @@
 
 基于 Tencent/UnLua 的 Unreal Engine Lua / Luau 脚本集成。不 fork 引擎、能运营期热更、性能可测。
 
-[中文入口](CN/index.md) · [English](EN/index.md) · [GitHub](https://github.com/HUSTJJD/UnLuaNova)
-
-## 当前状态
+[中文文档](CN/index.md) · [English](EN/index.md) · [GitHub](https://github.com/HUSTJJD/UnLuaNova)
 
 <!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
-源码包含双后端、UE 绑定与覆写、容器与委托、静态导出与生成 thunk、调试与 Profiler、
-类型声明导出、运行时库和实验性声明式网络。许可是 **MIT**。
+## 文档导航
 
-**当前发布状态：通过**（以 `Saved/ReleaseTests/test/release-summary.json` 为准）。
-2026-11-07 完整 Release 产出 `complete=true`、`passed=true`：33/33 阶段通过、2752/2752 次 UE 执行、0 失败、0 跳过 —— Lua Editor 690、Lua cooked 661、Luau Editor 715、Luau cooked 686，四个 release gate 全绿。
-33/33 的旧结论只属于 2026-11-03 基线轮（commit `347bb8c5`）；此前多轮失败（性能测量环境干扰、
-UBT 锁 / 编译子进程被外部中断、Net 回归、UFunction 重复覆写、Luau 安全点哨兵、cooked 卸载
-use-after-free、VM hook 槽位残留）均已定位并修复，25% 门禁未放宽；`perf-lua.json` 参考基线已在 `1455c38d` 换用 median-of-5 独立参考运行（与当前采样法一致），`perf-luau.json` 与 2026-11-03 基线轮记录未改动。
-详见[版本说明](CN/ReleaseNotes.md)。
+| 分类 | 中文 | English |
+|---|---|---|
+| 快速上手 | [UE 新手快速上手](CN/Quickstart_For_UE_Newbie.md) | [Quickstart](EN/Quickstart_For_UE_Newbie.md) |
+| 功能与编程 | [功能清单](CN/Features.md) · [编程指南](CN/UnLuaNova_Programming_Guide.md) · [API](CN/API.md) | [Features](EN/Features.md) · [Programming guide](EN/UnLuaNova_Programming_Guide.md) · [API](EN/API.md) |
+| 后端与内置库 | [Luau 后端](CN/Luau.md) · [内置库](CN/StdLib.md) | [Luau](EN/Luau.md) · [Standard library](EN/StdLib.md) |
+| 配置与工具 | [设置](CN/Settings.md) · [控制台命令](CN/ConsoleCommand.md) · [调试](CN/Debugging.md) · [测试](CN/Testing.md) | [Settings](EN/Settings.md) · [Console commands](EN/ConsoleCommand.md) · [Debugging](EN/Debugging.md) · [Testing](EN/Testing.md) |
+| 参考 | [Showcase 示例](CN/Showcase.md) · [版本说明](CN/ReleaseNotes.md) · [许可](CN/License.md) · [FAQ](CN/FAQ.md) | [Showcase](EN/Showcase.md) · [Release notes](EN/ReleaseNotes.md) · [License](EN/License.md) · [FAQ](EN/FAQ.md) |
 
-**2026-11-03 基线轮完整 Release 验证通过**（`.\Tools\RunTests.ps1 -Baseline`、
-`Saved/ReleaseTests/baseline`、commit `347bb8c5`；下列数字只对该轮成立。
-UE 5.8.3 源码引擎 / Win64 / Visual Studio 2026 18.10）：
-
-| 后端 | 载体 | 用例 | 结果 |
-|---|---|---:|---|
-| Luau（默认） | Editor | 641 | 641 通过 / 0 失败 / 0 跳过 |
-| Luau（默认） | cooked `-game` | 615 | 615 通过 / 0 失败 / 0 跳过 |
-| Lua 5.5.1 | Editor | 626 | 626 通过 / 0 失败 / 0 跳过 |
-| Lua 5.5.1 | cooked `-game` | 600 | 600 通过 / 0 失败 / 0 跳过 |
-
-33/33 阶段通过，含真实 Dedicated Server + 两客户端联网、两个后端各自的类型检查（0 错误）、
-性能 25% 门禁，以及 Development / Server / Shipping 三种打包。覆盖 `UnLuaNova.API.*`、
-`UnLuaNova.Regression.*`、`UnLuaNova.Binding`、`UnLuaNova.Memory`、`UnLuaNova.Editor`、
-`UnLuaNova.Settings`、`UnLuaNova.Lua`、`UnLuaNova.Extensions`、`UnLuaNova.Perf`、
-`UnLuaNova.Net.*` 与 `UnLuaNova.Showcase`。
-
-性能基线已提交（`Tools/baseline/perf-lua.json`、`perf-luau.json`），并作为 Release 的 25% 回退门禁。
-同机同构建下 Luau 比 Lua 5.5.1 更快，容器工作负载上为 **2.08×**（22.570 → 10.868 µs/op）。
-**这仍不是与 slua-unreal / FUnLua 的同机对照**，跨项目速度结论尚未建立。
-
-本轮没有覆盖的范围（范围声明，不是遗漏）：非 Win64 平台、条件复制的**联机验收**
-（owner / 非 owner 及全部八类连接场景）、Legacy / PushOff / Iris / Cooked
-四个变体的真实执行、第三方 notice 清单里仍需权利人决定的 `UNRESOLVED` 项（生成器与
-`--check` 门禁已交付），以及与 slua-unreal / FUnLua 的同机对照。按条件分组布局
-（8 种条件）、任意 `UStruct` / 容器类型规格、八类连接场景源码、四变体开关、跨 peer 声明指纹、
-多 Env 任意顺序销毁与对象失效单测**已交付但尚未执行**，源码层面已无网络待实现项；
-引擎级 seamless travel、热重载与权限检查明确不在范围内，
-见 [Lua 声明式网络（实验）](CN/LuaNetworking.md)。
-诊断历史与更早轮次见 [回归报告](CN/Regression_20261024.md)。
-
-- [现状、风险与路线图](CN/Benchmark_Review.md)
-- [能力与证据矩阵](feature-matrix.md)
-- [slua / FUnLua 对照](CN/Comparison_sluaunreal.md)
-- [Luau 支持边界](CN/Luau.md)
-- [性能验收方法](CN/Performance_Parity_slua.md)
-- [测试框架与验收](CN/Testing_Architecture.md)
-- [Lua 验证状态](test-lua-report.md) / [Luau 验证状态](test-luau-report.md)
+许可：**MIT**。当前版本面向 Unreal Engine 5.8.3 / Win64。

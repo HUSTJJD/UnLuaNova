@@ -1,6 +1,6 @@
 # slua-unreal 与 FUnLua 源码对照
 
-以 [当前审计](Benchmark_Review.md) 的固定提交为基线，产品行为和源码同时核对。README 性能宣传不作为本项目的实测结论。
+本页对照 slua-unreal 与 FUnLua 的固定版本源码，梳理可借鉴的设计。README 中的性能宣传不作为本项目的性能结论。
 
 ## slua-unreal
 
@@ -8,13 +8,13 @@
 
 | 对照能力 | 本项目现状 / 应吸收的要求 |
 |---|---|
-| 反射、双向调用、Blueprint override、out/ref、枚举与运算符 | 从 UnLua 继承大部分路径；需要参数与异常契约、继承/网络覆写的矩阵验收 |
+| 反射、双向调用、Blueprint override、out/ref、枚举与运算符 | 从 UnLua 继承大部分路径；参数与异常契约、继承/网络覆写需按场景核对 |
 | 模板导出普通 C++、静态代码生成、非反射扩展方法 | 已有 UnLuaNovaEx 模板和手工导出；生成器主要处理反射签名，不等价于 libclang 任意 C++ 导出 |
-| 容器、结构体、对象 GC、委托回调 | 已有实现；借用视图失效、手工引用和多 Env 清理仍有风险 |
-| 多 Lua state、热更新、脚本驱动 Actor/Component/Widget | 已有入口；同类不同实例模块绑定和多世界 Timer 隔离未闭环 |
-| RPC / 属性复制 | 有实验实现；条件分组布局、int64 / 标量 / Object 桶往返、多 Env 任意顺序销毁、弱对象失效、`UStruct` / 容器规格与 FProperty 参数导出、跨 peer 声明指纹均有单测或报告门禁；八类连接场景与四变体源码已补，**owner/非 owner 及真实网络验收仍未执行** |
-| CPU/内存诊断、真机调试、死循环检测 | 本项目有 Profiler、DAP、看门狗；真机远程调试与权限/重连/源码映射需要产品化 |
-| 多线程 GC | 本项目是显式分片/预算调度，不能称为同等线程 GC；需用帧停顿和线程安全证明替代方案 |
+| 容器、结构体、对象 GC、委托回调 | 已有实现；借用视图失效、手工引用与多 Env 清理属于已知边界 |
+| 多 Lua state、热更新、脚本驱动 Actor/Component/Widget | 已有入口；同类不同实例模块绑定与多世界 Timer 隔离属于已知边界 |
+| RPC / 属性复制 | 有实验实现；支持条件分组布局、int64 / 标量 / Object 桶往返、`UStruct` / 容器规格与 FProperty 参数导出、跨 peer 声明指纹。声明式网络是实验特性，真实联机验收需单独进行 |
+| CPU/内存诊断、真机调试、死循环检测 | 本项目有 Profiler、DAP、看门狗；真机远程调试与权限/重连/源码映射属于已知边界 |
+| 多线程 GC | 本项目是显式分片/预算调度，不是同等线程 GC；性能特性以帧停顿和线程安全衡量 |
 
 重点阅读 `LuaObject`、`LuaVar`、`LuaState`、`LuaDelegate`、`LuaOverrider`、`LuaProfiler` 及 `CppBinding`，并结合 `Tools` 导出工具。设计上应吸收“普通 C++ 与反射 API 都可用”的工作流，避免把某一种生成方式作为产品目标本身。
 
@@ -26,14 +26,14 @@
 |---|---|---|
 | `Private/FCGetObj.h` | FCObjRef 带引用类型、对象 ID、父子关系 | 统一 owned/borrowed 语义，父对象失效时子视图可诊断地失败；覆盖结构体/容器迭代器 |
 | `Private/FCSafeProperty.h` | 弱 FProperty 元数据引用 | 验证蓝图重编译、热重载、reinstance 后旧属性缓存失效 |
-| `Private/FCObjectManager.h/.cpp` | 对象绑定及 (Object, Function) override 身份 | 支持同类实例绑定不同模块；当前 UClass 缓存不能证明此能力 |
+| `Private/FCObjectManager.h/.cpp` | 对象绑定及 (Object, Function) override 身份 | 同类实例可绑定不同模块，见 [实例级模块绑定](InstanceBinding.md) |
 | `Private/FCDynamicDelegateManager.h` | table/object 与 Lua function 组成回调身份，去重与清理 | 设计 token、owner 与幂等取消；保留 UE 单播委托语义，不把单播强改多播 |
 | `Private/FCRefObjCache.cpp` | 缓存与预算释放，依赖全局脚本上下文 | 学习批量释放成本控制；本项目需按 Env 隔离，避免照搬全局假设 |
 
-FUnLua 的“无需手动释放”和“不增加 GC 计数”不能脱离源码路径作绝对保证，其代码也存在手工 FGCObject 引用。README 的 5 倍/10 倍性能数字没有在本项目环境复现。
+FUnLua 的“无需手动释放”和“不增加 GC 计数”不能脱离源码路径作绝对保证，其代码也存在手工 FGCObject 引用。
 
 ## 兼容与许可
 
-目标是覆盖工作流并提供迁移说明，不要求 API 名称或内存布局逐字兼容。UnLua fork 的既有接口必须保留回归测试；slua/FUnLua 脚本迁移需要独立适配表。
+目标是覆盖工作流并提供迁移说明，不要求 API 名称或内存布局逐字兼容。UnLua fork 的既有接口保持兼容；slua/FUnLua 脚本迁移需单独适配。
 
-slua-unreal 为 BSD-3-Clause，不能误写 MIT。FUnLua README 链接 `LICENSE.TXT`，但本轮固定提交的树中未找到该文件；暂不导入其源码。本轮仅借鉴设计并记录来源，未复制这两个项目的实现。完整规则见 [许可现状](License.md)。
+slua-unreal 为 BSD-3-Clause，不能误写为 MIT。FUnLua README 链接 `LICENSE.TXT`，但该文件未在其源码树中找到；本项目只借鉴设计，不复制其实现。完整规则见 [许可现状](License.md)。

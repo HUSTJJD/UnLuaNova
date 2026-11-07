@@ -121,14 +121,6 @@ class AuditRepositoryTests(unittest.TestCase):
         self.assertTrue(any("release status page is missing" in error
                             for error in audit.validate_release_docs(self.root)))
 
-    def test_stale_en_performance_claim_fails(self):
-        self._write_release_pages()
-        page = self.root / "Docs/EN/Performance_Parity_slua.md"
-        page.write_text(page.read_text(encoding="utf-8")
-                        + "\nTools/baseline/perf-*.json is not committed.\n", encoding="utf-8")
-        errors = audit.validate_release_docs(self.root)
-        self.assertTrue(any("conflicts with the CN page" in error for error in errors))
-
     def test_latest_finished_run_decides_status(self):
         self._write_release_pages()
         path = self._write_summary("test", {"complete": True, "passed": False})

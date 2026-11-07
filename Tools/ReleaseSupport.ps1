@@ -238,10 +238,19 @@ function Backup-ReleaseStaticBindings([string] $Project, [string] $BackupDirecto
     # Copy for evidence, then replace the translation unit in place with a compilable stub:
     # the generator still starts from nothing, while UBT keeps the same source file set.
     Copy-Item -LiteralPath $Source -Destination $Backup -ErrorAction Stop
-    [IO.File]::WriteAllText($Source,
-        ($script:ReleaseBindingHeader + "`n" + $script:ReleaseBindingStubLine + "`n"),
-        [Text.UTF8Encoding]::new($false))
+    # Register the backup before touching the source. If writing the stub throws, this
+    # function never returns a state object, so the pipeline's finally block has nothing
+    # to restore and the shared generated file would stay truncated for the other backend.
     $State.Backup = $Backup
+    try {
+        [IO.File]::WriteAllText($Source,
+            ($script:ReleaseBindingHeader + "`n" + $script:ReleaseBindingStubLine + "`n"),
+            [Text.UTF8Encoding]::new($false))
+    } catch {
+        try { Copy-Item -LiteralPath $Backup -Destination $Source -Force -ErrorAction Stop }
+        catch { Write-Warning "Static binding bootstrap could not be rolled back: $($_.Exception.Message)" }
+        throw
+    }
     Write-Host "Archived static bindings before generator bootstrap: $Backup"
     return $State
 }
@@ -252,5 +261,24 @@ function Restore-ReleaseStaticBindings($State) {
         # Copy preserves the run's evidence. Never replace newly generated or user-written output.
         Copy-Item -LiteralPath $State.Backup -Destination $State.Source -Force -ErrorAction Stop
         Write-Host "Restored static bindings after incomplete generation: $($State.Source)"
+    }
+}
+
+# A packaged/cooked game has no Engine/Content/Automation HTML template. UE logs that as
+# LogAutomationController: Error but still runs every test and exports the JSON this
+# pipeline actually consumes, so a zero exit code alone cannot hide *other* UE errors.
+$script:ReleaseAllowedAutomationErrors = @(
+    'Failed to load test report html template - No report will be generated.'
+)
+function Assert-ReleaseAutomationLog([string] $Log) {
+    if (-not (Test-Path -LiteralPath $Log -PathType Leaf)) { return }
+    $Unexpected = @(Select-String -LiteralPath $Log -Pattern 'LogAutomationController: Error:' -ErrorAction SilentlyContinue |
+        Where-Object {
+            $Line = $_.Line
+            -not @($script:ReleaseAllowedAutomationErrors | Where-Object { $Line.Contains($_) }).Count
+        })
+    if ($Unexpected.Count) {
+        $Sample = @($Unexpected | Select-Object -First 3 | ForEach-Object { $_.Line.Trim() }) -join ' | '
+        throw "Unexpected UE automation error(s) in $Log ($($Unexpected.Count) total): $Sample"
     }
 }

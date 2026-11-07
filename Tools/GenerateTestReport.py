@@ -985,7 +985,7 @@ def compare_with_baseline(summary, baseline):
     old_total = baseline.get("total")
     new_total = summary.get("total")
     if isinstance(old_total, int) and isinstance(new_total, int) and old_total != new_total:
-        lines.append(f"用例总数 {old_total} -> {new_total}（{new_total - old_total:+d}）")
+        lines.append(f"total cases {old_total} -> {new_total} ({new_total - old_total:+d})")
 
     old_names = set(baseline.get("names") or [])
     new_names = set(summary.get("names") or [])
@@ -994,11 +994,11 @@ def compare_with_baseline(summary, baseline):
     if missing:
         drifted = True
         shown = ", ".join(missing[:DRIFT_NAMES_SHOWN])
-        lines.append(f"{len(missing)} 个用例消失：{shown}{' …' if len(missing) > DRIFT_NAMES_SHOWN else ''}")
+        lines.append(f"{len(missing)} cases removed: {shown}{' ...' if len(missing) > DRIFT_NAMES_SHOWN else ''}")
     if added:
         drifted = True
         shown = ", ".join(added[:DRIFT_NAMES_SHOWN])
-        lines.append(f"{len(added)} 个用例新增：{shown}{' …' if len(added) > DRIFT_NAMES_SHOWN else ''}")
+        lines.append(f"{len(added)} cases added: {shown}{' ...' if len(added) > DRIFT_NAMES_SHOWN else ''}")
 
     old_duration = baseline.get("duration")
     new_duration = summary.get("duration")
@@ -1009,7 +1009,7 @@ def compare_with_baseline(summary, baseline):
     ):
         ratio = new_duration / old_duration
         if abs(ratio - 1.0) > DURATION_DRIFT_RATIO:
-            lines.append(f"耗时 {old_duration:.1f}s -> {new_duration:.1f}s（{ratio:.0%}，超出 ±50%）")
+            lines.append(f"duration {old_duration:.1f}s -> {new_duration:.1f}s ({ratio:.0%}, outside +/-50%)")
 
     return drifted, lines
 
@@ -1192,17 +1192,18 @@ def main() -> None:
         baseline_path = Path(args.baseline).resolve() if args.baseline else default_baseline_path(backend)
         baseline = load_baseline(baseline_path)
         if baseline is None:
-            print(f"BASELINE: 没有基线（{baseline_path}）；确认这份结果无误后用 --update-baseline 创建。")
+            print(f"BASELINE: no baseline ({baseline_path}); confirm this run, then use --update-baseline.")
         else:
             drifted, drift_lines = compare_with_baseline(summary, baseline)
             if drift_lines:
                 for line in drift_lines:
                     print(f"BASELINE: {line}")
             else:
-                print(f"BASELINE: 与基线一致（{summary['total']} 个用例）")
+                print(f"BASELINE: matches baseline ({summary['total']} cases)")
             if drifted:
                 print(
-                    "BASELINE: 用例集变了。确认是有意为之后，跑 RunTests.ps1 -UpdateBaseline 更新基线。",
+                    "BASELINE: case set changed; confirm it is intentional, then run "
+                    "RunTests.ps1 -UpdateBaseline to refresh the baseline.",
                     file=sys.stderr,
                 )
                 drift_exit = 1
@@ -1214,7 +1215,7 @@ def main() -> None:
                 encoding="utf-8",
                 newline="\n",
             )
-            print(f"BASELINE: 已写入 {baseline_path}（{summary['total']} 个用例）")
+            print(f"BASELINE: wrote {baseline_path} ({summary['total']} cases)")
 
     if args.publish:
         repo_root = Path(__file__).resolve().parent.parent
@@ -1272,7 +1273,7 @@ def main() -> None:
     )
 
     if drift_exit and args.fail_on_drift:
-        raise SystemExit("用例集与基线不一致；确认后更新基线（RunTests.ps1 -UpdateBaseline）。")
+        raise SystemExit("case set differs from baseline; confirm, then run RunTests.ps1 -UpdateBaseline.")
 
 
 if __name__ == "__main__":

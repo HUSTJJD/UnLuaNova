@@ -86,7 +86,8 @@ class MainTests(unittest.TestCase):
                     handle.write(json.dumps(run))
 
             self.assertEqual(metrics.main([good, "-o", output]), 0)
-            report = io.open(output, encoding="utf-8").read()
+            with io.open(output, encoding="utf-8") as handle:
+                report = handle.read()
             self.assertIn("VM.Arithmetic", report)
             self.assertIn("not a cross-project conclusion", report)
 

@@ -175,9 +175,9 @@ The Editor evidence gate requires all four Showcase PNGs. Cooked reports also co
 
 Editor diagnostics use the current Editor executable for all peers by default, avoiding stale Game binaries. Release explicitly selects its current staged Server/Game through environment variables. Clients never spawn the test actors or assign ownership locally.
 
-Performance requires `Tools/baseline/perf-lua.json` and `perf-luau.json`, matching backend, engine, machine, case inventory and iteration counts, with a 25% regression limit. Current references come from the independent `FullFix-Complete-11` diagnostic run, documented in the baseline README. They are not pre-fix measurements and cannot establish a performance improvement from these fixes. Missing comparable references fail the gate; the runner never promotes its own measurements automatically. External performance claims still require [controlled acceptance](Performance_Parity_slua.md).
+Performance requires `Tools/baseline/perf-lua.json` and `perf-luau.json`, matching backend, engine, machine, case inventory and iteration counts, with a 25% regression limit. `perf-lua.json` was refreshed in `1455c38d` from an independent 2026-11-05 median-of-5 reference run; `perf-luau.json` still comes from the 2026-10-24 `FullFix-Complete-11` diagnostic run. See the baseline README. Neither is a pre-fix measurement, so neither establishes a speedup caused by the fixes. Missing comparable references fail the gate; the runner never promotes its own measurements automatically. External performance claims still require [controlled acceptance](Performance_Parity_slua.md).
 
-Performance sampling warms each case for at least 250 ms, then records five samples of at least 100 ms each. Each sample repeats the same iteration batch; the result is the median of the five per-operation averages. `metadata/perf.json` retains raw elapsed times and batch counts. The gate recomputes the result and rejects missing, short or inconsistent samples. The original reference files remain unchanged and used single-batch samples. Workload, per-batch iterations, units and thresholds remain comparable, but the sampling-method change cannot establish a runtime speedup.
+Performance sampling warms each case for at least 250 ms, then records five samples of at least 100 ms each. Each sample repeats the same iteration batch; the result is the median of the five per-operation averages. `metadata/perf.json` retains raw elapsed times and batch counts. The gate recomputes the result and rejects missing, short or inconsistent samples. `perf-lua.json` now uses the current median-of-5 method; `perf-luau.json` still carries single-batch samples. Workload, per-batch iterations, units and thresholds remain comparable, but the sampling-method change cannot establish a runtime speedup.
 
 ## Memory Leak Gate
 
@@ -221,11 +221,26 @@ These are **static structure gates**. They prove evidence files are complete, co
 reproducible; they do not prove UE actually ran. Runtime behaviour, real coverage and remote
 reachability still belong to the full Release and the specialised acceptance runs.
 
-The last two commands **honestly fail** on the current tree: `ValidateProvenance.py`
-reports zero current-tree records (and fails outright with `--require-current`), while
-`GenerateNotices.py` reports 11 `UNRESOLVED` items and two staged `NOTICES.txt` files that
-disagree with the generated list. That is not a broken script - the release is not ready.
-Do not edit the evidence index or invent notice text just to turn those commands green.
+`GenerateNotices.py --check` still **honestly fails**: 11 `UNRESOLVED` items and two staged
+`NOTICES.txt` files that disagree with the generated list. `ValidateProvenance.py` is different:
+checked against the tested commit
+(`python Tools/ValidateProvenance.py --require-current --head 1455c38d`) it is PASS with four
+current-tree records, while running it against the current HEAD fails by fail-closed design
+because the newest evidence is bound to `1455c38d` and HEAD has since moved to documentation
+and tooling commits. Neither result is a broken script: the first is incomplete legal data, the
+second means "no execution is bound to the new HEAD". Do not edit the evidence index or invent
+notice text to turn those commands green; making HEAD itself pass requires another full Release.
+
+**New fail-closed checks in this pass** (tooling level, covered by static regressions): each of
+the four carriers has its own committed case-set baseline (`Tools/baseline/lua.json` /
+`luau.json` for Editor, `lua-game.json` / `luau-game.json` for cooked), and both the Release
+editor tests and the report stage pass `--fail-on-drift`. In cooked logs, any
+`LogAutomationController: Error` other than the known missing UE HTML report template fails
+the stage. A failed declaration export rolls the archived IntelliSense tree back, the
+declaration cache verifies both Luau and EmmyLua dialects through `declarations.sha256`, and a
+failed static-binding stub write restores the shared generated source. When a case set changes
+intentionally, review it first, then refresh the matching baseline with `-UpdateBaseline`
+(Editor) or `GenerateTestReport.py --update-baseline` (Game).
 
 ## Development
 

@@ -10,7 +10,7 @@
 
 当前状态以 `Saved/ReleaseTests/test/release-summary.json` 为准：2026-11-07 的完整
 `.\Tools\RunTests.ps1` 产出 `complete=true`、`passed=true`，33/33 阶段通过、2752/2752 次 UE 执行、0 失败、0 跳过 —— Lua Editor 690、Lua cooked 661、Luau Editor 715、Luau cooked 686，四个 release gate 全绿。
-下面 33/33 与 2482/2482 的旧结论只属于 2026-11-03 基线轮。
+下面的 2482/2482 与四载体旧数字只属于 2026-11-03 基线轮；最新一轮同样是 33/33 阶段通过，但用例总数为 2752/2752。
 
 ### 已关闭的历史失败（不是放宽门禁）
 

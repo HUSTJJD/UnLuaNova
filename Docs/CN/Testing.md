@@ -166,9 +166,9 @@ Editor 证据门禁要求四个 Showcase 的 PNG。cooked 报告也自动收集�
 
 Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混入旧 Game 二进制；Release 通过环境变量显式指定默认 staging 路径的当前 Server/Game。客户端不在本地生成测试 Actor 或设置 Owner。
 
-性能门禁要求 `Tools/baseline/perf-lua.json`、`perf-luau.json`，核对后端、引擎、机器、case 与迭代次数，并拒绝超过 25% 的回退。当前参考值来自独立的 `FullFix-Complete-11` 诊断轮，来源见基线目录 README；它们不是修复前基线，不能证明修复带来了性能提升。缺少可比参考值时门禁失败，**不会自动将待测结果提升为基线**。对外性能结论仍须遵守 [性能验收](Performance_Parity_slua.md)。
+性能门禁要求 `Tools/baseline/perf-lua.json`、`perf-luau.json`，核对后端、引擎、机器、case 与迭代次数，并拒绝超过 25% 的回退。`perf-lua.json` 已在 `1455c38d` 换用 2026-11-05 独立 median-of-5 参考运行；`perf-luau.json` 仍来自 2026-10-24 的 `FullFix-Complete-11` 诊断轮，来源见基线目录 README。两者都不是修复前基线，不能证明修复带来了性能提升。缺少可比参考值时门禁失败，**不会自动将待测结果提升为基线**。对外性能结论仍须遵守 [性能验收](Performance_Parity_slua.md)。
 
-性能采样对每项至少预热 250 毫秒，再测量五组各至少 100 毫秒的样本。每组重复相同迭代批次，取五组平均每操作耗时的中位数；`metadata/perf.json` 保留原始耗时和批次数，门禁独立重算并拒绝缺失、过短或与汇总不一致的数据。原参考文件保持不变，来自旧的单批采样方法；这能按相同工作内容、每批迭代数和单位继续检查原门槛，不能据采样方法变化声称运行时性能提升。
+性能采样对每项至少预热 250 毫秒，再测量五组各至少 100 毫秒的样本。每组重复相同迭代批次，取五组平均每操作耗时的中位数；`metadata/perf.json` 保留原始耗时和批次数，门禁独立重算并拒绝缺失、过短或与汇总不一致的数据。`perf-lua.json` 已按当前 median-of-5 采样法刷新，`perf-luau.json` 仍是旧的单批采样；两者都能按相同工作内容、每批迭代数和单位继续检查原门槛，不能据采样方法变化声称运行时性能提升。
 
 ## 内存泄漏门禁
 
@@ -207,10 +207,22 @@ python -B Tools/GenerateNotices.py --check Saved\StagedBuilds\Windows\NOTICES.tx
 这些是**静态结构门禁**：能证明证据文件齐全、自洽、可复现，不能证明 UE 真的跑过。
 运行时行为、真实覆盖率与远程可达性仍由完整 Release 和专项验收负责。
 
-当前仓库里后两条会**如实失败**：`ValidateProvenance.py` 报 0 条当前树证据（加
-`--require-current` 则直接 FAIL），`GenerateNotices.py` 报 11 项 `UNRESOLVED` 且两个
-staged `NOTICES.txt` 与生成清单不一致。这不是脚本故障，而是 release 尚未达标；
-不要为了让命令变绿去改证据索引或伪造 notice 文本。
+当前仓库里 `GenerateNotices.py --check` 仍会**如实失败**：11 项 `UNRESOLVED`，且两个
+staged `NOTICES.txt` 与生成清单不一致。`ValidateProvenance.py` 的情况不同：以被测 commit
+复核（`python Tools/ValidateProvenance.py --require-current --head 1455c38d`）为 PASS，
+4 条当前树证据齐全；直接以当前 HEAD 运行则按 fail-closed 设计返回 FAIL，因为最新证据绑定
+的是 `1455c38d`，而 HEAD 已前移到文档 / 工具链提交。两种结果都不是脚本故障：前者是法务资料
+尚未齐备，后者表示「尚无绑定到新 HEAD 的实跑」。不要为了让命令变绿去改证据索引或伪造
+notice 文本；要让 HEAD 自身通过，必须重跑一次完整 Release。
+
+**本轮新增的失败判定**（工具链级，静态回归已覆盖）：四个载体各有独立用例集基线
+（`Tools/baseline/lua.json` / `luau.json` 用于 Editor，`lua-game.json` / `luau-game.json`
+用于 cooked），Release 的 editor 测试与报告阶段均带 `--fail-on-drift`；cooked 日志里除
+已知的「打包载体缺 UE HTML 报告模板」外，任何 `LogAutomationController: Error` 都会让
+stage 失败；声明导出失败会把归档的 IntelliSense 目录回滚，声明缓存通过
+`declarations.sha256` 同时校验 Luau 与 EmmyLua 两种方言；静态绑定 bootstrap 写 stub 失败时
+自恢复共享生成文件。用例集有意变更时先人工确认，再用 `-UpdateBaseline`（Editor）或
+`GenerateTestReport.py --update-baseline`（Game）刷新对应基线。
 
 ## 开发调试
 

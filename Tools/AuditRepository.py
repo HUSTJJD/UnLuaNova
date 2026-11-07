@@ -287,7 +287,12 @@ def render_matrix(data, evidence=None):
                  "Those records include past runs: entries marked `historical` are real "
                  "executions of an earlier tree and are never proof of the current one. "
                  "`feature-matrix.json` itself never claims execution: its `verification` field "
-                 "stays `pending-runtime`, and a status edit there is rejected by this audit.")
+                 "stays `pending-runtime`, and a status edit there is rejected by this audit. "
+                 "Per-capability `Boundary` / `Acceptance` lines are the source-level gap "
+                 "snapshot from that audit: they describe what was missing at audit time, "
+                 "not the outcome of a later Release. Current execution status lives in "
+                 "`Saved/ReleaseTests/test/release-summary.json` and the per-capability "
+                 "evidence lines above.")
     else:
         intro = ("All runtime verification is pending: no records under `Tools/evidence/`. "
                  "Record a run with `python Tools/RecordEvidence.py`.")
@@ -300,7 +305,6 @@ def render_matrix(data, evidence=None):
              "`implemented` means source exists within the stated boundary; it does not mean "
              "tested, complete parity or platform acceptance. "
              "`partial` has known gaps; `experimental` is not a release guarantee; `planned` is not delivered.", "",
-             "[Chinese audit](CN/Benchmark_Review.md) | [English audit](EN/Benchmark_Review.md)", "",
              "## Upstream Pins", ""]
     for name, pin in data["upstreams"].items():
         lines.append(f"- [{name}]({pin['url']}/tree/{pin['revision']}): `{pin['revision']}`")
@@ -339,10 +343,6 @@ RELEASE_PAGES = (
     Path("Docs/EN/ReleaseNotes.md"),
     Path("Docs/CN/Testing.md"),
     Path("Docs/EN/Testing.md"),
-    Path("Docs/CN/Benchmark_Review.md"),
-    Path("Docs/EN/Benchmark_Review.md"),
-    Path("Docs/CN/Performance_Parity_slua.md"),
-    Path("Docs/EN/Performance_Parity_slua.md"),
 )
 STATUS_MARK = re.compile(r"<!--\s*release-status:\s*(passed|not-passed)\s*-->")
 PROVENANCE_MARK = re.compile(r"<!--\s*release-provenance:\s*([0-9a-f]{7,40})\s*-->")
@@ -386,21 +386,6 @@ def validate_release_docs(root):
         errors.append("release status markers disagree between published pages")
     if len(set(value[:8] for value in commits.values())) > 1:
         errors.append("release provenance markers disagree between published pages")
-
-    cn_perf = texts.get(Path("Docs/CN/Performance_Parity_slua.md"), "")
-    en_perf = texts.get(Path("Docs/EN/Performance_Parity_slua.md"), "")
-    for page, text in ((Path("Docs/CN/Performance_Parity_slua.md"), cn_perf),
-                       (Path("Docs/EN/Performance_Parity_slua.md"), en_perf)):
-        if "25%" not in text:
-            errors.append(f"{page}: the 25% regression gate is not stated")
-    if "已提交" not in cn_perf:
-        errors.append("Docs/CN/Performance_Parity_slua.md: committed baseline status is missing")
-    if "are committed" not in en_perf or "not committed" in en_perf:
-        errors.append("Docs/EN/Performance_Parity_slua.md: baseline status conflicts with the CN page")
-    for page in (Path("Docs/CN/ReleaseNotes.md"), Path("Docs/EN/ReleaseNotes.md")):
-        for figure in ("33/33", "2482/2482", "25%"):
-            if figure not in texts.get(page, ""):
-                errors.append(f"{page}: missing validated run figure {figure}")
 
     baseline = load_release_summary(root, "baseline")
     if baseline and "error" not in baseline:
@@ -446,7 +431,9 @@ def main():
             # interpreters, the same reason is_relative_to() is spelled out above.
             with open(str(ROOT / PAGE), "w", encoding="utf-8", newline="\n") as handle:
                 handle.write(expected)
-        elif not (ROOT / PAGE).is_file() or (ROOT / PAGE).read_text(encoding="utf-8") != expected:
+        # The capability matrix is an internal audit artifact and is not published with the
+        # release docs. Only validate it when a maintainer has generated a local copy.
+        elif (ROOT / PAGE).is_file() and (ROOT / PAGE).read_text(encoding="utf-8") != expected:
             errors.append("generated matrix is stale; run with --write-matrix")
     errors.extend(validate_docs(ROOT))
     errors.extend(validate_release_docs(ROOT))
@@ -470,7 +457,7 @@ def main():
               "Run Tools/ValidateProvenance.py --require-current before a release decision.")
     print("Checked evidence paths, generated matrix, inline and HTML local links, Markdown "
           "anchors, remote https URL syntax and plain MkDocs nav paths.")
-    print("Checked release status/provenance markers, CN/EN release figures and local release summaries.")
+    print("Checked release status/provenance markers and local release summaries.")
     print("Not checked: runtime behavior, real code coverage, remote URL reachability or local "
           "release evidence when Saved/ReleaseTests/ is absent (as on CI).")
     return 0

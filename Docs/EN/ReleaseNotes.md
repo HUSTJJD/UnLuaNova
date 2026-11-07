@@ -11,8 +11,8 @@ outstanding-work detail lives in the [audit](Benchmark_Review.md) and the
 
 Current status follows `Saved/ReleaseTests/test/release-summary.json`: the 2026-11-07 full
 `.\Tools\RunTests.ps1` produced `complete=true`, `passed=true`, 33/33 stages passed, 2752/2752 UE executions, 0 failed, 0 skipped - Lua Editor 690, Lua cooked 661, Luau Editor 715, Luau cooked 686, with all four
-release gates green. The 33/33 and 2482/2482 figures below belong only to the 2026-11-03
-baseline run.
+release gates green. The 2482/2482 figure and the four carrier counts below belong only to
+the 2026-11-03 baseline run; the latest run is also 33/33 stages, but with 2752/2752 executions.
 
 ### Historical failures, now closed (no gate was relaxed)
 

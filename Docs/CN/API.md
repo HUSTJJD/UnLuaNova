@@ -5,7 +5,7 @@ description: "UnLuaNova 的 C++ API、Lua API 与构建期宏定义速查"
 
 # UnLuaNova API
 
-本页列出接口用法；接口存在不代表后端语义等价或目标平台已验收。当前边界见 [能力矩阵](../feature-matrix.md)、[Luau](Luau.md) 和 [实验性网络](LuaNetworking.md)。
+本页列出接口用法；接口存在不代表后端语义等价或目标平台已验收。相关边界见 [Luau](Luau.md) 和 [实验性网络](LuaNetworking.md)。
 
 ## C++ API
 
@@ -196,8 +196,7 @@ FUnLuaNovaDelegates
 !!! warning "别把这些模块放进工程目录"
     `package.path` **工程在前**（`Content/Script/?.lua`），插件脚本目录按插件实例解析在后。
     放在 `Content/Script/UnLuaNova/` 下的模块在本仓库能加载，
-    但任何只装插件的工程都拿不到它 —— 而且本仓库不会有任何用例失败。
-    `UnLuaNova.API.RuntimeModules` 这条用例就是断言"文件在插件目录里"，防止再犯。
+    但任何只装插件的工程都拿不到它。
 
 !!! note "Timer 没有 .lua 文件"
     `Timer` 是内建模块，由 `FLuaEnv::AddBuiltInLoader` 提供加载器（`require` 的第五个 searcher），
