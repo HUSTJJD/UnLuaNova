@@ -14,19 +14,21 @@ Outputs, next to --reports unless --out says otherwise:
                    screenshotted
 
 --backend Lua|Luau records which Lua backend produced the run (a compile-time choice, see
-UnLuaNova.Build.cs). With --publish it also picks the destination, so the two backend runs
-do not overwrite each other:
-    Docs/test-lua-report.md     --backend Lua
-    Docs/test-luau-report.md    --backend Luau
-    Docs/test-report.md         no --backend (single, unlabelled run)
+UnLuaNova.Build.cs). With --publish it also picks the destination under
+Saved/TestReports/published/, so the two backend runs do not overwrite each other:
+    published/test-lua-report.md     --backend Lua
+    published/test-luau-report.md    --backend Luau
+    published/test-report.md         no --backend (single, unlabelled run)
+These per-case reports are internal verification artifacts and are not part of the
+published documentation site.
 
 A run that crashed exports no JSON at all, which used to make the report say "0 tests" -
 indistinguishable from a run that never started. When that happens this reads Editor.log
 next to the (missing) JSON instead and reports what was running and where it died.
 
-Either way that copy is what gets committed and rendered by MkDocs, and it deliberately
-points at no local path: the run directory is timestamped and Saved/ is gitignored, so
-naming it here would make the file change on every single run.
+Either way that copy deliberately points at no local path: the run directory is
+timestamped and machine-specific, so naming it here would make the report change on
+every single run.
 
 Baseline guard-rail:
     --baseline <path>      compare this run with a previous one and say what moved
@@ -1040,12 +1042,12 @@ def main() -> None:
         default=None,
         metavar="Lua|Luau",
         help="which Lua backend produced this run; with --publish it selects the destination"
-        " (Docs/test-lua-report.md or Docs/test-luau-report.md)",
+        " under Saved/TestReports/published/",
     )
     parser.add_argument(
         "--publish",
         action="store_true",
-        help="also write the Docs/ copy; that copy is committed, so it carries no "
+        help="also write an internal copy under Saved/TestReports/published/; it carries no "
         "machine specific path and no per-run directory name",
     )
     parser.add_argument(
@@ -1219,7 +1221,10 @@ def main() -> None:
 
     if args.publish:
         repo_root = Path(__file__).resolve().parent.parent
-        docs_dir = repo_root / "Docs"
+        # Detailed per-case reports are internal verification artifacts, not published
+        # documentation: keep them out of Docs/ so a release run cannot add them back.
+        docs_dir = repo_root / "Saved" / "TestReports" / "published"
+        docs_dir.mkdir(parents=True, exist_ok=True)
         # One page per backend, so the two runs are both visible instead of the second
         # overwriting the first. Screenshots get the same treatment: the two backends can
         # legitimately produce different pictures of the same scene.

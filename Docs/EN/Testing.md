@@ -175,9 +175,9 @@ The Editor evidence gate requires all four Showcase PNGs. Cooked reports also co
 
 Editor diagnostics use the current Editor executable for all peers by default, avoiding stale Game binaries. Release explicitly selects its current staged Server/Game through environment variables. Clients never spawn the test actors or assign ownership locally.
 
-Performance requires `Tools/baseline/perf-lua.json` and `perf-luau.json`, matching backend, engine, machine, case inventory and iteration counts, with a 25% regression limit. `perf-lua.json` was refreshed in `1455c38d` from an independent 2026-11-05 median-of-5 reference run; `perf-luau.json` still comes from the 2026-10-24 `FullFix-Complete-11` diagnostic run. See the baseline README. Neither is a pre-fix measurement, so neither establishes a speedup caused by the fixes. Missing comparable references fail the gate; the runner never promotes its own measurements automatically. External performance claims still require [controlled acceptance](Performance_Parity_slua.md).
+Performance requires `Tools/baseline/perf-lua.json` and `perf-luau.json`, matching backend, engine, machine, case inventory and iteration counts, with a 25% regression limit. Missing comparable references fail the gate; the runner never promotes its own measurements automatically.
 
-Performance sampling warms each case for at least 250 ms, then records five samples of at least 100 ms each. Each sample repeats the same iteration batch; the result is the median of the five per-operation averages. `metadata/perf.json` retains raw elapsed times and batch counts. The gate recomputes the result and rejects missing, short or inconsistent samples. `perf-lua.json` now uses the current median-of-5 method; `perf-luau.json` still carries single-batch samples. Workload, per-batch iterations, units and thresholds remain comparable, but the sampling-method change cannot establish a runtime speedup.
+Sampling warms each case for at least 250 ms, then records five samples of at least 100 ms each and reports the median of the five per-operation averages. The gate rejects missing, short or inconsistent samples.
 
 ## Memory Leak Gate
 
@@ -202,45 +202,8 @@ python -B Tools/ValidateProvenance.py --run Saved\ReleaseTests\baseline --summar
 python -B Tools/GenerateNotices.py --check Saved\StagedBuilds\Windows\NOTICES.txt Saved\StagedBuilds\WindowsServer\NOTICES.txt
 ```
 
-* `AuditRepository.py` also validates inline/HTML local links, Markdown anchors (using
-  MkDocs slug rules) and that remote links use plain https. Its output separates historical
-  from current-tree evidence: a record with `historical: true` is a real run of an earlier
-  tree and is **not proof of the current worktree**.
-* `ValidateProvenance.py` makes that distinction fail-closed: it checks the evidence index,
-  that all four release gates (two backends x two carriers) exist and belong to one run, and
-  that `release-summary.json` agrees with them. `--require-current` fails unless at least one
-  non-historical record matches the current HEAD.
-* `GenerateNotices.py` deterministically assembles the shipped `NOTICES.txt` from license
-  information already present in the repository; `--check` compares staged artifacts.
-  Unresolvable rights-holder information is listed as `UNRESOLVED` and fails the gate rather
-  than being invented.
-* `ValidateRelease.py`'s showcase gate now requires a PNG signature and an IHDR header, so a
-  renamed text file can no longer satisfy it.
-
-These are **static structure gates**. They prove evidence files are complete, consistent and
-reproducible; they do not prove UE actually ran. Runtime behaviour, real coverage and remote
-reachability still belong to the full Release and the specialised acceptance runs.
-
-`GenerateNotices.py --check` still **honestly fails**: 11 `UNRESOLVED` items and two staged
-`NOTICES.txt` files that disagree with the generated list. `ValidateProvenance.py` is different:
-checked against the tested commit
-(`python Tools/ValidateProvenance.py --require-current --head 1455c38d`) it is PASS with four
-current-tree records, while running it against the current HEAD fails by fail-closed design
-because the newest evidence is bound to `1455c38d` and HEAD has since moved to documentation
-and tooling commits. Neither result is a broken script: the first is incomplete legal data, the
-second means "no execution is bound to the new HEAD". Do not edit the evidence index or invent
-notice text to turn those commands green; making HEAD itself pass requires another full Release.
-
-**New fail-closed checks in this pass** (tooling level, covered by static regressions): each of
-the four carriers has its own committed case-set baseline (`Tools/baseline/lua.json` /
-`luau.json` for Editor, `lua-game.json` / `luau-game.json` for cooked), and both the Release
-editor tests and the report stage pass `--fail-on-drift`. In cooked logs, any
-`LogAutomationController: Error` other than the known missing UE HTML report template fails
-the stage. A failed declaration export rolls the archived IntelliSense tree back, the
-declaration cache verifies both Luau and EmmyLua dialects through `declarations.sha256`, and a
-failed static-binding stub write restores the shared generated source. When a case set changes
-intentionally, review it first, then refresh the matching baseline with `-UpdateBaseline`
-(Editor) or `GenerateTestReport.py --update-baseline` (Game).
+These checks validate file structure, local links, Markdown anchors and evidence consistency
+without a UE build. Runtime behaviour and platform acceptance are covered by the full Release run.
 
 ## Development
 
@@ -256,14 +219,14 @@ Partial runs explicitly select `Development` and are not release evidence:
 
 ### Connected network matrix (separate opt-in)
 
-Eight connected scenarios (late join, process-level reconnect, dormancy, relevancy, join-order swap, packet loss / reordering, `UNetConnection`-level reconnect, cross-peer declaration mismatch) and the Legacy / PushOff / Iris / Cooked variants each launch three real processes, so they are not part of the ordinary test matrix or the 33 normal Release stages:
+Eight connected scenarios (late join, process-level reconnect, dormancy, relevancy, join-order swap, packet loss / reordering, `UNetConnection`-level reconnect, cross-peer declaration mismatch) and the Legacy / PushOff / Iris / Cooked variants each launch three real processes, so they are not part of the ordinary test matrix or the standard Release stages:
 
 ```powershell
 .\Tools\RunTests.ps1 -Profile Development -NetMatrix -Backend Lua -SkipBuild
 python Tools\ValidateRelease.py --net-matrix --run Saved\ReleaseTests\net-matrix\Lua --backend Lua --carrier game
 ```
 
-`Tools/RunNetMatrix.ps1` is the underlying script. `-ExtraArgs` puts `-UnLuaNovaNetScenarios`, `-UnLuaNovaNetPktLoss=25` and the variant's real engine switch (`-UseIrisReplication=1` or a push-model cvar ini override) on the process command line; `FNetSession` forwards the scenario flag, loss percentage, exact reconnect URL and `UNLUANOVA_TEST_NET_VARIANT` to every peer. The Cooked variant points the peer executables at staged `Windows` / `WindowsServer` binaries. `AppendWorldFacts` reads cvar state, `WITH_EDITOR` and `UNetConnection` counters back, while `BuildNetDeclarationReport()` exports FProperty-derived parameter specs and `RepSchemaVersion` / `VariantRepSchemaVersion`, so neither a renamed directory nor a disagreeing declaration can pass. Artifacts land in `net/scenarios/<Name>/` and `net/variants/<Name>/DedicatedServer/`, judged into `metadata/net-matrix-gate.json`. This is **not** UE automation evidence and does not touch `Tools/evidence/index.json`. The gate fails closed on a missing topology, a missing peer log, a PID mismatch, a faked Iris/push-model/Cooked flag, a mismatched or non-discriminating declaration fingerprint, a missing Generic field / UStruct parameter, zero connection byte counters or a scenario that never ran. **At present all eight scenarios and four variants have source and gates only, with no execution evidence.**
+`Tools/RunNetMatrix.ps1` is the underlying script. `-ExtraArgs` puts `-UnLuaNovaNetScenarios`, `-UnLuaNovaNetPktLoss=25` and the variant's real engine switch (`-UseIrisReplication=1` or a push-model cvar ini override) on the process command line; `FNetSession` forwards the scenario flag, loss percentage, exact reconnect URL and `UNLUANOVA_TEST_NET_VARIANT` to every peer. The Cooked variant points the peer executables at staged `Windows` / `WindowsServer` binaries. `AppendWorldFacts` reads cvar state, `WITH_EDITOR` and `UNetConnection` counters back, while `BuildNetDeclarationReport()` exports FProperty-derived parameter specs and `RepSchemaVersion` / `VariantRepSchemaVersion`, so neither a renamed directory nor a disagreeing declaration can pass. Artifacts land in `net/scenarios/<Name>/` and `net/variants/<Name>/DedicatedServer/`, judged into `metadata/net-matrix-gate.json`. This is **not** UE automation evidence and does not touch `Tools/evidence/index.json`. The gate fails closed on a missing topology, a missing peer log, a PID mismatch, a faked Iris/push-model/Cooked flag, a mismatched or non-discriminating declaration fingerprint, a missing Generic field / UStruct parameter, zero connection byte counters or a scenario that never ran.
 
 Preview the default plan without writing config, installing tools, compiling or launching UE:
 
@@ -287,17 +250,8 @@ Rebuild and re-package everything, ignoring the cache:
 
 Register new `UnLuaNova.*` suites in the test plugin's `Private/Specs` or `Private/Tests`. Source classification tracks suites; the runtime manifest tracks actual context-specific leaves. New registration macros require classifier support, not silent exclusions. Multiple Lua assertions may still aggregate into one UE test.
 
-This entry covers the defined Win64 matrix, not every unfinished product requirement or 100% code coverage. Feature-off combinations, other platforms/devices, Shipping runtime smoke, Iris/push-model modes and external benchmark adapters remain [audit work](Benchmark_Review.md). License scope and third-party notices also require separate maintenance.
-
-Validation status (only for the 2026-11-03 baseline run: `-Baseline`, `Saved/ReleaseTests/baseline`, commit `347bb8c5`): 33/33 stages passed with 2482/2482 UE executions, zero failures and zero skips — Lua Editor 626, Lua cooked 600, Luau Editor 641, Luau cooked 615. All four real DS + two-client gates (DedicatedServer and Multicast) passed, and both backends packaged Development, Server and Shipping. All 41 Python tooling tests and PowerShell support checks passed. Static analysis had zero errors, with 298 Lua warnings and seven Luau warnings retained — both are a known analyzer limitation on `package.path`-style requires and do not affect loading. Both LuaLS and luau-lsp run the binary built from their submodule, and the build does not modify submodule sources; LuaLS's bee dependency retains two upstream-disabled tests. Release22's old DedicatedServer case does not establish transport. Historical failures and acceptance limits are in the [regression record](Regression_20261024.md).
-
-**Current release status: passed** (source: `Saved/ReleaseTests/test/release-summary.json`).
-The 2026-11-07 full Release produced `complete=true`, `passed=true`: 33/33 stages passed, 2752/2752 UE executions, 0 failed, 0 skipped - Lua Editor 690, Lua cooked 661, Luau Editor 715, Luau cooked 686, with all four
-release gates green. Every earlier failure was diagnosed and fixed (measurement-environment
-interference, UBT mutex / interrupted child compilers, the Net regression, duplicate UFunction
-overrides, the Luau safe-point sentinel, a cooked-shutdown use-after-free and a stale VM-hook
-slot). The 25% gate was not relaxed; `perf-lua.json` was refreshed in `1455c38d` from an independent median-of-5 reference run matching the current sampler, while `perf-luau.json` and the 2026-11-03 baseline run are unchanged. New regressions cover idempotent
-instance binding, GC safe-point semantics, hook-slot cleanup on Env destruction and a bounded
-safe-point cancellation check.
+This entry covers the defined Win64 test matrix. Feature-off combinations, other platforms and
+devices, Shipping runtime smoke, Iris / push-model modes and external benchmark adapters require
+separate validation.
 
 Type-check summaries retain every warning and the raw `analyzer_exit`. The final `exit` follows error-level diagnostics: warnings alone do not block, while type errors, abnormal analyzer exits and missing results fail.

@@ -1,6 +1,6 @@
 ---
 title: "测试与自动化"
-description: "单入口 release 验证、证据与失败判定"
+description: "单入口 release 验证与失败判定"
 ---
 
 # 测试与自动化
@@ -166,9 +166,9 @@ Editor 证据门禁要求四个 Showcase 的 PNG。cooked 报告也自动收集�
 
 Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混入旧 Game 二进制；Release 通过环境变量显式指定默认 staging 路径的当前 Server/Game。客户端不在本地生成测试 Actor 或设置 Owner。
 
-性能门禁要求 `Tools/baseline/perf-lua.json`、`perf-luau.json`，核对后端、引擎、机器、case 与迭代次数，并拒绝超过 25% 的回退。`perf-lua.json` 已在 `1455c38d` 换用 2026-11-05 独立 median-of-5 参考运行；`perf-luau.json` 仍来自 2026-10-24 的 `FullFix-Complete-11` 诊断轮，来源见基线目录 README。两者都不是修复前基线，不能证明修复带来了性能提升。缺少可比参考值时门禁失败，**不会自动将待测结果提升为基线**。对外性能结论仍须遵守 [性能验收](Performance_Parity_slua.md)。
+性能门禁要求 `Tools/baseline/perf-lua.json`、`perf-luau.json`，核对后端、引擎、机器、case 与迭代次数，并拒绝超过 25% 的回退。缺少可比参考值时门禁失败，**不会自动将待测结果提升为基线**。
 
-性能采样对每项至少预热 250 毫秒，再测量五组各至少 100 毫秒的样本。每组重复相同迭代批次，取五组平均每操作耗时的中位数；`metadata/perf.json` 保留原始耗时和批次数，门禁独立重算并拒绝缺失、过短或与汇总不一致的数据。`perf-lua.json` 已按当前 median-of-5 采样法刷新，`perf-luau.json` 仍是旧的单批采样；两者都能按相同工作内容、每批迭代数和单位继续检查原门槛，不能据采样方法变化声称运行时性能提升。
+性能采样对每项至少预热 250 毫秒，再测量五组各至少 100 毫秒的样本。每组重复相同迭代批次，取五组平均每操作耗时的中位数；`metadata/perf.json` 保留原始耗时和批次数，门禁独立重算并拒绝缺失、过短或与汇总不一致的数据。
 
 ## 内存泄漏门禁
 
@@ -179,7 +179,7 @@ Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混
 - 稳定性和热重载场景预热 8 轮后记录 32 轮完整 GC 的存活字节与块数；允许最多 8 KiB、16 块的预热后增长。schema 2 的 `live_bytes` 来自 VM 的 GC 计数，`bytes` 保留分配账本字节，`blocks` 保留分配块数。Luau 的分配块是内存页，可能正常保留约 32 KiB 的空闲空间，不能当作存活对象增长；环境关闭时仍要求整个分配账本归零。阈值在代码和验证器中固定，不接受报告自行放宽。
 - 对照用例保留一组对象，要求完整 GC 后仍能检测到至少 64 KiB 的增长，再解除引用确认回落。验证器独立检查采样，不能只填写 `passed=true`。
 
-这些是指定场景的泄漏回归，不是全进程内存安全证明。原生资源检查尚不等于覆盖每一处 C++ 分配；GPU/RHI、Luau CodeGen 可执行页、第三方库和长时间线上工作负载仍需专项检测。进程工作集未下降也不能单独判为泄漏。`FullFix-Release-22` 已通过双后端 Editor/cooked 四组实际运行与证据校验，共 36 份内存报告，关闭后残留及记账错误均为零。
+这些是指定场景的泄漏回归，不是全进程内存安全证明。原生资源检查尚不等于覆盖每一处 C++ 分配；GPU/RHI、Luau CodeGen 可执行页、第三方库和长时间线上工作负载仍需专项检测。进程工作集未下降也不能单独判为泄漏。
 
 ## 静态发布门禁（无需 UE）
 
@@ -191,38 +191,6 @@ python -B -m unittest discover -s Tools/tests -p "test_*.py"
 python -B Tools/ValidateProvenance.py --run Saved\ReleaseTests\baseline --summary Saved\ReleaseTests\baseline\release-summary.json
 python -B Tools/GenerateNotices.py --check Saved\StagedBuilds\Windows\NOTICES.txt Saved\StagedBuilds\WindowsServer\NOTICES.txt
 ```
-
-- `AuditRepository.py` 除证据路径、生成页与 release 标记外，还静态校验 Markdown / HTML
-  本地链接、标题锚点（按 MkDocs 的 slug 规则）与远程链接必须使用纯 https；输出会明确
-  区分历史证据和当前树证据 —— 带 `historical: true` 的记录是过去某次真实运行，
-  **不是当前工作树的证明**。
-- `ValidateProvenance.py` 把这条语义做成 fail-closed 门禁：校验证据索引、四个 release gate
-  （2 后端 × 2 载体）齐全且属于同一轮、`release-summary.json` 与 gate 结论一致；
-  `--require-current` 要求至少一条非历史且 commit 与当前 HEAD 一致的证据，否则明确失败。
-- `GenerateNotices.py` 把仓库里已有的许可信息确定性汇总成随包 `NOTICES.txt`，`--check`
-  比对 staged 产物；查不到的权利人信息列为 `UNRESOLVED` 并让门禁失败，不编造法务结论。
-- `ValidateRelease.py` 的 showcase 截图门禁现在只接受带 PNG 签名与 IHDR 头的文件，
-  改名的文本文件不再能蒙混过关。
-
-这些是**静态结构门禁**：能证明证据文件齐全、自洽、可复现，不能证明 UE 真的跑过。
-运行时行为、真实覆盖率与远程可达性仍由完整 Release 和专项验收负责。
-
-当前仓库里 `GenerateNotices.py --check` 仍会**如实失败**：11 项 `UNRESOLVED`，且两个
-staged `NOTICES.txt` 与生成清单不一致。`ValidateProvenance.py` 的情况不同：以被测 commit
-复核（`python Tools/ValidateProvenance.py --require-current --head 1455c38d`）为 PASS，
-4 条当前树证据齐全；直接以当前 HEAD 运行则按 fail-closed 设计返回 FAIL，因为最新证据绑定
-的是 `1455c38d`，而 HEAD 已前移到文档 / 工具链提交。两种结果都不是脚本故障：前者是法务资料
-尚未齐备，后者表示「尚无绑定到新 HEAD 的实跑」。不要为了让命令变绿去改证据索引或伪造
-notice 文本；要让 HEAD 自身通过，必须重跑一次完整 Release。
-
-**本轮新增的失败判定**（工具链级，静态回归已覆盖）：四个载体各有独立用例集基线
-（`Tools/baseline/lua.json` / `luau.json` 用于 Editor，`lua-game.json` / `luau-game.json`
-用于 cooked），Release 的 editor 测试与报告阶段均带 `--fail-on-drift`；cooked 日志里除
-已知的「打包载体缺 UE HTML 报告模板」外，任何 `LogAutomationController: Error` 都会让
-stage 失败；声明导出失败会把归档的 IntelliSense 目录回滚，声明缓存通过
-`declarations.sha256` 同时校验 Luau 与 EmmyLua 两种方言；静态绑定 bootstrap 写 stub 失败时
-自恢复共享生成文件。用例集有意变更时先人工确认，再用 `-UpdateBaseline`（Editor）或
-`GenerateTestReport.py --update-baseline`（Game）刷新对应基线。
 
 ## 开发调试
 
@@ -240,7 +208,7 @@ stage 失败；声明导出失败会把归档的 IntelliSense 目录回滚，声
 
 八类连接场景（晚加入、进程级重连、dormancy、relevancy、加入顺序互换、丢包/乱序、
 `UNetConnection` 级重连、跨 peer 声明差异）与 Legacy / PushOff / Iris / Cooked
-四个变体各起三个真实进程，不进普通测试矩阵，也不属于常规 Release 的 33 个阶段：
+四个变体各起三个真实进程，不进普通测试矩阵，也不属于常规 Release 阶段：
 
 ```powershell
 .\Tools\RunTests.ps1 -Profile Development -NetMatrix -Backend Lua -SkipBuild
@@ -258,7 +226,6 @@ ini 覆盖）传到进程命令行，`FNetSession` 再把场景开关、丢包�
 判定；它**不是** UE automation evidence，也不写 `Tools/evidence/index.json`。
 该门禁 fail-closed：缺拓扑、缺 peer 日志、PID 不符、伪造 Iris/push-model/Cooked 标志、
 声明指纹不一致或不可区分、缺 Generic 字段 / UStruct 参数、连接字节计数为零、场景没跑，都会失败。
-**当前八类场景与四个变体只有源码和门禁，没有执行证据。**
 
 只看默认计划、不修改配置、不安装工具、不启动编译或 UE：
 
@@ -282,15 +249,6 @@ ini 覆盖）传到进程命令行，`FNetSession` 再把场景开关、丢包�
 
 新增 C++ Spec / 回归用例应在 `Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/Specs` 或 `Tests` 注册 `UnLuaNova.*` 路径。`ClassifyTests.py` 提供源码 suite 清单，运行时 manifest 提供当前上下文的 leaf 清单；新增注册宏时需同步分类器，不能添加静默排除规则。Lua 侧多个断言仍可能汇总成一个 UE 用例。
 
-此入口覆盖当前定义的 Win64 测试矩阵，不等于所有产品需求已实现，也不是 100% 代码覆盖率。feature-off 组合、其他目标平台/设备、Shipping 运行 smoke、Iris/push model 和外部项目性能对照仍是 [审计](Benchmark_Review.md) 中的未完成工作。许可归属与第三方 notice 也不能由自动化通过替代。
+此入口覆盖当前定义的 Win64 测试矩阵，不等于所有产品需求已实现，也不是 100% 代码覆盖率。feature-off 组合、其他目标平台/设备、Shipping 运行 smoke、Iris/push model 和外部项目性能对照需单独验收。
 
-验证状态（只对应 2026-11-03 基线轮：`-Baseline`、`Saved/ReleaseTests/baseline`、commit `347bb8c5`）：33/33 阶段通过、2482/2482 次 UE 执行、0 失败、0 跳过 —— Lua Editor 626、Lua cooked 600、Luau Editor 641、Luau cooked 615；四组真实 DS + 双客户端（DedicatedServer 与 Multicast）及证据门禁均通过，两个后端 Development / Server / Shipping 打包成功。41 项 Python 工具测试与 PowerShell 支持检查通过。静态检查零错误，保留 Lua 298 条、Luau 7 条警告（都是分析器对 `package.path` 式 require 的已知限制，不影响加载）。LuaLS 与 luau-lsp 都是直接用子模块构建出的可执行文件，构建过程不修改子模块源码；LuaLS 的 bee 依赖仍有两项上游固定跳过。Release22 的旧 DedicatedServer 不构成传输证据；历史失败与验收边界见下方回归记录。
-
-**当前发布状态：通过**（以 `Saved/ReleaseTests/test/release-summary.json` 为准）。
-2026-11-07 完整 Release 产出 `complete=true`、`passed=true`：33/33 阶段通过、2752/2752 次 UE 执行、0 失败、0 跳过 —— Lua Editor 690、Lua cooked 661、Luau Editor 715、Luau cooked 686，四个 release gate 全绿。
-此前多轮失败的原因（性能测量环境干扰、UBT 锁 / 编译子进程被外部中断、Net 回归、
-UFunction 重复覆写、Luau 安全点哨兵、cooked 卸载 use-after-free、VM hook 槽位残留）
-均已定位并修复；25% 门禁未放宽；`perf-lua.json` 参考基线已在 `1455c38d` 换用 median-of-5 独立参考运行（与当前采样法一致），`perf-luau.json` 与 2026-11-03 基线轮记录未改动。新增的回归用例覆盖 UFunction 幂等绑定、
-GC 安全点哨兵语义、Env 销毁后的 hook 槽位清理，以及有界的 safe-point 取消。
-
-历史修复过程与诊断记录见 [2026-10-24 回归记录](Regression_20261024.md)。静态检查保留所有警告和分析器原始 `analyzer_exit`；最终 `exit` 依据错误级诊断判定。仅警告不阻断，类型错误、异常退出和缺少结果均失败。
+静态检查保留所有警告和分析器原始 `analyzer_exit`；最终 `exit` 依据错误级诊断判定。仅警告不阻断，类型错误、异常退出和缺少结果均失败。

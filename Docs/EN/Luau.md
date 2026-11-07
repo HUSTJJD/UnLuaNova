@@ -15,7 +15,7 @@ Integrated revision: `6d36d483cb88973276af611198169f76f3ce05b0` (0.743 + 1). Ups
 | Type checking | Generated declarations plus external luau-lsp | Analysis/Config are not runtime type checking; skip behavior must be checked |
 | Modules | Host loader, package.searchers/preload, `package.aliases` redirection on both backends, a final `require` wrapper with cycle detection on both backends, `unrequire` / `reloadmodule` and `package.resolution()` | Upstream Require `@alias` config files are explicitly refused; names are case-sensitive with no fallback; cooked builds need loose scripts staged; package.path/cpath are not the host loader policy |
 
-See upstream [compatibility](https://luau.org/compatibility/) and [sandbox](https://luau.org/sandbox/) documentation and the [local matrix](../feature-matrix.md).
+See upstream [compatibility](https://luau.org/compatibility/) and [sandbox](https://luau.org/sandbox/) documentation.
 
 ## Lua Compatibility
 
@@ -56,7 +56,7 @@ private caches on failure. `M.reload()` / `reload_modules()` return `ok, err`; `
 hooks fire only after a successful commit and file timestamps advance only on success, so
 fixing the source allows a direct retry. **This is best-effort rollback, not a transaction**:
 `_G`, live stack locals, arbitrary tables/upvalues/registry and references held elsewhere are
-not snapshotted. All of the above is source-only and awaits maintainer build and execution.
+not snapshotted.
 
 ## Configuration
 

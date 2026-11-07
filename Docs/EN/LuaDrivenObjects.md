@@ -1,6 +1,6 @@
 ---
 title: "Lua-driven Objects and Calling Lua from C++"
-description: "Making a Lua module drive a game object with UnLuaNova's existing binding and override machinery (no parallel base classes), calling Lua member functions from C++ in a typed way, and the gap that really remains: RPCs cannot be overridden"
+description: "Making a Lua module drive a game object with UnLuaNova's existing binding and override machinery (no parallel base classes), and calling Lua member functions from C++ in a typed way"
 ---
 
 # Lua-driven Objects and Calling Lua from C++
@@ -121,9 +121,9 @@ if (Call.IsValid())
 
 ## Networking and Instance Binding Boundaries
 
-Declared RPCs and replicated fields have an [experimental implementation](LuaNetworking.md). Ordinary overrides and declared RPC registration are different paths; one branch of IsOverridable cannot establish the entire network feature set. Conditions, int64, schemas and packaged acceptance remain open.
+Declared RPCs and replicated fields have an [experimental implementation](LuaNetworking.md). Ordinary overrides and declared RPC registration are different paths. Conditions, int64, schemas and packaged builds require separate validation.
 
-Binding a non-Blueprint UObject does not establish independent modules on same-class instances. UnLuaNovaManager::Classes remains keyed by UClass; see BIND-01 in the [roadmap](Benchmark_Review.md).
+Binding a non-Blueprint UObject does not provide independent modules for separate instances of the same class; `UnLuaNovaManager::Classes` is keyed by UClass.
 
 ## Further reading
 

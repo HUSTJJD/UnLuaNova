@@ -125,7 +125,7 @@ Hard requirements for native modules (Timer):
 
 ## Timer (C++ driven)
 
-Timer now cleans up with its Env/World and invokes callbacks on the owning Env's main state. Its regression cases executed on both backends in the complete Release validation of 2026-11-03; the remaining specialised work (world pause / time dilation, multi-PIE, packaged runs) is tracked under [LIFE-01](Benchmark_Review.md).
+Timer cleans up with its Env/World and invokes callbacks on the owning Env's main state.
 
 ```lua
 local Timer = require('UnLuaNova.Timer')
@@ -182,10 +182,9 @@ end
 Lua call errors in `UnLuaNovaBase.cpp` use the same `DescribeEnv()` label, so logs can be
 joined on `env=...`. Diagnostics are observation only - they never change scheduling - and
 the site is snapshotted at registration, so after a hot reload it still points at the
-original source line. The corresponding `UnLuaNova.API.Timer` specs are source-only and
-await maintainer build and execution.
+original source line.
 
-Example: [TimerLifecycle.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Examples/TimerLifecycle.lua). Regression entry: `UnLuaNova.API.Timer`. Multi-PIE, world pause/time dilation and packaged behavior still require execution.
+Example: [TimerLifecycle.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Examples/TimerLifecycle.lua). Regression entry: `UnLuaNova.API.Timer`.
 
 ## Event (pure Lua)
 

@@ -5,7 +5,7 @@ description: "C++ API, Lua API and build-time macros of UnLuaNova"
 
 # UnLuaNova API
 
-API existence does not establish backend equivalence or platform acceptance. See the [capability matrix](../feature-matrix.md), [Luau boundaries](Luau.md) and [experimental networking](LuaNetworking.md).
+For backend-specific behaviour, see [Luau boundaries](Luau.md) and [experimental networking](LuaNetworking.md).
 
 ## C++ API
 

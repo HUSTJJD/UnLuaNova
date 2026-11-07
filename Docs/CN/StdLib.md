@@ -104,7 +104,7 @@ native 模块（Timer）的硬要求：
 
 ## Timer（C++ 驱动）
 
-Timer 已接入 Env/World 销毁清理，回调统一在所属 Env 的主状态执行。相关回归用例已在 2026-11-03 的完整 Release 验证中双后端执行通过；剩余专项（世界暂停 / 时间膨胀、多 PIE、打包运行）见 [LIFE-01](Benchmark_Review.md)。
+Timer 已接入 Env/World 销毁清理，回调统一在所属 Env 的主状态执行。
 
 ```lua
 local Timer = require('UnLuaNova.Timer')
@@ -159,9 +159,9 @@ end
 
 这与 `UnLuaNovaBase.cpp` 的 Lua 调用错误日志共用 `DescribeEnv()` 标签，所以日志里可以直接
 按 `env=...` 串起来。诊断是**观察**，不改变调度；注册点在注册时快照，热重载后仍指向当时的
-源码行。对应自动化用例在 `UnLuaNova.API.Timer`；当时（第六轮源码补齐时）尚未编译或执行，现已随 2026-11-07 完整 Release 执行。
+源码行。
 
-可执行示例：[TimerLifecycle.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Examples/TimerLifecycle.lua)。回归入口：`UnLuaNova.API.Timer`；多 PIE、世界暂停/时间膨胀和打包行为仍需维护者实际验收。
+可执行示例：[TimerLifecycle.lua](https://github.com/HUSTJJD/UnLuaNova/blob/master/Content/Script/Examples/TimerLifecycle.lua)。多 PIE、世界暂停/时间膨胀和打包行为需单独验收。
 
 ## Event（纯 Lua）
 

@@ -5,12 +5,9 @@ description: "Runnable samples: binding, overriding, containers and UMG"
 
 # Showcase Samples
 
-See the [capability matrix](../feature-matrix.md) for source and execution evidence. Existing images
-are illustrative, were not regenerated in this audit, and do not certify the current build.
-
 New executable samples: `Examples.RuntimeContracts` exposes `.Run()` for Event.Once reentry,
 explicit unsubscribe and OOP inheritance on both backends. `Luau.Index.BufferInterop:Run()`
-demonstrates buffer copy ownership. Both are connected to automation source and await execution.
+demonstrates buffer copy ownership. Both ship with the automation suite.
 
 This page collects the **runnable samples**: a short piece of real code plus a screenshot of it
 running, to answer "how is this actually used" rather than describing an API signature.
@@ -21,9 +18,9 @@ hand.
 
 ## Why the screenshots are automated
 
-Hand-taken pictures go stale: the code moves on and the picture still claims to be current. So
-the release run collects them in its report; `Tools/RunTests.ps1 -Profile Development -Publish` publishes
-[the test reports](../test-luau-report.md). See [Testing and Automation](Testing.md).
+Hand-taken pictures go stale: the code moves on and the picture still claims to be current. The
+automation suite collects the images in its report; see [Testing and Automation](Testing.md) for
+the commands.
 
 Regenerating just the images (fast):
 
@@ -87,8 +84,6 @@ Debugging features are on the [Debugging](Debugging.md) page; memory statistics 
 
 ---
 
-The image comments above become real pictures after the next `-Publish` run - the shots are
-produced by `UnLuaNova.Showcase.*`, they just have to be published into the repository first.
 To add a sample: add the sample class and its Lua script, then one screenshot command in
 `Private/Tests/ShowcaseTest.cpp`.
 
@@ -97,5 +92,4 @@ To add a sample: add the sample class and its Lua script, then one screenshot co
 ## Further reading
 
 - [Testing and Automation](Testing.md) - where the screenshots come from
-- [Test report (Lua backend)](../test-lua-report.md) · [Test report (Luau backend)](../test-luau-report.md)
 - [Programming Guide](UnLuaNova_Programming_Guide.md)

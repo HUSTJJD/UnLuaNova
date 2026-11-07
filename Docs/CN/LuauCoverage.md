@@ -10,7 +10,7 @@ fail-closed 门禁重算分母。它不是"测试覆盖率达到某个百分比"
 |---|---|
 | Luau `lua_getcoverage` 读出的**每个可插桩行**命中次数 | 源码行覆盖率报告（没有源码文本映射） |
 | 按可达的全局表 / `package.loaded` 路径命名的 per-source 数据 | 分支覆盖率、函数参数覆盖、C++ 代码覆盖 |
-| 一份可以合并多轮运行、可被门禁重算的原始数据 | 执行证据；`verification` 仍是 `pending-runtime` |
+| 一份可以合并多轮运行、可被门禁重算的原始数据 | 执行证据 |
 | Luau 后端专用 | 纯 Lua 后端能力（该后端没有 counters，命令会明确报不支持） |
 
 C 闭包没有 Proto，也没有计数器，导出时跳过；遍历深度上限 8，并用访问过的表指针集合防环。
@@ -83,16 +83,8 @@ python Tools/ValidateCoverage.py `
 - `hit_lines / instrumented_lines` 低于 `--min-coverage` 时失败；
 - 把判定写成 `coverage-gate.json`（`passed` / `errors` / 分母 / 命中数 / 覆盖率），并以退出码 1 结束失败。
 
-`--backend Lua` 会被直接拒绝：纯 Lua 后端根本没有 `lua_getcoverage`，让它"通过"等于伪造证据。
-回归用例在 `Tools/tests/test_validate_coverage.py`（15 项，不启动 UE），随
+`--backend Lua` 会被直接拒绝：纯 Lua 后端没有 `lua_getcoverage`，覆盖率导出只适用于 Luau 后端。
+门禁自身的单元测试在 `Tools/tests/test_validate_coverage.py`（15 项，不启动 UE），随
 `python -B -m unittest discover -s Tools/tests -p "test_*.py"` 一起跑。
 
-## 与 Release 的关系
-
-`lua.coverage` 是 opt-in 的诊断能力，**不属于 33 个 Release 阶段**：覆盖哪批脚本、要哪个阈值、
-排除哪些生成代码，是每个工程自己的策略。要把它变成发布证据，需要在真实运行里设好
-`luau.coverage`、跑一遍目标脚本、`lua.coverage dump`，再用 `ValidateCoverage.py` 判定并把
-JSON 与 gate 一起归档；能力矩阵里的状态只描述源码交付，`verification` 仍由证据库决定。
-
-相关：[Luau 后端](Luau.md) · [控制台命令](ConsoleCommand.md) · [能力矩阵](../feature-matrix.md) ·
-[测试架构](Testing_Architecture.md)
+相关：[Luau 后端](Luau.md) · [控制台命令](ConsoleCommand.md) · [测试架构](Testing_Architecture.md)

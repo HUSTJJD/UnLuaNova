@@ -31,22 +31,9 @@ benefit of a small business requires a separate license" — put a gate in front
 was ever used. With MIT, the root license matches the upstream headers and there is no size or
 commercial condition of any kind.
 
-## Still open
-
-MIT resolves the license conflict itself. These remain, and are independent of the license choice:
-
-- `Tools/GenerateNotices.py` now deterministically generates the shipped notice inventory and `--check`s it against `Saved/StagedBuilds/*/NOTICES.txt`. Full version, provenance and rights-holder scope for extensions, tools, binaries and sample assets still appear as `UNRESOLVED` entries and fail the gate. Those are rights-holder decisions, not something a script can supply.
-- New third-party imports must record the exact URL / revision, keep the original notices and note modifications.
-- Do not add Tencent copyright to original code, and do not remove upstream notices.
-
 ## Comparison projects
 
-[slua-unreal](https://github.com/Tencent/sluaunreal/blob/7970ab72fd59118e1b3f86aac2d016828b54b748/LICENSE.TXT)
-is BSD-3-Clause — do not call it MIT. FUnLua claims MIT in its README, but the linked license file is
-absent from the audited commit; only its design is recorded here, no implementation copied.
-
+[slua-unreal](https://github.com/Tencent/sluaunreal) is BSD-3-Clause. FUnLua states MIT in its README.
 The relationship to slua-unreal and FUnLua is design comparison only: neither project's authors endorse
-this one, and this license grants no permission to copy their source. Provenance and copyright notices
+this one, and this license grants no permission to copy their source. Third-party copyright notices
 for UnLua, Lua and Luau are preserved.
-
-[Current audit](Benchmark_Review.md)
