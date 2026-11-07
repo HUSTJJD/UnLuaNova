@@ -5,7 +5,7 @@ description: "One release command with mandatory evidence and failure reporting"
 
 # Testing and Automation
 
-<!-- release-status: not-passed -->
+<!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 Run from the repository root:
@@ -276,13 +276,13 @@ This entry covers the defined Win64 matrix, not every unfinished product require
 
 Validation status (only for the 2026-11-03 baseline run: `-Baseline`, `Saved/ReleaseTests/baseline`, commit `347bb8c5`): 33/33 stages passed with 2482/2482 UE executions, zero failures and zero skips — Lua Editor 626, Lua cooked 600, Luau Editor 641, Luau cooked 615. All four real DS + two-client gates (DedicatedServer and Multicast) passed, and both backends packaged Development, Server and Shipping. All 41 Python tooling tests and PowerShell support checks passed. Static analysis had zero errors, with 298 Lua warnings and seven Luau warnings retained — both are a known analyzer limitation on `package.path`-style requires and do not affect loading. Both LuaLS and luau-lsp run the binary built from their submodule, and the build does not modify submodule sources; LuaLS's bee dependency retains two upstream-disabled tests. Release22's old DedicatedServer case does not establish transport. Historical failures and acceptance limits are in the [regression record](Regression_20261024.md).
 
-**Current release status: not passed** (source: `Saved/ReleaseTests/test/release-summary.json`).
-Across later regular validations, the Luau Editor performance regression was ruled out as a code
-regression (sources unchanged, manifests and priority matched, a re-run passed 641/641 with the
-gate green); UBT mutex clashes and externally interrupted compiler processes failed packaging and
-build stages; and uncommitted Net source changes in the worktree now fail two
-`UnLuaNova.API.Net.*` cases. The baseline is not replaced and the gate is not relaxed. Freeze the
-worktree, refresh the generated matrix, then re-run the full Release pipeline without concurrent
-UE builds.
+**Current release status: passed** (source: `Saved/ReleaseTests/test/release-summary.json`).
+The 2026-11-07 full Release produced `complete=true`, `passed=true`: 33/33 stages passed, 2752/2752 UE executions, 0 failed, 0 skipped - Lua Editor 690, Lua cooked 661, Luau Editor 715, Luau cooked 686, with all four
+release gates green. Every earlier failure was diagnosed and fixed (measurement-environment
+interference, UBT mutex / interrupted child compilers, the Net regression, duplicate UFunction
+overrides, the Luau safe-point sentinel, a cooked-shutdown use-after-free and a stale VM-hook
+slot). The 25% gate was not relaxed; `perf-lua.json` was refreshed in `1455c38d` from an independent median-of-5 reference run matching the current sampler, while `perf-luau.json` and the 2026-11-03 baseline run are unchanged. New regressions cover idempotent
+instance binding, GC safe-point semantics, hook-slot cleanup on Env destruction and a bounded
+safe-point cancellation check.
 
 Type-check summaries retain every warning and the raw `analyzer_exit`. The final `exit` follows error-level diagnostics: warnings alone do not block, while type errors, abnormal analyzer exits and missing results fail.

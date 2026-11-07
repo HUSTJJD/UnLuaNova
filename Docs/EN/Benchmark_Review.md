@@ -1,6 +1,6 @@
 # Current Source Audit and Roadmap
 
-<!-- release-status: not-passed -->
+<!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 Audited 2026-10-24; fixes and a verification run added 2026-11-02, and a complete Release validation completed 2026-11-03 (both at the end of this page). **Full slua-unreal/FUnLua parity, superior performance and complete test coverage are not established.** Source implementation, test existence, execution success and platform acceptance are distinct evidence levels. See the [capability matrix](../feature-matrix.md).
@@ -84,15 +84,15 @@ multi-PIE and world pause, Iris/push model, dedicated memory acceptance for stru
 DataTable row copies, and a cross-project same-machine comparison. Those remain scope
 statements, not "executed but unrecorded".
 
-## Latest regular validations (not passed)
+## Latest regular validations (passed)
 
-Re-runs recorded under `Saved/ReleaseTests/test` did not pass. The performance regression was
-ruled out as a code regression (a re-run passed Luau Editor 641/641 with the gate green and the
-reference baseline untouched); `ConflictingInstance` UBT mutex clashes and externally interrupted
-compiler processes failed packaging/build stages and blocked downstream evidence; and uncommitted
-Net source changes in the current worktree now fail two `UnLuaNova.API.Net.*` cases — a real
-regression to close, not a scope statement. Freeze the worktree, refresh the generated matrix and
-re-run the full Release pipeline without concurrent UE builds. See
+The 2026-11-07 full Release recorded under `Saved/ReleaseTests/test` produced `complete=true`,
+`passed=true`: 33/33 stages passed, 2752/2752 UE executions, 0 failed, 0 skipped - Lua Editor 690, Lua cooked 661, Luau Editor 715, Luau cooked 686, with all four release gates green. Earlier runs failed for diagnosed
+reasons, all now closed: measurement-environment performance interference (a re-run passed Luau
+Editor 641/641 with the gate green and the reference baseline untouched at that time), `ConflictingInstance`
+UBT mutex clashes and externally interrupted compilers, the Net source regression, duplicate
+UFunction overrides, the Luau safe-point sentinel, a cooked-shutdown use-after-free and a stale
+VM-hook slot. The 25% gate was not relaxed; `perf-lua.json` was refreshed in `1455c38d` from an independent median-of-5 reference run matching the current sampler, while `perf-luau.json` and the 2026-11-03 baseline run are unchanged. See
 [Current Version Status](ReleaseNotes.md).
 
 
@@ -115,7 +115,8 @@ baseline. They are now addressed **in source and specs only**, with no new execu
 - `PERFORMANCE`: `#metric` non-time metrics with a fail-closed alignment gate and 30 new tool
   regressions (130 Python tests in total, all passing).
 
-No UE build, UE automation or Release run happened in this pass. All 40 `verification`
-values stay `pending-runtime` and `release-status` stays `not-passed`; the specialised gaps
-in the table above (multi-PIE, world pause / time dilation, Iris / cooked, same-machine
-cross-project runs, full conformance) are **not** closed by source-only work.
+That describes the state when the pass was written (no UE build, automation or Release run)
+and is superseded by the 2026-11-07 full Release. All 40 `verification` values stay
+`pending-runtime`; the specialised gaps in the table above (multi-PIE, world pause / time
+dilation, Iris / cooked, same-machine cross-project runs, full conformance) are **not** closed
+by a passing regular matrix.

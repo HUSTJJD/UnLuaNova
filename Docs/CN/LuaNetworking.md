@@ -142,7 +142,8 @@ API.Net、ClientServer、Multicast 的历史诊断见 `FullFix-Complete-11`；�
 每格都会起三个真实进程，因此它不进普通测试矩阵，也不进常规 Release 阶段。
 
 **源码层面已无待实现项**。剩下的全部是执行：八类场景与四个变体一个都没跑过；
-`release-status` 仍是 `not-passed`，`NET-*` 仍是 `experimental`，`verification` 未手改。
+`release-status` 已由完整 Release 改为 `passed`，但 `NET-*` 仍是 `experimental`，
+`verification` 未手改；常规矩阵通过不等于下面的联机验收完成。
 seamless travel（`ServerTravel` / `TravelType`）本身不在实现范围内——这里交付的是
 `UNetConnection` 级关闭 + 进程内重连，两者是不同的引擎路径，文档不把它们混为一谈。
 
@@ -163,8 +164,9 @@ seamless travel（`ServerTravel` / `TravelType`）本身不在实现范围内—
    peer 报告、非空日志、与拓扑一致的 PID、一致且可区分的声明指纹、Generic 字段 / UStruct 参数与
    非零连接字节计数；变体还要有从 cvar 读回的真实 Iris / push-model 状态，Cooked 还要有 staged 二进制路径
    与 `WITH_EDITOR` 编译期标志。
-5. `release-status` marker 由该轮 Release 结果更新。**当前是 `not-passed`**（Luau Editor 性能门禁
-   超 25%），只能由一次真实通过的 Release 运行改写，不能靠编辑文档。
+5. `release-status` marker 已由一次真实通过的完整 Release 运行更新为 `passed`。
+   这只说明常规 Release 矩阵通过；第 4 项的八场景 / 四变体联机验收仍未执行，
+   不能据此把 `NET-*` 升为 `partial`。
 
 在 1–5 完成前，README 里的网络能力必须保留"（实验）"标签与硬边界。`status` 保持 `experimental`
 不是遗漏，而是"源码已交付、执行未验收"的如实标注。

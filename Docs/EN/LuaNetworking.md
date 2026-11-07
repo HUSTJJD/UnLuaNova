@@ -84,7 +84,8 @@ Development diagnostics support `-UnLuaNovaNetFault=SkipServerRpc|SkipClientRpc|
 
 **All of the above need a rebuild and real DS runs to become evidence - source existing is not a test passing.** The entry point is `Tools/RunTests.ps1 -Profile Development -NetMatrix` (backed by `Tools/RunNetMatrix.ps1`). Every cell launches three real processes, so it is not part of the ordinary test matrix or the normal Release stages.
 
-**There is no remaining source-level TODO.** What remains is execution only: none of the eight scenarios or four variants has been run; `release-status` is still `not-passed`, `NET-*` is still `experimental`, and `verification` was not hand-edited. Engine-level seamless travel (`ServerTravel` / `TravelType`) is deliberately out of scope: what is delivered here is a `UNetConnection` close plus an in-process reopen, a different engine path, and the documentation does not conflate the two.
+**There is no remaining source-level TODO.** What remains is execution only: none of the eight scenarios or four variants has been run; `release-status` is now `passed` after a full Release run, but `NET-*` is still `experimental` and
+`verification` was not hand-edited; a green regular matrix is not the connected acceptance below. Engine-level seamless travel (`ServerTravel` / `TravelType`) is deliberately out of scope: what is delivered here is a `UNetConnection` close plus an in-process reopen, a different engine path, and the documentation does not conflate the two.
 
 ## When the "experimental" label can come off
 
@@ -101,9 +102,9 @@ it is **bought with evidence, not with words**. Moving to `partial` requires all
 3. Record that run's Editor / Game automation reports into `Tools/evidence/` with
    `RecordEvidence.py --commit <that run's commit>`; the records must not be `historical`.
 4. `ValidateRelease.py --net-matrix` fully green: eight scenario topologies and four variant topologies, each with three real peer reports, non-empty logs, PIDs matching topology, agreeing and discriminating declaration fingerprints, a Generic field / UStruct parameter and non-zero connection byte counters. Variants additionally need Iris / push-model state read back from cvars, and Cooked needs a staged binary path plus the `WITH_EDITOR`-derived flag.
-5. The `release-status` marker is updated from that Release result. It is **currently
-   `not-passed`** (Luau Editor performance exceeded the 25% gate) and can only be changed by a
-   genuinely passing Release run, never by editing documentation.
+5. The `release-status` marker was updated to `passed` by a genuinely passing full Release
+   run. That only covers the regular matrix: item 4 (eight scenarios / four variants) still
+   has no execution evidence, so `NET-*` cannot be promoted to `partial`.
 
 Until 1-5 are done, the README must keep the "(experimental)" label and the hard limits. Keeping
 `status` at `experimental` is not an omission - it states accurately that source is delivered but

@@ -1,13 +1,33 @@
 # Changelog
 
-<!-- release-status: not-passed -->
+<!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 Entries follow the acceptance runs recorded under `Saved/ReleaseTests/` and the
 [capability matrix](Docs/feature-matrix.md). Historical detail lives in Git; current scope and
 outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
 
-## Unreleased — source changes, not yet validated
+## 2026-11-07 — full Release run, passed
+
+`.\Tools\RunTests.ps1` completed with `complete=true`, `passed=true`: 33/33 stages passed, 2752/2752 UE executions, 0 failed, 0 skipped - Lua Editor 690, Lua cooked 661, Luau Editor 715, Luau cooked 686,
+four green release gates. The 2026-11-03 baseline run was not replaced; `perf-lua.json` was refreshed
+in `1455c38d` from an independent median-of-5 reference run, and the generated capability matrix was refreshed.
+
+Runtime fixes that this run actually executed: idempotent UFunction overrides (a second
+`BindInstance` on a class-level bound UFunction used to stack a thunk and assert in
+`ULuaFunction::Override`); a backend-correct GC-interrupt sentinel so Luau VM safe points
+(`-1`) are no longer discarded by cancellation listeners; VM hook slot cleanup in
+`~FLuaEnv()` before `lua_close()` so a recycled `lua_State*` cannot inherit a stale
+per-safe-point callback; `FLuaVmHooks::Get()` is now an exported out-of-line singleton
+so every module shares one hook table (an inline static used to give each DLL its own);
+and a guard in `UUnLuaNovaManager::Cleanup()` that skips
+`luaL_unref` on an already closed state. New regressions cover these paths. Three earlier
+spec failures (an unterminated adjacent Lua literal, undeclared expected cyclic-dependency
+errors) and hardened-PowerShell `Remove-Item` calls were fixed as well. The sections below
+that say `not-passed` describe earlier source-only passes at the time they were written;
+they are historical, not the current status.
+
+## Unreleased — earlier source-only passes (superseded by the run above)
 
 - **Fix: declare `DefaultEditorTarget` for the multi-target project (found by a real
   Release run).** Adding `UnLuaNovaDemo{Lua,Luau}Editor.Target.cs` leaves three Editor
@@ -288,16 +308,14 @@ outstanding work are maintained in the [audit](Docs/CN/Benchmark_Review.md).
   than silently claimed. `release-status` stays `not-passed` and the three Networking capability
   groups stay `experimental`; see the [acceptance checklist](Docs/CN/LuaNetworking.md).
 
-## Current release status: not passed
+## Current release status: passed
 
-Current status follows `Saved/ReleaseTests/test/release-summary.json`. Later validations did not
-pass for three diagnosed reasons: a Luau Editor performance regression that was reproduced as
-measurement-environment interference (a later re-run passed 641/641 with the gate green, with the
-committed baseline untouched); `ConflictingInstance` UBT mutex clashes and externally interrupted
-compiler processes that failed packaging/build stages; and uncommitted Net source changes in the
-current worktree that fail two `UnLuaNova.API.Net.*` cases. The baseline is not replaced and the
-25% gate is not relaxed. Release stays blocked until the worktree is frozen, the generated matrix
-is refreshed and a full Release run completes 33/33 with four green release gates.
+Current status follows `Saved/ReleaseTests/test/release-summary.json`: 2026-11-07 full Release,
+`complete=true`, `passed=true`, 33/33 stages passed, 2752/2752 UE executions, 0 failed, 0 skipped - Lua Editor 690, Lua cooked 661, Luau Editor 715, Luau cooked 686, four green release gates. Earlier failures
+(measurement-environment performance interference, `ConflictingInstance` UBT mutex clashes,
+interrupted child compilers, the Net regression and the runtime defects listed above) were
+diagnosed and fixed. The 2026-11-03 baseline run is unchanged and the 25% gate is not relaxed; `perf-lua.json`
+was refreshed in `1455c38d` from an independent median-of-5 reference run.
 
 ## 2026-11-03 — baseline run, validated
 

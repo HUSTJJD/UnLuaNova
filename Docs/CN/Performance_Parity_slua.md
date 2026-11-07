@@ -1,6 +1,6 @@
 # 性能验收
 
-<!-- release-status: not-passed -->
+<!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 尚未建立"比 slua-unreal / FUnLua 更快"的同条件实测。上游 README 的倍数、不同机器的截图、
@@ -51,9 +51,9 @@
 
 某一轮 Luau Editor 有 5 项超过 25% 门禁（+43.8%~+55.8%）；与基线轮相比产品源码、
 运行清单与进程优先级均未变化，后续重跑 Luau Editor 641/641 且性能门禁通过，
-因此这是测量环境干扰，不是代码回归。**已提交基线未被替换，25% 门禁未被放宽。**
-当前发布状态仍为未通过（UBT 编译进程被外部中断、工作树 Net 改动导致用例失败），
-见[版本说明](ReleaseNotes.md)。
+因此这是测量环境干扰，不是代码回归。**当时已提交基线未被替换，25% 门禁也未被放宽；`perf-lua.json` 后续已在 `1455c38d` 用 median-of-5 独立参考运行刷新。**
+当前发布状态已随 2026-11-07 的完整 Release 改为通过（`complete=true`、`passed=true`，
+四个 release gate 全绿），见[版本说明](ReleaseNotes.md)。
 
 ## 当前测试工具
 

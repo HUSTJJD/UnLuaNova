@@ -158,7 +158,8 @@ RPC 的 `UFunction` 本来就是运行时构造的，可以直接挂 `FStructPro
 > 上述都用 `Tools/RunNetMatrix.ps1` 跑真实 DS 才算数；存在源码不等于测试通过。
 > 源码层面已无待实现项；剩下的唯一工作是执行。引擎级 seamless travel（`ServerTravel`）不在范围内，
 > 这里交付的是 `UNetConnection` 关闭 + 同进程重连，两者是不同路径。
-> `release-status` 仍是 `not-passed`，只能由一次真实通过的 Release 改写。
+> `release-status` 已由一次真实通过的完整 Release 改写为 `passed`；但网络八场景 / 四变体
+> 的联机验收仍未执行，`NET-*` 保持 `experimental`。
 > 逐项状态见 [能力矩阵](Docs/feature-matrix.md)，用法见 [Lua 声明式网络（实验）](Docs/CN/LuaNetworking.md)。
 
 ---
@@ -280,15 +281,16 @@ python Tools/AuditRepository.py      # 不编译的仓库一致性检查
 
 ## 🧪 验证状态
 
-<!-- release-status: not-passed -->
+<!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 这个项目把"能跑"和"验证过"分开写。**源码存在、用例存在、执行通过、目标平台验收是四种不同证据。**
 
-**当前发布状态：未通过**（以 `Saved/ReleaseTests/test/release-summary.json` 为准）：
-性能回退已排除为代码回归（重跑 Luau Editor 641/641 且门禁通过），UBT 全局锁冲突 / 编译进程
-被外部中断曾使打包与构建阶段失败，当前工作树未提交的 Net 源码改动使 2 个
-`UnLuaNova.API.Net.*` 用例失败。基线不替换、门禁不放宽；需冻结工作树后重跑完整 Release。
+**当前发布状态：通过**（以 `Saved/ReleaseTests/test/release-summary.json` 为准）。
+2026-11-07 的完整 `.\Tools\RunTests.ps1` 产出 `complete=true`、`passed=true`：33/33 阶段通过、2752/2752 次 UE 执行、0 失败、0 跳过 —— Lua Editor 690、Lua cooked 661、Luau Editor 715、Luau cooked 686，
+四个 release gate 全绿。此前多轮失败已逐项定位并修复（性能测量环境干扰、UBT 锁与编译子进程
+被外部中断、Net 回归、UFunction 重复覆写、Luau 安全点哨兵、cooked 卸载 use-after-free、
+VM hook 槽位残留）；25% 门禁未放宽；`perf-lua.json` 参考基线已在 `1455c38d` 换用 median-of-5 独立参考运行（与当前采样法一致），`perf-luau.json` 与 2026-11-03 基线轮记录未改动。
 见[版本说明](Docs/CN/ReleaseNotes.md)。
 
 ### 基线轮（`.\Tools\RunTests.ps1 -Baseline`，2026-11-03，commit `347bb8c5`，UE 5.8.3 源码引擎 / Win64 / Visual Studio 2026 18.10）

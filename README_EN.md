@@ -174,8 +174,9 @@ Object bucket because a text payload cannot carry a NetGUID.
 > All of them require real DS runs through `Tools/RunNetMatrix.ps1`; source existing is not a
 > test passing. There is no remaining source-level TODO - execution is the only outstanding
 > work. Engine-level seamless travel (`ServerTravel`) is out of scope: what is delivered is a
-> `UNetConnection` close plus an in-process reopen, a different path. `release-status` is still
-> `not-passed` and can only change through a genuinely passing Release run. See the
+> `UNetConnection` close plus an in-process reopen, a different path. `release-status` is now
+> `passed` after a genuinely passing full Release run; the eight scenarios and four variants
+> still have no execution evidence, so `NET-*` remains `experimental`. See the
 > [capability matrix](Docs/feature-matrix.md) and
 > [Lua-declared networking (experimental)](Docs/EN/LuaNetworking.md).
 
@@ -302,18 +303,19 @@ python Tools/AuditRepository.py      # repository consistency, no compile
 
 ## 🧪 Verification status
 
-<!-- release-status: not-passed -->
+<!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 This project separates "it runs" from "it has been verified". **Source existing, tests existing, tests passing, and target-platform acceptance are four different pieces of evidence.**
 
-**Current release status: not passed** (source: `Saved/ReleaseTests/test/release-summary.json`).
-The performance regression was reproduced as measurement-environment interference (a re-run passed
-641/641 with the gate green); UBT mutex clashes and externally interrupted compiler processes
-failed packaging/build stages; and uncommitted Net source changes in the worktree now fail two
-`UnLuaNova.API.Net.*` cases. The baseline is not replaced and the gate is not relaxed; freeze the
-worktree and re-run the full Release pipeline. See
-[Current Version Status](Docs/EN/ReleaseNotes.md).
+**Current release status: passed** (source: `Saved/ReleaseTests/test/release-summary.json`).
+The 2026-11-07 full `.\Tools\RunTests.ps1` produced `complete=true`, `passed=true`: 33/33 stages passed, 2752/2752 UE executions, 0 failed, 0 skipped - Lua Editor 690, Lua cooked 661, Luau Editor 715, Luau cooked 686,
+with all four release gates green. Every earlier failure was diagnosed and fixed (measurement-
+environment interference, UBT mutex / interrupted child compilers, the Net regression,
+duplicate UFunction overrides, the Luau safe-point sentinel, a cooked-shutdown use-after-free
+and a stale VM-hook slot). The 25% gate was not relaxed; `perf-lua.json` was refreshed in `1455c38d` from an
+independent median-of-5 reference run matching the current sampler, while `perf-luau.json`
+and the 2026-11-03 baseline run are unchanged. See [Current Version Status](Docs/EN/ReleaseNotes.md).
 
 ### Baseline run (`.\Tools\RunTests.ps1 -Baseline`, 2026-11-03, commit `347bb8c5`, UE 5.8.3 source build / Win64 / Visual Studio 2026 18.10)
 

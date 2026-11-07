@@ -1,6 +1,6 @@
 # Performance Acceptance
 
-<!-- release-status: not-passed -->
+<!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 No controlled measurement establishes that UnLuaNova is faster than slua-unreal or FUnLua.
@@ -39,9 +39,10 @@ Lua 5.5.1 is faster on `VM.TableGrow` — recorded as measured, not cherry-picke
 One re-run failed the gate on five Luau Editor cases (+43.8% to +55.8%). Product sources,
 manifests and process priorities were unchanged from the validated baseline run, and a later re-run
 passed Luau Editor 641/641 with the performance gate green, so this was measurement-environment
-interference, not a code regression. The committed baseline was **not** replaced and the 25% gate
-was **not** relaxed. Current release status is still not passed (externally interrupted UBT
-compilers and uncommitted Net changes failing cases); see the
+interference, not a code regression. At that time the committed baseline was **not** replaced and the 25% gate
+was **not** relaxed; `perf-lua.json` has since been refreshed in `1455c38d` from an
+independent median-of-5 reference run. Current release status is now passed after the 2026-11-07 full Release
+(`complete=true`, `passed=true`, four green release gates); see the
 [current version status](ReleaseNotes.md).
 
 ## Implemented paths

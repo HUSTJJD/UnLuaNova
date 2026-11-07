@@ -1,20 +1,25 @@
 # 当前版本状态
 
-<!-- release-status: not-passed -->
+<!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 本页只记录**已经跑出来的结论**，不叠加已过期的状态。能力与未尽工作逐项见
 [审计与路线图](Benchmark_Review.md) 与 [能力矩阵](../feature-matrix.md)，历史细节从 Git 获取。
 
-## 当前发布状态：未通过
+## 当前发布状态：通过
 
-当前状态以 `Saved/ReleaseTests/test/release-summary.json` 为准；下面 33/33 的已验证结论只属于
-2026-11-03 基线轮。之后的多轮常规验证未通过，原因分三类，均已定位，不含"放宽门禁"：
+当前状态以 `Saved/ReleaseTests/test/release-summary.json` 为准：2026-11-07 的完整
+`.\Tools\RunTests.ps1` 产出 `complete=true`、`passed=true`，33/33 阶段通过、2752/2752 次 UE 执行、0 失败、0 跳过 —— Lua Editor 690、Lua cooked 661、Luau Editor 715、Luau cooked 686，四个 release gate 全绿。
+下面 33/33 与 2482/2482 的旧结论只属于 2026-11-03 基线轮。
+
+### 已关闭的历史失败（不是放宽门禁）
+
+此前多轮常规验证未通过，原因均已逐项定位并修复；最新一轮之后不再是当前状态：
 
 1. **性能回退已排除为代码回归**：首次重跑的 Luau Editor 有 5 项超过 25% 门禁
    （+43.8%~+55.8%），但两轮之间产品源码（C++ / Lua / ini）零改动，运行清单、后端开关与
    进程优先级一致，5 组采样稳定；后续重跑中 Luau Editor 641/641 全过且性能门禁通过，
-   属测量环境干扰。参考基线未替换。
+   属测量环境干扰；当时参考基线未替换（后续 `1455c38d` 已用 median-of-5 独立参考运行刷新 `perf-lua.json`）。
 2. **本机 UBT 编译进程被外部中断**：`ConflictingInstance`（全局互斥锁被孤儿 UBA/UBT 进程占用）
    与编译子进程 `Exit -1` 曾使 `Lua-package-development`、`Lua-server-build`、
    `Luau-package-development` 等阶段失败，并连锁阻塞测试与证据阶段。清理孤儿进程后这些阶段
@@ -28,10 +33,12 @@
    35 成功 / 3 带警告 / 0 失败（`Saved/TestReports/20261103-234556/luau/index.json`）。
    **这不是完整 Release**：33 个阶段、四种载体与四个 release gate 仍需在无并发构建的机器上重跑。
 
-**发布仍被阻断**：原因是还没有一次完整 `.\Tools\RunTests.ps1` 的通过记录。需先冻结工作树
-（本轮改动同样要提交或回滚）、同步能力矩阵，再在无并发构建的环境跑完整流程，拿到
-`complete=true`、`passed=true`、33/33、四个 release gate 全绿，
-才能把本页状态改回通过。诊断明细与各轮归档在 `Saved/ReleaseTests/` 下。
+**本轮还关闭了多处运行时缺陷**：类级绑定后的 `BindInstance` 不再对同一 UFunction 二次打补丁；
+Luau 的 `lua_Callbacks::interrupt` 普通安全点（`GC = -1`）不再被当成 GC 中断跳过，
+safe-point 预算与超时看门狗都能真正取消死循环；`~FLuaEnv()` 在 `lua_close` 前清理 VM hook
+槽位并跳过已关闭状态上的 `luaL_unref`，消除 cooked 卸载崩溃与跨 Env 的 hook 残留；
+`FLuaVmHooks::Get()` 改为导出的进程级单例，避免每个 DLL 各持一份 hook 表。
+2026-11-07 的通过记录、阶段明细与归档在 `Saved/ReleaseTests/test/` 下；25% 门禁未放宽；`perf-lua.json` 参考基线已在 `1455c38d` 换用 median-of-5 独立参考运行（与当前采样法一致），`perf-luau.json` 与 2026-11-03 基线轮记录未改动。
 
 ## 2026-11-03 基线轮（已验证）
 

@@ -6,17 +6,17 @@
 
 ## 当前状态
 
-<!-- release-status: not-passed -->
+<!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 源码包含双后端、UE 绑定与覆写、容器与委托、静态导出与生成 thunk、调试与 Profiler、
 类型声明导出、运行时库和实验性声明式网络。许可是 **MIT**。
 
-**当前发布状态：未通过**（以 `Saved/ReleaseTests/test/release-summary.json` 为准）。
-33/33 的已验证结论只属于 2026-11-03 基线轮（commit `347bb8c5`）。后续重跑中性能回退已排除为
-代码回归（重跑 Luau Editor 641/641 且门禁通过）；UBT 全局锁冲突与编译进程被外部中断曾使打包 /
-构建阶段失败；当前工作树还有未提交的 Net 源码改动，使 2 个 `UnLuaNova.API.Net.*` 用例失败。
-基线不替换、门禁不放宽，发布前需冻结工作树并在无并发构建环境重跑完整 Release。
+**当前发布状态：通过**（以 `Saved/ReleaseTests/test/release-summary.json` 为准）。
+2026-11-07 完整 Release 产出 `complete=true`、`passed=true`：33/33 阶段通过、2752/2752 次 UE 执行、0 失败、0 跳过 —— Lua Editor 690、Lua cooked 661、Luau Editor 715、Luau cooked 686，四个 release gate 全绿。
+33/33 的旧结论只属于 2026-11-03 基线轮（commit `347bb8c5`）；此前多轮失败（性能测量环境干扰、
+UBT 锁 / 编译子进程被外部中断、Net 回归、UFunction 重复覆写、Luau 安全点哨兵、cooked 卸载
+use-after-free、VM hook 槽位残留）均已定位并修复，25% 门禁未放宽；`perf-lua.json` 参考基线已在 `1455c38d` 换用 median-of-5 独立参考运行（与当前采样法一致），`perf-luau.json` 与 2026-11-03 基线轮记录未改动。
 详见[版本说明](CN/ReleaseNotes.md)。
 
 **2026-11-03 基线轮完整 Release 验证通过**（`.\Tools\RunTests.ps1 -Baseline`、

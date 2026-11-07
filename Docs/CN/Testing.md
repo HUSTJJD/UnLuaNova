@@ -5,7 +5,7 @@ description: "单入口 release 验证、证据与失败判定"
 
 # 测试与自动化
 
-<!-- release-status: not-passed -->
+<!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 维护者只需在仓库根目录运行：
@@ -274,10 +274,11 @@ ini 覆盖）传到进程命令行，`FNetSession` 再把场景开关、丢包�
 
 验证状态（只对应 2026-11-03 基线轮：`-Baseline`、`Saved/ReleaseTests/baseline`、commit `347bb8c5`）：33/33 阶段通过、2482/2482 次 UE 执行、0 失败、0 跳过 —— Lua Editor 626、Lua cooked 600、Luau Editor 641、Luau cooked 615；四组真实 DS + 双客户端（DedicatedServer 与 Multicast）及证据门禁均通过，两个后端 Development / Server / Shipping 打包成功。41 项 Python 工具测试与 PowerShell 支持检查通过。静态检查零错误，保留 Lua 298 条、Luau 7 条警告（都是分析器对 `package.path` 式 require 的已知限制，不影响加载）。LuaLS 与 luau-lsp 都是直接用子模块构建出的可执行文件，构建过程不修改子模块源码；LuaLS 的 bee 依赖仍有两项上游固定跳过。Release22 的旧 DedicatedServer 不构成传输证据；历史失败与验收边界见下方回归记录。
 
-**当前发布状态：未通过**（以 `Saved/ReleaseTests/test/release-summary.json` 为准）。
-后续多轮常规验证中：Luau Editor 的性能回退已排除为代码回归（源码零改动、清单与优先级一致，
-重跑 641/641 且门禁通过）；UBT 全局锁冲突 / 编译进程被外部中断曾使打包与构建阶段失败；
-当前工作树未提交的 Net 源码改动使 2 个 `UnLuaNova.API.Net.*` 用例失败。基线不替换、
-门禁不放宽；发布前需冻结工作树、同步能力矩阵，并在无并发构建环境重跑完整 Release。
+**当前发布状态：通过**（以 `Saved/ReleaseTests/test/release-summary.json` 为准）。
+2026-11-07 完整 Release 产出 `complete=true`、`passed=true`：33/33 阶段通过、2752/2752 次 UE 执行、0 失败、0 跳过 —— Lua Editor 690、Lua cooked 661、Luau Editor 715、Luau cooked 686，四个 release gate 全绿。
+此前多轮失败的原因（性能测量环境干扰、UBT 锁 / 编译子进程被外部中断、Net 回归、
+UFunction 重复覆写、Luau 安全点哨兵、cooked 卸载 use-after-free、VM hook 槽位残留）
+均已定位并修复；25% 门禁未放宽；`perf-lua.json` 参考基线已在 `1455c38d` 换用 median-of-5 独立参考运行（与当前采样法一致），`perf-luau.json` 与 2026-11-03 基线轮记录未改动。新增的回归用例覆盖 UFunction 幂等绑定、
+GC 安全点哨兵语义、Env 销毁后的 hook 槽位清理，以及有界的 safe-point 取消。
 
 历史修复过程与诊断记录见 [2026-10-24 回归记录](Regression_20261024.md)。静态检查保留所有警告和分析器原始 `analyzer_exit`；最终 `exit` 依据错误级诊断判定。仅警告不阻断，类型错误、异常退出和缺少结果均失败。

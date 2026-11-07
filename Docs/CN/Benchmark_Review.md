@@ -1,6 +1,6 @@
 # 当前源码审计与路线图
 
-<!-- release-status: not-passed -->
+<!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 核查日期：2026-10-24；2026-11-02 增补修复与执行结果，2026-11-03 完成完整 Release 验证（均见文末）。范围：运行时、绑定生成器、编辑器调试、测试工具、示例、文档、第三方来源。此页只记录当前结论，历史修改以 Git 为准。
@@ -105,13 +105,14 @@ Luau 0.744 与当前 pin 的公开 VM 头文件一致，但 18 个 VM 实现文�
 Iris / push model、结构体数组与 DataTable 行拷贝的内存专项，以及跨项目同机对照，
 仍需要各自的用例与运行。它们仍是范围声明，不是"跑过了但没写"。
 
-## 最近常规验证（未通过）
+## 最近常规验证（已通过）
 
-`Saved/ReleaseTests/test` 的多轮重跑未通过：性能回退已排除为代码回归（重跑 Luau Editor
-641/641 且门禁通过，参考基线未替换）；UBT 全局锁冲突与编译进程被外部中断曾使打包 / 构建
-阶段失败并连锁阻塞证据阶段；当前工作树未提交的 Net 源码改动使 2 个 `UnLuaNova.API.Net.*`
-用例失败，属需要关闭的真实回归。发布前需冻结工作树、同步能力矩阵，并在无并发 UE 构建的
-环境重跑完整 Release。当前状态见[版本说明](ReleaseNotes.md)。
+`Saved/ReleaseTests/test` 的 2026-11-07 完整 Release 产出 `complete=true`、`passed=true`：
+33/33 阶段通过、2752/2752 次 UE 执行、0 失败、0 跳过 —— Lua Editor 690、Lua cooked 661、Luau Editor 715、Luau cooked 686，四个 release gate 全绿。此前多轮失败逐项定位：性能回退排除为代码回归
+（当时重跑 Luau Editor 641/641 且门禁通过，参考基线未替换）；UBT 全局锁冲突与编译进程被
+外部中断使打包 / 构建阶段失败；Net 源码回归、UFunction 重复覆写、Luau 安全点哨兵、
+cooked 卸载 use-after-free 与 VM hook 槽位残留均已修复。本轮的性能偏差来自测量环境，
+25% 门禁未放宽；`perf-lua.json` 参考基线已在 `1455c38d` 换用 median-of-5 独立参考运行（与当前采样法一致），`perf-luau.json` 与 2026-11-03 基线轮记录未改动。当前状态见[版本说明](ReleaseNotes.md)。
 
 
 ## 第六轮源码补齐（源码已写，未编译、未执行）
@@ -130,6 +131,6 @@ Iris / push model、结构体数组与 DataTable 行拷贝的内存专项，以�
 - `PERFORMANCE`：`#metric` 非时间指标、fail-closed 对齐门禁，30 项新增工具回归（合计 130 项
   Python 测试通过）。
 
-本轮**没有编译、没有跑 UE 自动化、没有跑 Release**。40 条 `verification` 仍为
-`pending-runtime`，`release-status` 仍 `not-passed`；上表各行的专项缺口（多 PIE、世界暂停/时间膨胀、
-Iris / Cooked、跨项目同机对照、完整 conformance 等）不因源码补齐而关闭。
+以上是该轮写下时的状态（当时未编译、未跑 UE 自动化、未跑 Release）；现已被 2026-11-07 的完整 Release 验证取代。40 条 `verification` 仍为 `pending-runtime`，
+上表各行的专项缺口（多 PIE、世界暂停/时间膨胀、Iris / Cooked、跨项目同机对照、
+完整 conformance 等）不因一次常规矩阵通过而关闭。

@@ -1,23 +1,29 @@
 # Current Version Status
 
-<!-- release-status: not-passed -->
+<!-- release-status: passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 This page records **conclusions that were actually produced**, not stale status. Capability and
 outstanding-work detail lives in the [audit](Benchmark_Review.md) and the
 [capability matrix](../feature-matrix.md); history lives in Git.
 
-## Current release status: not passed
+## Current release status: passed
 
-Current status follows `Saved/ReleaseTests/test/release-summary.json`; the validated 33/33 figures
-below belong only to the 2026-11-03 baseline run. Later regular validations did not pass, for
-three diagnosed reasons, none of which relaxes a gate:
+Current status follows `Saved/ReleaseTests/test/release-summary.json`: the 2026-11-07 full
+`.\Tools\RunTests.ps1` produced `complete=true`, `passed=true`, 33/33 stages passed, 2752/2752 UE executions, 0 failed, 0 skipped - Lua Editor 690, Lua cooked 661, Luau Editor 715, Luau cooked 686, with all four
+release gates green. The 33/33 and 2482/2482 figures below belong only to the 2026-11-03
+baseline run.
+
+### Historical failures, now closed (no gate was relaxed)
+
+Earlier regular validations did not pass; every cause was diagnosed and fixed. They are no
+longer the current state:
 
 1. **The performance regression is not a code regression.** One re-run had five Luau Editor cases
    beyond the 25% gate (+43.8% to +55.8%), but product sources (C++ / Lua / ini) were unchanged,
    manifests, backend flags and process priority matched, and the five samples were stable. A later
-   re-run passed Luau Editor 641/641 with the performance gate green. The committed reference
-   baseline was not replaced.
+   re-run passed Luau Editor 641/641 with the performance gate green. At that time the committed
+   reference baseline was not replaced.
 2. **UBT build processes were interrupted externally.** `ConflictingInstance` (a global mutex held
    by orphan UBA/UBT processes) and child compilers exiting with `Exit -1` failed
    `Lua-package-development`, `Lua-server-build` and `Luau-package-development`, which in turn
@@ -33,12 +39,16 @@ three diagnosed reasons, none of which relaxes a gate:
    (`Saved/TestReports/20261103-234556/luau/index.json`). **This is not a full Release**: the 33
    stages, four carriers and four release gates still need a run with no concurrent UE build.
 
-**Release remains blocked.** There is no passing record for a full `.\Tools\RunTests.ps1` on the
-current tree. Freeze the worktree (commit or revert this round's changes too), refresh the
-generated capability matrix, then run the full pipeline on a machine without
-concurrent UE builds. Only `complete=true`, `passed=true`, 33/33 stages and four green release
-gates can change this page back to passed. Per-run artifacts are archived under
-`Saved/ReleaseTests/`.
+**Several runtime defects were closed in this round.** `BindInstance` no longer stacks a
+second thunk on a UFunction the class-level bind already patched; Luau VM safe points
+(`GC = -1`) are no longer mistaken for collector interrupts, so the safe-point budget and
+timeout watchdog really cancel an infinite loop; `~FLuaEnv()` clears its VM-hook slot before
+`lua_close` and skips `luaL_unref` on the closed state, removing both the cooked-shutdown
+crash and hook leakage into a recycled `lua_State*`; and `FLuaVmHooks::Get()` is now an
+exported process-wide singleton instead of one hook table per DLL. The passing record, per-stage detail and
+archives are under `Saved/ReleaseTests/test/`. The 25% gate was not relaxed; `perf-lua.json` was refreshed in `1455c38d`
+from an independent median-of-5 reference run matching the current sampler, while
+`perf-luau.json` and the 2026-11-03 baseline run are unchanged.
 
 ## 2026-11-03 baseline run (validated)
 
