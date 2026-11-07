@@ -528,12 +528,20 @@ function Get-BuiltBackend {
     # 中间目录按目标名分层：编辑器目标是 UnrealEditor，游戏目标是 <Project> 或隔离 target 名。
     # 只接受当前目标的定义，不能借另一个目标的旧头文件通过后端校验。
     $Folders = if ($IsGameCarrier) { @($script:BackendIntermediateFolder) } else { @('UnrealEditor') }
-    foreach ($Folder in $Folders) {
-        $Rel = "Intermediate/Build/$Platform/x64/$Folder/$Configuration"
-        if ($script:BackendBuildSubFolder) { $Rel = "$Rel/$script:BackendBuildSubFolder" }
-        $Definitions = Join-Path $PluginRoot "$Rel/UnLuaNova/Definitions.UnLuaNova.h"
-        if (Test-Path $Definitions) { break }
-        $Definitions = $null
+    # A monolithic Game/Server target links every module into one executable, and UBT writes
+    # its Definitions header under the *project* Intermediate tree, not the plugin tree.
+    # Modular Editor builds keep it under the plugin tree; -BackendTargets adds Backends/<B>.
+    # The folder name still pins the header to this target, so an Editor build or another
+    # backend's header can never stand in for the one actually being tested.
+    $Definitions = $null
+    foreach ($Root in @($PluginRoot, $RepoRoot)) {
+        foreach ($Folder in $Folders) {
+            $Rel = "Intermediate/Build/$Platform/x64/$Folder/$Configuration"
+            if ($script:BackendBuildSubFolder) { $Rel = "$Rel/$script:BackendBuildSubFolder" }
+            $Candidate = Join-Path $Root "$Rel/UnLuaNova/Definitions.UnLuaNova.h"
+            if (Test-Path -LiteralPath $Candidate) { $Definitions = $Candidate; break }
+        }
+        if ($Definitions) { break }
     }
     if (-not $Definitions) { return $null }
 
@@ -555,7 +563,15 @@ function Assert-BackendBuilt {
     if ($script:BackendBuildSubFolder) { $DllRel = "$DllRel/$script:BackendBuildSubFolder" }
     $Dll = Join-Path $PluginRoot ("$DllRel/$DllPrefix-" + $Value + ".dll")
     if (-not (Test-Path $Dll)) {
-        throw "'$Dll' is missing - the $Value backend has never been built here. Drop -SkipBuild."
+        # UE monolithic Game/Server targets statically link every module into one .exe.
+        # Build.cs still prints a logical "<Target>-<Backend>.dll" while UBT evaluates the
+        # rules, but that file is never emitted. Require the executable in that case, so a
+        # build that never happened still fails closed; Get-BuiltBackend below pins which
+        # backend the target was actually compiled for.
+        $GameExe = Join-Path $RepoRoot "Binaries/$Platform/$($script:BackendGameExeName).exe"
+        if (-not $IsGameCarrier -or -not (Test-Path -LiteralPath $GameExe)) {
+            throw "'$Dll' is missing - the $Value backend has never been built here. Drop -SkipBuild."
+        }
     }
 
     $Built = Get-BuiltBackend
