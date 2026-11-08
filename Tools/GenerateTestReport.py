@@ -92,6 +92,16 @@ DURATION_DRIFT_RATIO = 0.5
 DRIFT_NAMES_SHOWN = 8
 
 
+def console_safe(text):
+    """Keep drift output readable on a non-UTF-8 Windows console.
+
+    Test names contain Chinese. Printing them as UTF-8 into a GBK console produced lines
+    like ``TArray寮曠敤...``, which made a real drift report useless. Files and JSON stay
+    UTF-8; only this human-facing console line is escaped to ASCII.
+    """
+    return str(text).encode("ascii", "backslashreplace").decode("ascii")
+
+
 def _get(obj, *names, default=None):
     """Case-insensitive lookup across a dict - UE is not consistent about casing."""
     if not isinstance(obj, dict):
@@ -995,11 +1005,11 @@ def compare_with_baseline(summary, baseline):
     added = sorted(new_names - old_names)
     if missing:
         drifted = True
-        shown = ", ".join(missing[:DRIFT_NAMES_SHOWN])
+        shown = ", ".join(console_safe(name) for name in missing[:DRIFT_NAMES_SHOWN])
         lines.append(f"{len(missing)} cases removed: {shown}{' ...' if len(missing) > DRIFT_NAMES_SHOWN else ''}")
     if added:
         drifted = True
-        shown = ", ".join(added[:DRIFT_NAMES_SHOWN])
+        shown = ", ".join(console_safe(name) for name in added[:DRIFT_NAMES_SHOWN])
         lines.append(f"{len(added)} cases added: {shown}{' ...' if len(added) > DRIFT_NAMES_SHOWN else ''}")
 
     old_duration = baseline.get("duration")

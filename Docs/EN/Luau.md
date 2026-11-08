@@ -17,6 +17,33 @@ Integrated revision: `6d36d483cb88973276af611198169f76f3ce05b0` (0.743 + 1). Ups
 
 See upstream [compatibility](https://luau.org/compatibility/) and [sandbox](https://luau.org/sandbox/) documentation.
 
+### Native codegen stability contract
+
+`lua.codegen.enabled` defaults to 0. This is a **default-off optional optimisation**, not a
+correctness dependency: with it off every chunk runs interpreted and the feature set is
+identical. The contract below is public; anything outside it is explicitly not guaranteed.
+
+| Item | Contract |
+|---|---|
+| Backend / architecture | Luau only; decided at runtime by upstream `luau_codegen_supported()` (x64 / arm64). Other targets compile with `UNLUANOVA_HAS_NATIVE_CODEGEN=0`: the switch is ignored with a warning rather than silently taking another path. Runtime acceptance here is UE 5.8.3 / Win64 x64; arm64 is compile-time supported but not runtime-validated in this repository |
+| Scope | Only chunks loaded after the switch; `lua.codegen.modules` narrows by module-name substring; `lua.codegen on/off` and the CVar are one state |
+| Executable memory | Upstream Luau allocates its own executable code pages. The host does not own the W^X / page-reclaim policy, and does not guarantee native debugger attachment or stepping into natively compiled functions while CodeGen is on |
+| Failure semantics | Upstream `luau_codegen_compile()` returns void with no per-chunk success signal; a chunk that cannot be compiled keeps interpreted execution. The `lua.codegen` counter is a **request count** (`GetNativeCodeGenRequestCount()`), not a count of compiled functions; the old getter remains as a documented alias |
+| Regression | `LuauIntegration.spec.cpp` covers VM / coroutine lifetimes and command / CVar coexistence; CodeGen executable pages are outside the per-block `UnLuaNova.Memory` release assertions |
+
+It is therefore a **delivered optional optimisation with a published boundary**, not an
+outstanding experimental gap. Depending on it for arm64, packaged Shipping or native
+debugging still requires separate acceptance on that target.
+
+### Upstream experimental boundary
+
+Luau's integer / user-defined-class libraries are upstream feature-flag APIs whose semantics,
+ABI and type declarations can change between upstream releases. Our `Luau.Build.cs` **does not
+enable those flags**, and they appear in none of UnLuaNova's public APIs, generated declarations
+or test contracts. They are **not a capability this plugin ships**: they are optional switches
+inside the pinned upstream submodule. Enabling them yourself is outside the supported surface
+and carries upstream-change and ABI risk. The plugin itself ships no experimental capability.
+
 ## Lua Compatibility
 
 Full Lua 5.x language equivalence is not promised: integer/operator syntax, goto and close semantics differ. Use explicit resource cleanup. Replication buckets use strict int64 conversion, and the ±2^31 / ±2^53 and bad-input cases have executed on both backends; extreme values across real transports and mismatched schemas remain specialised gaps. Exact values beyond +/-2^53 require native integer64; conversion cannot recover precision already lost in a number.

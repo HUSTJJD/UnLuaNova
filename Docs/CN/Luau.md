@@ -17,6 +17,24 @@
 
 上游 [兼容说明](https://luau.org/compatibility/) 与 [沙盒说明](https://luau.org/sandbox/) 是语义边界的来源；本插件补充 API 不改变 Luau 的全部语言语义。
 
+### 原生编译（CodeGen）支持契约
+
+`lua.codegen.enabled` 默认 0，是一个**默认关闭的可选优化**，不是正确性依赖：不开启时所有 chunk 走解释执行，功能集完全一致。契约如下，超出部分明确不在保证范围内。
+
+| 项 | 契约 |
+|---|---|
+| 后端 / 架构 | 仅 Luau 后端；运行期由上游 `luau_codegen_supported()` 判定（x64 / arm64）。其他目标 `UNLUANOVA_HAS_NATIVE_CODEGEN=0`，开关被忽略并打印告警，不会静默变成别的执行路径。已做运行验收的平台是 UE 5.8.3 / Win64 x64；arm64 仅编译期支持，未在本仓库做运行验收 |
+| 生效范围 | 只影响开关之后加载的 chunk；`lua.codegen.modules` 可按模块名子串收窄；`lua.codegen on/off` 与 CVar 是同一个状态 |
+| 可执行内存 | 上游 Luau 自行申请可执行代码页。宿主不接管 W^X / 代码页回收策略，也不保证在启用 CodeGen 时可附加原生调试器或单步进入已编译函数 |
+| 失败语义 | 上游 `luau_codegen_compile()` 返回 void，没有逐 chunk 成功信号；无法编译的 chunk 继续解释执行。`lua.codegen` 输出的计数是**请求数**（`GetNativeCodeGenRequestCount()`），不是成功编译的函数数；旧 getter 保留为文档化别名 |
+| 回归 | `LuauIntegration.spec.cpp` 覆盖 VM / 协程生命周期与命令 / CVar 共存；CodeGen 可执行页不纳入 `UnLuaNova.Memory` 的逐块释放断言 |
+
+因此它是**已交付、带边界的可选优化**：这些限制是公开的契约，不是待补齐的实验缺口；但如需在 arm64、打包 Shipping 或原生调试场景下依赖它，仍需针对该目标单独验收。
+
+### 上游实验能力边界
+
+Luau 上游的 integer / 用户类等库由上游 feature flag 控制，语义、ABI 与类型声明都可能随上游版本变化。本仓库的 `Luau.Build.cs` **不启用这些 flag**，它们不出现在 UnLuaNova 的公开 API、生成声明或测试契约里。换句话说，它们**不是本插件交付的能力**，而是固定上游子模块内部的可选开关；自行开启即超出支持范围，需自行承担上游变更与 ABI 兼容风险。本插件自身不提供任何实验性能力。
+
 ## 与原生 Lua 的差异
 
 | 能力 | 当前处理与边界 |

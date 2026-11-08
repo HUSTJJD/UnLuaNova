@@ -133,7 +133,7 @@ target。某个 Binaries root 如果没有该后端的隔离产物，脚本会�
 
 使用 `Saved/RunTests.lock` 防止脚本并发切换后端。测试期间不要在另一编辑器或构建任务中修改同一项目配置/二进制。脚本恢复配置，但最后构建的二进制仍属于最后一个后端。
 
-Release 自动设置 `UNLUANOVA_TEST_PEER_EXE` 和 `UNLUANOVA_TEST_SERVER_EXE`，分别指向默认 staging 路径的当前 Game 和 Server 程序。编译复用 `Binaries/Win64`，打包复用 `Saved/StagedBuilds/Windows` 和 `WindowsServer`；后续后端及 Shipping 会覆盖相应输出，不为每轮复制 exe。各后端的 `metadata/binary-*.json` 保存当时的路径、大小及 SHA-256。UE 5.8 普通 Game 二进制不会因 `-server` 参数变成 Dedicated Server。拓扑文件记录每个 peer 的实际可执行文件，清理时同时核对 PID、路径及启动时间。
+Release 自动设置 `UNLUANOVA_TEST_PEER_EXE` 和 `UNLUANOVA_TEST_SERVER_EXE`，分别指向默认 staging 路径的当前 Game 和 Server 程序。编译复用 `Binaries/Win64`；Development 打包复用 `Saved/StagedBuilds/Windows` 和 `WindowsServer`，**Shipping 单独落在 `Saved/StagedBuilds/WindowsShipping`**。UAT 每次 `-stage` 都会清空 staging 目录，两个配置共用同一目录时，最后执行的 Shipping 会删掉 Development 的客户端 exe —— 而 `metadata/binary-Development.json` 与联网矩阵 Cooked 变体都还要用它。拆开后一次完整 Release 结束仍留下可用的 Development staged peer。后续后端会覆盖相应输出，不为每轮复制 exe。各后端的 `metadata/binary-*.json` 保存当时的路径、大小及 SHA-256。UE 5.8 普通 Game 二进制不会因 `-server` 参数变成 Dedicated Server。拓扑文件记录每个 peer 的实际可执行文件，清理时同时核对 PID、路径及启动时间。
 
 Release 的 Editor、Game 和非 headless peer 使用 `-RenderOffScreen`，保留真实 RHI、视口用例、单张游戏视口截图，避免依赖桌面窗口是否可见；已移除桌面录屏、连续帧采集及视频编码。DS 仍使用 `-NullRHI`。Development 可显式选择 `-RenderOffScreen`。
 
@@ -218,8 +218,21 @@ python Tools\ValidateRelease.py --net-matrix --run Saved\ReleaseTests\net-matrix
 底层脚本是 `Tools/RunNetMatrix.ps1`；`-ExtraArgs` 把 `-UnLuaNovaNetScenarios`、
 `-UnLuaNovaNetPktLoss=25` 和变体的真实引擎开关（`-UseIrisReplication=1` 或 push-model cvar 的
 ini 覆盖）传到进程命令行，`FNetSession` 再把场景开关、丢包率、精确重连 URL 与
-`UNLUANOVA_TEST_NET_VARIANT` 转发给每个 peer。Cooked 变体把 peer 可执行文件指向 staged
-`Windows` / `WindowsServer` 二进制。`AppendWorldFacts` 从 cvar、`WITH_EDITOR` 与 `UNetConnection`
+`UNLUANOVA_TEST_NET_VARIANT` 转发给每个 peer。
+
+**载体按变体分开**：`AppendWorldFacts` 把编译期 `WITH_EDITOR` 写成 peer 报告的 `Cooked` 字段，
+门禁据此要求 Legacy / PushOff / Iris 与八个场景用 **Editor 载体**（`Cooked=false`），只有 Cooked
+变体用 **Game 载体 + staged 打包 peer**（`Cooked=true`）。所有 cell 统一跑 `-Carrier Game` 会让
+前三个变体也报 `Cooked=true`，门禁必然失败。Cooked 变体需要 `Saved/StagedBuilds/Windows`
+里的 **Development** 客户端 exe（Shipping 包裁掉了 automation peer 测试，不能替代），以及
+`WindowsServer` 里的 Development 服务器 exe；一次完整 Release 现在会保留这两个产物。
+
+每个 cell 跑的是筛选后的单条联网用例，判定依据是拓扑、三份 peer 报告与日志，不是全量用例清单；
+因此 cell 使用 `-NoReport`，不与 `Tools/baseline/*.json` 做用例集漂移比较。UE 进程退出码、
+`Copy-Tree` 的拓扑存在性检查与门禁仍然 fail-closed。`UNLUANOVA_TEST_NET_ROOT` 指向项目外的
+共享临时目录，避免 Development `-game` 把项目内绝对路径重映射到各自的 cooked root。
+
+`AppendWorldFacts` 从 cvar、`WITH_EDITOR` 与 `UNetConnection`
 读回状态写进报告，`BuildNetDeclarationReport()` 导出真实 FProperty 参数规格与
 `RepSchemaVersion` / `VariantRepSchemaVersion`，因此改目录名冒充不了变体、声明不一致也混不过去。产物落在
 `net/scenarios/<Name>/` 与 `net/variants/<Name>/DedicatedServer/`，由 `metadata/net-matrix-gate.json`

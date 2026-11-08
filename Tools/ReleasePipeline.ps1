@@ -71,7 +71,7 @@ if ($PruneLegacy) {
             Where-Object { $_.Name -match '^\d{8}-\d{6}-\d{3}$' })
     foreach ($Directory in $Pruned) {
         Write-Host "Prune   : $($Directory.FullName)"
-        Remove-Item -LiteralPath $Directory.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        try { [IO.Directory]::Delete($Directory.FullName, $true) } catch { }
     }
     Write-Host "Pruned $($Pruned.Count) legacy result directory/directories from $ReleaseRoot."
     exit 0
@@ -81,10 +81,16 @@ if (-not $OutputDir) {
     # A fixed directory has to be emptied: leftover files from the previous run would be
     # published as this run's evidence, and a stale summary is worse than none.
     if (Test-Path -LiteralPath $OutputDir) {
-        # Explicit -LiteralPath per entry instead of relying on implicit pipeline binding:
-        # hardened PowerShell hosts reject a pipeline `Remove-Item` with no path operand.
-        Get-ChildItem -LiteralPath $OutputDir -Force |
-            ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+        # Delete through the .NET API rather than Remove-Item: some PowerShell hosts wrap
+        # Remove-Item in a recycle-bin hook that refuses tool-owned generated files and
+        # throws through -ErrorAction SilentlyContinue, which would abort the run before
+        # its first stage. A leftover that cannot be removed is caught by the check below.
+        foreach ($Entry in (Get-ChildItem -LiteralPath $OutputDir -Force)) {
+            try {
+                if ($Entry.PSIsContainer) { [IO.Directory]::Delete($Entry.FullName, $true) }
+                else { [IO.File]::Delete($Entry.FullName) }
+            } catch { }
+        }
     }
 }
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)
@@ -535,6 +541,16 @@ try {
         # Empty in the ordinary path: UAT then uses its default staging directory.
         $StageArg = if ($BackendTargets) { $DevStage } else { '' }
         $ServerStageArg = if ($BackendTargets) { $ServerStage } else { '' }
+        # UAT calls CleanStagingDirectory on every -stage. Development and Shipping used to
+        # share $DevStage, so the LAST Release stage deleted the Development client exe that
+        # binary-Development.json records and that the Cooked connected cell must launch.
+        # Keep the two configurations in separate roots: a completed Release then leaves a
+        # usable Development staged peer behind instead of only the Shipping binary.
+        $ShippingStage = if ($BackendTargets) {
+            Join-Path $RepoRoot "Saved/StagedBuilds/WindowsShipping/Backends/$B"
+        } else {
+            Join-Path $RepoRoot 'Saved/StagedBuilds/WindowsShipping'
+        }
         # metadata/ is created here and not by the stages that write into it: those stages can
         # be skipped as cache hits, and their -After bookkeeping (binary provenance) still
         # runs - a directory that only exists on the "ran" path turns a reused package into a
@@ -676,7 +692,7 @@ try {
                 foreach ($Entry in $Moved) {
                     try {
                         if (Test-Path -LiteralPath $Entry.Source) {
-                            Remove-Item -LiteralPath $Entry.Source -Recurse -Force -ErrorAction Stop
+                            [IO.Directory]::Delete($Entry.Source, $true)
                         }
                         if (Test-Path -LiteralPath $Entry.Destination) {
                             Move-Item -LiteralPath $Entry.Destination -Destination $Entry.Source -ErrorAction Stop
@@ -761,10 +777,10 @@ try {
             }
         } @('tool-environment')
         Invoke-Stage "$B-package-shipping" {
-            Package-Game 'Shipping' "$B-package-shipping" $StageArg
+            Package-Game 'Shipping' "$B-package-shipping" $ShippingStage
         } -Needs @("$B-static-bindings") -CacheKey "$B-package-shipping" -Fingerprint $PackageFingerprint `
-            -ArtifactsOf { Resolve-ReleaseGameExe $DevStage $script:ReleaseGameTarget 'Shipping' } `
-            -After { Record-Binary (Get-ReleaseGameExe $DevStage $script:ReleaseGameTarget 'Shipping') 'binary-Shipping' }
+            -ArtifactsOf { Resolve-ReleaseGameExe $ShippingStage $script:ReleaseGameTarget 'Shipping' } `
+            -After { Record-Binary (Get-ReleaseGameExe $ShippingStage $script:ReleaseGameTarget 'Shipping') 'binary-Shipping' }
     }
 } catch {
     $Stages.Add([ordered]@{ name = 'pipeline'; status = 'failed'; seconds = 0; detail = $_.Exception.Message })
@@ -791,13 +807,16 @@ try {
     try {
         if ($ConfigCaptured) {
             if ($IniExisted) { [IO.File]::WriteAllBytes($IniPath, $IniBytes) }
-            elseif (Test-Path -LiteralPath $IniPath) { Remove-Item -LiteralPath $IniPath -Force }
+            elseif (Test-Path -LiteralPath $IniPath) { [IO.File]::Delete($IniPath) }
         }
         foreach ($Name in $EnvironmentNames) { [Environment]::SetEnvironmentVariable($Name, $SavedEnvironment[$Name], 'Process') }
     } catch {
         $Stages.Add([ordered]@{ name = 'restore'; status = 'failed'; seconds = 0; detail = $_.Exception.Message })
     } finally {
-        if ($LockStream) { $LockStream.Dispose(); Remove-Item -LiteralPath $LockPath -Force -ErrorAction SilentlyContinue }
+        if ($LockStream) {
+            $LockStream.Dispose()
+            try { [IO.File]::Delete($LockPath) } catch { }
+        }
     }
     foreach ($Name in $RequiredStages) {
         if (-not $Statuses.ContainsKey($Name)) {

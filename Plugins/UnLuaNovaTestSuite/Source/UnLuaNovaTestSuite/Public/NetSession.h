@@ -42,8 +42,10 @@
 
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
+#include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/CString.h"
 #include "Templates/Function.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -258,7 +260,25 @@ namespace UnLuaNovaTestSuite
     public:
         FNetWaitForReportsCommand(TSharedRef<FNetSession> InSession, FAutomationTestBase& InTest,
             double InTimeoutSeconds = 180.0)
-            : Session(InSession), Test(InTest), TimeoutSeconds(InTimeoutSeconds) {}
+            : Session(InSession), Test(InTest), TimeoutSeconds(InTimeoutSeconds)
+        {
+            // The opt-in connected matrix launches three full editor processes per cell.
+            // On a loaded machine each peer can spend two minutes in module, shader and DDC
+            // startup before it even connects, so a fixed 210 s deadline expires before a
+            // report can be written. Let that matrix widen the deadline explicitly while
+            // ordinary automation keeps its fail-fast default. Bounds keep a typo from
+            // turning a hung peer into an unbounded wait.
+            const FString Override = FPlatformMisc::GetEnvironmentVariable(
+                TEXT("UNLUANOVA_TEST_NET_REPORT_TIMEOUT"));
+            if (!Override.IsEmpty())
+            {
+                const double Requested = FCString::Atof(*Override);
+                if (Requested >= 60.0 && Requested <= 1800.0)
+                {
+                    TimeoutSeconds = Requested;
+                }
+            }
+        }
 
         virtual bool Update() override;
 

@@ -468,13 +468,13 @@ if you are certain it is not running.
 "@
         }
         Write-Host "Removing stale lock from a run that is no longer alive ($LockPath)" -ForegroundColor Yellow
-        Remove-Item $LockPath -Force -ErrorAction SilentlyContinue
+        try { [System.IO.File]::Delete($LockPath) } catch { }
     }
 
     New-Item -ItemType Directory -Path (Split-Path -Parent $LockPath) -Force | Out-Null
     # FileShare::None is the actual mutex: a second process cannot even open the file.
     #
-    # Retried, because Remove-Item above returns while Windows may still be finishing the
+    # Retried, because the delete above returns while Windows may still be finishing the
     # delete (a scanner or an indexer holding the file briefly is enough), and because two
     # runs starting in the same second can both get past the stale check. Without this the
     # failure is an IOException that looks like a broken script rather than a busy moment.
@@ -503,7 +503,7 @@ function Release-RunLock {
         $script:LockStream.Dispose()
         $script:LockStream = $null
     }
-    Remove-Item $LockPath -Force -ErrorAction SilentlyContinue
+    try { [System.IO.File]::Delete($LockPath) } catch { }
 }
 
 # --- which backend is actually in these binaries? -----------------------------------
@@ -670,11 +670,15 @@ function Get-ScreenshotDir {
 function Clear-StaleScreenshots {
     $ShotDir = Get-ScreenshotDir
     if (-not (Test-Path $ShotDir)) { return }
-    # Explicit -LiteralPath per item: a bare pipeline `Remove-Item -Force` relies on the
-    # caller binding $_ implicitly, which hardened PowerShell hosts reject as a delete
-    # with no path operand. -LiteralPath also keeps PNG names containing [] intact.
+    # Some PowerShell hosts wrap Remove-Item in a recycle-bin/safe-delete hook that can
+    # refuse even a tool-owned generated file and throw right through
+    # -ErrorAction SilentlyContinue. That used to abort a connected-matrix cell before UE
+    # ever started. Use the .NET API directly; a PNG still held by another process is left
+    # for the next run instead of being mistaken for a failed test.
     Get-ChildItem -Path $ShotDir -Filter "*.png" -File -ErrorAction SilentlyContinue |
-        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+        ForEach-Object {
+            try { [System.IO.File]::Delete($_.FullName) } catch { }
+        }
 }
 
 function Get-NetTopologyFiles {
@@ -1003,7 +1007,7 @@ function Restore-IniBackend {
         if ($IniExisted) {
             [System.IO.File]::WriteAllBytes($IniPath, $IniBackup)
         } elseif (Test-Path $IniPath) {
-            Remove-Item $IniPath -Force
+            [System.IO.File]::Delete($IniPath)
         }
     } catch {
         $script:ExitCode = 1
@@ -1356,9 +1360,27 @@ $CurrentBackend - editing the ini would only relabel it. Drop -SkipBuild, or run
             if ($Publish) { $GenArgs += "--publish" }
             # 用例被改名/误删/被 filter 漏掉时，"全绿"是最坏的结果 —— 少跑一半和全过
             # 看起来一模一样。基线比对让报告自己说出这件事。
-            $GenArgs += @("--baseline", (Join-Path $RepoRoot "Tools/baseline/$($B.ToLower()).json"))
-            if ($UpdateBaseline) { $GenArgs += "--update-baseline" }
-            if ($FailOnDrift) { $GenArgs += "--fail-on-drift" }
+            #
+            # 但基线是"完整用例清单"。Development 的自定义 -Filter / -Tier Fast 本来就只跑
+            # 一个子集，拿它和 690/715 条的全量基线比，必然报 "-690 cases removed"，看起来
+            # 像回归，其实只是筛选结果；更糟的是 -UpdateBaseline 会把子集写成新基线。
+            # 只有默认 filter + Tier All 才比对。Release 走的正是这条完整路径，它的
+            # -FailOnDrift 与 reports 阶段的双载体 --fail-on-drift 不受影响。
+            #
+            # 载体也要分开：Editor 与 cooked Game 的用例集本来就不同，各有自己的基线文件。
+            # 之前两种载体都拿 Editor 的 <backend>.json 比，-game 一轮必然误报。
+            $FullInventory = ($Filter -eq "UnLuaNova") -and ($Tier -eq "All")
+            if (-not $FullInventory) {
+                if ($UpdateBaseline -or $FailOnDrift) {
+                    throw "-UpdateBaseline/-FailOnDrift require the complete inventory; drop -Filter and -Tier Fast."
+                }
+                Write-Host "Baseline : skipped - a filtered/tiered run is a subset, not the full case inventory." -ForegroundColor Yellow
+            } else {
+                $BaselineName = if ($IsGameCarrier) { "$($B.ToLower())-game.json" } else { "$($B.ToLower()).json" }
+                $GenArgs += @("--baseline", (Join-Path $RepoRoot "Tools/baseline/$BaselineName"))
+                if ($UpdateBaseline) { $GenArgs += "--update-baseline" }
+                if ($FailOnDrift) { $GenArgs += "--fail-on-drift" }
+            }
 
             # 每个用例"需要什么环境"的分类，报告里用它算出 A–E 各占多少秒。
             # 没有这一节，"把某一类挪出编辑器进程能省多少"只能靠估 —— 而这是决定要不要

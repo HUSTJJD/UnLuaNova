@@ -61,6 +61,10 @@
 		{
 			"Name": "ConfigSettingsToolset",
 			"Enabled": true
+		},
+		{
+			"Name": "Iris",
+			"Enabled": true
 		}
 	]
 }

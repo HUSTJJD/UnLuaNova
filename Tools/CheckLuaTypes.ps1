@@ -248,7 +248,11 @@ foreach ($d in @($LogDir, $MetaDir))
 }
 # 上一轮的结果必须清掉：check.json 不会被覆盖时，报告会拿上一轮的结果当这一轮的
 $CheckJson = Join-Path $LogDir "check.json"
-if (Test-Path -LiteralPath $CheckJson) { Remove-Item -LiteralPath $CheckJson -Force }
+# Delete through the .NET API: some PowerShell hosts shadow Remove-Item with a trash
+# wrapper that fails closed for generated artifacts under Saved/. This is one analyzer
+# result file from the previous run, not user data, and must be gone before LuaLS writes
+# the new one or the report would reuse stale diagnostics.
+if (Test-Path -LiteralPath $CheckJson) { [IO.File]::Delete($CheckJson) }
 
 Write-Host "lua-language-server: $Analyzer"
 Write-Host "检查 $($Files.Count) 个文件（checklevel=$CheckLevel，runtime=$RuntimeVersion）"

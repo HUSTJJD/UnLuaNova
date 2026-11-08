@@ -13,8 +13,11 @@
     Eight scenarios: LateJoin, Reconnect (process replacement), Dormancy, Relevancy,
     JoinOrderSwap, PacketLoss (NetEmulation), SeamlessReconnect (UNetConnection::Close +
     in-process reopen) and SchemaMismatch (cross-peer declaration fingerprints).
-    The Cooked variant launches staged WindowsServer / Windows binaries as the peers, so
-    packaged-peer acceptance is its own cell rather than a claim about the Editor build.
+    The Cooked variant launches staged WindowsServer / Windows Development binaries as the
+    peers; the other three variants and all eight scenarios use the Editor carrier. The gate
+    reads compile-time WITH_EDITOR back as the "Cooked" field, so Editor peers are required
+    for those cells and a real packaged peer only for Cooked. Running everything in -game
+    made every peer report Cooked=true and the gate could never pass.
 
     Evidence is copied into one release-shaped directory per backend and judged by
     ValidateRelease.py --net-matrix. That gate fails closed: a missing topology.json, a
@@ -37,6 +40,10 @@ param(
     [string] $ConnectedFilter = 'UnLuaNova.API.Net.DedicatedServer',
     [string] $ScenarioFilter = 'UnLuaNova.Slow.Net.Scenarios',
     [ValidateRange(1, 1440)] [int] $TimeoutMinutes = 60,
+    # Three editor peers per cell can spend several minutes in module/shader/DDC startup
+    # on a loaded machine. This widens the driver's wait for peer reports without
+    # weakening the fail-fast default used by ordinary automation runs.
+    [ValidateRange(60, 1800)] [int] $ReportTimeoutSeconds = 600,
     [switch] $SkipBuild,
     # Run every cell against the prebuilt backend-isolated Game/Server targets instead of
     # recompiling the ordinary target for whichever backend the ini currently names.
@@ -53,6 +60,7 @@ $Variants = @('Legacy', 'PushOff', 'Iris', 'Cooked')
 $Scenarios = @('LateJoin', 'Reconnect', 'Dormancy', 'Relevancy',
     'JoinOrderSwap', 'PacketLoss', 'SeamlessReconnect', 'SchemaMismatch')
 $Backends = if ($Backend -eq 'Both') { @('Lua', 'Luau') } else { @($Backend) }
+$RunToken = [DateTime]::UtcNow.ToString('yyyyMMddHHmmss')
 
 function Copy-Tree([string] $Source, [string] $Destination) {
     if (-not (Test-Path -LiteralPath $Source)) {
@@ -63,36 +71,64 @@ function Copy-Tree([string] $Source, [string] $Destination) {
 }
 
 function Resolve-StagedExe([string] $Stage, [string] $ExeName) {
+    # Only a *Development* packaged binary still contains the automation peer test. A
+    # Shipping package strips it, so accepting "-Win64-Shipping.exe" here would produce a
+    # Cooked cell whose peers never write a report - and the gate would then correctly fail.
     $Found = @(Get-ChildItem -LiteralPath $Stage -Recurse -File -Filter $ExeName -ErrorAction SilentlyContinue |
             Where-Object { $_.Directory -and $_.Directory.Name -eq 'Win64' -and
                 $_.Directory.Parent -and $_.Directory.Parent.Name -eq 'Binaries' })
     if ($Found.Count -ne 1) {
-        throw "Expected one packaged $ExeName under $Stage/Binaries/Win64, found $($Found.Count). Run a Release build first."
+        throw "Expected one Development staged $ExeName under $Stage/Binaries/Win64, found $($Found.Count). " +
+              'A Shipping package cleans that staging directory; re-run the Development package ' +
+              'stage (ReleasePipeline.ps1 <backend>-package-development) before the Cooked variant.'
     }
     return $Found[0].FullName
 }
 
 function Invoke-Cell([string] $Label, [string] $BackendName, [string] $Filter, [string] $ExtraArgs,
-    [string] $Variant, [string] $Scratch, [string] $PeerExe = '', [string] $ServerExe = '') {
+    [string] $Variant, [string] $Scratch, [string] $PeerExe = '', [string] $ServerExe = '',
+    [string] $Carrier = 'Editor') {
     # A cell must not leak its variant, net root or packaged binaries into the next cell or
     # the caller's shell: a stale UNLUANOVA_TEST_NET_VARIANT would make a Legacy run report
     # itself as Iris, and a stale PEER_EXE would silently turn Cooked into an Editor run.
     $Names = @('UNLUANOVA_TEST_NET_VARIANT', 'UNLUANOVA_TEST_NET_ROOT',
-        'UNLUANOVA_TEST_PEER_EXE', 'UNLUANOVA_TEST_SERVER_EXE')
+        'UNLUANOVA_TEST_PEER_EXE', 'UNLUANOVA_TEST_SERVER_EXE',
+        'UNLUANOVA_TEST_NET_REPORT_TIMEOUT')
     $Saved = @{}
     foreach ($Name in $Names) { $Saved[$Name] = [Environment]::GetEnvironmentVariable($Name, 'Process') }
     try {
-        if (Test-Path -LiteralPath $Scratch) { Remove-Item -LiteralPath $Scratch -Recurse -Force }
+        $env:UNLUANOVA_TEST_NET_REPORT_TIMEOUT = [string]$ReportTimeoutSeconds
+        # Scratch holds only this cell's generated reports. Use the .NET API so a host-level
+        # Remove-Item wrapper cannot refuse to clear it between cells.
+        if (Test-Path -LiteralPath $Scratch) { [IO.Directory]::Delete($Scratch, $true) }
         New-Item -ItemType Directory -Path $Scratch -Force | Out-Null
         $env:UNLUANOVA_TEST_NET_VARIANT = $Variant
-        $env:UNLUANOVA_TEST_NET_ROOT = Join-Path $Scratch 'net-root'
+        # A Development -game process remaps absolute paths under the project into its own
+        # cooked root. The Windows client and WindowsServer server targets use different
+        # roots, so peer reports used to land in two separate trees and the connected
+        # session timed out reading them. A net root outside the project is not remapped,
+        # so all three peers and the driver share one directory; the per-run token keeps
+        # stale reports from a previous matrix out of this one.
+        $script:CellNetRoot = Join-Path ([IO.Path]::GetTempPath()) "UnLuaNovaNetMatrix/$RunToken/$($Label -replace '[\\/]', '_')"
+        $env:UNLUANOVA_TEST_NET_ROOT = $script:CellNetRoot
         [Environment]::SetEnvironmentVariable('UNLUANOVA_TEST_PEER_EXE', $PeerExe, 'Process')
         [Environment]::SetEnvironmentVariable('UNLUANOVA_TEST_SERVER_EXE', $ServerExe, 'Process')
-        Write-Host "NetMatrix: $Label ($Variant) -> $Scratch" -ForegroundColor Cyan
+        Write-Host "NetMatrix: $Label ($Variant, carrier $Carrier) -> $Scratch" -ForegroundColor Cyan
         if ($DryRun) { return }
-        & $RunTests -Profile Development -Backend $BackendName -Carrier Game -Tier All -Filter $Filter `
+        # -Carrier matters to the gate, not just to speed. AppendWorldFacts records
+        # WITH_EDITOR at build time as the "Cooked" field: Editor binaries report false,
+        # packaged binaries report true. ValidateRelease.py --net-matrix therefore requires
+        # Editor peers for Legacy / PushOff / Iris and the eight scenarios, and a real
+        # packaged peer only for Cooked. Running every cell with -Carrier Game made all of
+        # them report Cooked=true and the gate failed nine times by construction.
+        #
+        # -NoReport: a cell runs one filtered automation test whose verdict is the net/
+        # topology, peer reports and peer logs. The full-suite case-set baseline and the
+        # per-cell IntelliSense/typecheck pass do not apply to a filtered connected run;
+        # the UE process exit code and the fail-closed Copy-Tree/gate below still do.
+        & $RunTests -Profile Development -Backend $BackendName -Carrier $Carrier -Tier All -Filter $Filter `
             -OutputDir $Scratch -ExtraArgs $ExtraArgs -SkipBuild:$SkipBuild -BackendTargets:$BackendTargets `
-            -TimeoutMinutes $TimeoutMinutes -EnginePath $EnginePath -ProjectPath $ProjectPath
+            -TimeoutMinutes $TimeoutMinutes -EnginePath $EnginePath -ProjectPath $ProjectPath -NoReport
         if ($LASTEXITCODE -ne 0) { throw "NetMatrix cell failed: $Label ($LASTEXITCODE)" }
     } finally {
         foreach ($Name in $Names) {
@@ -106,60 +142,95 @@ if (-not $DryRun) { New-Item -ItemType Directory -Path $OutputDir -Force | Out-N
 foreach ($B in $Backends) {
     $RunDir = Join-Path $OutputDir $B
     if (-not $DryRun) {
-        if (Test-Path -LiteralPath $RunDir) { Remove-Item -LiteralPath $RunDir -Recurse -Force }
+        if (Test-Path -LiteralPath $RunDir) { [IO.Directory]::Delete($RunDir, $true) }
         New-Item -ItemType Directory -Path (Join-Path $RunDir 'metadata') -Force | Out-Null
     }
 
+    # One failing cell must not abort the whole backend. These runs are expensive (three
+    # real UE processes per cell, eight scenarios in one driver) and the gate is fail-closed:
+    # a cell that produced no topology is reported as a missing-evidence error anyway.
+    # Previously a missing staged Cooked exe threw before the scenario cell ever ran, so a
+    # 40-minute matrix lost all eight scenarios to one packaging prerequisite.
+    $CellErrors = [Collections.Generic.List[string]]::new()
+
     foreach ($Variant in $Variants) {
-        $Flags = switch ($Variant) {
-            'Iris' { '-UseIrisReplication=1' }
-            'PushOff' { '-ini:Engine:[ConsoleVariables]:Net.IsPushModelEnabled=0' }
-            default { '' }
-        }
-        $CellArgs = (@("-UnLuaNovaNetVariant=$Variant") + @($Flags | Where-Object { $_ })) -join ' '
-        $PeerExe = ''
-        $ServerExe = ''
-        if ($Variant -eq 'Cooked' -and -not $DryRun) {
-            $ProjectFile = if ($ProjectPath) { $ProjectPath } else { Join-Path $RepoRoot 'UnLuaNovaDemo.uproject' }
-            $ProjectName = [IO.Path]::GetFileNameWithoutExtension($ProjectFile)
-            # An isolated Game/Server target is staged under its own target name (AppName),
-            # not the ordinary project name. Looking for the old .exe would either fail or
-            # pick up a build from the other backend's Release run.
-            $GameTarget = if ($BackendTargets) { "UnLuaNovaDemo$B" } else { $ProjectName }
-            $ServerTarget = if ($BackendTargets) { "UnLuaNovaDemo${B}Server" } else { "$ProjectName`Server" }
-            # ReleasePipeline -BackendTargets stages each backend into its own directory
-            # (UAT cleans the staging directory on every -stage), so look there as well.
-            $DevStage = if ($BackendTargets) { Join-Path $RepoRoot "Saved/StagedBuilds/Windows/Backends/$B" } else { Join-Path $RepoRoot 'Saved/StagedBuilds/Windows' }
-            $ServerStage = if ($BackendTargets) { Join-Path $RepoRoot "Saved/StagedBuilds/WindowsServer/Backends/$B" } else { Join-Path $RepoRoot 'Saved/StagedBuilds/WindowsServer' }
-            $PeerExe = Resolve-StagedExe $DevStage "$GameTarget.exe"
-            $ServerExe = Resolve-StagedExe $ServerStage "$ServerTarget.exe"
-        }
-        $Scratch = Join-Path $RunDir "scratch/variant-$Variant"
-        Invoke-Cell "variant/$B/$Variant" $B $ConnectedFilter $CellArgs $Variant $Scratch $PeerExe $ServerExe
-        if (-not $DryRun) {
-            Copy-Tree (Join-Path $Scratch 'net/DedicatedServer') `
-                (Join-Path $RunDir "net/variants/$Variant/DedicatedServer")
+        try {
+            $Flags = switch ($Variant) {
+                'Iris' { '-UseIrisReplication=1' }
+                'PushOff' { '-ini:Engine:[ConsoleVariables]:Net.IsPushModelEnabled=0' }
+                default { '' }
+            }
+            $CellArgs = (@("-UnLuaNovaNetVariant=$Variant") + @($Flags | Where-Object { $_ })) -join ' '
+            $PeerExe = ''
+            $ServerExe = ''
+            if ($Variant -eq 'Cooked' -and -not $DryRun) {
+                $ProjectFile = if ($ProjectPath) { $ProjectPath } else { Join-Path $RepoRoot 'UnLuaNovaDemo.uproject' }
+                $ProjectName = [IO.Path]::GetFileNameWithoutExtension($ProjectFile)
+                # An isolated Game/Server target is staged under its own target name (AppName),
+                # not the ordinary project name. Looking for the old .exe would either fail or
+                # pick up a build from the other backend's Release run.
+                $GameTarget = if ($BackendTargets) { "UnLuaNovaDemo$B" } else { $ProjectName }
+                $ServerTarget = if ($BackendTargets) { "UnLuaNovaDemo${B}Server" } else { "$ProjectName`Server" }
+                # ReleasePipeline -BackendTargets stages each backend into its own directory
+                # (UAT cleans the staging directory on every -stage), so look there as well.
+                $DevStage = if ($BackendTargets) { Join-Path $RepoRoot "Saved/StagedBuilds/Windows/Backends/$B" } else { Join-Path $RepoRoot 'Saved/StagedBuilds/Windows' }
+                $ServerStage = if ($BackendTargets) { Join-Path $RepoRoot "Saved/StagedBuilds/WindowsServer/Backends/$B" } else { Join-Path $RepoRoot 'Saved/StagedBuilds/WindowsServer' }
+                $PeerExe = Resolve-StagedExe $DevStage "$GameTarget.exe"
+                $ServerExe = Resolve-StagedExe $ServerStage "$ServerTarget.exe"
+            }
+            $Scratch = Join-Path $RunDir "scratch/variant-$Variant"
+            # Cooked is the only cell whose peers are real packaged binaries. It drives them
+            # from the Development Game target; the other three variants and every scenario
+            # use the Editor build, which is what WITH_EDITOR=1 (Cooked=false) in the gate's
+            # peer reports means. Passing the staged exes is what makes this cell genuinely
+            # packaged rather than a renamed Editor run.
+            $CellCarrier = if ($Variant -eq 'Cooked') { 'Game' } else { 'Editor' }
+            Invoke-Cell "variant/$B/$Variant" $B $ConnectedFilter $CellArgs $Variant $Scratch `
+                $PeerExe $ServerExe -Carrier $CellCarrier
+            if (-not $DryRun) {
+                Copy-Tree (Join-Path $script:CellNetRoot 'DedicatedServer') `
+                    (Join-Path $RunDir "net/variants/$Variant/DedicatedServer")
+            }
+        } catch {
+            $CellErrors.Add("variant/$B/$Variant : $($_.Exception.Message)")
+            Write-Warning "NetMatrix cell 'variant/$B/$Variant' failed: $($_.Exception.Message)"
         }
     }
 
     # Forwarded to every peer by FNetSession; only the PacketLoss scenario's peer command
     # actually issues the NetEmulation.* console commands.
-    $ScenarioArgs = "-UnLuaNovaNetScenarios -UnLuaNovaNetVariant=Legacy -UnLuaNovaNetPktLoss=25"
-    $Scratch = Join-Path $RunDir 'scratch/scenarios'
-    Invoke-Cell "scenarios/$B" $B $ScenarioFilter $ScenarioArgs 'Legacy' $Scratch
+    try {
+        $ScenarioArgs = "-UnLuaNovaNetScenarios -UnLuaNovaNetVariant=Legacy -UnLuaNovaNetPktLoss=25"
+        $Scratch = Join-Path $RunDir 'scratch/scenarios'
+        Invoke-Cell "scenarios/$B" $B $ScenarioFilter $ScenarioArgs 'Legacy' $Scratch
+    } catch {
+        $CellErrors.Add("scenarios/$B : $($_.Exception.Message)")
+        Write-Warning "NetMatrix cell 'scenarios/$B' failed: $($_.Exception.Message)"
+    }
     if (-not $DryRun) {
+        # Copy each scenario independently: one missing topology is a gate error, not a
+        # reason to discard the seven other scenarios the driver did produce.
         foreach ($Scenario in $Scenarios) {
-            Copy-Tree (Join-Path $Scratch "net/$Scenario") (Join-Path $RunDir "net/scenarios/$Scenario")
+            try {
+                Copy-Tree (Join-Path $script:CellNetRoot $Scenario) (Join-Path $RunDir "net/scenarios/$Scenario")
+            } catch {
+                $CellErrors.Add("scenarios/$B/$Scenario : $($_.Exception.Message)")
+                Write-Warning "NetMatrix scenario '$Scenario' has no evidence: $($_.Exception.Message)"
+            }
         }
     }
-
     if ($DryRun) { continue }
     $Manifest = Join-Path $RunDir 'metadata/net-variants.json'
     [IO.File]::WriteAllText($Manifest, (@{ variants = $Variants } | ConvertTo-Json -Compress))
     $Python = if ($env:UNLUANOVA_PYTHON) { $env:UNLUANOVA_PYTHON } else { 'python' }
     & $Python (Join-Path $PSScriptRoot 'ValidateRelease.py') --net-matrix `
         --run $RunDir --backend $B --carrier game
-    if ($LASTEXITCODE -ne 0) { throw "Network matrix gate failed for backend $B" }
+    $GateExit = $LASTEXITCODE
+    if ($CellErrors.Count -gt 0) {
+        foreach ($Line in $CellErrors) { Write-Host "CELL FAILURE: $Line" -ForegroundColor Red }
+        throw "Network matrix for backend $B had $($CellErrors.Count) failed cell(s); the gate above lists the missing evidence."
+    }
+    if ($GateExit -ne 0) { throw "Network matrix gate failed for backend $B" }
 }
 
 Write-Host "Network matrix evidence: $OutputDir" -ForegroundColor Green
