@@ -349,7 +349,7 @@ namespace UnLuaNovaDefaultParamCollector
                 }
                 else
                 {
-                    GeneratedContentBuilder.AppendFormat("PC->Parameters.Add(TEXT(\"{0}\"), new FNameParamValue(FName(\"{1}\")));\r\n", property.SourceName, valueStr);
+                    GeneratedContentBuilder.AppendFormat("PC->Parameters.Add(TEXT(\"{0}\"), new FNameParamValue(FName(\"{1}\")));\r\n", property.SourceName, EscapeCppStringLiteral(valueStr));
                 }
             }
             else if (property is UhtTextProperty)
@@ -361,13 +361,13 @@ namespace UnLuaNovaDefaultParamCollector
                 }
                 else
                 {
-                    GeneratedContentBuilder.AppendFormat("PC->Parameters.Add(TEXT(\"{0}\"), new FTextParamValue(FText::FromString(TEXT(\"{1}\"))));\r\n", property.SourceName, valueStr);
+                    GeneratedContentBuilder.AppendFormat("PC->Parameters.Add(TEXT(\"{0}\"), new FTextParamValue(FText::FromString(TEXT(\"{1}\"))));\r\n", property.SourceName, EscapeCppStringLiteral(valueStr));
                 }
             }
             else if (property is UhtStrProperty)
             {
                 PreAddProperty(classObj, function);
-                GeneratedContentBuilder.AppendFormat("PC->Parameters.Add(TEXT(\"{0}\"), new FStringParamValue(TEXT(\"{1}\")));\r\n", property.SourceName, valueStr);
+                GeneratedContentBuilder.AppendFormat("PC->Parameters.Add(TEXT(\"{0}\"), new FStringParamValue(TEXT(\"{1}\")));\r\n", property.SourceName, EscapeCppStringLiteral(valueStr));
             }
             else if (property is UhtArrayProperty)
             {
@@ -398,6 +398,22 @@ namespace UnLuaNovaDefaultParamCollector
                 bCurrentFunctionWritten = true;
                 GeneratedContentBuilder.AppendFormat("PC = &FC->Functions.Add(TEXT(\"{0}\"));\r\n", function.StrippedFunctionName);
             }
+        }
+
+        /// <summary>
+        /// UHT exposes C++ default values as raw text. UE 6.0 metadata can contain
+        /// multi-line doc comments used as string defaults, and emitting those
+        /// verbatim inside TEXT("...") produced C2001 "newline in constant" in the
+        /// generated DefaultParamCollection.inl. Escape the text as a C++ literal.
+        /// </summary>
+        private static string EscapeCppStringLiteral(string value)
+        {
+            return value
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\r", "\\r")
+                .Replace("\n", "\\n")
+                .Replace("\t", "\\t");
         }
 
         private static bool FindDefaultValueString(UhtMetaData metaData, UhtProperty property, out string value)

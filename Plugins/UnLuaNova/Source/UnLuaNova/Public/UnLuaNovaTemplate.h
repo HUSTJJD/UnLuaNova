@@ -22,6 +22,23 @@ namespace UnLuaNova
 {
 
     /**
+     * UE 6.0 compatibility for the legacy UE type traits.
+     *
+     * These names now live only in Templates/*_DeprecatedIncludeOrder.h shims
+     * (or were removed outright), so whether a translation unit sees them
+     * depends on its PCH. MSVC reported C3861/C2065 for TIsPointer, TIsClass
+     * and TRemoveReference in the test-suite units while the plugin units
+     * compiled. Define the equivalents locally so every unit gets identical
+     * behaviour; std::is_* has the same semantics for the types used here.
+     */
+    template <typename T> struct TIsPointer { static constexpr bool Value = std::is_pointer<T>::value; };
+    template <typename T> struct TIsClass { static constexpr bool Value = std::is_class<T>::value; };
+    template <typename T> struct TIsEnum { static constexpr bool Value = std::is_enum<T>::value; };
+    template <typename T> struct TIsArithmetic { static constexpr bool Value = std::is_arithmetic<T>::value; };
+    template <typename T> struct TRemoveReference { using Type = std::remove_reference_t<T>; };
+    template <typename T> struct TRemovePointer { using Type = std::remove_pointer_t<T>; };
+
+    /**
      * Traits class which tests if a type is constructible
      */
     template <class T, class... Args> struct TIsConstructible { enum { Value = std::is_constructible<T, Args...>::value }; };
@@ -67,7 +84,9 @@ namespace UnLuaNova
     /**
      * Traits class which tests if a type is primitive
      */
-    template <typename T> struct TIsPrimitiveType { enum { Value = TOr<TIsEnum<T>, TIsArithmetic<T>>::Value }; };
+    // std::is_enum / std::is_arithmetic instead of UE's TOr<TIsEnum<T>, TIsArithmetic<T>>:
+    // TOr is only forward-declared in some UE 6.0 translation units.
+    template <typename T> struct TIsPrimitiveType { enum { Value = std::is_enum<T>::value || std::is_arithmetic<T>::value }; };
     template <typename T> struct TIsPrimitiveType<const T> { enum { Value = TIsPrimitiveType<T>::Value }; };
     template <typename T> struct TIsPrimitiveType<volatile T> { enum { Value = TIsPrimitiveType<T>::Value }; };
     template <typename T> struct TIsPrimitiveType<const volatile T> { enum { Value = TIsPrimitiveType<T>::Value }; };
@@ -82,7 +101,7 @@ namespace UnLuaNova
     /**
      * Traits class which tests if a type is primitive or pointer
      */
-    template <typename T> struct TIsPrimitiveTypeOrPointer { enum { Value = TOr<TIsPrimitiveType<T>, TIsPointer<T>>::Value }; };
+    template <typename T> struct TIsPrimitiveTypeOrPointer { enum { Value = TIsPrimitiveType<T>::Value || TIsPointer<T>::Value }; };
 
 
     /**
@@ -268,9 +287,25 @@ namespace UnLuaNova
 
 
     /**
+     * Tests whether a From* is implicitly convertible to a To*.
+     *
+     * UE 5.8+/6.0 no longer pulls Templates/PointerIsConvertibleFromTo.h into the
+     * common includes and deprecates that trait. Referencing it without an explicit
+     * include makes the default argument below ill-formed, which MSVC reports as
+     * C2653 on the trait and then as C2976/C2955 on every TType<T> use. The
+     * pointer form of std::is_convertible has the same semantics for the types
+     * used here, including cv-qualification and void handling.
+     */
+    template <typename From, typename To>
+    struct TIsPointerConvertibleFromTo
+    {
+        static constexpr bool Value = std::is_convertible<From*, To*>::value;
+    };
+
+    /**
      * Generic type
      */
-    template <typename T, bool IsUObject = TPointerIsConvertibleFromTo<typename TDecay<T>::Type, UObject>::Value>
+    template <typename T, bool IsUObject = TIsPointerConvertibleFromTo<typename TDecay<T>::Type, UObject>::Value>
     struct TType
     {
         static const char* GetName()

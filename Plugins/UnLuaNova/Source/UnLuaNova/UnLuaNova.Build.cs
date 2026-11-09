@@ -97,6 +97,10 @@ public class UnLuaNova : ModuleRules
         {
             OptimizeCode = CodeOptimization.Never;
             PrivateDependencyModuleNames.Add("UnrealEd");
+            // UnLuaNovaModule.cpp registers settings under WITH_EDITOR and includes
+            // ISettingsModule.h; that header belongs to the Settings module, which
+            // is no longer reachable through UnrealEd's public includes alone.
+            PrivateDependencyModuleNames.Add("Settings");
         }
 
         // UUnLuaNovaReplicationComponent marks its buckets dirty through

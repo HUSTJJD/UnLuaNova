@@ -113,6 +113,11 @@ public class UnLuaNovaEditor : ModuleRules
                 "Sockets",
                 "UnLuaNova",
                 "ToolMenus",
+                // ISettingsModule.h / ISettingsSection.h live in the Settings module and
+                // LevelEditor.h in LevelEditor; UE 6.0 no longer exposes either header
+                // transitively through UnrealEd's public includes.
+                "Settings",
+                "LevelEditor",
                 // DAP 适配器的 JSON 编解码（LuaDebugAdapter）
                 "Json",
                 "JsonUtilities",

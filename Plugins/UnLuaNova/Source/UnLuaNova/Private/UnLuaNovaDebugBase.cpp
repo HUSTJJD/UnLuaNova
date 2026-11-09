@@ -448,7 +448,10 @@ namespace UnLuaNova
         case CPT_UInt64:
             {
                 FNumericProperty *NumericProperty = (FNumericProperty*)InProperty;
-                ReadableValue = FString::Printf(TEXT("%ld"), NumericProperty->GetUnsignedIntPropertyValue(ValuePtr));
+                // The getter returns uint64. %ld is 32-bit on Windows and UE's
+                // compile-time format check rejects it (C7595). UINT64_FMT is the
+                // platform-correct length modifier for a 64-bit unsigned value.
+                ReadableValue = FString::Printf(TEXT("%" UINT64_FMT), NumericProperty->GetUnsignedIntPropertyValue(ValuePtr));
             }
             break;
         case CPT_Float:

@@ -23,6 +23,7 @@
 #include "HAL/PlatformTime.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
+#include "Misc/EngineVersionComparison.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Misc/PackageName.h"
@@ -39,6 +40,10 @@
 #include "Settings/LevelEditorPlaySettings.h"
 #if ENGINE_MAJOR_VERSION >= 5
 #include "Tests/AutomationEditorCommon.h"
+#endif
+// UE 6.0 moved the PIE delegates from FEditorDelegates to UE::Editor::PIE.
+#if !UE_VERSION_OLDER_THAN(6, 0, 0)
+#include "Editor/EditorEngineDelegates.h"
 #endif
 #endif
 
@@ -217,12 +222,20 @@ namespace UnLuaNovaTestSuite
             FFailedGameStartHandler()
             {
                 bCanProceed = true;
+#if UE_VERSION_OLDER_THAN(6, 0, 0)
                 FEditorDelegates::EndPIE.AddRaw(this, &FFailedGameStartHandler::OnEndPIE);
+#else
+                UE::Editor::PIE::OnEnd.AddRaw(this, &FFailedGameStartHandler::OnEndPIE);
+#endif
             }
 
             ~FFailedGameStartHandler()
             {
+#if UE_VERSION_OLDER_THAN(6, 0, 0)
                 FEditorDelegates::EndPIE.RemoveAll(this);
+#else
+                UE::Editor::PIE::OnEnd.RemoveAll(this);
+#endif
             }
 
             bool CanProceed() const { return bCanProceed; }

@@ -1032,14 +1032,14 @@ namespace UnLuaNova
     template <bool bIsReflected, typename ClassType, typename... CtorArgType>
     template <ESPMode Mode, typename... ArgType> void TExportedClass<bIsReflected, ClassType, CtorArgType...>::AddSharedPtrConstructor()
     {
-        static_assert(TPointerIsConvertibleFromTo<ClassType, UObject>::Value == false, "UObject doesn't support shared ptr");
+        static_assert(TIsPointerConvertibleFromTo<ClassType, UObject>::Value == false, "UObject doesn't support shared ptr");
         FExportedClassBase::Functions.Add(new TSharedPtrConstructor<Mode, ClassType, ArgType...>);
     }
 
     template <bool bIsReflected, typename ClassType, typename... CtorArgType>
     template <ESPMode Mode, typename... ArgType> void TExportedClass<bIsReflected, ClassType, CtorArgType...>::AddSharedRefConstructor()
     {
-        static_assert(TPointerIsConvertibleFromTo<ClassType, UObject>::Value == false, "UObject doesn't support shared ref");
+        static_assert(TIsPointerConvertibleFromTo<ClassType, UObject>::Value == false, "UObject doesn't support shared ref");
         FExportedClassBase::Functions.Add(new TSharedRefConstructor<Mode, ClassType, ArgType...>);
     }
 
@@ -1065,7 +1065,7 @@ namespace UnLuaNova
     template <bool bIsReflected, typename ClassType, typename... CtorArgType>
     void TExportedClass<bIsReflected, ClassType, CtorArgType...>::AddDefaultFunctions(FTrue Reflected)
     {
-        AddDefaultFunctions_Reflected(std::conditional_t<TPointerIsConvertibleFromTo<ClassType, UObject>::Value, FTrue, FFalse>());
+        AddDefaultFunctions_Reflected(std::conditional_t<TIsPointerConvertibleFromTo<ClassType, UObject>::Value, FTrue, FFalse>());
     }
 
     template <bool bIsReflected, typename ClassType, typename... CtorArgType>

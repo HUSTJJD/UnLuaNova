@@ -993,7 +993,7 @@ namespace UnLuaNova
     /**
      * Helper for pointer operation
      */
-    template <typename T, bool IsUObject = TPointerIsConvertibleFromTo<typename TDecay<T>::Type, UObject>::Value>
+    template <typename T, bool IsUObject = TIsPointerConvertibleFromTo<typename TDecay<T>::Type, UObject>::Value>
     struct TPointerHelper
     {
         static int32 Push(lua_State* L, T* V)

@@ -12,10 +12,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 // See the License for the specific language governing permissions and limitations under the License.
 
+#include "Misc/EngineVersionComparison.h"
+
 #if WITH_EDITOR
 #include "ISettingsModule.h"
 #include "ISettingsSection.h"
 #include "Modules/ModuleManager.h"
+// UE 6.0 removed the PIE delegates from FEditorDelegates and moved them to
+// UE::Editor::PIE in the Engine module.
+#if !UE_VERSION_OLDER_THAN(6, 0, 0)
+#include "Editor/EditorEngineDelegates.h"
+#endif
 #endif
 
 #if ALLOW_CONSOLE
@@ -36,7 +43,6 @@
 #include "GameFramework/PlayerController.h"
 #include "Registries/ClassRegistry.h"
 #include "Registries/EnumRegistry.h"
-#include "Misc/EngineVersionComparison.h"
 
 #define LOCTEXT_NAMESPACE "FUnLuaNovaModule"
 
@@ -72,9 +78,15 @@ namespace UnLuaNova
 #if WITH_EDITOR
             if (!IsRunningGame())
             {
+#if UE_VERSION_OLDER_THAN(6, 0, 0)
                 PreBeginPIEHandle = FEditorDelegates::PreBeginPIE.AddRaw(this, &FUnLuaNovaModule::OnPreBeginPIE);
                 PostPIEStartedHandle = FEditorDelegates::PostPIEStarted.AddRaw(this, &FUnLuaNovaModule::OnPostPIEStarted);
                 EndPIEHandle = FEditorDelegates::EndPIE.AddRaw(this, &FUnLuaNovaModule::OnEndPIE);
+#else
+                PreBeginPIEHandle = UE::Editor::PIE::OnPreBegin.AddRaw(this, &FUnLuaNovaModule::OnPreBeginPIE);
+                PostPIEStartedHandle = UE::Editor::PIE::OnPostStarted.AddRaw(this, &FUnLuaNovaModule::OnPostPIEStarted);
+                EndPIEHandle = UE::Editor::PIE::OnEnd.AddRaw(this, &FUnLuaNovaModule::OnEndPIE);
+#endif
                 EndPlayMapHandle = FGameDelegates::Get().GetEndPlayMapDelegate().AddRaw(this, &FUnLuaNovaModule::OnEndPlayMap);
             }
 
@@ -101,9 +113,15 @@ namespace UnLuaNova
 
 #if AUTO_UNLUA_STARTUP
 #if WITH_EDITOR
+#if UE_VERSION_OLDER_THAN(6, 0, 0)
             FEditorDelegates::PreBeginPIE.Remove(PreBeginPIEHandle);
             FEditorDelegates::PostPIEStarted.Remove(PostPIEStartedHandle);
             FEditorDelegates::EndPIE.Remove(EndPIEHandle);
+#else
+            UE::Editor::PIE::OnPreBegin.Remove(PreBeginPIEHandle);
+            UE::Editor::PIE::OnPostStarted.Remove(PostPIEStartedHandle);
+            UE::Editor::PIE::OnEnd.Remove(EndPIEHandle);
+#endif
             FGameDelegates::Get().GetEndPlayMapDelegate().Remove(EndPlayMapHandle);
             PreBeginPIEHandle.Reset();
             PostPIEStartedHandle.Reset();

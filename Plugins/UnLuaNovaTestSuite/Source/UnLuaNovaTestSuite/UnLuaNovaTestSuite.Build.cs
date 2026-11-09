@@ -134,6 +134,9 @@ public class UnLuaNovaTestSuite : ModuleRules
 			// (It used to also pull AssetRegistry + BlueprintGraph for the one-off asset
 			// repair test; that test is gone - the assets are fixed and committed.)
 			PrivateDependencyModuleNames.Add("UnrealEd");
+			// LevelEditor.h and Settings/LevelEditorPlaySettings.h are no longer
+			// reachable through UnrealEd's includes on UE 6.0.
+			PrivateDependencyModuleNames.Add("LevelEditor");
 
 			// UnLuaNovaEditor: drives UnLuaNovaStaticBindingGenerator end to end
 			// (Private/Specs/StaticBindingGenerator.spec.cpp). Editor-only, like the module.
