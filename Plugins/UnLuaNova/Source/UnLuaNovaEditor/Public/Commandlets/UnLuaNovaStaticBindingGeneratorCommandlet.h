@@ -1,7 +1,7 @@
 // Commandlet front-end for static binding generation.
 //
 //   UnrealEditor-Cmd.exe <Project> -run=UnLuaNovaStaticBindingGenerator
-//       [-OutputDir=<Project>/Source/<Module>/Generated]
+//       [-OutputDir=<explicit directory>]; default: Generated/Backends/<compiled backend>
 //       [-Modules=/Script/Engine,/Script/UMG]
 //
 // This is the manual / CI entry point, not the normal one: a project turns on

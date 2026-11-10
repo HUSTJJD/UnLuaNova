@@ -14,7 +14,7 @@ description: "单入口 release 验证与失败判定"
 .\Tools\RunTests.ps1
 ```
 
-默认 `Release` 配置自动执行下表，不需要分别切换后端、构建分析器、导出声明、启动网络 peer 或选择测试过滤器。当前固定为 **Win64**，使用项目关联的 UE、已安装的 Visual Studio C++ 工具和 Python。首次执行会联网初始化仓库固定提交的子模块，并在 `Saved/ReleaseTools` 准备 Python 工具；不会安装 UE 或 Visual Studio。
+这条命令**不接受任何参数**，自动执行下表，不需要分别切换后端、构建分析器、导出声明、启动网络 peer 或选择测试过滤器。当前固定为 **Win64**，使用项目关联的 UE、已安装的 Visual Studio C++ 工具和 Python。首次执行会联网初始化仓库固定提交的子模块，并在 `Saved/ReleaseTools` 准备 Python 工具；不会安装 UE 或 Visual Studio。
 
 > **Python 需要 3.10 或更高版本。** `python -m venv` 在 3.7–3.9 上会调用当时还不存在的
 > `ensurepip --default-pip`，失败时只会给出一个看不懂的子进程错误，后面所有阶段都记成
@@ -28,12 +28,14 @@ $env:UNLUANOVA_PYTHON = 'C:\Users\<你>\scoop\apps\python311\current\python.exe'
 
 > 另外请用 **PowerShell 7（`pwsh`）** 运行，不要用 Windows PowerShell 5.1（`powershell.exe`）。
 
-## 后端隔离构建（-BackendTargets）
+## 后端隔离构建
 
-不带开关时，Development 与 Release 的行为都和以前一致：改 ini → 重编 → 跑 → 换后端 →
-再重编。加上 `-BackendTargets` 后，**每个后端的 Editor / Game / Server 各编一次，产物按
-`Backends/<后端>/` 分开，之后切换只改模块清单，不编译、不覆盖**。这个开关对 Development、
-Release、`-Carrier Game`、`-NetMatrix` 都生效。
+后端隔离是**默认且唯一**的构建方式，不再是可选开关：`RunTests.ps1` / `ReleasePipeline.ps1` / `RunDevelopmentTests.ps1` /
+`RunNetMatrix.ps1` 一律使用 `UnLuaNovaDemo<后端>{Editor,Server,''}` 六个隔离 target，
+**每个后端的 Editor / Game / Server 各编一次，产物按 `Backends/<后端>/` 分开，之后切换只改
+模块清单，不编译、不覆盖**。对 Development、Release、`-Carrier Game`、`-NetMatrix` 全部生效。
+普通工程仍可在 `Config/DefaultUnLuaNova.ini` 里编译期选择后端并手动编译普通 target；
+流水线不再提供单槽路径。
 
 ### 一次性构建
 
@@ -58,15 +60,15 @@ Build.bat UnLuaNovaDemoLuauServer Win64 Development -Project=UnLuaNovaDemo.uproj
 .\Tools\SwitchBackend.ps1 -Status                 # 看当前哪套生效
 .\Tools\SwitchBackend.ps1 -Backend Default       # 回到普通单 target 布局
 
-# Development：Editor 或 Game 载体
-.\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both
-.\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both -Carrier Game
+# 局部/调试：Editor 或 Game 载体（不是 release 结论）
+.\Tools\RunDevelopmentTests.ps1 -Backend Both
+.\Tools\RunDevelopmentTests.ps1 -Backend Both -Carrier Game
 
 # 联网矩阵（每个 cell 启真实 server/client 进程）
-.\Tools\RunTests.ps1 -Profile Development -NetMatrix -BackendTargets -Backend Both -SkipBuild
+.\Tools\RunDevelopmentTests.ps1 -NetMatrix -Backend Both -SkipBuild
 
-# Release 完整 Win64 矩阵（每后端用隔离 target + 独立 stage 目录）
-.\Tools\RunTests.ps1 -Profile Release -BackendTargets
+# 完整 Win64 Release 矩阵 —— 无参数，所有配置都是默认值
+.\Tools\RunTests.ps1
 ```
 
 ### 为什么需要六个 target
@@ -80,15 +82,15 @@ UBT 给所有 Editor target 同一个 `AppName`（`UnrealEditor`），只加一�
 命名契约是 `UnLuaNovaDemo<后端>{Editor,Server,''}`。Editor 是共享构建环境，AppName 恒为
 `UnrealEditor`；Game/Server 不是，AppName 就是 target 名，所以它们的 exe、模块 DLL 前缀、
 中间目录和 `*.modules` 清单名都跟着变（例如 `UnLuaNovaDemoLua.exe`、
-`UnLuaNovaDemoLuaServer.modules`）。`RunTests.ps1` / `ReleasePipeline.ps1` 在隔离模式下按
+`UnLuaNovaDemoLuaServer.modules`）。`RunTests.ps1` / `ReleasePipeline.ps1` 在默认隔离构建下按
 carrier 使用对应的名字，不会误拿另一个后端的二进制。
 
 多出来的两个隔离 Editor target 让工程同时有三个 `*Editor.Target.cs`。UAT 的
 `BuildCookRun` 在无法确定默认编辑器目标时会直接拒绝执行（即使带了 `-skipbuildeditor`），
 因此 `Config/DefaultEngine.ini` 必须显式声明
 `[/Script/BuildSettings.BuildSettings] DefaultEditorTarget=UnLuaNovaDemoEditor`。
-`Tools/tests/test_backend_isolation.py` 把这条约束作为静态回归守着：它不影响隔离模式，
-隔离模式的 Editor target 由 `RunTests.ps1` / `ReleasePipeline.ps1` 按后端名字显式指定。
+`Tools/tests/test_backend_isolation.py` 把这条约束作为静态回归守着：它不影响默认隔离构建：
+Editor target 由 `RunTests.ps1` / `ReleasePipeline.ps1` 按后端名字显式指定。
 
 ### 为什么需要 SwitchBackend
 
@@ -105,14 +107,14 @@ target。某个 Binaries root 如果没有该后端的隔离产物，脚本会�
 | 项 | 说明 |
 |---|---|
 | 首次成本 | 六个 target 各一次全量编译；磁盘约为原来的两倍。之后切换零编译 |
-| 载体 | Editor / Game / Server 全部隔离。`-BackendTargets` 可与 `-Carrier Game`、`-NetMatrix`、`-Profile Release` 组合 |
-| Release | 每后端用隔离 Editor/Game/Server target，UAT 加 `-stagingdirectory` 指向 `Saved/StagedBuilds/{Windows,WindowsServer}/Backends/<后端>`（UAT 每次 `-stage` 会清空目标目录，共用目录会删掉另一个后端的 exe）；缓存指纹含 `isolated`/`targets`，结束把清单复位为 Default 并恢复原 ini |
+| 载体 | Editor / Game / Server 全部隔离；与 `-Carrier Game`、`-NetMatrix` 及无参的完整 Release 组合同样默认生效 |
+| Release | 每后端用隔离 Editor/Game/Server target，UAT 加 `-stagingdirectory` 指向 `Saved/StagedBuilds/{Windows,WindowsServer}/Backends/<后端>`，`-CookOutputDir` 指向 `Saved/Cooked/Backends/<后端>/{Development,Shipping}/{Windows,WindowsServer}`；静态绑定源码按后端落在 `Generated/Backends/<后端>/`；缓存指纹含 `isolated`/`targets`，结束把清单复位为 Default 并恢复原 ini |
 | 清单 | 编某个 isolated target 时 UBT 会重写该后端的清单。若之后又编了普通 target，根目录会重新出现一份清单，再跑一次 `SwitchBackend.ps1` 即可 |
 | 并发 | 切换仍是全局状态，`Saved/RunTests.lock` 继续生效；不要在切换时另开构建/编辑器 |
 | 上层工程 | `Tools/unluanova.ps1 doctor` 现在认识 `Backends/<后端>/`、live/disabled 清单与示例工程 ini 标签：两套 DLL 并存不再报错，两个后端清单同时 live 才报错 |
 
 静态契约由 `Tools/tests/test_backend_isolation.py` 守住：布局块逐字节一致、六个 target 存在、
-脚本参数贯通，并用合成目录对上层 doctor 做功能回归。
+脚本调用链与无参入口贯通，并用合成目录对上层 doctor 做功能回归。
 
 ## 默认执行内容
 
@@ -121,19 +123,19 @@ target。某个 Binaries root 如果没有该后端的隔离产物，脚本会�
 | 仓库与工具 | 能力矩阵/文档链接检查、Python 工具回归、PowerShell 语法与进程/参数/超时回归 |
 | 分析器 | 初始化 MSVC 环境，从固定子模块构建 LuaLS 和 luau-lsp |
 | 每个后端 | Lua、Luau 分别执行，开启 Timer/Event/OOP 和静态绑定 |
-| Editor | 备份移出旧静态绑定源码，构建 Editor/生成器，重新生成并再次构建，确保本轮生成代码参与编译 |
-| Development | 构建、cook、打包 Game 和 Dedicated Server target 到默认输出路径 |
+| Editor | 构建 Editor/生成器；为当前后端在 `Generated/Backends/<后端>/` 生成静态绑定源码并重新构建，确保本轮生成代码参与编译。不再备份/替换/恢复共享源码 |
+| Development | 构建、cook、打包 Game 和 Dedicated Server target 到各自的 `Backends/<后端>` staging 目录 |
 | Editor 全量测试 | 全部 `UnLuaNova` 注册用例，包括 Slow、VM/绑定/生命周期、扩展、示例截图及性能用例 |
 | 跨进程联网 | 本轮同后端 cooked Server/Game 组成一个 DS 和两个客户端；验证两个服务端生成 Actor 的两轮 Lua 字段同步、双向 RPC、Owner 定向投递及 multicast，保留逐端原始观测 |
 | 静态类型 | 备份旧生成声明，重新导出；LuaLS 和 luau-lsp 必须实际执行，不能静默跳过 |
 | Cooked 全量测试 | 在 Development 包中执行 UE 当前游戏上下文可运行的全部注册用例 |
 | 内存 | 两个后端的 Editor 与 cooked Development 均执行 `UnLuaNova.Memory`，逐块核对 VM 释放、资源释放和预热后堆增长；报告缺失或残留超标失败 |
-| Shipping | 构建、cook、打包到默认输出路径并检查可执行文件；这是打包门禁，尚不等于 Shipping 运行验收 |
+| Shipping | 构建、cook、打包到该后端独立的 `WindowsShipping/Backends/<后端>` 目录并检查可执行文件；这是打包门禁，尚不等于 Shipping 运行验收 |
 | 收尾 | 恢复配置原始字节及修改过的环境变量，清理本轮残留进程，输出总结果 |
 
-使用 `Saved/RunTests.lock` 防止脚本并发切换后端。测试期间不要在另一编辑器或构建任务中修改同一项目配置/二进制。脚本恢复配置，但最后构建的二进制仍属于最后一个后端。
+使用 `Saved/RunTests.lock` 防止脚本并发切换后端。测试期间不要在另一编辑器或构建任务中修改同一项目配置/二进制。脚本恢复配置；两个后端的隔离二进制都保留在磁盘上，Release 收尾把模块清单复位为 Default，Development 保留最后激活的后端清单。
 
-Release 自动设置 `UNLUANOVA_TEST_PEER_EXE` 和 `UNLUANOVA_TEST_SERVER_EXE`，分别指向默认 staging 路径的当前 Game 和 Server 程序。编译复用 `Binaries/Win64`；Development 打包复用 `Saved/StagedBuilds/Windows` 和 `WindowsServer`，**Shipping 单独落在 `Saved/StagedBuilds/WindowsShipping`**。UAT 每次 `-stage` 都会清空 staging 目录，两个配置共用同一目录时，最后执行的 Shipping 会删掉 Development 的客户端 exe —— 而 `metadata/binary-Development.json` 与联网矩阵 Cooked 变体都还要用它。拆开后一次完整 Release 结束仍留下可用的 Development staged peer。后续后端会覆盖相应输出，不为每轮复制 exe。各后端的 `metadata/binary-*.json` 保存当时的路径、大小及 SHA-256。UE 5.8 普通 Game 二进制不会因 `-server` 参数变成 Dedicated Server。拓扑文件记录每个 peer 的实际可执行文件，清理时同时核对 PID、路径及启动时间。
+Release 自动设置 `UNLUANOVA_TEST_PEER_EXE` 和 `UNLUANOVA_TEST_SERVER_EXE`，分别指向该后端 `Backends/<后端>` staging 路径下的 Game 和 Server 程序。编译复用各后端的 `Binaries/Win64/Backends/<后端>`；Development 打包落在 `Saved/StagedBuilds/{Windows,WindowsServer}/Backends/<后端>`，**Shipping 单独落在 `Saved/StagedBuilds/WindowsShipping/Backends/<后端>`**。UAT 每次 `-stage` 都会清空 staging 目录，两个配置共用同一目录时，最后执行的 Shipping 会删掉 Development 的客户端 exe —— 而 `metadata/binary-Development.json` 与联网矩阵 Cooked 变体都还要用它。拆开后一次完整 Release 结束仍留下可用的 Development staged peer。两个后端的输出互不覆盖，不为每轮复制 exe。各后端的 `metadata/binary-*.json` 保存当时的路径、大小及 SHA-256。UE 5.8 普通 Game 二进制不会因 `-server` 参数变成 Dedicated Server。拓扑文件记录每个 peer 的实际可执行文件，清理时同时核对 PID、路径及启动时间。
 
 Release 的 Editor、Game 和非 headless peer 使用 `-RenderOffScreen`，保留真实 RHI、视口用例、单张游戏视口截图，避免依赖桌面窗口是否可见；已移除桌面录屏、连续帧采集及视频编码。DS 仍使用 `-NullRHI`。Development 可显式选择 `-RenderOffScreen`。
 
@@ -141,7 +143,14 @@ Release 测试 Editor 固定使用 `AboveNormal` 进程优先级，设置与 PID
 
 LuaLS 构建在 `Saved/ReleaseTools/luals-temp/` 使用每次独立的临时目录，并在退出时恢复 TMP/TEMP。引导工具和主分析器的构建、测试分别检查退出码，任何一步失败都会阻止分析器阶段通过。
 
-静态绑定备份保存在各后端的 `metadata/static-binding-backup/`，仅处理带生成器标记的固定输出文件；其他源码不参与此流程。若流程结束时未生成新文件，自动恢复旧文件并保留备份。这样旧版生成代码不会阻止新版生成器启动，也不需要手动删除源码。生成器指纹包含格式版本，格式修复可使旧输出失效。
+Cook 输出同样按后端 + 配置隔离：三次 `BuildCookRun` 都显式传 `-CookOutputDir`，分别落到
+`Saved/Cooked/Backends/<后端>/Development/Windows`、`.../Shipping/Windows` 和
+`.../Development/WindowsServer`。路径末段必须是 UAT 的 `SC.CookPlatform`：CookCommandlet 把
+`-outputdir` 原样当 sandbox 根（不含 `[Platform]` 时单平台不追加），而
+`CopyBuildToStagingDirectory` 在末段不等于 `CookPlatform` 时会再拼一层平台目录 —— 两边必须对上。
+按配置分开还避免 Development 与 Shipping 反复覆盖同一批 cooked 资产。
+
+静态绑定源码按后端隔离：生成器读取所在 Editor 二进制的编译期 `UNLUANOVA_LUA_BACKEND`，把 `.cpp` 写进 `Generated/Backends/<后端>/`，两个后端各写各的文件、互不覆盖。UBT 会递归编译模块目录下所有 `.cpp`，因此每份生成文件的整段内容都由同一后端宏卫住：只有与当前 target 匹配的一份真正注册绑定表，另一份是空翻译单元。Release 因此不再需要 backup / stub / restore 串行化，也没有共享文件可相互污染；门禁除校验生成器标记外还核对 `// backend:` 与宏卫，串到错误后端的文件会直接失败。首次生成时生成器会删除旧的全局单份产物（仅当它带生成器标记）。生成器指纹包含格式版本，格式修复可使旧输出失效。
 
 DAP 会话测试使用系统分配的回环端口，由游戏线程逐帧处理非阻塞收发，保留 TCP 分包、粘包和 UTF-8 字节。每步超时 5 秒、会话上限 20 秒，清理时先移除轮询再关闭连接。用例覆盖真实会话、未知命令、分片请求、帧解码、并发停止与重启；两个后端的 Editor 全量测试会自动包含这些回归。
 
@@ -156,7 +165,10 @@ DAP 会话测试使用系统分配的回环端口，由游戏线程逐帧处理�
 编译、cook、打包、声明导出和静态检查都是"输入变了才需要重做"的工作，`Tools/ReleaseCache.ps1` 据此复用：每个阶段把自己的输入（源码、资产、项目配置、引擎版本、后端、分析器）算成指纹，连同产物路径、大小、修改时间和 SHA-256 记到 `Saved/ReleaseCache/index.json`。指纹一致且产物仍与记录一致时，阶段记为 `cached` 并跳过；产物被删除、被另一次构建替换，或输入变化时立即失效并重做。
 
 - **测试、证据、报告阶段从不复用**：它们是本轮的证据，不是别人的输入。
-- **构建树只有一个**：后端是编译期选择，切换后端会覆盖前一个后端的二进制，所以流水线先跑"磁盘上现在编好的那个"后端（按 `Definitions.UnLuaNova.h` 判断），它这一轮的编译/烘焙/打包全部复用；另一个后端重建，并把构建树留给下一轮。固定顺序等于每轮两次全量构建。
+- **每个后端一棵构建树**：隔离 target 把 DLL、中间产物、stage、cook 输出与静态绑定源码都写入
+  `Backends/<后端>/` 下各自的目录，两个后端互不覆盖；缓存指纹固定含 `isolated=True`、各自的 target
+  名以及 `cook=isolated` / `binding=isolated`，后端顺序固定为 Lua → Luau，不再需要按"磁盘上现在
+  编好的那个"排序。
 - 声明导出两个后端共用一次；类型检查结果（`*-analyze.json`）由缓存回写到本轮目录，因为证据门禁要读它，"没有文件"是门禁失败而不是跳过。
 - `-NoCache` 强制全部重做；删掉 `Saved/ReleaseCache` 同上。`-PruneLegacy` 删除旧的时间戳结果目录（`Saved/ReleaseTests/<yyyyMMdd-HHmmss-fff>`）。
 
@@ -164,7 +176,7 @@ DAP 会话测试使用系统分配的回环端口，由游戏线程逐帧处理�
 
 Editor 证据门禁要求四个 Showcase 的 PNG。cooked 报告也自动收集本轮新生成的单张截图。网络要求 Server/Client1/Client2 的日志、角色、后端、RPCId、不同 PID、实际打开的连接及相同服务器地址。DedicatedServer schema 2 还要求相同服务端生成的 SessionId、两个不同 Owner、两轮 Lua HP 与准确的逐端 RPC 日志；Standalone 或只有声明编号一致的旧报告不能通过。单独运行报告 helper 的空操作不算联网通过。
 
-Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混入旧 Game 二进制；Release 通过环境变量显式指定默认 staging 路径的当前 Server/Game。客户端不在本地生成测试 Actor 或设置 Owner。
+Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混入旧 Game 二进制；Release 通过环境变量显式指定该后端 `Backends/<后端>` staging 路径下的 Server/Game。客户端不在本地生成测试 Actor 或设置 Owner。
 
 性能门禁要求 `Tools/baseline/perf-lua.json`、`perf-luau.json`，核对后端、引擎、机器、case 与迭代次数，并拒绝超过 25% 的回退。缺少可比参考值时门禁失败，**不会自动将待测结果提升为基线**。
 
@@ -194,15 +206,16 @@ python -B Tools/GenerateNotices.py --check Saved\StagedBuilds\Windows\NOTICES.tx
 
 ## 开发调试
 
-局部测试必须明确指定 `Development`，其结果不能作为 release 总结：
+局部测试走独立的 `Tools/RunDevelopmentTests.ps1`，其结果不能作为 release 总结。
+`Tools/RunTests.ps1` 不接受任何参数，因此不存在漏加开关、只跑了一半却当成 release 结论的情况：
 
 ```powershell
-.\Tools\RunTests.ps1 -Profile Development -Backend Luau -Filter UnLuaNova.API.Timer
-.\Tools\RunTests.ps1 -Profile Development -Tier Fast
-.\Tools\RunTests.ps1 -Profile Development -Filter UnLuaNova.Showcase -Backend Luau -Publish
+.\Tools\RunDevelopmentTests.ps1 -Backend Luau -Filter UnLuaNova.API.Timer
+.\Tools\RunDevelopmentTests.ps1 -Tier Fast
+.\Tools\RunDevelopmentTests.ps1 -Filter UnLuaNova.Showcase -Backend Luau -Publish
 ```
 
-`-SkipBuild`、`-BuildOnly`、`-NullRHI`、`-NoReport`、单后端和自定义 filter 均限 Development。release 拒绝这些降低覆盖范围的选项。旧的 nightly build 注册器也使用 Development，仅检查编译，不代表 release 验收。
+`-SkipBuild`、`-BuildOnly`、`-NullRHI`、`-NoReport`、单后端和自定义 filter 都属于这个调试脚本。旧的 nightly build 注册器也用它，仅检查编译，不代表 release 验收。
 
 ### 联网矩阵（独立 opt-in）
 
@@ -211,7 +224,7 @@ python -B Tools/GenerateNotices.py --check Saved\StagedBuilds\Windows\NOTICES.tx
 四个变体各起三个真实进程，不进普通测试矩阵，也不属于常规 Release 阶段：
 
 ```powershell
-.\Tools\RunTests.ps1 -Profile Development -NetMatrix -Backend Lua -SkipBuild
+.\Tools\RunDevelopmentTests.ps1 -NetMatrix -Backend Lua -SkipBuild
 python Tools\ValidateRelease.py --net-matrix --run Saved\ReleaseTests\net-matrix\Lua --backend Lua --carrier game
 ```
 
@@ -240,22 +253,25 @@ ini 覆盖）传到进程命令行，`FNetSession` 再把场景开关、丢包�
 该门禁 fail-closed：缺拓扑、缺 peer 日志、PID 不符、伪造 Iris/push-model/Cooked 标志、
 声明指纹不一致或不可区分、缺 Generic 字段 / UStruct 参数、连接字节计数为零、场景没跑，都会失败。
 
+下面是维护者操作，直接调用 `Tools/ReleasePipeline.ps1`；日常验收只需无参的
+`.\Tools\RunTests.ps1`，不需要以下任何开关。
+
 只看默认计划、不修改配置、不安装工具、不启动编译或 UE：
 
 ```powershell
-.\Tools\RunTests.ps1 -DryRun
+.\Tools\ReleasePipeline.ps1 -DryRun
 ```
 
 把这一轮写成以后用来对比的基线（写到 `Saved/ReleaseTests/baseline`）：
 
 ```powershell
-.\Tools\RunTests.ps1 -Baseline
+.\Tools\ReleasePipeline.ps1 -Baseline
 ```
 
 不用缓存、全部重新构建与打包：
 
 ```powershell
-.\Tools\RunTests.ps1 -NoCache
+.\Tools\ReleasePipeline.ps1 -NoCache
 ```
 
 ## 覆盖边界

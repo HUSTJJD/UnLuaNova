@@ -206,19 +206,22 @@ LuaBackend=Luau        ; or Lua; rebuild after changing
 
 The example project has a faster path: `UnLuaNovaDemo<Lua|Luau>{Editor,Server,''}` build into
 separate trees, so after one build each, switching backends costs **no compile**.
-`-BackendTargets` works for Editor / Game / Server carriers, `-NetMatrix` and the full
-Release matrix:
+Backend isolation is the default and only path - no switch: Editor / Game / Server
+carriers, `-NetMatrix` and the full Release matrix all use the isolated targets. It is not
+just the DLLs: cooked assets go to `Saved/Cooked/Backends/<backend>/...` and generated static
+binding sources to `Source/UnLuaNova/Generated/Backends/<backend>/`, split per backend (and
+per configuration for cooks) so nothing overwrites anything else:
 
 ```powershell
 # Editor fast path (Game / Server target commands are in the docs)
 Build.bat UnLuaNovaDemoLuaEditor  Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
 Build.bat UnLuaNovaDemoLuauEditor Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
 .\Tools\SwitchBackend.ps1 -Backend Lua     # or Luau; -Status, -Backend Default
-.\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both
-.\Tools\RunTests.ps1 -Profile Release -BackendTargets
+.\Tools\RunDevelopmentTests.ps1 -Backend Both
+.\Tools\RunTests.ps1                    # full Release, no arguments
 ```
 
-See [Testing / Backend-isolated builds](Docs/EN/Testing.md#backend-isolated-builds--backendtargets).
+See [Testing / Backend-isolated builds](Docs/EN/Testing.md#backend-isolated-builds).
 
 Bind a Blueprint to a module from the UnLuaNova toolbar and put scripts in `Content/Script/`.
 Migrating from UnLua is a rename: `UnLua` → `UnLuaNova`.
@@ -230,9 +233,13 @@ Migrating from UnLua is a rename: `UnLua` → `UnLuaNova`.
 
 ```powershell
 .\Tools\RunTests.ps1                 # full release: both backends, networking, type checks, packaging, perf gate
-.\Tools\RunTests.ps1 -Profile Development -Filter UnLuaNova.API
+.\Tools\RunDevelopmentTests.ps1 -Filter UnLuaNova.API
 python Tools/AuditRepository.py      # repository consistency, no compile
 ```
+
+`RunTests.ps1` takes no parameters: engine discovery, both backends, output directories,
+cache and the complete matrix are all defaults. Filters, carriers, tiers, `-BuildOnly` and
+the connected matrix belong to `Tools/RunDevelopmentTests.ps1`.
 
 </details>
 

@@ -8,7 +8,7 @@ comes out on an engine upgrade, and the numbers that matter - pass/fail, why, ho
 end up on one page.
 
 Outputs, next to --reports unless --out says otherwise:
-    summary.json   machine-readable totals, so RunTests.ps1 can set its exit code
+    summary.json   machine-readable totals, so the driver can set its exit code
     report.md      the conclusions: totals, the passed tests, failures with their
                    messages, slowest tests, and a gallery of whatever the tests
                    screenshotted
@@ -64,7 +64,7 @@ SKIP_STATES = {"skipped", "skip", "notrun", "notrun", "ignored", "na"}
 MAX_MESSAGE_LEN = 400
 SLOWEST_COUNT = 10
 
-# Written by Tools/RunTests.ps1. Which checker runs depends on the backend - Luau scripts
+# Written by Tools/RunDevelopmentTests.ps1. Which checker depends on the backend - Luau scripts
 # are checked with luau-analyze, Lua scripts with LuaLS - and each one writes its summary
 # under its own name next to the automation JSON.
 TYPECHECK_FILES = {"Lua": "lua-analyze.json", "Luau": "luau-analyze.json"}
@@ -741,7 +741,7 @@ def render(
     elif backend in TYPECHECK_FILES:
         lines.append("## 静态类型检查")
         lines.append("")
-        lines.append(f"这一轮没有跑：`Tools/RunTests.ps1` 没写 `{TYPECHECK_FILES[backend]}`。")
+        lines.append(f"这一轮没有跑：`Tools/RunDevelopmentTests.ps1` 没写 `{TYPECHECK_FILES[backend]}`。")
         lines.append("")
 
     lines.extend(render_memory(reports_dir))
@@ -754,7 +754,7 @@ def render(
         # This copy is committed and rendered by MkDocs, so it must not carry a machine
         # specific path or a run timestamp: either one makes the file diff on every run
         # even when the results did not change.
-        regenerate = "Tools/RunTests.ps1 -Profile Development -Backend " + (backend if backend else "<Lua|Luau>") + " -Publish"
+        regenerate = "Tools/RunDevelopmentTests.ps1 -Backend " + (backend if backend else "<Lua|Luau>") + " -Publish"
         lines.append(
             "原始 JSON 留在本机对应的 `Saved/TestReports/`（Development）或 "
             "`Saved/ReleaseTests/`（Release）运行目录（`Saved/` 不入库），"
@@ -774,7 +774,7 @@ def default_baseline_path(backend):
 
 
 def load_net_sessions(reports_dir: Path) -> list:
-    """这一轮归档下来的联网拓扑（RunTests.ps1 把 Saved/UnLuaNovaNet 拷进 <RunDir>/net）。
+    """这一轮归档下来的联网拓扑（RunDevelopmentTests.ps1 把 Saved/UnLuaNovaNet 拷进 <RunDir>/net）。
 
     跨进程用例的断言都在**报告文件**里，而报告文件在 Saved/ 下、会被下一轮删掉重写。归档
     只是把东西挪到了这一轮的目录；不把它接进报告，就只有当时在场的人知道去哪儿找。
@@ -820,7 +820,7 @@ def render_net_sessions(sessions, published=False) -> list:
     lines.append(
         "这一轮跑过的跨进程拓扑。用例用 `FNetSession` 声明要几个 peer、各自什么角色，"
         "每个 peer 把自己的报告与日志写进 `Saved/UnLuaNovaNet/<会话>/`，"
-        "`Tools/RunTests.ps1` 再归档到本轮目录的 `net/` 下。"
+        "`Tools/RunDevelopmentTests.ps1` 再归档到本轮目录的 `net/` 下。"
     )
     lines.append("")
     lines.append(
@@ -1215,7 +1215,7 @@ def main() -> None:
             if drifted:
                 print(
                     "BASELINE: case set changed; confirm it is intentional, then run "
-                    "RunTests.ps1 -UpdateBaseline to refresh the baseline.",
+                    "RunDevelopmentTests.ps1 -UpdateBaseline to refresh the baseline.",
                     file=sys.stderr,
                 )
                 drift_exit = 1
@@ -1288,7 +1288,7 @@ def main() -> None:
     )
 
     if drift_exit and args.fail_on_drift:
-        raise SystemExit("case set differs from baseline; confirm, then run RunTests.ps1 -UpdateBaseline.")
+        raise SystemExit("case set differs from baseline; confirm, then run RunDevelopmentTests.ps1 -UpdateBaseline.")
 
 
 if __name__ == "__main__":

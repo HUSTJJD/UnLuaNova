@@ -115,7 +115,7 @@ StaticBindingSelection=Modules
 产物缺失或类型有增删就重新生成，日志会写明做了什么：
 
 ```
-StaticBinding: no generated file yet, generating into .../Generated/UnLuaNovaStaticBinding_Generated.cpp
+StaticBinding: no generated file yet, generating into .../Generated/Backends/Luau/UnLuaNovaStaticBinding_Generated.cpp
 StaticBinding: wrote ... (312 types, thunk coverage 2211/4078).
 It is C++ - rebuild once for it to take effect; until then the reflective path stays in use.
 ```
@@ -123,8 +123,12 @@ It is C++ - rebuild once for it to take effect; until then the reflective path s
 **注意第二步**：产物是 `.cpp`，写完盘还要 UBT 编一次才进二进制。所以自动生成之后
 thunk **本次启动还不生效**，要下次编译之后。日志里直接写了这句，不用猜。
 
-产物落在 **UnLuaNova 插件自己的模块目录** `<UnLuaNova>/Source/UnLuaNova/Generated/`
-（只有落在模块目录内才会被 UBT 编译）—— 把生成物放在别处等于没有它。
+产物落在 **UnLuaNova 插件自己的模块目录**
+`<UnLuaNova>/Source/UnLuaNova/Generated/Backends/<后端>/`（只有落在模块目录内才会被 UBT 编译）
+—— 把生成物放在别处等于没有它。`<后端>` 来自运行生成器的 Editor 二进制的编译期
+`UNLUANOVA_LUA_BACKEND`（`Lua` / `Luau`），所以两个后端各写各的文件、可以同时存在、互不覆盖。
+UBT 会递归编译模块目录下所有 `.cpp`，因此生成文件整段由同一后端宏卫住：只有与当前 target
+匹配的一份注册绑定表，另一份是空翻译单元。切换后端不再需要备份、替换或恢复共享源码。
 
 默认不给宿主工程的 `Source/<工程模块>/`：工程名并不等于主模块目录名
 （宿主 `LyraStarterGame` 的主模块目录是 `Source/LyraGame`），按工程名推会把产物写进一个
@@ -155,7 +159,7 @@ UnrealEditor-Cmd.exe "<工程目录>/<工程>.uproject" -run=UnLuaNovaStaticBind
 
 | 参数 | 作用 |
 |:---|:---|
-| `-OutputDir=<路径>` | 产物目录，默认 `<UnLuaNova>/Source/UnLuaNova/Generated` |
+| `-OutputDir=<路径>` | 产物目录（原样使用，需自行接入编译），默认 `<UnLuaNova>/Source/UnLuaNova/Generated/Backends/<后端>` |
 | `-Selection=ExportedReflected\|Modules\|All` | 生成范围，默认 `ExportedReflected` |
 | `-Modules=/Script/Engine,/Script/UMG` | 收窄到指定包，逗号分隔；仅 `-Selection=Modules` 时生效 |
 

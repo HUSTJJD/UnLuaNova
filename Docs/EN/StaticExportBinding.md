@@ -41,9 +41,15 @@ UnrealEditor-Cmd.exe "<ProjectDir>/<Project>.uproject" -run=UnLuaNovaStaticBindi
 ```
 
 The generated code lands in **UnLuaNova's own module directory**
-`<UnLuaNova>/Source/UnLuaNova/Generated/` - inside a module directory, because that is the
-only place UBT compiles it. A generated file written anywhere else is not compiled at all,
-and the reflection cost you meant to save is still being paid.
+`<UnLuaNova>/Source/UnLuaNova/Generated/Backends/<backend>/` - inside a module directory,
+because that is the only place UBT compiles it. A generated file written anywhere else is not
+compiled at all, and the reflection cost you meant to save is still being paid. `<backend>` is
+derived from the compile-time `UNLUANOVA_LUA_BACKEND` of the Editor binary running the
+generator (`Lua` / `Luau`), so both backends keep separate files that coexist without
+overwriting each other. UBT compiles every `.cpp` under the module directory, so the whole
+body of each generated file is guarded by that same macro: only the one matching the current
+target registers tables, the other is an empty translation unit. Switching backends no longer
+needs any backup, substitution or restore of a shared source file.
 
 It deliberately does *not* default to the host project's `Source/<ProjectModule>/`: the project
 name is not necessarily the main module directory (the Lyra host is named `LyraStarterGame`

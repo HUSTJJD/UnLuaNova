@@ -29,7 +29,7 @@
 .EXAMPLE
     .\Tools\RunNetMatrix.ps1 -Backend Lua -SkipBuild
 .EXAMPLE
-    .\Tools\RunTests.ps1 -Profile Development -NetMatrix -BackendTargets -SkipBuild
+    .\Tools\RunDevelopmentTests.ps1 -NetMatrix -SkipBuild
 #>
 [CmdletBinding()]
 param(
@@ -45,9 +45,8 @@ param(
     # weakening the fail-fast default used by ordinary automation runs.
     [ValidateRange(60, 1800)] [int] $ReportTimeoutSeconds = 600,
     [switch] $SkipBuild,
-    # Run every cell against the prebuilt backend-isolated Game/Server targets instead of
-    # recompiling the ordinary target for whichever backend the ini currently names.
-    [switch] $BackendTargets,
+    # Every cell runs against the prebuilt backend-isolated Game/Server targets; there is
+    # no ordinary-target path.
     [switch] $DryRun
 )
 
@@ -55,7 +54,7 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 if (-not $OutputDir) { $OutputDir = Join-Path $RepoRoot 'Saved/ReleaseTests/net-matrix' }
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)
-$RunTests = Join-Path $PSScriptRoot 'RunTests.ps1'
+$RunDevTests = Join-Path $PSScriptRoot 'RunDevelopmentTests.ps1'
 $Variants = @('Legacy', 'PushOff', 'Iris', 'Cooked')
 $Scenarios = @('LateJoin', 'Reconnect', 'Dormancy', 'Relevancy',
     'JoinOrderSwap', 'PacketLoss', 'SeamlessReconnect', 'SchemaMismatch')
@@ -126,8 +125,8 @@ function Invoke-Cell([string] $Label, [string] $BackendName, [string] $Filter, [
         # topology, peer reports and peer logs. The full-suite case-set baseline and the
         # per-cell IntelliSense/typecheck pass do not apply to a filtered connected run;
         # the UE process exit code and the fail-closed Copy-Tree/gate below still do.
-        & $RunTests -Profile Development -Backend $BackendName -Carrier $Carrier -Tier All -Filter $Filter `
-            -OutputDir $Scratch -ExtraArgs $ExtraArgs -SkipBuild:$SkipBuild -BackendTargets:$BackendTargets `
+        & $RunDevTests -Backend $BackendName -Carrier $Carrier -Tier All -Filter $Filter `
+            -OutputDir $Scratch -ExtraArgs $ExtraArgs -SkipBuild:$SkipBuild `
             -TimeoutMinutes $TimeoutMinutes -EnginePath $EnginePath -ProjectPath $ProjectPath -NoReport
         if ($LASTEXITCODE -ne 0) { throw "NetMatrix cell failed: $Label ($LASTEXITCODE)" }
     } finally {
@@ -169,12 +168,12 @@ foreach ($B in $Backends) {
                 # An isolated Game/Server target is staged under its own target name (AppName),
                 # not the ordinary project name. Looking for the old .exe would either fail or
                 # pick up a build from the other backend's Release run.
-                $GameTarget = if ($BackendTargets) { "UnLuaNovaDemo$B" } else { $ProjectName }
-                $ServerTarget = if ($BackendTargets) { "UnLuaNovaDemo${B}Server" } else { "$ProjectName`Server" }
-                # ReleasePipeline -BackendTargets stages each backend into its own directory
+                $GameTarget = "UnLuaNovaDemo$B"
+                $ServerTarget = "UnLuaNovaDemo${B}Server"
+                # ReleasePipeline stages each backend into its own directory
                 # (UAT cleans the staging directory on every -stage), so look there as well.
-                $DevStage = if ($BackendTargets) { Join-Path $RepoRoot "Saved/StagedBuilds/Windows/Backends/$B" } else { Join-Path $RepoRoot 'Saved/StagedBuilds/Windows' }
-                $ServerStage = if ($BackendTargets) { Join-Path $RepoRoot "Saved/StagedBuilds/WindowsServer/Backends/$B" } else { Join-Path $RepoRoot 'Saved/StagedBuilds/WindowsServer' }
+                $DevStage = Join-Path $RepoRoot "Saved/StagedBuilds/Windows/Backends/$B"
+                $ServerStage = Join-Path $RepoRoot "Saved/StagedBuilds/WindowsServer/Backends/$B"
                 $PeerExe = Resolve-StagedExe $DevStage "$GameTarget.exe"
                 $ServerExe = Resolve-StagedExe $ServerStage "$ServerTarget.exe"
             }

@@ -70,7 +70,7 @@ param(
     # 只打印将要执行的命令
     [switch] $DryRun,
 
-    # 把结果写成 JSON，供 Tools/RunTests.ps1 收进测试报告
+    # 把结果写成 JSON，供 Tools/RunDevelopmentTests.ps1 收进测试报告
     [string] $SummaryPath
 )
 

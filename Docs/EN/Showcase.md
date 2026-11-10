@@ -25,7 +25,7 @@ the commands.
 Regenerating just the images (fast):
 
 ```powershell
-.\Tools\RunTests.ps1 -Profile Development -Filter UnLuaNova.Showcase -Backend Luau -Publish
+.\Tools\RunDevelopmentTests.ps1 -Filter UnLuaNova.Showcase -Backend Luau -Publish
 ```
 
 Four specs, each opening one tutorial level and taking one shot; the files land in

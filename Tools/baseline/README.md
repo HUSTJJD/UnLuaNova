@@ -55,7 +55,7 @@ These are recorded **execution** inventories. Never hand-edit them to claim test
 run. When a case set changes intentionally, review the diff, then refresh only the matching
 file from a real run:
 
-- Editor carriers: run `Tools/RunTests.ps1` with `-UpdateBaseline` and the matching `-Backend`.
+- Editor carriers: run `Tools/RunDevelopmentTests.ps1` with `-UpdateBaseline` and the matching `-Backend`.
   It rewrites `Tools/baseline/<backend>.json` from that run.
 - Cooked carriers: run `Tools/GenerateTestReport.py` with `--reports <game run dir>`,
   `--out <game run dir>`, `--backend <Backend>`, `--baseline Tools/baseline/<backend>-game.json`

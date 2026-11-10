@@ -14,7 +14,7 @@ Run from the repository root:
 .\Tools\RunTests.ps1
 ```
 
-The default `Release` profile orchestrates the current **Win64** matrix. Operators do not need separate backend builds, analyzer builds, declaration exports, network peers or test filters. It uses the project's associated UE installation, installed Visual Studio C++ tools and Python. On first use it initializes pinned submodules and installs isolated Python tools under `Saved/ReleaseTools`; it does not install UE or Visual Studio.
+The command takes **no parameters** and orchestrates the current **Win64** Release matrix. Operators do not need separate backend builds, analyzer builds, declaration exports, network peers or test filters. It uses the project's associated UE installation, installed Visual Studio C++ tools and Python. On first use it initializes pinned submodules and installs isolated Python tools under `Saved/ReleaseTools`; it does not install UE or Visual Studio.
 
 > **Python 3.10 or newer is required.** On 3.7–3.9, `python -m venv` shells out to
 > `ensurepip --default-pip`, which did not exist yet, so the stage dies with an opaque
@@ -29,13 +29,16 @@ $env:UNLUANOVA_PYTHON = 'C:\Users\<you>\scoop\apps\python311\current\python.exe'
 
 > Run it with **PowerShell 7 (`pwsh`)**, not Windows PowerShell 5.1 (`powershell.exe`).
 
-## Backend-isolated builds (-BackendTargets)
+## Backend-isolated builds
 
-Without the switch, both Development and Release behave exactly as before: edit the ini,
-rebuild, run, switch backends, rebuild again. With `-BackendTargets`, **each backend's
-Editor / Game / Server targets are built once into separate `Backends/<backend>/` trees,
-and switching afterwards only changes module manifests - no compile, no overwrite**. The
-switch works for Development, Release, `-Carrier Game` and `-NetMatrix`.
+Backend isolation is the **default and only** build path, not an option: `RunTests.ps1`,
+`ReleasePipeline.ps1`, `RunDevelopmentTests.ps1` and `RunNetMatrix.ps1` always use the six
+`UnLuaNovaDemo<backend>{Editor,Server,''}` targets. **Each backend's Editor / Game /
+Server targets are built once into separate `Backends/<backend>/` trees, and switching
+afterwards only changes module manifests - no compile, no overwrite**. This applies to
+Development, Release, `-Carrier Game` and `-NetMatrix`. A normal project can still pick
+the backend at compile time in `Config/DefaultUnLuaNova.ini` and build the ordinary
+targets by hand; the pipeline no longer offers a single-slot path.
 
 ### One-time build
 
@@ -61,15 +64,15 @@ need the Game/Server pairs.
 .\Tools\SwitchBackend.ps1 -Status                 # which one is live?
 .\Tools\SwitchBackend.ps1 -Backend Default       # back to the ordinary single target
 
-# Development: Editor or Game carrier
-.\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both
-.\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both -Carrier Game
+# Partial/debug runs: Editor or Game carrier (not a release verdict)
+.\Tools\RunDevelopmentTests.ps1 -Backend Both
+.\Tools\RunDevelopmentTests.ps1 -Backend Both -Carrier Game
 
 # Connected network matrix (each cell launches real server/client processes)
-.\Tools\RunTests.ps1 -Profile Development -NetMatrix -BackendTargets -Backend Both -SkipBuild
+.\Tools\RunDevelopmentTests.ps1 -NetMatrix -Backend Both -SkipBuild
 
-# Full Win64 Release matrix (isolated targets + per-backend staging directories)
-.\Tools\RunTests.ps1 -Profile Release -BackendTargets
+# Full Win64 Release matrix - no parameters, everything is a default
+.\Tools\RunTests.ps1
 ```
 
 ### Why six targets
@@ -95,7 +98,7 @@ UAT's `BuildCookRun` refuses to run when it cannot resolve a default editor targ
 with `-skipbuildeditor`, so `Config/DefaultEngine.ini` must declare
 `[/Script/BuildSettings.BuildSettings] DefaultEditorTarget=UnLuaNovaDemoEditor`.
 `Tools/tests/test_backend_isolation.py` guards this as a static regression. It does not
-change isolated mode, where the Editor target is selected explicitly per backend by
+change the default isolated build, where the Editor target is selected per backend by
 `RunTests.ps1` / `ReleasePipeline.ps1`.
 
 ### Why SwitchBackend is needed
@@ -113,15 +116,15 @@ discoverable.
 | Constraint | Detail |
 |---|---|
 | First-run cost | Six full builds and roughly twice the disk space; switching is free afterwards |
-| Carrier | Editor / Game / Server are all isolated. `-BackendTargets` combines with `-Carrier Game`, `-NetMatrix` and `-Profile Release` |
-| Release | Each backend uses isolated Editor/Game/Server targets and UAT `-stagingdirectory` pointing at `Saved/StagedBuilds/{Windows,WindowsServer}/Backends/<backend>` (UAT cleans the staging directory on every `-stage`, so a shared one would delete the other backend's exe); cache fingerprints include `isolated`/`targets`, and the run restores the Default manifest layout and the original ini at the end |
+| Carrier | Editor / Game / Server are all isolated, including `-Carrier Game`, `-NetMatrix` and the parameterless full Release |
+| Release | Each backend uses isolated Editor/Game/Server targets, UAT `-stagingdirectory` under `Saved/StagedBuilds/{Windows,WindowsServer}/Backends/<backend>`, `-CookOutputDir` under `Saved/Cooked/Backends/<backend>/{Development,Shipping}/{Windows,WindowsServer}`, and static binding sources under `Generated/Backends/<backend>/`; cache fingerprints include `isolated`/`targets`, and the run restores the Default manifest layout and the original ini at the end |
 | Manifests | Building an isolated target rewrites that backend's manifests. Building an ordinary target afterwards recreates root manifests - run `SwitchBackend.ps1` again |
 | Concurrency | Switching is still global state; `Saved/RunTests.lock` remains in force. Do not build or open the editor during a switch |
 | Host projects | `Tools/unluanova.ps1 doctor` now understands `Backends/<backend>/`, live/disabled manifests and the demo project's ini label: two DLL sets coexisting is no longer an error; two backends' manifests live at once is |
 
 `Tools/tests/test_backend_isolation.py` guards the source contract: byte-identical layout
-blocks, all six targets, end-to-end script plumbing, plus functional tests of the outer
-doctor against synthetic Binaries trees.
+blocks, all six targets, the end-to-end call chain and the parameterless entry point,
+plus functional tests of the outer doctor against synthetic Binaries trees.
 
 ## Automatic Stages
 
@@ -130,19 +133,19 @@ doctor against synthetic Binaries trees.
 | Repository/tools | Capability and link audit; Python regressions; PowerShell syntax, argument, process and timeout tests |
 | Analyzers | Initialize the MSVC environment and build pinned LuaLS and luau-lsp |
 | Backends | Run both Lua and Luau with Timer/Event/OOP and static binding enabled |
-| Editor | Archive old static binding source, build Editor/generator, regenerate and rebuild the generated code |
-| Development | Build/cook/package Game and Dedicated Server targets into default output paths |
+| Editor | Build Editor/generator, generate static binding source into this backend's `Generated/Backends/<backend>/` and rebuild. No shared-source backup/substitution/restore |
+| Development | Build/cook/package Game and Dedicated Server targets into per-backend `Backends/<backend>` staging directories |
 | Editor automation | All registered UnLuaNova tests, including Slow, lifetime, extensions, showcase media and benchmarks |
 | Connected peers | Use this backend's current staged Server/Game for one DS and two clients; verify two server-spawned actors, two rounds of Lua field replication, bidirectional RPCs, owner-targeted delivery and multicast with raw per-peer observations |
 | Types | Back up old generated declarations, export fresh declarations, require successful backend type checks |
 | Cooked automation | Run all tests registered for the Development game's actual UE context |
 | Memory | Require `UnLuaNova.Memory` evidence in both backend/carrier combinations: VM allocation balance, resource release and warmed heap growth |
-| Shipping | Build/cook/package into default output paths and verify the executable; this is not Shipping runtime certification |
+| Shipping | Build/cook/package into `WindowsShipping/Backends/<backend>` and verify the executable; this is not Shipping runtime certification |
 | Cleanup | Restore original config bytes and changed environment variables, clean up owned processes, write an aggregate verdict |
 
-`Saved/RunTests.lock` prevents concurrent runner backend changes. Avoid editing/building the same project in another process during validation. Configuration is restored; the last built binaries still belong to the last backend.
+`Saved/RunTests.lock` prevents concurrent runner backend changes. Avoid editing/building the same project in another process during validation. Configuration is restored; both backends' isolated binaries stay on disk, Release resets the manifest layout to Default and Development leaves the last activated backend live.
 
-Release sets `UNLUANOVA_TEST_PEER_EXE` and `UNLUANOVA_TEST_SERVER_EXE` to the current Game and Server executables in default staging paths. Compilation reuses `Binaries/Win64`; the Development package uses `Saved/StagedBuilds/Windows` and `WindowsServer`, while **Shipping stages separately into `Saved/StagedBuilds/WindowsShipping`**. UAT calls `CleanStagingDirectory` on every `-stage`, so sharing one root let the final Shipping stage delete the Development client exe that `metadata/binary-Development.json` and the connected matrix's Cooked cell still need. With separate roots a completed Release leaves a usable Development staged peer. Subsequent backends still overwrite their own outputs without copying per-run executables. Each backend's `metadata/binary-*.json` retains the path, size and SHA-256 at the time of use. A UE 5.8 Game binary cannot become a dedicated server through `-server`. Topology records each peer's executable; cleanup checks its PID, path and start time.
+Release sets `UNLUANOVA_TEST_PEER_EXE` and `UNLUANOVA_TEST_SERVER_EXE` to the Game and Server executables in that backend's `Backends/<backend>` staging paths. Compilation reuses each backend's `Binaries/Win64/Backends/<backend>`; the Development package uses `Saved/StagedBuilds/{Windows,WindowsServer}/Backends/<backend>`, while **Shipping stages separately into `Saved/StagedBuilds/WindowsShipping/Backends/<backend>`**. UAT calls `CleanStagingDirectory` on every `-stage`, so sharing one root let the final Shipping stage delete the Development client exe that `metadata/binary-Development.json` and the connected matrix's Cooked cell still need. With separate roots a completed Release leaves a usable Development staged peer. The two backends never overwrite each other's outputs, and no per-run executables are copied. Each backend's `metadata/binary-*.json` retains the path, size and SHA-256 at the time of use. A UE 5.8 Game binary cannot become a dedicated server through `-server`. Topology records each peer's executable; cleanup checks its PID, path and start time.
 
 Release Editor, Game and non-headless peers use `-RenderOffScreen`, retaining real RHI, viewport tests, single game-viewport screenshots independently of desktop window visibility. Desktop recording, frame sequences and video encoding have been removed; DS still uses `-NullRHI`. Development can explicitly select `-RenderOffScreen`.
 
@@ -150,7 +153,26 @@ The Release test Editor uses `AboveNormal` process priority, recorded with its P
 
 LuaLS builds use a unique temporary directory under `Saved/ReleaseTools/luals-temp/` and restore TMP/TEMP on exit. Bootstrap and main analyzer builds/tests have separate exit-code checks; either failure blocks the analyzer stage.
 
-Static binding backups live in each backend's `metadata/static-binding-backup/`. Only the fixed output file bearing the generator's ownership marker is archived. If no replacement exists when the pipeline finishes, the original is restored and the backup retained. Old generated code therefore cannot prevent the updated generator from building, and operators need no manual source cleanup. Fingerprints include a generator format version to invalidate obsolete output.
+Cook outputs are isolated on backend *and* configuration: all three `BuildCookRun`
+invocations pass `-CookOutputDir` explicitly, to
+`Saved/Cooked/Backends/<backend>/Development/Windows`, `.../Shipping/Windows` and
+`.../Development/WindowsServer`. The last segment must be UAT's `SC.CookPlatform`: the
+CookCommandlet uses `-outputdir` verbatim as its sandbox root (single-platform cooks do not
+append a platform directory when the path has no `[Platform]` token), while
+`CopyBuildToStagingDirectory` appends `CookPlatform` unless the final segment already equals it.
+Separating configurations also stops Development and Shipping from overwriting each other's
+cooked assets.
+
+Static binding sources are isolated per backend. The generator reads the compile-time
+`UNLUANOVA_LUA_BACKEND` of the Editor binary hosting it and writes its `.cpp` into
+`Generated/Backends/<backend>/`, so the two backends never overwrite each other. UBT compiles
+every `.cpp` under the module directory, so the whole body of each generated file is guarded by
+that same macro: only the file matching the current target registers tables, the other one is an
+empty translation unit. The Release therefore needs no backup / stub / restore choreography and
+there is no shared file to corrupt. Besides the generator's ownership marker, the gate also
+checks the `// backend:` label and the macro guard, so a file from the wrong backend fails
+closed. The first generation removes the legacy global single file (only if it carries the
+generator's marker). Fingerprints include a generator format version to invalidate old output.
 
 DAP session tests use OS-assigned loopback ports and nonblocking game-thread polling with persistent TCP and UTF-8 byte buffers. Requests time out after 5 seconds and sessions after 20 seconds; cleanup removes polling before closing sockets. Full Editor runs for both backends include session, unknown-command, fragmented-request, frame-decoding, concurrent-stop and restart regressions.
 
@@ -165,7 +187,7 @@ Stages report `passed`, `cached`, `failed` or `blocked`. `cached` means the stag
 Compiling, cooking, packaging, exporting declarations and type checking only need to happen when their inputs change, so `Tools/ReleaseCache.ps1` fingerprints them: each stage hashes the inputs that decide its output (source, assets, project config, engine version, backend, analyzer) and records them in `Saved/ReleaseCache/index.json` together with its artifacts' path, size, modification time and SHA-256. A stage is recorded as `cached` and skipped when the fingerprint matches and the artifacts still match the record; a deleted artifact, one replaced by another build, or any changed input is a miss and the stage runs.
 
 - Test, evidence and report stages are never cached. They are this run's evidence, not an input.
-- The build tree is single-slot: the backend is a compile-time choice, so building the second backend overwrites the first one's binaries. The pipeline therefore starts with whichever backend the tree currently holds (read from `Definitions.UnLuaNova.h`): that backend reuses the previous run's compile, cook and package, and the other one rebuilds and leaves the tree for the next run. A fixed order would rebuild both every time.
+- Each backend has its own build tree: isolated targets write DLLs, intermediates, staged packages, cooked assets and static binding sources into separate `Backends/<backend>/` directories, so neither build overwrites the other. Cache fingerprints always include `isolated=True`, the per-backend target names and `cook=isolated` / `binding=isolated`; the backend order is fixed at Lua then Luau.
 - Declarations are exported once for both backends. Type check summaries (`*-analyze.json`) are copied back from the cache into the run directory on a hit, because the evidence gate reads them and "no file" is a failed gate rather than a skip.
 - `-NoCache` forces everything to run again; deleting `Saved/ReleaseCache` does the same. `-PruneLegacy` deletes the old per-timestamp result directories (`Saved/ReleaseTests/<yyyyMMdd-HHmmss-fff>`).
 
@@ -207,22 +229,26 @@ without a UE build. Runtime behaviour and platform acceptance are covered by the
 
 ## Development
 
-Partial runs explicitly select `Development` and are not release evidence:
+Partial runs use the separate `Tools/RunDevelopmentTests.ps1` and are not release evidence.
+`Tools/RunTests.ps1` takes no parameters, so a forgotten switch can never turn a release
+verdict into a half-covered run:
 
 ```powershell
-.\Tools\RunTests.ps1 -Profile Development -Backend Luau -Filter UnLuaNova.API.Timer
-.\Tools\RunTests.ps1 -Profile Development -Tier Fast
-.\Tools\RunTests.ps1 -Profile Development -Filter UnLuaNova.Showcase -Backend Luau -Publish
+.\Tools\RunDevelopmentTests.ps1 -Backend Luau -Filter UnLuaNova.API.Timer
+.\Tools\RunDevelopmentTests.ps1 -Tier Fast
+.\Tools\RunDevelopmentTests.ps1 -Filter UnLuaNova.Showcase -Backend Luau -Publish
 ```
 
-`SkipBuild`, `BuildOnly`, `NullRHI`, `NoReport`, individual backends and custom filters are Development options. The release entry rejects reduced coverage. The nightly build installer also uses Development and only verifies compilation.
+`SkipBuild`, `BuildOnly`, `NullRHI`, `NoReport`, individual backends and custom filters
+belong to that debug driver. The nightly build installer uses it too and only verifies
+compilation.
 
 ### Connected network matrix (separate opt-in)
 
 Eight connected scenarios (late join, process-level reconnect, dormancy, relevancy, join-order swap, packet loss / reordering, `UNetConnection`-level reconnect, cross-peer declaration mismatch) and the Legacy / PushOff / Iris / Cooked variants each launch three real processes, so they are not part of the ordinary test matrix or the standard Release stages:
 
 ```powershell
-.\Tools\RunTests.ps1 -Profile Development -NetMatrix -Backend Lua -SkipBuild
+.\Tools\RunDevelopmentTests.ps1 -NetMatrix -Backend Lua -SkipBuild
 python Tools\ValidateRelease.py --net-matrix --run Saved\ReleaseTests\net-matrix\Lua --backend Lua --carrier game
 ```
 
@@ -234,22 +260,25 @@ Each cell runs one filtered connected test and is judged by topology, three peer
 
 `AppendWorldFacts` reads cvar state, `WITH_EDITOR` and `UNetConnection` counters back, while `BuildNetDeclarationReport()` exports FProperty-derived parameter specs and `RepSchemaVersion` / `VariantRepSchemaVersion`, so neither a renamed directory nor a disagreeing declaration can pass. Artifacts land in `net/scenarios/<Name>/` and `net/variants/<Name>/DedicatedServer/`, judged into `metadata/net-matrix-gate.json`. This is **not** UE automation evidence and does not touch `Tools/evidence/index.json`. The gate fails closed on a missing topology, a missing peer log, a PID mismatch, a faked Iris/push-model/Cooked flag, a mismatched or non-discriminating declaration fingerprint, a missing Generic field / UStruct parameter, zero connection byte counters or a scenario that never ran.
 
+These are maintainer operations on `Tools/ReleasePipeline.ps1`. Day-to-day acceptance is
+just the parameterless `.\Tools\RunTests.ps1` - none of these switches are needed.
+
 Preview the default plan without writing config, installing tools, compiling or launching UE:
 
 ```powershell
-.\Tools\RunTests.ps1 -DryRun
+.\Tools\ReleasePipeline.ps1 -DryRun
 ```
 
 Write this run as the baseline later runs are compared against (`Saved/ReleaseTests/baseline`):
 
 ```powershell
-.\Tools\RunTests.ps1 -Baseline
+.\Tools\ReleasePipeline.ps1 -Baseline
 ```
 
 Rebuild and re-package everything, ignoring the cache:
 
 ```powershell
-.\Tools\RunTests.ps1 -NoCache
+.\Tools\ReleasePipeline.ps1 -NoCache
 ```
 
 ## Scope

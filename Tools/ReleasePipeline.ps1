@@ -10,11 +10,9 @@ param([string] $EnginePath = '', [string] $ProjectPath = '', [string] $OutputDir
     # Delete the per-timestamp result directories the pipeline used to create
     # (Saved/ReleaseTests/<yyyyMMdd-HHmmss-fff>).
     [switch] $PruneLegacy,
-    # Build the backend-isolated Editor/Game/Server targets instead of the ordinary ones.
-    # Both backends' products stay on disk under Backends/<Backend>, so the second backend
-    # no longer overwrites the first one's build. Off by default: the classic single-slot
-    # Release matrix stays exactly as it was.
-    [switch] $BackendTargets,
+    # Backend isolation is unconditional: only the backend-isolated Editor/Game/Server
+    # targets are built, into Binaries/Win64/Backends/<Backend>. Both backends' products
+    # stay on disk, so no stage overwrites the other one's build.
     [switch] $DryRun)
 
 $ErrorActionPreference = 'Stop'
@@ -29,8 +27,8 @@ Release / Win64 / Lua + Luau (no operations performed):
   1. Lock project; snapshot config/environment and source provenance.
   2. Initialize pinned submodules; prepare isolated Python tools and MSVC environment.
   3. Repository audit, Python and PowerShell tooling regressions; build both analyzers.
-  4. Per backend: enable features; archive old bindings; build Editor/generator; regenerate; rebuild.
-  5. Build/cook/stage Development game and Dedicated Server targets in the default directories.
+  4. Per backend: enable features; build Editor/generator; generate this backend's bindings; rebuild.
+  5. Build/cook/stage Development game and Dedicated Server targets into per-backend staging/cook directories.
   6. Full Editor automation including Slow, connected cooked peers, screenshots and benchmark.
   7. Fresh declaration export and mandatory backend type checking.
   8. Full applicable cooked Development automation with runtime manifest verification.
@@ -44,17 +42,18 @@ Missing/skipped evidence, timeouts, failed/blocked stages and absent performance
 
 The connected delivery matrix (eight connected scenarios and Legacy / PushOff / Iris / Cooked
 variants) is NOT a Release stage: each cell launches three extra processes. Run it
-separately with .\Tools\RunTests.ps1 -Profile Development -NetMatrix and judge it with
+separately with .\Tools\RunDevelopmentTests.ps1 -NetMatrix and judge it with
 ValidateRelease.py --net-matrix.
 '@
-    if ($BackendTargets) {
-        Write-Host @'
-Isolated mode (-BackendTargets): steps 4/5/8 build
+    Write-Host @'
+Backend isolation (default, not a switch): steps 4/5/8 build
 UnLuaNovaDemo<Backend>{Editor,Server,''} into Binaries/Win64/Backends/<Backend> and
-activate that backend with Tools/SwitchBackend.ps1. Both backends' artifacts stay on disk,
-so no stage overwrites the other one's build; stage caches are keyed per isolated target.
+activate that backend with Tools/SwitchBackend.ps1. Cooked assets go to
+Saved/Cooked/Backends/<Backend>/<Configuration>/<CookPlatform> and generated static binding
+sources to Source/UnLuaNova/Generated/Backends/<Backend>/, so no stage overwrites another
+one's output and no shared binding source needs backup/restore. Stage caches are keyed
+per isolated target.
 '@
-    }
     exit 0
 }
 
@@ -112,13 +111,12 @@ $Started = [DateTime]::UtcNow
 $script:CacheHits = 0
 $LockStream = $null
 $ConfigCaptured = $false
-$BindingBackups = [Collections.Generic.List[object]]::new()
 $SavedEnvironment = @{}
 $EnvironmentNames = @('PATH', 'LUA_LANGUAGE_SERVER', 'LUAU_LSP', 'UNLUANOVA_RELEASE_TOKEN',
     'UNLUANOVA_TEST_MANIFEST', 'UNLUANOVA_TEST_PEER_EXE', 'UNLUANOVA_TEST_SERVER_EXE', 'UNLUANOVA_TEST_NET_ROOT', 'UNLUANOVA_RECORD_FRAMES')
 foreach ($Name in $EnvironmentNames) { $SavedEnvironment[$Name] = [Environment]::GetEnvironmentVariable($Name, 'Process') }
 $Provenance = [ordered]@{ platform = 'Win64'; backends = @('Lua', 'Luau');
-    isolated_backends = [bool]$BackendTargets; machine = $env:COMPUTERNAME }
+    isolated_backends = $true; machine = $env:COMPUTERNAME }
 
 function Test-ReleaseStageSucceeded([string] $Name) { $Statuses[$Name] -in @('passed', 'cached') }
 
@@ -138,8 +136,8 @@ function Test-ReleaseCacheVerify([scriptblock] $Verify) {
 function Invoke-Stage([string] $Name, [scriptblock] $Action, [string[]] $Needs = @(),
     # -CacheKey/-Fingerprint/-Artifacts: reuse what a previous run already produced for the
     # same inputs. -Verify decides whether the files on disk really are this stage's output
-    # (a build tree is single-slot, so another backend's build must not be reused as this
-    # one's). -ReuseFile carries a small result (a type check summary) across runs, because
+    # (each backend has its own tree, so another backend's build must not be reused as
+    # this one's). -ReuseFile carries a small result (a type check summary) across runs, because
     # it lives inside the run directory and would otherwise never exist on a hit. -After
     # runs on passed *and* cached, for the bookkeeping a skipped stage still owes.
     [string] $CacheKey = '', [string] $Fingerprint = '', [string[]] $Artifacts = @(),
@@ -289,7 +287,7 @@ function Write-ReleaseSummary {
             $Lines += 'No regression: every stage that passed in the baseline still passes, and no carrier lost tests.'
         }
     } elseif (-not $IsBaselineRun) {
-        $Lines += @('', '## Compared With Baseline', '', 'No baseline yet - run `.\Tools\RunTests.ps1 -Baseline` once to create one.')
+        $Lines += @('', '## Compared With Baseline', '', 'No baseline yet - run `.\Tools\ReleasePipeline.ps1 -Baseline` once to create one.')
     }
     $Lines += @('', 'The stage verdict also requires runtime manifests, memory and network evidence, type checks, and independent performance references. Test totals alone do not establish release acceptance.', '',
         'Source provenance and file hashes are recorded in [release-summary.json](release-summary.json).')
@@ -338,7 +336,7 @@ function Record-Binary([string] $Exe, [string] $Name) {
         backend = $B; recorded_utc = [DateTime]::UtcNow.ToString('o') } |
         ConvertTo-Json | Set-Content -LiteralPath $Destination -Encoding UTF8
 }
-function Package-Game([string] $Configuration, [string] $Label, [string] $StageDir = '') {
+function Package-Game([string] $Configuration, [string] $Label, [string] $StageDir, [string] $CookDir) {
     $UatArgs = @('BuildCookRun', "-project=$ProjectPath", '-noP4', '-unattended',
         '-platform=Win64', "-clientconfig=$Configuration", "-target=$script:ReleaseGameTarget", '-build',
         '-skipbuildeditor', '-cook', '-stage', '-pak', '-iostore', '-package')
@@ -346,6 +344,14 @@ function Package-Game([string] $Configuration, [string] $Label, [string] $StageD
     # staging directory: the second package would delete the first one's .exe. Isolated
     # builds stage each backend into its own Backends/<Backend> subdirectory.
     if ($StageDir) { $UatArgs += "-stagingdirectory=$StageDir" }
+    # CookCommandlet writes cooked assets into -CookOutputDir verbatim (it only appends
+    # <CookPlatform> itself when the path contains a [Platform] token), while
+    # CopyBuildToStagingDirectory APPENDS SC.CookPlatform unless the last path segment
+    # already equals it. Pass the exact platform directory so both sides agree, and keep
+    # it under Backends/<Backend>/<Configuration> so no two runs ever cook over each
+    # other's Saved/Cooked/Windows* tree.
+    if (-not $CookDir) { throw 'Package-Game requires an isolated cook directory.' }
+    $UatArgs += "-CookOutputDir=$CookDir"
     Run $Uat $UatArgs $Label
     # Record-Binary is not called here but by the stage's -After block, so that a reused
     # (cached) package still records the binary it is shipping.
@@ -504,53 +510,44 @@ try {
     $DeclarationFingerprint = ConvertTo-ReleaseFingerprint @("engine=$EngineStamp", "code=$CodeTree", "content=$ContentTree")
 
     # --- backend order ---------------------------------------------------------------
-    # Ordinary builds are single-slot: building the second backend overwrites the first
-    # one's binaries, so only what a run did *last* survives. Starting with the backend the
-    # tree already holds lets that backend reuse the previous run's compile, cook and
-    # package, and leaves the other one to rebuild and hand the tree to the next run.
-    # With -BackendTargets both backends live in separate Backends/<Backend> trees, so
-    # there is no slot to preserve and a fixed order is fine.
+    # Both backends live in separate Backends/<Backend> trees, so there is no single slot
+    # to preserve: a fixed order is fine and neither build invalidates the other.
     $PluginRoot = Join-Path $RepoRoot 'Plugins/UnLuaNova'
-    $BuiltBackend = if ($BackendTargets) { $null } else { Get-ReleaseBuiltBackend $PluginRoot }
-    $BackendOrder = if ($BackendTargets) { @('Lua', 'Luau') }
-                    elseif ($BuiltBackend -eq 'Luau') { @('Luau', 'Lua') }
-                    else { @('Lua', 'Luau') }
-    Write-Host "Backend order : $($BackendOrder -join ' -> ') - $(if ($BackendTargets) { 'isolated Backends/<Backend> trees, no single-slot reuse order' } else { "the tree already holds $(if ($BuiltBackend) { $BuiltBackend } else { 'nothing built yet' }), so that backend reuses it" })."
+    $BackendOrder = @('Lua', 'Luau')
+    Write-Host "Backend order : $($BackendOrder -join ' -> ') - isolated Backends/<Backend> trees, no single-slot reuse order"
 
     foreach ($B in $BackendOrder) {
-        $EditorTarget = if ($BackendTargets) { "UnLuaNovaDemo${B}Editor" } else { ($ProjectName + 'Editor') }
-        $GameTarget = if ($BackendTargets) { "UnLuaNovaDemo${B}" } else { $ProjectName }
-        $ServerTarget = if ($BackendTargets) { "UnLuaNovaDemo${B}Server" } else { ($ProjectName + 'Server') }
+        $EditorTarget = "UnLuaNovaDemo${B}Editor"
+        $GameTarget = "UnLuaNovaDemo${B}"
+        $ServerTarget = "UnLuaNovaDemo${B}Server"
         # Package-Game / package-server run in their own function scopes, so publish the
         # names instead of relying on dynamic scope lookup.
         $script:ReleaseGameTarget = $GameTarget
         $script:ReleaseServerTarget = $ServerTarget
-        $script:ReleaseDefinitionsSubFolder = if ($BackendTargets) { "Backends/$B" } else { '' }
+        $script:ReleaseDefinitionsSubFolder = "Backends/$B"
         Write-Host "Targets  : $B -> $EditorTarget / $GameTarget / $ServerTarget"
         $script:EditorStarted = $null
-        # Reset per backend: with an editor build that is reused, this backend's bindings are
-        # archived by the binding stage itself instead (see below), and a state left over
-        # from the other backend must never be treated as this one's.
-        $script:BindingState = $null
         $Lower = $B.ToLowerInvariant()
         $BackendDir = Join-Path $OutputDir $Lower
         $EditorDir = Join-Path $BackendDir "editor/$Lower"
         $GameDir = Join-Path $BackendDir 'game'
-        $DevStage = if ($BackendTargets) { Join-Path $RepoRoot "Saved/StagedBuilds/Windows/Backends/$B" } else { Join-Path $RepoRoot 'Saved/StagedBuilds/Windows' }
-        $ServerStage = if ($BackendTargets) { Join-Path $RepoRoot "Saved/StagedBuilds/WindowsServer/Backends/$B" } else { Join-Path $RepoRoot 'Saved/StagedBuilds/WindowsServer' }
-        # Empty in the ordinary path: UAT then uses its default staging directory.
-        $StageArg = if ($BackendTargets) { $DevStage } else { '' }
-        $ServerStageArg = if ($BackendTargets) { $ServerStage } else { '' }
+        $DevStage = Join-Path $RepoRoot "Saved/StagedBuilds/Windows/Backends/$B"
+        $ServerStage = Join-Path $RepoRoot "Saved/StagedBuilds/WindowsServer/Backends/$B"
+        $StageArg = $DevStage
+        $ServerStageArg = $ServerStage
+        # Cook outputs are isolated on backend AND configuration/carrier. The leaf name
+        # has to be exactly UAT's SC.CookPlatform ("Windows" / "WindowsServer"): the
+        # cooker writes into this directory verbatim and the stager reads it verbatim.
+        $script:ReleaseCookRoot = Join-Path $RepoRoot "Saved/Cooked/Backends/$B"
+        $DevCookDir = Join-Path $script:ReleaseCookRoot 'Development/Windows'
+        $ShippingCookDir = Join-Path $script:ReleaseCookRoot 'Shipping/Windows'
+        $ServerCookDir = Join-Path $script:ReleaseCookRoot 'Development/WindowsServer'
         # UAT calls CleanStagingDirectory on every -stage. Development and Shipping used to
         # share $DevStage, so the LAST Release stage deleted the Development client exe that
         # binary-Development.json records and that the Cooked connected cell must launch.
         # Keep the two configurations in separate roots: a completed Release then leaves a
         # usable Development staged peer behind instead of only the Shipping binary.
-        $ShippingStage = if ($BackendTargets) {
-            Join-Path $RepoRoot "Saved/StagedBuilds/WindowsShipping/Backends/$B"
-        } else {
-            Join-Path $RepoRoot 'Saved/StagedBuilds/WindowsShipping'
-        }
+        $ShippingStage = Join-Path $RepoRoot "Saved/StagedBuilds/WindowsShipping/Backends/$B"
         # metadata/ is created here and not by the stages that write into it: those stages can
         # be skipped as cache hits, and their -After bookkeeping (binary provenance) still
         # runs - a directory that only exists on the "ran" path turns a reused package into a
@@ -570,22 +567,20 @@ try {
         $IniStamp = if (Test-Path -LiteralPath $IniPath) { (Get-FileHash -LiteralPath $IniPath -Algorithm SHA256).Hash } else { 'absent' }
         # The isolated targets produce different DLL/exe names and different stage paths,
         # so their caches must never be interchangeable with an ordinary run's cache.
-        $BuildFingerprint = ConvertTo-ReleaseFingerprint @("backend=$B", "isolated=$BackendTargets",
+        $BuildFingerprint = ConvertTo-ReleaseFingerprint @("backend=$B", "isolated=True",
             "targets=$EditorTarget/$GameTarget/$ServerTarget", 'platform=Win64',
-            "engine=$EngineStamp", "ini=$IniStamp", "code=$CodeTree")
+            "engine=$EngineStamp", "ini=$IniStamp", "code=$CodeTree", "binding=isolated")
         # Packaging also cooks assets, so it moves when content moves, not only when code does.
-        $PackageFingerprint = ConvertTo-ReleaseFingerprint @($BuildFingerprint, "content=$ContentTree")
-        $BinariesRel = if ($BackendTargets) { "Binaries/Win64/Backends/$B" } else { 'Binaries/Win64' }
+        $PackageFingerprint = ConvertTo-ReleaseFingerprint @($BuildFingerprint, "content=$ContentTree", "cook=isolated")
+        $BinariesRel = "Binaries/Win64/Backends/$B"
         $DefinitionsRel = 'Intermediate/Build/Win64/x64/UnrealEditor/Development'
         if ($script:ReleaseDefinitionsSubFolder) { $DefinitionsRel = "$DefinitionsRel/$script:ReleaseDefinitionsSubFolder" }
         $BackendDll = Join-Path $PluginRoot "$BinariesRel/UnrealEditor-$B.dll"
         $DefinitionsHeader = Join-Path $PluginRoot "$DefinitionsRel/UnLuaNova/Definitions.UnLuaNova.h"
-        $BindingSource = Get-ReleaseStaticBindingSource $ProjectPath
+        $BindingSource = Get-ReleaseStaticBindingSource $ProjectPath $B
         $ServerExe = Join-Path $RepoRoot "Binaries/Win64/$ServerTarget.exe"
 
         Invoke-Stage "$B-editor-build" {
-            $script:BindingState = Backup-ReleaseStaticBindings $ProjectPath (Join-Path $BackendDir 'metadata/static-binding-backup')
-            $BindingBackups.Add($BindingState)
             Build-Target $EditorTarget "$B-editor-build"
         } -Needs @('tool-environment', "$B-config") -CacheKey "$B-editor-build" -Fingerprint $BuildFingerprint `
             -Artifacts @($BackendDll, $DefinitionsHeader) `
@@ -595,21 +590,16 @@ try {
                 # the VM DLL and the manifest UBT just wrote are present. -After also runs
                 # on a cache hit, so a reused build still activates the right backend before
                 # the static binding generator / editor commandlets start loading modules.
-                if ($BackendTargets) {
-                    Run-Script 'SwitchBackend.ps1' @('-Backend', $B, '-ProjectPath', $ProjectPath, '-Platform', 'Win64') "$B-activate-backend"
-                }
+                Run-Script 'SwitchBackend.ps1' @('-Backend', $B, '-ProjectPath', $ProjectPath, '-Platform', 'Win64') "$B-activate-backend"
             }
         Invoke-Stage "$B-static-bindings" {
-            # The editor build above may have been reused, so archiving can fall to this
-            # stage: the generator still has to start from nothing rather than read whatever
-            # the previous run left behind.
-            if (-not $script:BindingState) {
-                $script:BindingState = Backup-ReleaseStaticBindings $ProjectPath (Join-Path $BackendDir 'metadata/static-binding-backup')
-                $BindingBackups.Add($script:BindingState)
-            }
+            # The generator writes only into this backend's Generated/Backends/<Backend>/,
+            # so there is no shared source to archive, stub or restore. The other backend's
+            # file stays untouched and is compiled as an empty translation unit (its whole
+            # body is guarded by UNLUANOVA_LUA_BACKEND).
             Run $Editor @($ProjectPath, '-run=UnLuaNovaStaticBindingGenerator', '-unattended', '-NoSplash', '-stdout') "$B-generate-bindings"
-            if (-not (Test-ReleaseBindingGenerated -Path $BindingState.Source)) {
-                throw "Static binding generator produced no source: $($BindingState.Source)"
+            if (-not (Test-ReleaseBindingGenerated -Path $BindingSource -Backend $B)) {
+                throw "Static binding generator produced no source for $B : $BindingSource"
             }
             Build-Target $EditorTarget "$B-rebuild-bindings"
             Build-Target 'ShaderCompileWorker' "$B-shader-worker-build"
@@ -617,9 +607,9 @@ try {
             -Artifacts @($BindingSource) -Verify {
             # Reuse only a file the generator owns: a hand-edited, truncated or still-bootstrapped
             # binding source would otherwise be compiled into a "cached" build.
-            Test-ReleaseBindingGenerated -Path $BindingSource
+            Test-ReleaseBindingGenerated -Path $BindingSource -Backend $B
         }
-        Invoke-Stage "$B-package-development" { Package-Game 'Development' "$B-package-development" $StageArg } -Needs @("$B-static-bindings") `
+        Invoke-Stage "$B-package-development" { Package-Game 'Development' "$B-package-development" $StageArg $DevCookDir } -Needs @("$B-static-bindings") `
             -CacheKey "$B-package-development" -Fingerprint $PackageFingerprint `
             -ArtifactsOf { Resolve-ReleaseGameExe $DevStage $script:ReleaseGameTarget 'Development' } `
             -After { Record-Binary (Get-ReleaseGameExe $DevStage $script:ReleaseGameTarget 'Development') 'binary-Development' }
@@ -630,6 +620,7 @@ try {
                 '-server', '-noclient', '-serverplatform=Win64', '-serverconfig=Development',
                 "-target=$script:ReleaseServerTarget", '-build', '-skipbuildeditor', '-cook', '-stage', '-pak', '-iostore', '-package')
             if ($ServerStageArg) { $UatServerArgs += "-stagingdirectory=$ServerStageArg" }
+            $UatServerArgs += "-CookOutputDir=$ServerCookDir"
             Run $Uat $UatServerArgs "$B-package-server"
         } -Needs @("$B-server-build") -CacheKey "$B-package-server" -Fingerprint $PackageFingerprint `
             -ArtifactsOf { Resolve-ReleaseGameExe $ServerStage $script:ReleaseServerTarget 'Development' } `
@@ -646,15 +637,14 @@ try {
             $script:EditorStarted = [DateTime]::UtcNow
             $env:UNLUANOVA_RECORD_FRAMES = '0'
             try {
-                $TestArgs = @('-Profile', 'Development', '-ReleaseManaged', '-EnginePath', $EnginePath,
+                $TestArgs = @('-ReleaseManaged', '-EnginePath', $EnginePath,
                     '-ProjectPath', $ProjectPath, '-Backend', $B, '-Carrier', 'Editor', '-SkipBuild', '-RenderOffScreen',
                     '-OutputDir', (Join-Path $BackendDir 'editor'), '-TimeoutMinutes', "$TimeoutMinutes")
-                if ($BackendTargets) { $TestArgs += '-BackendTargets' }
                 # The Release is the one place where a changed test inventory must not be
                 # a warning: "all green" after silently dropping half the cases is the
                 # failure mode the baseline comparison exists to catch.
                 $TestArgs += '-FailOnDrift'
-                Run-Script 'RunTests.ps1' $TestArgs "$B-editor-tests"
+                Run-Script 'RunDevelopmentTests.ps1' $TestArgs "$B-editor-tests"
                 Assert-ReleaseAutomationLog (Join-Path $OutputDir "logs/$B-editor-tests.log")
             } finally { Stop-ReleasePeers $env:UNLUANOVA_TEST_NET_ROOT $EditorStarted }
         } @("$B-package-development", "$B-package-server")
@@ -777,7 +767,7 @@ try {
             }
         } @('tool-environment')
         Invoke-Stage "$B-package-shipping" {
-            Package-Game 'Shipping' "$B-package-shipping" $ShippingStage
+            Package-Game 'Shipping' "$B-package-shipping" $ShippingStage $ShippingCookDir
         } -Needs @("$B-static-bindings") -CacheKey "$B-package-shipping" -Fingerprint $PackageFingerprint `
             -ArtifactsOf { Resolve-ReleaseGameExe $ShippingStage $script:ReleaseGameTarget 'Shipping' } `
             -After { Record-Binary (Get-ReleaseGameExe $ShippingStage $script:ReleaseGameTarget 'Shipping') 'binary-Shipping' }
@@ -789,7 +779,7 @@ try {
     # Stop any build still running before releasing the run lock: orphaned Build.bat/UBT/cl
     # processes hold UBT's mutex, and the next run would wait on it for most of its timeout.
     Stop-ReleaseChildProcesses
-    if ($BackendTargets -and $ConfigCaptured) {
+    if ($ConfigCaptured) {
         # The run leaves one backend's isolated manifests live. Its ini is restored to the
         # original bytes below, so the manifest layout has to go back to the ordinary
         # single-target one too - otherwise the next doctor run sees an active backend that
@@ -799,10 +789,6 @@ try {
         } catch {
             $Stages.Add([ordered]@{ name = 'restore-backend-layout'; status = 'failed'; seconds = 0; detail = $_.Exception.Message })
         }
-    }
-    for ($Index = $BindingBackups.Count - 1; $Index -ge 0; $Index--) {
-        try { Restore-ReleaseStaticBindings $BindingBackups[$Index] }
-        catch { $Stages.Add([ordered]@{ name = 'restore-static-bindings'; status = 'failed'; seconds = 0; detail = $_.Exception.Message }) }
     }
     try {
         if ($ConfigCaptured) {

@@ -9,7 +9,7 @@
     happen every day.
 
     This registers a Windows scheduled task that compiles one backend every night and
-    nothing else: no editor, no test run, no report. RunTests.ps1 exits non-zero when the
+    nothing else: no editor, no test run, no report. RunDevelopmentTests.ps1 exits non-zero when the
     build fails, so the task's exit code (and its log) is the whole answer.
 
     If you have a self-hosted Windows runner instead, you do not need this: wire the same
@@ -47,12 +47,12 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $TaskName = "UnLuaNova-NightlyBuild"
-$RunTests = Join-Path $RepoRoot "Tools/RunTests.ps1"
+$RunDevTests = Join-Path $RepoRoot "Tools/RunDevelopmentTests.ps1"
 $LogDir = Join-Path $RepoRoot "Saved"
 $LogPath = Join-Path $LogDir "nightly-build.log"
 
-if (-not (Test-Path $RunTests)) {
-    throw "'$RunTests' not found - is this script still under Tools/?"
+if (-not (Test-Path $RunDevTests)) {
+    throw "'$RunDevTests' not found - is this script still under Tools/?"
 }
 
 if ($Uninstall) {
@@ -67,7 +67,7 @@ if (-not (Test-Path $LogDir)) {
 
 # Quoted individually: the repo path can contain spaces, and the task scheduler hands the
 # argument string to pwsh verbatim.
-$Command = "& '$RunTests' -Profile Development -Backend $Backend -BuildOnly -NoReport *>&1 | Out-File -FilePath '$LogPath' -Encoding utf8"
+$Command = "& '$RunDevTests' -Backend $Backend -BuildOnly -NoReport *>&1 | Out-File -FilePath '$LogPath' -Encoding utf8"
 $Argument = "-NoProfile -ExecutionPolicy Bypass -Command `"$Command`""
 
 # Prefer PowerShell 7 when it exists, but fall back to Windows PowerShell 5.1: a machine

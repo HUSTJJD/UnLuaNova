@@ -13,7 +13,8 @@ Contract:
   - every Build.cs that reads LuaBackend from the ini lets backendVariant win
   - Tools/SwitchBackend.ps1 discovers *.modules dynamically (AppName differs per carrier)
     and leaves exactly one backend's manifests live
-  - RunTests/RunNetMatrix/ReleasePipeline carry -BackendTargets end to end
+  - isolation is unconditional in RunTests/RunDevelopmentTests/RunNetMatrix/ReleasePipeline; no switch
+  - Tools/RunTests.ps1 is a parameterless entry point: no switches, no partial runs
   - Tools/unluanova/{state,doctor}.py in the outer repo understand Backends/<Backend>
 """
 
@@ -203,33 +204,56 @@ class BackendIsolationTests(unittest.TestCase):
         self.assertNotIn('$ManifestName = "UnrealEditor.modules"', text,
                          "Game/Server targets use their own AppName as manifest name")
 
-    def test_runtests_no_longer_rejects_game_or_netmatrix(self):
-        text = (TOOLS / "RunTests.ps1").read_text(encoding="utf-8-sig")
-        self.assertNotIn("-BackendTargets needs the Editor carrier", text)
-        self.assertNotIn("-NetMatrix and -BackendTargets cannot be combined", text)
+    def test_development_driver_uses_isolated_targets_unconditionally(self):
+        # The selective/debug driver was split out of the parameterless entry point; it
+        # still has to build the isolated targets for every carrier it runs.
+        text = (TOOLS / "RunDevelopmentTests.ps1").read_text(encoding="utf-8-sig")
+        self.assertNotIn("$BackendTargets", text)
+        self.assertNotIn("-BackendTargets", text)
+        self.assertNotIn("-Profile", text)
         for needle in (
-            "[switch] $BackendTargets",
             "$script:BackendBuildSubFolder",
             '$script:BackendGameExeName',
-            '"Backends/$B"',
+            '$script:BackendBuildSubFolder = "Backends/$B"',
+            '$ThisTargetName = if ($IsGameCarrier) { "UnLuaNovaDemo${B}" }',
             '"UnLuaNovaDemo${B}Editor"',
-            'elseif ($IsGameCarrier) { "UnLuaNovaDemo${B}" }',
             'Resolve-GameExe -Name $script:BackendGameExeName',
             '$script:BackendIntermediateFolder = if ($IsGameCarrier) { $ThisTargetName }',
             'SwitchBackend.ps1',
-            '$ThisTargetName',
-            "if ($BackendTargets) { return }",
-            "-BackendTargets:$BackendTargets -DryRun:$DryRun",
-            "'Baseline', 'NoCache', 'PruneLegacy', 'BackendTargets'",
+            "Backend isolation is unconditional",
         ):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
+        self.assertNotIn("'Baseline', 'NoCache', 'PruneLegacy'", text,
+                         "the removed Release dispatch left Release-only switches behind")
 
-    def test_runnetmatrix_forwards_isolation(self):
-        text = (TOOLS / "RunNetMatrix.ps1").read_text(encoding="utf-8-sig")
+    def test_runtests_is_a_parameterless_entry_point(self):
+        # One command, no switches: engine/project discovery, backends, configurations
+        # and outputs are all defaults. A forgotten -Filter/-Profile must not silently
+        # turn a release verdict into a partial run.
+        text = (TOOLS / "RunTests.ps1").read_text(encoding="utf-8-sig")
+        for banned in ("$PSBoundParameters", "-Profile", "$BackendTargets"):
+            with self.subTest(banned=banned):
+                self.assertNotIn(banned, text)
+        # A real parameter block starts at column 0; "param()" in a comment is fine.
+        self.assertNotRegex(text, r"(?m)^param\(")
         for needle in (
-            '[switch] $BackendTargets',
-            '-BackendTargets:$BackendTargets',
+            "$args.Count -gt 0",
+            "takes no parameters",
+            "RunDevelopmentTests.ps1",
+            "& (Join-Path $PSScriptRoot 'ReleasePipeline.ps1')",
+            "exit $LASTEXITCODE",
+        ):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+        self.assertNotIn("BuildCookRun", text,
+                         "the entry point must not duplicate the release matrix")
+
+    def test_runnetmatrix_uses_isolated_targets(self):
+        text = (TOOLS / "RunNetMatrix.ps1").read_text(encoding="utf-8-sig")
+        self.assertNotIn("$BackendTargets", text)
+        self.assertNotIn("-BackendTargets", text)
+        for needle in (
             '"UnLuaNovaDemo$B"',
             '"UnLuaNovaDemo${B}Server"',
             'Saved/StagedBuilds/Windows/Backends/$B',
@@ -240,20 +264,23 @@ class BackendIsolationTests(unittest.TestCase):
 
     def test_release_pipeline_isolates_every_stage(self):
         text = (TOOLS / "ReleasePipeline.ps1").read_text(encoding="utf-8-sig")
+        self.assertNotIn("$BackendTargets", text)
+        self.assertNotIn("-BackendTargets", text)
         for needle in (
-            '[switch] $BackendTargets',
             '"UnLuaNovaDemo${B}Editor"',
             '"UnLuaNovaDemo${B}"',
             '"UnLuaNovaDemo${B}Server"',
             '"-stagingdirectory=$StageDir"',
             '"-stagingdirectory=$ServerStageArg"',
             '$script:ReleaseDefinitionsSubFolder',
-            '"isolated=$BackendTargets"',
-            "if ($BackendTargets) { $TestArgs += '-BackendTargets' }",
+            '"isolated=True"',
             "'-Backend', $B",
             "'-Backend', 'Default'",
             'restore-backend-layout',
-            'isolated_backends = [bool]$BackendTargets',
+            "Run-Script 'RunDevelopmentTests.ps1'",
+            'isolated_backends = $true',
+            "$BackendOrder = @('Lua', 'Luau')",
+            'if ($ConfigCaptured) {',
         ):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
@@ -261,6 +288,67 @@ class BackendIsolationTests(unittest.TestCase):
         self.assertIn('function Get-ReleaseBuiltBackend([string] $PluginRoot, [string] $BinariesSubFolder',
                       support)
         self.assertIn('if ($BinariesSubFolder) { $Rel = "$Rel/$BinariesSubFolder" }', support)
+
+    def test_no_backend_targets_switch_is_reintroduced(self):
+        # Isolation is the only path. Re-adding a switch would silently restore the
+        # single-slot layout that overwrites one backend's binaries with the other's.
+        for name in ("RunTests.ps1", "RunDevelopmentTests.ps1", "RunNetMatrix.ps1",
+                 "ReleasePipeline.ps1"):
+            with self.subTest(script=name):
+                text = (TOOLS / name).read_text(encoding="utf-8-sig")
+                self.assertNotIn("BackendTargets", text)
+
+    def test_release_pipeline_isolates_cook_outputs(self):
+        text = (TOOLS / "ReleasePipeline.ps1").read_text(encoding="utf-8-sig")
+        for needle in (
+            '"-CookOutputDir=$CookDir"',
+            '"-CookOutputDir=$ServerCookDir"',
+            '$script:ReleaseCookRoot = Join-Path $RepoRoot "Saved/Cooked/Backends/$B"',
+            "'Development/Windows'",
+            "'Shipping/Windows'",
+            "'Development/WindowsServer'",
+            '"cook=isolated"',
+        ):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+        # A path whose last segment is not SC.CookPlatform makes the stager append an
+        # extra Windows/WindowsServer directory that the cooker never wrote.
+        self.assertNotIn('"-CookOutputDir=$script:ReleaseCookRoot"', text)
+        self.assertEqual(2, text.count('"-CookOutputDir='),
+                         "every BuildCookRun must pass its own isolated cook directory")
+
+    def test_static_binding_sources_are_isolated_per_backend(self):
+        pipeline = (TOOLS / "ReleasePipeline.ps1").read_text(encoding="utf-8-sig")
+        support = (TOOLS / "ReleaseSupport.ps1").read_text(encoding="utf-8-sig")
+        generator = (REPO / "Plugins" / "UnLuaNova" / "Source" / "UnLuaNovaEditor" /
+                     "Private" / "Commandlets" / "UnLuaNovaStaticBindingGenerator.cpp").read_text(
+                         encoding="utf-8-sig")
+        # The backup/stub/restore choreography existed only because both backends shared
+        # one global .cpp. None of it may come back.
+        for text, label in ((pipeline, "ReleasePipeline.ps1"), (support, "ReleaseSupport.ps1")):
+            with self.subTest(script=label):
+                for banned in ("Backup-ReleaseStaticBindings", "Restore-ReleaseStaticBindings",
+                               "Test-ReleaseBindingStub", "static-binding-backup", "$BindingState",
+                               "$BindingBackups"):
+                    self.assertNotIn(banned, text, f"{label} still serialises a shared binding file")
+        for needle in (
+            "Generated/Backends/$Backend/",
+            "function Get-ReleaseStaticBindingSource([string] $Project, [string] $Backend)",
+            "Test-ReleaseBindingGenerated -Path $BindingSource -Backend $B",
+            '"binding=isolated"',
+        ):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, pipeline if needle.startswith('"binding') else support
+                              if not needle.startswith("Test-") else pipeline)
+        for needle in (
+            'TEXT("Generated"), TEXT("Backends"), GStaticBindingBackendName',
+            "GStaticBindingBackendValue",
+            '#if defined(UNLUANOVA_LUA_BACKEND) && UNLUANOVA_LUA_BACKEND == %d',
+            '#endif // UNLUANOVA_LUA_BACKEND',
+            "removed the legacy shared source",
+        ):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, generator)
 
     def test_outer_doctor_understands_isolated_layout(self):
         state_py = (OUTER_UNLUANOVA / "state.py").read_text(encoding="utf-8-sig")

@@ -203,7 +203,9 @@ private:
      * 产物里存了一份类型集合的 CRC，启动时重算一遍。不同就说明有类型增删，重新生成。
      *
      * 这里必须说清一件事，否则日志会被误读成"开了没生效"：
-     * 产物是 .cpp，写完盘之后还要 UBT 编一次才进二进制。所以自动生成之后，
+     * 产物落在 Generated/Backends/<编译期后端>/，两个后端各写各的文件，互不覆盖；整份
+     * 内容由 UNLUANOVA_LUA_BACKEND 宏卫住，UBT 会把两份都编进构建图，但只有匹配的一份
+     * 真正注册绑定表。产物是 .cpp，写完盘之后还要 UBT 编一次才进二进制。所以自动生成之后，
      * thunk **本次启动还不会生效** —— 要下次编译之后。属性/函数的描述表部分在产物
      * 编进去之前也用不上。这一点在日志里直接写出来，不让人猜。
      *
@@ -230,7 +232,7 @@ private:
 
         const FString File = FPaths::Combine(
             Options.OutputDir.IsEmpty() ? UnLuaNova::GetDefaultStaticBindingOutputDir() : Options.OutputDir,
-            TEXT("UnLuaNovaStaticBinding_Generated.cpp"));
+            UnLuaNova::GetStaticBindingGeneratedFileName());
 
         const bool bExists = IFileManager::Get().FileExists(*File);
 

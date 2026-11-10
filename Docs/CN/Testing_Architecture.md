@@ -22,9 +22,9 @@
 
 ## 验收入口
 
-维护者只运行 `.\Tools\RunTests.ps1`。默认 Release 自动完成双后端构建、生成代码重编、完整 Editor 和 cooked Development 用例、真实网络 peer、类型检查、性能门禁、Server 构建与 Shipping 打包。实际顺序、失败规则与覆盖边界以 [测试说明](Testing.md) 为准。
+维护者只运行 `.\Tools\RunTests.ps1`（无参数）。这条命令自动完成完整 Release：双后端构建、生成代码重编、完整 Editor 和 cooked Development 用例、真实网络 peer、类型检查、性能门禁、Server 构建与 Shipping 打包。实际顺序、失败规则与覆盖边界以 [测试说明](Testing.md) 为准。
 
-`-Profile Development` 才允许局部 filter、Fast、NullRHI 或 SkipBuild，不能作为 release 结果。
+局部 filter、Fast、NullRHI 或 SkipBuild 属于独立的 `Tools/RunDevelopmentTests.ps1`，不能作为 release 结果。
 
 ## 无编译检查
 

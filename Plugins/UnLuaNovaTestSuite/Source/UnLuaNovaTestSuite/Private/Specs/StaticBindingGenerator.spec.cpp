@@ -16,9 +16,9 @@
 // committed, so a generator that stopped emitting anything would leave the registry empty and
 // the fast call path dead, with the suite still green.
 //
-// Output goes to a scratch directory - never to <UnLuaNova>/Source/UnLuaNova/Generated, which
-// is where it would land by default and where it would become real, compiled code with
-// test-shaped contents.
+// Output goes to a scratch directory - never to
+// <UnLuaNova>/Source/UnLuaNova/Generated/Backends/<Backend>, which is where it would land
+// by default and where it would become real, compiled code with test-shaped contents.
 
 #include "UnLuaNovaBase.h"
 #include "UnLuaNovaTemplate.h"
@@ -107,6 +107,12 @@ void FStaticBindingGeneratorSpec::Define()
         // ever sees, which is exactly the failure that is otherwise invisible.
         TestTrue(*Generated, Content.Contains(TEXT("UNLUANOVA_REGISTER_STATIC_BINDING(")));
         TestTrue(*Generated, Content.Contains(TEXT("FStaticTypeBinding")));
+
+        // Both backends' generated files are compiled by UBT, so the whole body must be
+        // guarded: only the file matching the target's compile-time backend may register.
+        TestTrue(TEXT("backend label"), Content.Contains(TEXT("// backend: ")));
+        TestTrue(TEXT("backend guard"), Content.Contains(TEXT("#if defined(UNLUANOVA_LUA_BACKEND) && UNLUANOVA_LUA_BACKEND ==")));
+        TestTrue(TEXT("guard closed"), Content.Contains(TEXT("#endif // UNLUANOVA_LUA_BACKEND")));
 
         // The opt-out rule: internal / deprecated / transient names must not be selected.
         TestFalse(*Generated, Content.Contains(TEXT("SKEL_")));

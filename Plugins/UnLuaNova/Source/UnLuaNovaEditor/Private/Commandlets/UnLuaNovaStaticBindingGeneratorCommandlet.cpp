@@ -6,7 +6,7 @@
 // exit code, and a project that wants generation pinned to an explicit step in CI.
 //
 //   UnrealEditor-Cmd.exe <Project> -run=UnLuaNovaStaticBindingGenerator
-//       [-OutputDir=<Project>/Source/<Module>/Generated]
+//       [-OutputDir=<explicit directory>]; default: Generated/Backends/<compiled backend>
 
 #include "Commandlets/UnLuaNovaStaticBindingGeneratorCommandlet.h"
 #include "UnLuaNovaCompatibility.h"

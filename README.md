@@ -192,20 +192,22 @@ LuaBackend=Luau        ; 或 Lua；改完要重新编译
 ```
 
 **示例工程可以不这么折腾**：`UnLuaNovaDemo<Lua|Luau>{Editor,Server,''}` 六个 target 各有一套
-独立产物，各编一次之后切后端**零编译**。`-BackendTargets` 对 Editor / Game / Server 载体、
-`-NetMatrix` 和完整 Release 矩阵都生效：
+独立产物，各编一次之后切后端**零编译**。后端隔离是默认且唯一的方式，不需要任何开关：
+Editor / Game / Server 载体、`-NetMatrix` 和完整 Release 矩阵一律使用隔离 target。
+不只 DLL：cook 输出落在 `Saved/Cooked/Backends/<后端>/...`，静态绑定生成源码落在
+`Source/UnLuaNova/Generated/Backends/<后端>/`，都按后端（cook 还按配置）分开，互不覆盖：
 
 ```powershell
 # Editor 快速路径（Game / Server target 见文档）
 Build.bat UnLuaNovaDemoLuaEditor  Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
 Build.bat UnLuaNovaDemoLuauEditor Win64 Development -Project=UnLuaNovaDemo.uproject -WaitMutex
 .\Tools\SwitchBackend.ps1 -Backend Lua     # 或 Luau；-Status 看当前，-Backend Default 回到普通布局
-.\Tools\RunTests.ps1 -Profile Development -BackendTargets -Backend Both
-.\Tools\RunTests.ps1 -Profile Release -BackendTargets
+.\Tools\RunDevelopmentTests.ps1 -Backend Both
+.\Tools\RunTests.ps1                    # 完整 Release，无参数
 ```
 
 原理、六个 target 的构建命令与边界见
-[测试与自动化 / 后端隔离构建](Docs/CN/Testing.md#后端隔离构建-backendtargets)。
+[测试与自动化 / 后端隔离构建](Docs/CN/Testing.md#后端隔离构建)。
 
 用 UnLuaNova 工具栏把蓝图绑到模块，脚本放 `Content/Script/`。
 从 UnLua 迁移只需把全局名 `UnLua` 批量换成 `UnLuaNova`。
@@ -217,9 +219,12 @@ Build.bat UnLuaNovaDemoLuauEditor Win64 Development -Project=UnLuaNovaDemo.uproj
 
 ```powershell
 .\Tools\RunTests.ps1                 # 完整 Release：双后端 + 联网 + 类型检查 + 打包 + 性能门禁
-.\Tools\RunTests.ps1 -Profile Development -Filter UnLuaNova.API
+.\Tools\RunDevelopmentTests.ps1 -Filter UnLuaNova.API
 python Tools/AuditRepository.py      # 不编译的仓库一致性检查
 ```
+
+`RunTests.ps1` 不接受任何参数：引擎路径、双后端、输出目录、缓存与完整矩阵都是默认值。
+局部过滤器、载体、分层、`-BuildOnly` 和联网矩阵属于 `Tools/RunDevelopmentTests.ps1`。
 
 </details>
 

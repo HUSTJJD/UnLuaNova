@@ -60,7 +60,9 @@ enum class EStaticBindingSelection : uint8
 
 struct FStaticBindingGenerateOptions
 {
-	/** Empty -> <Project>/Source/<ProjectModule>/Generated, which is where UBT picks it up. */
+	/** Empty -> <UnLuaNova>/Source/UnLuaNova/Generated/Backends/<Backend>, which is where
+	 *  UBT picks it up. A non-empty value is used verbatim and bypasses the backend layout;
+	 *  the caller is then responsible for compiling that translation unit. */
 	FString OutputDir;
 
 	EStaticBindingSelection Selection = EStaticBindingSelection::ExportedReflected;
@@ -99,8 +101,11 @@ namespace UnLuaNova
 	/** Reads the fingerprint out of a generated file. Empty when absent or unreadable. */
 	UNLUANOVAEDITOR_API FString ReadStaticBindingFingerprint(const FString& File);
 
-	/** Default output directory when none is given. */
+	/** Default output directory when none is given: Generated/Backends/<compiled backend>. */
 	UNLUANOVAEDITOR_API FString GetDefaultStaticBindingOutputDir();
+
+	/** Leaf filename of the generated translation unit, shared by all backend directories. */
+	UNLUANOVAEDITOR_API FString GetStaticBindingGeneratedFileName();
 
 	UNLUANOVAEDITOR_API FStaticBindingGenerateResult GenerateStaticBindings(const FStaticBindingGenerateOptions& Options);
 }
