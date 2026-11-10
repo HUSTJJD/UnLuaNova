@@ -1,4 +1,5 @@
 #include "Commandlets/UnLuaNovaShowcaseDressingCommandlet.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "Components/DirectionalLightComponent.h"
 #include "Components/SkyLightComponent.h"
@@ -93,7 +94,7 @@ namespace
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[ShowcaseDressing] %s is missing - no floor was added."), GPlaneAsset);
+			UNLUANOVA_LOGF(LogTemp, Warning, TEXT("[ShowcaseDressing] %s is missing - no floor was added."), GPlaneAsset);
 		}
 
 		// Three cubes in front of the camera: a lit floor on its own reads as a flat gradient,
@@ -168,7 +169,7 @@ namespace
 				++Removed;
 		}
 
-		UE_LOG(LogTemp, Display, TEXT("[ShowcaseDressing] removed %d actor(s)."), Removed);
+		UNLUANOVA_LOGF(LogTemp, Display, TEXT("[ShowcaseDressing] removed %d actor(s)."), Removed);
 		return Removed > 0;
 	}
 }
@@ -208,7 +209,7 @@ int32 UUnLuaNovaShowcaseDressingCommandlet::Main(const FString& Params)
 		ULevel* Level = World ? World->PersistentLevel : nullptr;
 		if (!Level)
 		{
-			UE_LOG(LogTemp, Error, TEXT("[ShowcaseDressing] %s: could not open the level."), *Map);
+			UNLUANOVA_LOGF(LogTemp, Error, TEXT("[ShowcaseDressing] %s: could not open the level."), *Map);
 			++Failed;
 			continue;
 		}
@@ -217,7 +218,7 @@ int32 UUnLuaNovaShowcaseDressingCommandlet::Main(const FString& Params)
 		// only adds what is missing - no duplicate suns, no reason to skip a dressed level.
 		if (!(bUndo ? UndressLevel(Level) : DressLevel(Level)))
 		{
-			UE_LOG(LogTemp, Error, TEXT("[ShowcaseDressing] %s: nothing was %s."), *Map,
+			UNLUANOVA_LOGF(LogTemp, Error, TEXT("[ShowcaseDressing] %s: nothing was %s."), *Map,
 				bUndo ? TEXT("removed") : TEXT("added"));
 			++Failed;
 			continue;
@@ -226,16 +227,16 @@ int32 UUnLuaNovaShowcaseDressingCommandlet::Main(const FString& Params)
 		const FString Filename = FPackageName::LongPackageNameToFilename(Map, FPackageName::GetMapPackageExtension());
 		if (!FEditorFileUtils::SaveMap(World, Filename))
 		{
-			UE_LOG(LogTemp, Error, TEXT("[ShowcaseDressing] %s: could not save to %s."), *Map, *Filename);
+			UNLUANOVA_LOGF(LogTemp, Error, TEXT("[ShowcaseDressing] %s: could not save to %s."), *Map, *Filename);
 			++Failed;
 			continue;
 		}
 
 		++Changed;
-		UE_LOG(LogTemp, Display, TEXT("[ShowcaseDressing] %s: %s -> %s"), *Map,
+		UNLUANOVA_LOGF(LogTemp, Display, TEXT("[ShowcaseDressing] %s: %s -> %s"), *Map,
 			bUndo ? TEXT("dressing removed") : TEXT("dressed"), *Filename);
 	}
 
-	UE_LOG(LogTemp, Display, TEXT("[ShowcaseDressing] %d level(s) changed, %d failed."), Changed, Failed);
+	UNLUANOVA_LOGF(LogTemp, Display, TEXT("[ShowcaseDressing] %d level(s) changed, %d failed."), Changed, Failed);
 	return Failed > 0 ? 1 : 0;
 }

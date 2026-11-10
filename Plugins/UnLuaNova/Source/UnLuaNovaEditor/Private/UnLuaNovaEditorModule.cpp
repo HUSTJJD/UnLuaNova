@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Compat/UObjectHash.h"
+#include "UnLuaNovaCompatibility.h"
 #include "UnLuaNovaEditorStyle.h"
 #include "UnLuaNovaEditorCommands.h"
 #include "Misc/CoreDelegates.h"
@@ -142,7 +143,7 @@ private:
 
         if (Args.Num() == 0 || Args[0] == TEXT("status"))
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.dap: %s (port=%d)"),
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.dap: %s (port=%d)"),
                 Adapter.IsRunning() ? TEXT("running") : TEXT("stopped"), Adapter.GetPort());
             return;
         }
@@ -156,7 +157,7 @@ private:
             // 和其他特性一样走统一开关：关掉就起不来，而不是"起来了但没人连"
             if (!GetDefault<UUnLuaNovaSettings>()->bDebugAdapter)
             {
-                UE_LOG(LogUnLuaNova, Warning,
+                UNLUANOVA_LOGF(LogUnLuaNova, Warning,
                     TEXT("lua.dap: 该特性已关闭（DefaultUnLuaNovaSettings.ini 的 bDebugAdapter=false）"));
                 return;
             }
@@ -171,7 +172,7 @@ private:
             return;
         }
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.dap [start [port] | stop | status]"));
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("usage: lua.dap [start [port] | stop | status]"));
     }
 
     /**
@@ -191,7 +192,7 @@ private:
         if (OutputDir.IsEmpty() || IFileManager::Get().DirectoryExists(*OutputDir))
             return;
 
-        UE_LOG(LogUnLuaNova, Display, TEXT("IntelliSense: first-time generation into %s"), *OutputDir);
+        UNLUANOVA_LOGF(LogUnLuaNova, Display, TEXT("IntelliSense: first-time generation into %s"), *OutputDir);
         Generator->UpdateAll();
     }
 
@@ -243,22 +244,22 @@ private:
             if (Stored.IsEmpty() || Stored == Current)
                 return;
 
-            UE_LOG(LogUnLuaNova, Display,
+            UNLUANOVA_LOGF(LogUnLuaNova, Display,
                 TEXT("StaticBinding: type set changed (%s -> %s), regenerating."), *Stored, *Current);
         }
         else
         {
-            UE_LOG(LogUnLuaNova, Display, TEXT("StaticBinding: no generated file yet, generating into %s"), *File);
+            UNLUANOVA_LOGF(LogUnLuaNova, Display, TEXT("StaticBinding: no generated file yet, generating into %s"), *File);
         }
 
         const FStaticBindingGenerateResult Result = UnLuaNova::GenerateStaticBindings(Options);
         if (Result.NumTypes == 0)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("StaticBinding: generation produced nothing (%s)"), *Result.Message);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("StaticBinding: generation produced nothing (%s)"), *Result.Message);
             return;
         }
 
-        UE_LOG(LogUnLuaNova, Display,
+        UNLUANOVA_LOGF(LogUnLuaNova, Display,
             TEXT("StaticBinding: wrote %s (%d types, thunk coverage %d/%d). "
                  "It is C++ - rebuild once for it to take effect; until then the reflective path stays in use."),
             *Result.OutputFile, Result.NumTypes, Result.NumThunks, Result.NumFuncs);

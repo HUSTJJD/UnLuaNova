@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaOverrider.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "LuaCore.h"
 #include "LuaDanglingCheck.h"
@@ -87,7 +88,7 @@ namespace UnLuaNova
         if (!Env)
         {
             if (!bRequireExist)
-                UE_LOG(LogUnLuaNova, Warning, TEXT("No lua env available for '%s' - cannot call Lua function '%s'."),
+                UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("No lua env available for '%s' - cannot call Lua function '%s'."),
                     *GetNameSafe(Self), *FunctionName);
             return Call;
         }
@@ -100,7 +101,7 @@ namespace UnLuaNova
             if (!Env->TryBind(const_cast<UObject*>(Self)))
             {
                 if (!bRequireExist)
-                    UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to bind a lua module to '%s' - cannot call Lua function '%s'."),
+                    UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Failed to bind a lua module to '%s' - cannot call Lua function '%s'."),
                         *GetNameSafe(Self), *FunctionName);
                 return Call;
             }
@@ -116,7 +117,7 @@ namespace UnLuaNova
         {
             // PushFunction already restored the stack. Nothing to call.
             if (!bRequireExist)
-                UE_LOG(LogUnLuaNova, Warning, TEXT("Lua function '%s' does not exist on '%s'."), *FunctionName, *GetNameSafe(Self));
+                UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Lua function '%s' does not exist on '%s'."), *FunctionName, *GetNameSafe(Self));
             return Call;
         }
 

@@ -1,4 +1,5 @@
 #include "UnLuaNovaConsoleCommands.h"
+#include "UnLuaNovaCompatibility.h"
 #include "LuaBackend.h"
 #include "LuaCoroutineTracker.h"
 #include "LuaCoverage.h"
@@ -72,14 +73,14 @@ namespace UnLuaNova
     {
         if (Args.Num() == 0)
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.do <your code>"));
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("usage: lua.do <your code>"));
             return;
         }
 
         auto Env = Module->GetEnv();
         if (!Env)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("no available lua env found to run code."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("no available lua env found to run code."));
             return;
         }
 
@@ -97,7 +98,7 @@ namespace UnLuaNova
         const TArray<FLuaEnv*> Envs = FLuaEnv::GetAllEnvs();
         if (Envs.Num() == 0)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("no available lua env found to debug."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("no available lua env found to debug."));
             return;
         }
 
@@ -106,21 +107,21 @@ namespace UnLuaNova
             const int32 Wanted = FCString::Atoi(*Args[1]);
             if (!Envs.IsValidIndex(Wanted))
             {
-                UE_LOG(LogUnLuaNova, Warning, TEXT("lua.dbg: no env at index %d - %d env(s) exist. Run 'lua.dbg env' to list them."), Wanted, Envs.Num());
+                UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("lua.dbg: no env at index %d - %d env(s) exist. Run 'lua.dbg env' to list them."), Wanted, Envs.Num());
                 return;
             }
 
             DebugEnvIndex = Wanted;
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.dbg: now debugging env %d (main state 0x%p)"), DebugEnvIndex, Envs[DebugEnvIndex]->GetMainState());
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.dbg: now debugging env %d (main state 0x%p)"), DebugEnvIndex, Envs[DebugEnvIndex]->GetMainState());
             return;
         }
 
         if (Args.Num() >= 1 && Args[0].Equals(TEXT("env"), ESearchCase::IgnoreCase))
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.dbg: %d env(s), debugging env %d:"), Envs.Num(), DebugEnvIndex);
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.dbg: %d env(s), debugging env %d:"), Envs.Num(), DebugEnvIndex);
             for (int32 Index = 0; Index < Envs.Num(); ++Index)
             {
-                UE_LOG(LogUnLuaNova, Log, TEXT("  %s%d: %s (main state 0x%p)"),
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("  %s%d: %s (main state 0x%p)"),
                     Index == DebugEnvIndex ? TEXT("> ") : TEXT("  "), Index,
                     *Envs[Index]->GetName(), Envs[Index]->GetMainState());
             }
@@ -144,7 +145,7 @@ namespace UnLuaNova
 
         if (Args.Num() == 0)
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.dbg: env=%d/%d attached=%d paused=%d hits=%d breakpoints=%d"),
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.dbg: env=%d/%d attached=%d paused=%d hits=%d breakpoints=%d"),
                 DebugEnvIndex, Envs.Num(),
                 DebugService.IsAttached() ? 1 : 0,
                 DebugService.IsPaused() ? 1 : 0,
@@ -161,7 +162,7 @@ namespace UnLuaNova
             // Toggle: a second invocation on the same site removes it.
             if (!DebugService.RemoveBreakpoint(Args[1], Line))
                 DebugService.AddBreakpoint(Args[1], Line);
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.dbg: breakpoint toggled at %s:%d"), *Args[1], Line);
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.dbg: breakpoint toggled at %s:%d"), *Args[1], Line);
             return;
         }
 
@@ -181,7 +182,7 @@ namespace UnLuaNova
         if (Sub == TEXT("stack"))
         {
             for (const FLuaDebugFrame& Frame : DebugService.GetStackTrace())
-                UE_LOG(LogUnLuaNova, Log, TEXT("#%d %s:%d %s"),
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("#%d %s:%d %s"),
                     Frame.Depth, *Frame.Source, Frame.Line, *Frame.Function);
             return;
         }
@@ -189,7 +190,7 @@ namespace UnLuaNova
         if (Sub == TEXT("locals"))
         {
             for (const FLuaDebugVariable& Var : DebugService.GetLocals())
-                UE_LOG(LogUnLuaNova, Log, TEXT("%s (%s) = %s"),
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s (%s) = %s"),
                     *Var.Name, *Var.Type, *Var.Value);
             return;
         }
@@ -206,21 +207,21 @@ namespace UnLuaNova
             return;
         }
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.dbg [env [n] | bp <src> <line> | step | continue | stack | locals | clear | detach]"));
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("usage: lua.dbg [env [n] | bp <src> <line> | step | continue | stack | locals | clear | detach]"));
     }
 
     void FUnLuaNovaConsoleCommands::DoFile(const TArray<FString>& Args) const
     {
         if (Args.Num() != 1)
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.dofile <lua.module.path>"));
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("usage: lua.dofile <lua.module.path>"));
             return;
         }
 
         auto Env = Module->GetEnv();
         if (!Env)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("no available lua env found to run file."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("no available lua env found to run file."));
             return;
         }
 
@@ -239,14 +240,14 @@ namespace UnLuaNova
         auto Env = Module->GetEnv();
         if (!Env)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("no available lua env found to collect garbage."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("no available lua env found to collect garbage."));
             return;
         }
 
         if (Args.Num() == 0)
         {
             Env->GC();
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: full collect done, heap = %.1f KB"), Env->GetGCStats().HeapBytes / 1024.0);
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.gc: full collect done, heap = %.1f KB"), Env->GetGCStats().HeapBytes / 1024.0);
             return;
         }
 
@@ -257,7 +258,7 @@ namespace UnLuaNova
         if (Sub == TEXT("auto"))
         {
             Env->SetGCMode(UnLuaNova::ELuaGcMode::Automatic);
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: automatic (VM-paced); the per-frame slice is off."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.gc: automatic (VM-paced); the per-frame slice is off."));
             return;
         }
 
@@ -270,7 +271,7 @@ namespace UnLuaNova
                 Env->SetGCStepBudget(Kb * 1024);
             }
             Env->SetGCMode(UnLuaNova::ELuaGcMode::TimeSliced);
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: time sliced, budget = %lld KB/frame (0 = uncapped)"), Kb);
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.gc: time sliced, budget = %lld KB/frame (0 = uncapped)"), Kb);
             return;
         }
 
@@ -278,7 +279,7 @@ namespace UnLuaNova
         {
             const int64 Kb = FCString::Atoi64(*Args[1]);
             Env->SetGCStepBudget(Kb * 1024);
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: per-frame budget = %lld KB (0 = uncapped)"), Kb);
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.gc: per-frame budget = %lld KB (0 = uncapped)"), Kb);
             return;
         }
 
@@ -286,7 +287,7 @@ namespace UnLuaNova
         {
             const int32 Percent = FCString::Atoi(*Args[1]);
             Env->SetGCStepMultiplier(Percent);
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: step multiplier = %d%% (100 = keep pace with the allocator)"), Percent);
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.gc: step multiplier = %d%% (100 = keep pace with the allocator)"), Percent);
             return;
         }
 
@@ -294,22 +295,22 @@ namespace UnLuaNova
         {
             const int64 Kb = FCString::Atoi64(*Args[1]);
             Env->SetGCHardLimit(Kb * 1024);
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: hard limit = %lld KB (0 = disabled)"), Kb);
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.gc: hard limit = %lld KB (0 = disabled)"), Kb);
             return;
         }
 
         if (Sub == TEXT("stats"))
         {
             const auto& S = Env->GetGCStats();
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: mode=%s heap=%.1f KB peak=%.1f KB debt=%.1f KB"),
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.gc: mode=%s heap=%.1f KB peak=%.1f KB debt=%.1f KB"),
                 Env->GetGCMode() == UnLuaNova::ELuaGcMode::TimeSliced ? TEXT("time-sliced") : TEXT("automatic"),
                 S.HeapBytes / 1024.0, S.PeakHeapBytes / 1024.0, S.PendingDebtBytes / 1024.0);
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.gc: frames=%d stepped=%d fullcollects=%d steppedMB=%.2f total=%.2f ms worst frame=%.3f ms"),
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.gc: frames=%d stepped=%d fullcollects=%d steppedMB=%.2f total=%.2f ms worst frame=%.3f ms"),
                 S.Frames, S.SteppedFrames, S.FullCollects, S.BytesSteppedTotal / (1024.0 * 1024.0), S.TotalStepMs, S.WorstFrameMs);
             return;
         }
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.gc [auto | slice [kb] | budget <kb> | mult <pct> | limit <kb> | stats]"));
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("usage: lua.gc [auto | slice [kb] | budget <kb> | mult <pct> | limit <kb> | stats]"));
     }
 
     void FUnLuaNovaConsoleCommands::MemStats(const TArray<FString>& Args) const
@@ -328,37 +329,37 @@ namespace UnLuaNova
                 if (auto Env = Module->GetEnv())
                     Stats.Attach(Env->GetMainState());
 
-                UE_LOG(LogUnLuaNova, Log, TEXT("Lua memory tracking enabled."));
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua memory tracking enabled."));
                 return;
             }
             if (Arg.Equals(TEXT("off"), ESearchCase::IgnoreCase))
             {
                 Stats.bEnabled.store(false, std::memory_order_relaxed);
                 Stats.Detach();
-                UE_LOG(LogUnLuaNova, Log, TEXT("Lua memory tracking disabled."));
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua memory tracking disabled."));
                 return;
             }
             if (Arg.Equals(TEXT("reset"), ESearchCase::IgnoreCase))
             {
                 Stats.Reset();
-                UE_LOG(LogUnLuaNova, Log, TEXT("Lua memory interval counters reset; live allocations preserved."));
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua memory interval counters reset; live allocations preserved."));
                 return;
             }
 
-            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.memstats [on|off|reset]"));
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("usage: lua.memstats [on|off|reset]"));
             return;
         }
 
         if (!Stats.bEnabled.load(std::memory_order_relaxed))
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("Detailed tracking is off; live bytes remain available. Use 'lua.memstats on' for call counts and categories."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Detailed tracking is off; live bytes remain available. Use 'lua.memstats on' for call counts and categories."));
         }
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Stats.BuildReport());
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s"), *Stats.BuildReport());
 
         // Categorized breakdown is Luau-only; on other backends it reports that and stops.
         // Empty until 'lua.memstats on' has been run, since that is what installs the hooks.
-        UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Stats.BuildCategoryReport());
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s"), *Stats.BuildCategoryReport());
     }
 
     void FUnLuaNovaConsoleCommands::MemoryQuota(const TArray<FString>& Args) const
@@ -370,19 +371,19 @@ namespace UnLuaNova
         {
             // Force the CVar to exist even on a build where no env has been created yet.
             const int64 CvarBytes = FLuaEnv::ReadMemoryQuotaCvar();
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.memquota: %d env(s); cvar lua.maxmemorykb = %lld KiB for NEW envs"),
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.memquota: %d env(s); cvar lua.maxmemorykb = %lld KiB for NEW envs"),
                 Envs.Num(), CvarBytes / 1024);
             for (int32 Index = 0; Index < Envs.Num(); ++Index)
             {
                 FLuaEnv* Env = Envs[Index];
                 const int64 Max = Env->GetMemoryQuotaMaxBytes();
-                UE_LOG(LogUnLuaNova, Log,
+                UNLUANOVA_LOGF(LogUnLuaNova, Log,
                     TEXT("  %d: %s limit=%lld B (%s) live=%lld B rejections=%d last_request=%lld B"),
                     Index, *Env->GetName(), Max, Max > 0 ? TEXT("on") : TEXT("off"),
                     Env->GetLiveLuaBytes(), Env->GetMemoryQuotaRejectionCount(),
                     Env->GetMemoryQuota().LastRequestedBytes.load());
             }
-            UE_LOG(LogUnLuaNova, Log,
+            UNLUANOVA_LOGF(LogUnLuaNova, Log,
                 TEXT("lua.memquota: a refusal raises a recoverable Lua error; lua.gc limit only forces a collection."));
             return;
         }
@@ -391,7 +392,7 @@ namespace UnLuaNova
         {
             for (FLuaEnv* Env : Envs)
                 Env->GetMemoryQuota().Rejections.store(0);
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.memquota: rejection counters cleared for %d env(s); limits unchanged."), Envs.Num());
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.memquota: rejection counters cleared for %d env(s); limits unchanged."), Envs.Num());
             return;
         }
 
@@ -405,7 +406,7 @@ namespace UnLuaNova
             Kb = FCString::Atoi64(*Sub);
             if (Kb < 0 || (!Sub.IsNumeric() && Kb == 0))
             {
-                UE_LOG(LogUnLuaNova, Warning, TEXT("usage: lua.memquota <kb> | off | status | reset"));
+                UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("usage: lua.memquota <kb> | off | status | reset"));
                 return;
             }
         }
@@ -419,7 +420,7 @@ namespace UnLuaNova
         for (FLuaEnv* Env : Envs)
             Env->SetMemoryQuotaMaxBytes(Bytes);
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("lua.memquota: limit = %lld B (%lld KiB) for %d live env(s); new envs inherit lua.maxmemorykb. rejections counters kept."),
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.memquota: limit = %lld B (%lld KiB) for %d live env(s); new envs inherit lua.maxmemorykb. rejections counters kept."),
             Bytes, Bytes / 1024, Envs.Num());
     }
 
@@ -435,13 +436,13 @@ namespace UnLuaNova
                 Profiler.SetEnabled(true);
                 // Not "DeadLoopCheck is inactive": both go through FLuaVmHooks now, which
                 // exists precisely so they stop overwriting each other.
-                UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiling on - capture with Unreal Insights. DeadLoopCheck keeps its hook (both go through FLuaVmHooks)."));
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua profiling on - capture with Unreal Insights. DeadLoopCheck keeps its hook (both go through FLuaVmHooks)."));
                 return;
             }
             if (Arg.Equals(TEXT("off"), ESearchCase::IgnoreCase))
             {
                 Profiler.SetEnabled(false);
-                UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiling off."));
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua profiling off."));
                 return;
             }
 
@@ -451,14 +452,14 @@ namespace UnLuaNova
             {
                 const bool bOn = !(Args.Num() >= 2 && Args[1].Equals(TEXT("off"), ESearchCase::IgnoreCase));
                 Profiler.SetAggregateEnabled(bOn);
-                UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiler aggregation %s."), bOn ? TEXT("ON") : TEXT("OFF"));
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua profiler aggregation %s."), bOn ? TEXT("ON") : TEXT("OFF"));
                 return;
             }
 
             if (Arg.Equals(TEXT("reset"), ESearchCase::IgnoreCase))
             {
                 Profiler.ResetAggregate();
-                UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiler aggregates reset."));
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua profiler aggregates reset."));
                 return;
             }
 
@@ -471,14 +472,14 @@ namespace UnLuaNova
                 if (Sub.Equals(TEXT("off"), ESearchCase::IgnoreCase))
                 {
                     Profiler.SetTraceEnabled(false);
-                    UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiler trace off."));
+                    UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua profiler trace off."));
                     return;
                 }
 
                 if (Sub.Equals(TEXT("reset"), ESearchCase::IgnoreCase))
                 {
                     Profiler.ResetTrace();
-                    UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiler trace cleared."));
+                    UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua profiler trace cleared."));
                     return;
                 }
 
@@ -493,7 +494,7 @@ namespace UnLuaNova
 
                 Profiler.SetEnabled(true);
                 Profiler.SetTraceEnabled(true);
-                UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiler trace on (~1kHz, %d sample ceiling). 'lua.profiler trace dump [path]' to write it."),
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua profiler trace on (~1kHz, %d sample ceiling). 'lua.profiler trace dump [path]' to write it."),
                     FLuaProfiler::MaxTraceSamples);
                 return;
             }
@@ -501,7 +502,7 @@ namespace UnLuaNova
             if (Arg.Equals(TEXT("top"), ESearchCase::IgnoreCase))
             {
                 const int32 Rows = Args.Num() >= 2 ? FCString::Atoi(*Args[1]) : 20;
-                UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Profiler.BuildReport(Rows));
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s"), *Profiler.BuildReport(Rows));
                 return;
             }
 
@@ -510,7 +511,7 @@ namespace UnLuaNova
             if (Arg.Equals(TEXT("mem"), ESearchCase::IgnoreCase))
             {
                 const int32 Rows = Args.Num() >= 2 ? FCString::Atoi(*Args[1]) : 20;
-                UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Profiler.BuildAllocReport(Rows));
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s"), *Profiler.BuildAllocReport(Rows));
                 return;
             }
 
@@ -518,15 +519,15 @@ namespace UnLuaNova
             {
                 const FString File = Args.Num() >= 2 ? Args[1] : TEXT("lua-profiler.csv");
                 if (!Profiler.DumpToFile(File))
-                    UE_LOG(LogUnLuaNova, Error, TEXT("Failed to write the profiler report to '%s'."), *File);
+                    UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("Failed to write the profiler report to '%s'."), *File);
                 return;
             }
 
-            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.profiler [on|off|agg on|off|reset|top [n]|mem [n]|dump [file]]"));
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("usage: lua.profiler [on|off|agg on|off|reset|top [n]|mem [n]|dump [file]]"));
             return;
         }
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiling is %s (%d functions tracked, %d aggregated)."),
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua profiling is %s (%d functions tracked, %d aggregated)."),
                Profiler.IsEnabled() ? TEXT("ON") : TEXT("OFF"),
                Profiler.NumTrackedFunctions(),
                Profiler.NumAggregatedFunctions());
@@ -537,7 +538,7 @@ namespace UnLuaNova
         auto Env = Module->GetEnv();
         if (!Env)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("lua.coroutines: no lua env is active."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("lua.coroutines: no lua env is active."));
             return;
         }
 
@@ -551,7 +552,7 @@ namespace UnLuaNova
             if (Sub.Equals(TEXT("on"), ESearchCase::IgnoreCase))
             {
                 Tracker.SetEnabled(true);
-                UE_LOG(LogUnLuaNova, Log, TEXT("lua.coroutines: tracking on. It replaces coroutine.create/wrap, so it costs a table write per coroutine - turn it off when you are done."));
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.coroutines: tracking on. It replaces coroutine.create/wrap, so it costs a table write per coroutine - turn it off when you are done."));
                 return;
             }
 
@@ -560,17 +561,17 @@ namespace UnLuaNova
                 Tracker.SetEnabled(false);
                 // Said out loud rather than left implicit: the originals cannot be put back,
                 // they only exist inside the upvalues of the wrappers.
-                UE_LOG(LogUnLuaNova, Log, TEXT("lua.coroutines: recording off. The wrapped constructors stay installed (there is nothing to restore them from); only new coroutines stop being recorded."));
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.coroutines: recording off. The wrapped constructors stay installed (there is nothing to restore them from); only new coroutines stop being recorded."));
                 return;
             }
 
-            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.coroutines [on|off]"));
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("usage: lua.coroutines [on|off]"));
             return;
         }
 
         if (!Tracker.IsEnabled())
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("lua.coroutines: tracking is off - run 'lua.coroutines on' first. A census taken before that is empty, not healthy."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.coroutines: tracking is off - run 'lua.coroutines on' first. A census taken before that is empty, not healthy."));
             return;
         }
 
@@ -583,18 +584,18 @@ namespace UnLuaNova
                 ++Suspended;
         }
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("lua.coroutines: %d live (%d suspended), %llu created since tracking began"),
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("lua.coroutines: %d live (%d suspended), %llu created since tracking began"),
             Live.Num(), Suspended, Tracker.NumCreated());
 
         for (const UnLuaNova::FLuaCoroutineTracker::FLiveCoroutine& Co : Live)
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("  %-10s created at %s, parked at %s"),
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("  %-10s created at %s, parked at %s"),
                 *Co.Status, *Co.CreatedAt, *Co.SuspendedAt);
         }
 
         if (Suspended > 0)
         {
-            UE_LOG(LogUnLuaNova, Warning,
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning,
                 TEXT("lua.coroutines: %d suspended coroutine(s), each holding its stack and everything it captured. ")
                 TEXT("A deliberately parked one is fine; one nobody will ever resume is a leak - and 'created at' is the only thing that tells you which."),
                 Suspended);
@@ -625,26 +626,26 @@ namespace UnLuaNova
                 return;
             }
 
-            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.codegen [on|off|modules <a,b,c>]"));
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("usage: lua.codegen [on|off|modules <a,b,c>]"));
             return;
         }
 
         // Status. "available" is the build/platform question, "enabled" is the switch, and
         // they are different: a build with no native backend must say so rather than
         // reporting the switch as if it were doing something.
-        UE_LOG(LogUnLuaNova, Log,
+        UNLUANOVA_LOGF(LogUnLuaNova, Log,
             TEXT("lua.codegen: available=%d enabled=%d compile_requests=%d modules='%s'"),
             UnLuaNova::IsNativeCodeGenAvailable() ? 1 : 0,
             EnableCVar ? EnableCVar->GetInt() : 0,
             UnLuaNova::GetNativeCodeGenRequestCount(),
             ModulesCVar ? *ModulesCVar->GetString() : TEXT(""));
-        UE_LOG(LogUnLuaNova, Log,
+        UNLUANOVA_LOGF(LogUnLuaNova, Log,
             TEXT("lua.codegen: compile_requests counts chunks handed to Luau's compiler, "
                  "not successful compiles - luau_codegen_compile() exposes no success signal."));
 
         if (!UnLuaNova::IsNativeCodeGenAvailable())
         {
-            UE_LOG(LogUnLuaNova, Log,
+            UNLUANOVA_LOGF(LogUnLuaNova, Log,
                 TEXT("This build cannot emit native code: it needs the Luau backend on x64 or arm64."));
         }
     }
@@ -653,7 +654,7 @@ namespace UnLuaNova
     {
         if (!UnLuaNova::IsLuaCoverageAvailable())
         {
-            UE_LOG(LogUnLuaNova, Warning,
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning,
                 TEXT("lua.coverage: unavailable - coverage counters are a Luau compiler feature, and this build uses the plain Lua backend."));
             return;
         }
@@ -663,7 +664,7 @@ namespace UnLuaNova
         if (Sub.Equals(TEXT("status"), ESearchCase::IgnoreCase))
         {
             const int32 Level = UnLuaNova::GetLuaCoverageLevel();
-            UE_LOG(LogUnLuaNova, Log,
+            UNLUANOVA_LOGF(LogUnLuaNova, Log,
                 TEXT("lua.coverage: available=1 level=%d. Set luau.coverage=1 before the scripts load, then use 'lua.coverage dump'. "
                      "Chunks already loaded have no counters; the gate refuses a level-0 export."),
                 Level);
@@ -672,7 +673,7 @@ namespace UnLuaNova
 
         if (!Sub.Equals(TEXT("dump"), ESearchCase::IgnoreCase))
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("usage: lua.coverage [dump [file] | status]"));
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("usage: lua.coverage [dump [file] | status]"));
             return;
         }
 
@@ -683,7 +684,7 @@ namespace UnLuaNova
         auto* Env = Module->GetEnv();
         if (!Env)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("lua.coverage: no Lua environment is attached."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("lua.coverage: no Lua environment is attached."));
             return;
         }
 
@@ -691,11 +692,11 @@ namespace UnLuaNova
         UnLuaNova::FCoverageSummary Summary;
         if (!UnLuaNova::DumpLuaCoverage(Env->GetMainState(), Path, Error, &Summary))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("lua.coverage: %s"), *Error);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("lua.coverage: %s"), *Error);
             return;
         }
 
-        UE_LOG(LogUnLuaNova, Log,
+        UNLUANOVA_LOGF(LogUnLuaNova, Log,
             TEXT("lua.coverage: wrote %s - %d functions, %lld/%lld instrumented lines hit (level=%d). "
                  "Judge it with Tools/ValidateCoverage.py."),
             *Path, Summary.Functions, static_cast<int64>(Summary.HitLines),

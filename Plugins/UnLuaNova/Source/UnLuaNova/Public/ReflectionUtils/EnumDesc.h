@@ -15,6 +15,7 @@
 #pragma once
 
 #include "UnLuaNovaBase.h"
+#include "UnLuaNovaCompatibility.h"
 #include "CoreUObject.h"
 #include "Engine/UserDefinedEnum.h"
 #include "HAL/Platform.h"
@@ -37,7 +38,7 @@ public:
 
         if (!IsValid())
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("%s:Invalid enum[%s] descriptor"), ANSI_TO_TCHAR(__FUNCTION__), *EnumName);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("%s:Invalid enum[%s] descriptor"), ANSI_TO_TCHAR(__FUNCTION__), *EnumName);
             return INDEX_NONE;
         }
 

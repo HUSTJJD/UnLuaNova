@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Misc/EngineVersionComparison.h"
+#include "UnLuaNovaCompatibility.h"
 
 #if WITH_EDITOR
 #include "ISettingsModule.h"
@@ -225,7 +226,7 @@ namespace UnLuaNova
 
         virtual void NotifyUObjectCreated(const UObjectBase* ObjectBase, int32 Index) override
         {
-            // UE_LOG(LogTemp, Log, TEXT("NotifyUObjectCreated : %p"), ObjectBase);
+            // UNLUANOVA_LOGF(LogTemp, Log, TEXT("NotifyUObjectCreated : %p"), ObjectBase);
             if (!bIsActive)
                 return;
 
@@ -273,9 +274,9 @@ namespace UnLuaNova
                 if (!Pair.Key || !Pair.Value)
                     continue;
 
-                UE_LOG(LogUnLuaNova, Log, TEXT("%s:"), *Pair.Value->GetName())
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s:"), *Pair.Value->GetName())
                 PrintCallStack(Pair.Key);
-                UE_LOG(LogUnLuaNova, Log, TEXT(""))
+                UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT(""))
             }
 
             if (GLog)

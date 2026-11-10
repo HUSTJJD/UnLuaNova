@@ -339,7 +339,7 @@ function Record-Binary([string] $Exe, [string] $Name) {
         ConvertTo-Json | Set-Content -LiteralPath $Destination -Encoding UTF8
 }
 function Package-Game([string] $Configuration, [string] $Label, [string] $StageDir = '') {
-    $UatArgs = @('BuildCookRun', "-project=$ProjectPath", '-noP4', '-unattended', '-utf8output',
+    $UatArgs = @('BuildCookRun', "-project=$ProjectPath", '-noP4', '-unattended',
         '-platform=Win64', "-clientconfig=$Configuration", "-target=$script:ReleaseGameTarget", '-build',
         '-skipbuildeditor', '-cook', '-stage', '-pak', '-iostore', '-package')
     # UAT calls CleanStagingDirectory on every -stage, so two backends cannot share one
@@ -626,7 +626,7 @@ try {
         Invoke-Stage "$B-server-build" { Build-Target $ServerTarget "$B-server-build" } -Needs @("$B-static-bindings") `
             -CacheKey "$B-server-build" -Fingerprint $BuildFingerprint -Artifacts @($ServerExe)
         Invoke-Stage "$B-package-server" {
-            $UatServerArgs = @('BuildCookRun', "-project=$ProjectPath", '-noP4', '-unattended', '-utf8output',
+            $UatServerArgs = @('BuildCookRun', "-project=$ProjectPath", '-noP4', '-unattended',
                 '-server', '-noclient', '-serverplatform=Win64', '-serverconfig=Development',
                 "-target=$script:ReleaseServerTarget", '-build', '-skipbuildeditor', '-cook', '-stage', '-pak', '-iostore', '-package')
             if ($ServerStageArg) { $UatServerArgs += "-stagingdirectory=$ServerStageArg" }

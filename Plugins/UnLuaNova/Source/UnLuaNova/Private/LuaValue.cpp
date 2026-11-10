@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "LuaValue.h"
+#include "UnLuaNovaCompatibility.h"
 #include "LuaEnv.h"
 #include "UnLuaNovaBase.h"
 
@@ -162,7 +163,7 @@ namespace UnLuaNova
         }
         else
         {
-            UE_LOG(LogUnLuaNova, Verbose, TEXT("Global function %s doesn't exist!"), UTF8_TO_TCHAR(GlobalFuncName));
+            UNLUANOVA_LOGF(LogUnLuaNova, Verbose, TEXT("Global function %s doesn't exist!"), UTF8_TO_TCHAR(GlobalFuncName));
             lua_pop(L, 1);
         }
     }
@@ -187,13 +188,13 @@ namespace UnLuaNova
             }
             else
             {
-                UE_LOG(LogUnLuaNova, Verbose, TEXT("Function %s of global table %s doesn't exist!"), UTF8_TO_TCHAR(FuncName), UTF8_TO_TCHAR(GlobalTableName));
+                UNLUANOVA_LOGF(LogUnLuaNova, Verbose, TEXT("Function %s of global table %s doesn't exist!"), UTF8_TO_TCHAR(FuncName), UTF8_TO_TCHAR(GlobalTableName));
                 lua_pop(L, 2);
             }
         }
         else
         {
-            UE_LOG(LogUnLuaNova, Verbose, TEXT("Global table %s doesn't exist!"), UTF8_TO_TCHAR(GlobalTableName));
+            UNLUANOVA_LOGF(LogUnLuaNova, Verbose, TEXT("Global table %s doesn't exist!"), UTF8_TO_TCHAR(GlobalTableName));
             lua_pop(L, 1);
         }
     }
@@ -210,7 +211,7 @@ namespace UnLuaNova
         }
         else
         {
-            UE_LOG(LogUnLuaNova, Verbose, TEXT("Function %s doesn't exist!"), UTF8_TO_TCHAR(FuncName));
+            UNLUANOVA_LOGF(LogUnLuaNova, Verbose, TEXT("Function %s doesn't exist!"), UTF8_TO_TCHAR(FuncName));
             lua_pop(L, 1);
         }
     }

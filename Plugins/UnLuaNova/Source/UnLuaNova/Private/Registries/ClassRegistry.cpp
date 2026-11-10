@@ -87,7 +87,7 @@ namespace UnLuaNova
             // it there and report nothing here: UE.EFoo already takes that route, and this
             // is the same name reached the long way round (UE.UFoo, a container's enum
             // entry), so failing loudly is the wrong answer where a working binding is.
-            UE_LOG(LogUnLuaNova, Verbose, TEXT("%s is an enum, registered with the enum registry."), UTF8_TO_TCHAR(MetatableName));
+            UNLUANOVA_LOGF(LogUnLuaNova, Verbose, TEXT("%s is an enum, registered with the enum registry."), UTF8_TO_TCHAR(MetatableName));
             Env->GetEnumRegistry()->Register(EnumType);
             return nullptr;
         }

@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "LuaBackend.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "LuaVmHooks.h"
 #include "UnLuaNovaBase.h"
@@ -137,7 +138,7 @@ namespace UnLuaNova
             if (!bLoggedUnsupported)
             {
                 bLoggedUnsupported = true;
-                UE_LOG(LogUnLuaNova, Warning,
+                UNLUANOVA_LOGF(LogUnLuaNova, Warning,
                     TEXT("lua.codegen is on but this platform has no Luau native compiler (x64/arm64 only); ignoring."));
             }
             return;

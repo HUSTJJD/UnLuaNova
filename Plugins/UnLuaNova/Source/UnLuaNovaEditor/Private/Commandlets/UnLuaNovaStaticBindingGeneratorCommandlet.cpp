@@ -9,6 +9,7 @@
 //       [-OutputDir=<Project>/Source/<Module>/Generated]
 
 #include "Commandlets/UnLuaNovaStaticBindingGeneratorCommandlet.h"
+#include "UnLuaNovaCompatibility.h"
 #include "Commandlets/UnLuaNovaStaticBindingGenerator.h"
 
 #include "Misc/Parse.h"
@@ -37,7 +38,7 @@ int32 UUnLuaNovaStaticBindingGeneratorCommandlet::Main(const FString& Params)
 		if (Selection.Equals(TEXT("Modules")))				Options.Selection = EStaticBindingSelection::Modules;
 		else if (Selection.Equals(TEXT("All")))				Options.Selection = EStaticBindingSelection::All;
 		else if (Selection.Equals(TEXT("ExportedReflected")))	Options.Selection = EStaticBindingSelection::ExportedReflected;
-		else UE_LOG(LogTemp, Warning, TEXT("[StaticBindingGen] unknown -Selection=%s, using ExportedReflected."), *Selection);
+		else UNLUANOVA_LOGF(LogTemp, Warning, TEXT("[StaticBindingGen] unknown -Selection=%s, using ExportedReflected."), *Selection);
 	}
 
 	// -Modules=/Script/Engine,/Script/UMG narrows generation to those packages. Comma

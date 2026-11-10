@@ -1,4 +1,5 @@
 #include "UnLuaNovaEx.h"
+#include "UnLuaNovaCompatibility.h"
 #include "LuaCore.h"
 #include "HAL/FileManager.h"
 
@@ -462,7 +463,7 @@ static int32 UE4File_Delete(lua_State *L)
 	int32 NumParams = lua_gettop(L);
 	if (NumParams != 1)
 	{
-		UE_LOG(LogUnLuaNova, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+		UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
 		return 0;
 	}
 

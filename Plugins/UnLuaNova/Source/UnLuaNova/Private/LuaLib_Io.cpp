@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "LuaLib_Io.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "HAL/IConsoleManager.h"
 #include "HAL/FileManager.h"
@@ -825,7 +826,7 @@ namespace
                 Out += UTF8_TO_TCHAR(luaL_checkstring(L, i));
         }
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Out);
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s"), *Out);
 
         lua_pushboolean(L, 1);
         return 1;
@@ -931,6 +932,6 @@ namespace UnLuaNova
         lua_setfield(L, -2, "type");
         lua_setglobal(L, "io");
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("io library installed, rooted at lua.ioroot (default: the project directory)."));
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("io library installed, rooted at lua.ioroot (default: the project directory)."));
     }
 }

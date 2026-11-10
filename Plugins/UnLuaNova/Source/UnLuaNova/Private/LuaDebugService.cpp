@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "LuaDebugService.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "LuaVmHooks.h"
 #include "UnLuaNovaDebugBase.h"
@@ -372,7 +373,7 @@ namespace UnLuaNova
         RefreshLoadedModules(L);
         bPaused = true;
 
-        UE_LOG(LogLuaDebug, Display, TEXT("Stopped at %s:%d%s%s"),
+        UNLUANOVA_LOGF(LogLuaDebug, Display, TEXT("Stopped at %s:%d%s%s"),
             *Source, Line,
             Info.name ? TEXT(" in ") : TEXT(""),
             *SafeString(Info.name));

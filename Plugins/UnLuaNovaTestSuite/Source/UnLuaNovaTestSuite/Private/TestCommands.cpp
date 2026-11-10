@@ -15,6 +15,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "TestCommands.h"
+#include "UnLuaNovaCompatibility.h"
 #include "UnLuaNovaBase.h"
 
 #include "HAL/FileManager.h"
@@ -142,7 +143,7 @@ namespace UnLuaNovaTestSuite
 
         if (FPlatformTime::Seconds() > WaitDeadline)
         {
-            UE_LOG(LogTemp, Error, TEXT("Game map '%s' did not begin play after %.0fs."),
+            UNLUANOVA_LOGF(LogTemp, Error, TEXT("Game map '%s' did not begin play after %.0fs."),
                 *MapName, WaitTimeoutSeconds);
             return true;
         }
@@ -201,7 +202,7 @@ namespace UnLuaNovaTestSuite
             // on its own assertions with a clear reason here in the log, and the rest of the
             // suite still runs. Ending the session keeps the next test from inheriting a
             // half-started one.
-            UE_LOG(LogTemp, Error, TEXT("PIE never came up for '%s' after %.0fs - ending the session and moving on. Check the log above for why the play session did not start (a lost request, or PIE being ended mid-start)."),
+            UNLUANOVA_LOGF(LogTemp, Error, TEXT("PIE never came up for '%s' after %.0fs - ending the session and moving on. Check the log above for why the play session did not start (a lost request, or PIE being ended mid-start)."),
                 *MapName, WaitTimeoutSeconds);
             if (IsPIERunning())
                 GEditor->EndPlayMap();
@@ -336,7 +337,7 @@ namespace UnLuaNovaTestSuite
 
         if (FPlatformTime::Seconds() > WaitDeadline)
         {
-            UE_LOG(LogTemp, Warning, TEXT("PIE did not finish ending after %.0fs; the test moves on, but per-session cleanup may have run against a live session."),
+            UNLUANOVA_LOGF(LogTemp, Warning, TEXT("PIE did not finish ending after %.0fs; the test moves on, but per-session cleanup may have run against a live session."),
                 WaitTimeoutSeconds);
             return true;
         }
@@ -392,7 +393,7 @@ namespace UnLuaNovaTestSuite
             // viewport has to exist), and a missing picture must not read as "the showcase
             // broke". Say it out loud anyway - otherwise the only symptom is an empty
             // gallery in the report and nobody knows why.
-            UE_LOG(LogTemp, Warning, TEXT("Screenshot '%s' was never written to %s - no viewport, or rendering is off (-NullRHI)."), *Name, *Path);
+            UNLUANOVA_LOGF(LogTemp, Warning, TEXT("Screenshot '%s' was never written to %s - no viewport, or rendering is off (-NullRHI)."), *Name, *Path);
             return true;
         }
 

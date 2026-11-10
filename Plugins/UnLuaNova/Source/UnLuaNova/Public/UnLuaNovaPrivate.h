@@ -15,6 +15,7 @@
 #pragma once
 
 #include "CoreUObject.h"
+#include "UnLuaNovaCompatibility.h"
 #include "UnLuaNovaBase.h"
 
 #if NO_LOGGING
@@ -26,7 +27,7 @@
     {\
     	FString LogMsg = FString::Printf(Format, ##__VA_ARGS__);\
         luaL_traceback(L, L, "", 0); \
-        UE_LOG(LogUnLuaNova, Log, TEXT("%s%s"),*LogMsg,UTF8_TO_TCHAR(lua_tostring(L,-1))); \
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s%s"),*LogMsg,UTF8_TO_TCHAR(lua_tostring(L,-1))); \
         lua_pop(L,1); \
     }
 
@@ -34,7 +35,7 @@
     {\
     	FString LogMsg = FString::Printf(Format, ##__VA_ARGS__);\
         luaL_traceback(L, L, "", 0); \
-        UE_LOG(LogUnLuaNova, Warning, TEXT("%s%s"),*LogMsg,UTF8_TO_TCHAR(lua_tostring(L,-1))); \
+        UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("%s%s"),*LogMsg,UTF8_TO_TCHAR(lua_tostring(L,-1))); \
         lua_pop(L,1); \
     }
 
@@ -42,7 +43,7 @@
     {\
     	FString LogMsg = FString::Printf(Format, ##__VA_ARGS__);\
         luaL_traceback(L, L, "", 0); \
-        UE_LOG(LogUnLuaNova, Error, TEXT("%s%s"),*LogMsg,UTF8_TO_TCHAR(lua_tostring(L,-1))); \
+        UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("%s%s"),*LogMsg,UTF8_TO_TCHAR(lua_tostring(L,-1))); \
         lua_pop(L,1); \
     }
 #endif

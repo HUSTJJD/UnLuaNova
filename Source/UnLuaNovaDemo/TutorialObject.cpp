@@ -1,4 +1,5 @@
 #include "TutorialObject.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "LuaCore.h"
 #include "UnLuaNova.h"
@@ -20,7 +21,7 @@ static int32 FTutorialObject_New(lua_State* L)
     const char* NameChars = lua_tostring(L, 2);
     if (!NameChars)
     {
-        UE_LOG(LogUnLuaNova, Log, TEXT("%s: Invalid tutorial name!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s: Invalid tutorial name!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 

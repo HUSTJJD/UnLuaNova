@@ -144,7 +144,7 @@ static int32 FVector_ToVector(lua_State* L)
     // with "attempt to index a nil value" - nowhere near the call that caused it. Say it
     // here, once, where the reason is. Scripts that want to branch instead should ask
     // UnLuaNova.HasFeature('vector') rather than poke the return value.
-    UE_LOG(LogUnLuaNova, Warning,
+    UNLUANOVA_LOGF(LogUnLuaNova, Warning,
         TEXT("FVector:ToVector() is only available on the Luau backend - there is no native vector type to hand back here. It returns nil; guard the call with UnLuaNova.HasFeature('vector')."));
     lua_pushnil(L);
     return 1;

@@ -17,6 +17,25 @@
 #include "CoreUObject.h"
 #include "Runtime/Launch/Resources/Version.h"
 #include "Misc/EngineVersionComparison.h"
+#include "Logging/LogMacros.h"
+
+// UE 5.6 introduced UE_LOGF (a narrow, printf-style format string) and deprecated
+// UE_LOG; the deprecation message says the old macro will stop compiling in a future
+// engine release. This plugin still targets UE4/UE5
+// versions that only understand TCHAR format strings, so call sites keep the original
+// TEXT(...) format and go through UNLUANOVA_LOGF instead:
+//   - engines with UE_LOGF: format via FString::Printf and pass the result with %ls,
+//     which is exactly what the engine's own deprecated UE_LOG shim does;
+//   - older engines: use UE_LOG directly.
+// This removes C4996 without dropping support for pre-5.6 engines, and gives a single
+// place to migrate to native UE_LOGF format strings later.
+#if defined(UE_LOGF)
+#define UNLUANOVA_LOGF(CategoryName, Verbosity, Format, ...) \
+    UE_LOGF(CategoryName, Verbosity, "%ls", *FString::Printf(Format, ##__VA_ARGS__))
+#else
+#define UNLUANOVA_LOGF(CategoryName, Verbosity, Format, ...) \
+    UE_LOG(CategoryName, Verbosity, Format, ##__VA_ARGS__)
+#endif
 
 #if ENGINE_MAJOR_VERSION <= 4 && ENGINE_MINOR_VERSION < 19
 #define DEFINE_FUNCTION(func) void func( FFrame& Stack, RESULT_DECL )

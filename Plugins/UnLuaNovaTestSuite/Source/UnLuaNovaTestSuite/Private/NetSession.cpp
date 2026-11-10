@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "NetSession.h"
+#include "UnLuaNovaCompatibility.h"
 #include "LuaBackend.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -305,7 +306,7 @@ namespace UnLuaNovaTestSuite
             }
 
             ++Launched;
-            UE_LOG(LogTemp, Display, TEXT("[NetSession:%s] %s peer pid=%u port=%d: %s %s"),
+            UNLUANOVA_LOGF(LogTemp, Display, TEXT("[NetSession:%s] %s peer pid=%u port=%d: %s %s"),
                 *Name, *Peer.Spec.Label, Pid, Peer.Spec.Port, *Exe, *Args);
         }
 

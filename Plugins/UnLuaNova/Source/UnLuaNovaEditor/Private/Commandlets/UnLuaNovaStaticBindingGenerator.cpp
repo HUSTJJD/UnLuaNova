@@ -1,4 +1,5 @@
 #include "Commandlets/UnLuaNovaStaticBindingGenerator.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "Binding.h"
 #include "StaticBinding/StaticBindingTypes.h"
@@ -377,7 +378,7 @@ namespace UnLuaNova
 		// Unreachable in practice (the generator ships inside that very plugin), but a silent
 		// fallback to a directory UBT ignores is exactly the bug being fixed here, so say so.
 		const FString Fallback = FPaths::Combine(FPaths::ProjectDir(), TEXT("Source"), FApp::GetProjectName(), TEXT("Generated"));
-		UE_LOG(LogTemp, Warning,
+		UNLUANOVA_LOGF(LogTemp, Warning,
 			TEXT("[StaticBindingGen] UnLuaNova plugin not found; falling back to %s, which is not a module directory - set StaticBindingOutputDir explicitly."),
 			*Fallback);
 		return Fallback;
@@ -391,13 +392,13 @@ namespace UnLuaNova
 		if (TypeNames.Num() == 0)
 		{
 			Result.Message = TEXT("every type was filtered out; nothing to generate.");
-			UE_LOG(LogTemp, Warning, TEXT("[StaticBindingGen] %s"), *Result.Message);
+			UNLUANOVA_LOGF(LogTemp, Warning, TEXT("[StaticBindingGen] %s"), *Result.Message);
 			return Result;
 		}
 
 		Result.Fingerprint = ComputeStaticBindingFingerprint(Options);
 
-		UE_LOG(LogTemp, Display, TEXT("[StaticBindingGen] selected %d types."), TypeNames.Num());
+		UNLUANOVA_LOGF(LogTemp, Display, TEXT("[StaticBindingGen] selected %d types."), TypeNames.Num());
 
 		FString Out;
 
@@ -416,7 +417,7 @@ namespace UnLuaNova
 			UStruct* Struct = FindType(TypeName);
 			if (!Struct)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("[StaticBindingGen] '%s' not found, skipped."), *TypeName);
+				UNLUANOVA_LOGF(LogTemp, Warning, TEXT("[StaticBindingGen] '%s' not found, skipped."), *TypeName);
 				continue;
 			}
 
@@ -516,7 +517,7 @@ namespace UnLuaNova
 				*Id, *TypeName, *Id, *Id, *Id, *Id, *Id);
 
 			++GeneratedTypes;
-			UE_LOG(LogTemp, Display, TEXT("[StaticBindingGen] %s ok."), *TypeName);
+			UNLUANOVA_LOGF(LogTemp, Display, TEXT("[StaticBindingGen] %s ok."), *TypeName);
 		}
 
 		Result.NumTypes = GeneratedTypes;
@@ -533,18 +534,18 @@ namespace UnLuaNova
 		if (!FFileHelper::SaveStringToFile(Out, *OutputFile, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
 		{
 			Result.Message = FString::Printf(TEXT("failed to write %s"), *OutputFile);
-			UE_LOG(LogTemp, Error, TEXT("[StaticBindingGen] %s"), *Result.Message);
+			UNLUANOVA_LOGF(LogTemp, Error, TEXT("[StaticBindingGen] %s"), *Result.Message);
 			Result.NumTypes = 0;
 			return Result;
 		}
 
 		Result.OutputFile = OutputFile;
 
-		UE_LOG(LogTemp, Display, TEXT("[StaticBindingGen] %d type(s) -> %s"), GeneratedTypes, *OutputFile);
+		UNLUANOVA_LOGF(LogTemp, Display, TEXT("[StaticBindingGen] %d type(s) -> %s"), GeneratedTypes, *OutputFile);
 
 		if (Result.NumFuncs > 0)
 		{
-			UE_LOG(LogTemp, Display, TEXT("[StaticBindingGen] thunk coverage: %d/%d functions (%.1f%%)"),
+			UNLUANOVA_LOGF(LogTemp, Display, TEXT("[StaticBindingGen] thunk coverage: %d/%d functions (%.1f%%)"),
 				Result.NumThunks, Result.NumFuncs, 100.f * (float)Result.NumThunks / (float)Result.NumFuncs);
 		}
 

@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "ReflectionUtils/StaticPropDesc.h"
+#include "UnLuaNovaCompatibility.h"
 #include "StaticBinding/StaticBindingThunk.h"
 #include "UObject/UnrealType.h"
 
@@ -132,7 +133,7 @@ void FStaticPropDesc::ReadValue_InContainer(lua_State* L, const void* ContainerP
 
 	if (UNLIKELY(UnLuaNova::LowLevel::IsReleasedPtr(ContainerPtr)))
 	{
-		UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to read property '%s' on released object"), *Name);
+		UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to read property '%s' on released object"), *Name);
 		lua_pushnil(L);
 		return;
 	}
@@ -152,7 +153,7 @@ bool FStaticPropDesc::WriteValue_InContainer(lua_State* L, void* ContainerPtr, i
 
 	if (UNLIKELY(UnLuaNova::LowLevel::IsReleasedPtr(ContainerPtr)))
 	{
-		UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to write property '%s' on released object"), *Name);
+		UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to write property '%s' on released object"), *Name);
 		return false;
 	}
 
@@ -170,7 +171,7 @@ void FStaticPropDesc::ReadValue(lua_State* L, const void* ValuePtr, bool bCreate
 
 	if (UNLIKELY(UnLuaNova::LowLevel::IsReleasedPtr(ValuePtr)))
 	{
-		UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to read property '%s' on released object"), *Name);
+		UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to read property '%s' on released object"), *Name);
 		lua_pushnil(L);
 		return;
 	}
@@ -190,7 +191,7 @@ bool FStaticPropDesc::WriteValue(lua_State* L, void* ValuePtr, int32 IndexInStac
 
 	if (UNLIKELY(UnLuaNova::LowLevel::IsReleasedPtr(ValuePtr)))
 	{
-		UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to write property '%s' on released object"), *Name);
+		UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to write property '%s' on released object"), *Name);
 		return false;
 	}
 

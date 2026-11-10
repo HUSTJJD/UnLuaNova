@@ -1,4 +1,5 @@
 #include "LuaBackend.h"
+#include "UnLuaNovaCompatibility.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProperties.h"
@@ -18,7 +19,7 @@ namespace
         const FString Path = FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_TEST_MANIFEST"));
         if (Path.IsEmpty())
         {
-            UE_LOG(LogTemp, Error, TEXT("UNLUANOVA_TEST_MANIFEST is required"));
+            UNLUANOVA_LOGF(LogTemp, Error, TEXT("UNLUANOVA_TEST_MANIFEST is required"));
             return;
         }
         auto& Framework = FAutomationTestFramework::Get();
@@ -49,7 +50,7 @@ namespace
         // MakeShared() hands back a TSharedRef, and Serialize() wants exactly that - there
         // is no ToSharedRef() on a ref, only on a TSharedPtr.
         if (!FJsonSerializer::Serialize(Root, Writer) || !FFileHelper::SaveStringToFile(Text, *Path))
-            UE_LOG(LogTemp, Error, TEXT("Could not write test manifest: %s"), *Path);
+            UNLUANOVA_LOGF(LogTemp, Error, TEXT("Could not write test manifest: %s"), *Path);
     }
 
     FAutoConsoleCommand ExportManifestCommand(TEXT("UnLuaNovaTest.ExportManifest"),

@@ -15,6 +15,7 @@
 #pragma once
 
 #include "UnLuaNova.h"
+#include "UnLuaNovaCompatibility.h"
 #include "Binding.h"
 
 namespace UnLuaNova
@@ -211,7 +212,7 @@ namespace UnLuaNova
                 // runs straight from C++ during startup - so report and skip the field
                 // instead of taking the process down. The failed lookup leaves its userdata
                 // on the stack, hence the two pops.
-                UE_LOG(LogUnLuaNova, Error, TEXT("FExportedProperty::Register: cannot push '%s' - the TSharedPtr metatable is missing."), *Name);
+                UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("FExportedProperty::Register: cannot push '%s' - the TSharedPtr metatable is missing."), *Name);
                 lua_pop(L, 2);
                 return;
             }

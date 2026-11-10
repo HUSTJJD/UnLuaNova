@@ -6,6 +6,7 @@
 // http://opensource.org/licenses/MIT
 
 #include "LuaProfiler.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "LuaBackend.h"
 #include "LuaVmHooks.h"
@@ -191,7 +192,7 @@ namespace UnLuaNova
         if (!FFileHelper::SaveStringToFile(Out, *FullPath))
             return false;
 
-        UE_LOG(LogUnLuaNova, Log,
+        UNLUANOVA_LOGF(LogUnLuaNova, Log,
             TEXT("Wrote %d samples to '%s'. Convert with Tools/LuauPerfgraph/perfgraph.py (Luau's own tool)."),
             TraceSamples.Num(), *FullPath);
         return true;
@@ -214,7 +215,7 @@ namespace UnLuaNova
         if (TraceSamples.Num() >= MaxTraceSamples)
         {
             bTrace.store(false, std::memory_order_relaxed);
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Lua profiler trace hit its %d sample ceiling and stopped; dump it or raise MaxTraceSamples."),
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Lua profiler trace hit its %d sample ceiling and stopped; dump it or raise MaxTraceSamples."),
                 MaxTraceSamples);
             return;
         }
@@ -451,7 +452,7 @@ namespace UnLuaNova
         if (!FFileHelper::SaveStringToFile(Report, *FullPath))
             return false;
 
-        UE_LOG(LogUnLuaNova, Log, TEXT("Lua profiler report written to %s"), *FullPath);
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua profiler report written to %s"), *FullPath);
         return true;
     }
 

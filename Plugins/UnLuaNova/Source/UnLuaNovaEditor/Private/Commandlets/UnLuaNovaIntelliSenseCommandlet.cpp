@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Commandlets/UnLuaNovaIntelliSenseCommandlet.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Binding.h"
@@ -136,11 +137,11 @@ int32 UUnLuaNovaIntelliSenseCommandlet::Main(const FString &Params)
 
         // The caller cannot see inside UpdateAll(), and "did it write anything" is the whole
         // question when the type check comes up empty.
-        UE_LOG(LogTemp, Display, TEXT("[IntelliSense] exported to %s"), *Generator->GetOutputDir());
+        UNLUANOVA_LOGF(LogTemp, Display, TEXT("[IntelliSense] exported to %s"), *Generator->GetOutputDir());
     }
     else
     {
-        UE_LOG(LogTemp, Display, TEXT("[IntelliSense] static exports only - pass -BP=1 to write UnLuaNova.d.lua."));
+        UNLUANOVA_LOGF(LogTemp, Display, TEXT("[IntelliSense] static exports only - pass -BP=1 to write UnLuaNova.d.lua."));
     }
 
     return 0;

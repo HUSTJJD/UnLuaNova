@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Engine/World.h"
+#include "UnLuaNovaCompatibility.h"
 #include "Components/InputComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "LuaEnv.h"
@@ -135,7 +136,7 @@ namespace UnLuaNova
 
         if (StepMul < MinStepMul || StepMul > MaxStepMul)
         {
-            UE_LOG(LogUnLuaNova, Warning,
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning,
                 TEXT("lua.gcstepmul=%d is outside the interval [%d, %d] recommended for lua.gcgoal=%d; "
                      "review GC pacing. See the GC note in LuaBackend.h."),
                 StepMul, MinStepMul, MaxStepMul, Goal);
@@ -449,7 +450,7 @@ namespace UnLuaNova
         // from opening.
         if (const int LeftOver = lua_gettop(L))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Lua stack is not balanced after the env was created: %d value(s) left on the stack. Check for a missing lua_pop / an extra one in FLuaEnv::FLuaEnv()."), LeftOver);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Lua stack is not balanced after the env was created: %d value(s) left on the stack. Check for a missing lua_pop / an extra one in FLuaEnv::FLuaEnv()."), LeftOver);
         }
     }
 
@@ -607,7 +608,7 @@ namespace UnLuaNova
 
             const char* ModuleName = lua_tostring(L, lua_upvalueindex(2));
             const char* Message = lua_tostring(L, -1);
-            UE_LOG(LogUnLuaNova, Error, TEXT("Startup module '%s' failed to load: %s"),
+            UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("Startup module '%s' failed to load: %s"),
                 UTF8_TO_TCHAR(ModuleName ? ModuleName : ""),
                 UTF8_TO_TCHAR(Message ? Message : luaL_typename(L, -1)));
             return 0;
@@ -663,13 +664,13 @@ namespace UnLuaNova
             if (!bReported)
             {
                 const char* Message = lua_tostring(L, -1);
-                UE_LOG(LogUnLuaNova, Error, TEXT("Startup module '%s' failed to load: %s"), *StartupModuleName,
+                UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("Startup module '%s' failed to load: %s"), *StartupModuleName,
                     UTF8_TO_TCHAR(Message ? Message : luaL_typename(L, -1)));
             }
         }
         else if (!IsModuleLoaded(L, TCHAR_TO_UTF8(*StartupModuleName)))
         {
-            UE_LOG(LogUnLuaNova, Error, TEXT("Startup module '%s' did not load: require() returned without recording it in package.loaded, so the module never ran."), *StartupModuleName);
+            UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("Startup module '%s' did not load: require() returned without recording it in package.loaded, so the module never ran."), *StartupModuleName);
         }
 
         // The results are ours, not the caller's - Start() returns void. Leaving them
@@ -832,7 +833,7 @@ namespace UnLuaNova
 #if !UE_BUILD_SHIPPING
         if (GLuaDynamicBinding.IsValid(Class) && GLuaDynamicBinding.ModuleName != ModuleName)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Dynamic binding '%s' ignored as it conflicts static binding '%s'."), *GLuaDynamicBinding.ModuleName, *ModuleName);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Dynamic binding '%s' ignored as it conflicts static binding '%s'."), *GLuaDynamicBinding.ModuleName, *ModuleName);
         }
 #endif
 
@@ -875,7 +876,7 @@ namespace UnLuaNova
         if (Size > 3 && Buffer[0] == static_cast<char>(0xEF) && Buffer[1] == static_cast<char>(0xBB) && Buffer[2] == static_cast<char>(0xBF))
         {
 #if !UNLUANOVA_LEGACY_ALLOW_BOM
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Lua chunk with utf-8 BOM:%s"), UTF8_TO_TCHAR(InName));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Lua chunk with utf-8 BOM:%s"), UTF8_TO_TCHAR(InName));
 #endif
             return LoadBuffer(InL, Buffer + 3, Size - 3, InName);
         }
@@ -892,7 +893,7 @@ namespace UnLuaNova
             // second line is what a test that feeds LoadBuffer a broken chunk on purpose
             // trips over: it declares the Error-level message expected, and the Warning is
             // still there, unnamed and unmatched.
-            UE_LOG(LogUnLuaNova, Verbose, TEXT("Failed to call luaL_loadbufferx for '%s', error code: %d"), UTF8_TO_TCHAR(InName), Code);
+            UNLUANOVA_LOGF(LogUnLuaNova, Verbose, TEXT("Failed to call luaL_loadbufferx for '%s', error code: %d"), UTF8_TO_TCHAR(InName), Code);
             ReportLuaCallError(InL); // report pcall error
             lua_pushnil(InL); /* error (message is on top of the stack) */
             lua_insert(InL, -2); /* put before error message */
@@ -997,7 +998,7 @@ namespace UnLuaNova
         if (Status != LUA_OK)
         {
             const auto ErrMsg = lua_tostring(Thread, -1);
-            UE_LOG(LogUnLuaNova, Error, TEXT("%s"), UTF8_TO_TCHAR(ErrMsg));
+            UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("%s"), UTF8_TO_TCHAR(ErrMsg));
         }
 
         ThreadToRef.Remove(Thread);
@@ -1518,7 +1519,7 @@ namespace UnLuaNova
             const TCHAR* BuildKind = TEXT("cooked");
 #endif
             const FString Example = Patterns.Num() > 0 ? Patterns[0] : FString();
-            UE_LOG(LogUnLuaNova, Warning,
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning,
                 TEXT("require: file-system searcher could not resolve '%s' (%d pattern(s), e.g. '%s'); "
                      "%s build. Names are case-sensitive, cooked builds need loose scripts staged "
                      "under ProjectDir or ProjectPersistentDownloadDir. See package.resolution()."),
@@ -1543,7 +1544,7 @@ namespace UnLuaNova
         // LoadFromBuiltinLibs, which UnLuaNova calls directly.
         if (!lua_istable(L, -1))
         {
-            UE_LOG(LogUnLuaNova, Verbose, TEXT("No package table on this Lua backend; skipping searcher registration."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Verbose, TEXT("No package table on this Lua backend; skipping searcher registration."));
             lua_pop(L, 1);
             return;
         }
@@ -1552,7 +1553,7 @@ namespace UnLuaNova
         lua_remove(L, -2);
         if (!lua_istable(L, -1))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Invalid package.searchers!"));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Invalid package.searchers!"));
             return;
         }
 
@@ -1782,7 +1783,7 @@ namespace UnLuaNova
                 // other log in the process. lua.memquota status gives the live totals.
                 if (Quota->Rejections.load() == 1)
                 {
-                    UE_LOG(LogUnLuaNova, Error,
+                    UNLUANOVA_LOGF(LogUnLuaNova, Error,
                         TEXT("Lua memory quota (ctx 0x%p) refused an allocation: live=%lld B, "
                              "requested=%lld B, limit=%lld B. The VM raises a recoverable "
                              "'not enough memory' error; raise lua.maxmemorykb or release "

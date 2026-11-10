@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaNet.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "Engine/EngineBaseTypes.h"
 #include "LuaEnv.h"
@@ -366,7 +367,7 @@ namespace UnLuaNova
                 FProperty* Property = CreateParam(Function, Param);
                 if (!Property)
                 {
-                    UE_LOG(LogUnLuaNova, Error, TEXT("Could not build parameter '%s' of RPC '%s'; rejecting RPC."),
+                    UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("Could not build parameter '%s' of RPC '%s'; rejecting RPC."),
                         *Param.Name.ToString(), *Decl.Name.ToString());
                     return nullptr;
                 }
@@ -430,7 +431,7 @@ namespace UnLuaNova
                     Decl.Kind = Entry.Kind;
                     if (Decl.Name.IsNone() || !ParseRpcDecl(L, -1, Decl))
                     {
-                        UE_LOG(LogUnLuaNova, Error, TEXT("Invalid RPC declaration '%s'; rejecting RPC without changing its signature."), *Name);
+                        UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("Invalid RPC declaration '%s'; rejecting RPC without changing its signature."), *Name);
                         lua_pop(L, 1);
                         continue;
                     }
@@ -440,7 +441,7 @@ namespace UnLuaNova
                         // Re-binding after a hot reload must not replace an RPC the engine
                         // (or a blueprint) already owns; ULuaFunction::SetActive() checks
                         // this too and would fail the check.
-                        UE_LOG(LogUnLuaNova, Warning,
+                        UNLUANOVA_LOGF(LogUnLuaNova, Warning,
                             TEXT("'%s' already declares a function named '%s'; the Lua RPC declaration is ignored."),
                             *Class->GetName(), *Decl.Name.ToString());
                     }
@@ -457,7 +458,7 @@ namespace UnLuaNova
                         if (auto* Added = Cast<ULuaFunction>(Class->FindFunctionByName(Decl.Name, EIncludeSuperFlag::ExcludeSuper)))
                             EnsureRpcId(Class, Added);
                         else
-                            UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to register Lua RPC '%s' on '%s'."),
+                            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Failed to register Lua RPC '%s' on '%s'."),
                                 *Decl.Name.ToString(), *Class->GetName());
                     }
                 }
@@ -481,7 +482,7 @@ namespace UnLuaNova
         auto Reject = [&](const TCHAR* Reason)
         {
             lua_settop(L, Top);
-            UE_LOG(LogUnLuaNova, Error, TEXT("Rejected replication declaration on '%s': %s"), *Class->GetName(), Reason);
+            UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("Rejected replication declaration on '%s': %s"), *Class->GetName(), Reason);
             return false;
         };
 

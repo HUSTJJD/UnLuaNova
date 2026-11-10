@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "CollisionHelper.h"
+#include "UnLuaNovaCompatibility.h"
 #include "LuaCore.h"
 #include "LuaBackend.h"
 #include "Binding.h"
@@ -599,7 +600,7 @@ void PushObjectCore(lua_State *L, UObjectBaseUtility *Object)
     }
     
 #if UNLUANOVA_ENABLE_DEBUG != 0
-	UE_LOG(LogUnLuaNova, Log, TEXT("%s : %p,%s,%s"), ANSI_TO_TCHAR(__FUNCTION__), Object,*Object->GetName(), *MetatableName);
+	UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s : %p,%s,%s"), ANSI_TO_TCHAR(__FUNCTION__), Object,*Object->GetName(), *MetatableName);
 #endif
 
     NewUserdataWithTwoLvPtrTag(L, sizeof(void*), Object);  // create a userdata and store the UObject address
@@ -1373,7 +1374,7 @@ int32 Class_NewIndex(lua_State *L)
             lua_pushvalue(L, 3);
             lua_rawset(L, 1);
 
-            //UE_LOG(LogUnLuaNova, Warning, TEXT("%s: You are modifying metatable! Please make sure you know what you are doing!"), ANSI_TO_TCHAR(__FUNCTION__));
+            //UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("%s: You are modifying metatable! Please make sure you know what you are doing!"), ANSI_TO_TCHAR(__FUNCTION__));
         }
     }
     lua_pop(L, 1);
@@ -1391,7 +1392,7 @@ int32 Class_CallUFunction(lua_State *L)
     auto Function = Env.GetObjectRegistry()->Get<FFunctionDesc>(L, lua_upvalueindex(1));
     if (!Function->IsValid())
     {
-        UE_LOG(LogUnLuaNova, Log, TEXT("%s: Invalid function descriptor!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s: Invalid function descriptor!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
     int32 NumParams = lua_gettop(L);
@@ -1408,7 +1409,7 @@ int32 Class_CallLatentFunction(lua_State *L)
     auto Function = Env.GetObjectRegistry()->Get<FFunctionDesc>(L, lua_upvalueindex(1));
 	if (!Function->IsValid())
     {
-        UE_LOG(LogUnLuaNova, Log, TEXT("%s: Invalid function descriptor!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s: Invalid function descriptor!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
@@ -1440,14 +1441,14 @@ FClassDesc* Class_CheckParam(lua_State *L)
     FClassDesc *ClassDesc = (FClassDesc*)lua_touserdata(L, lua_upvalueindex(1));
     if (!ClassDesc)
     {
-        UE_LOG(LogUnLuaNova, Log, TEXT("Class : Invalid FClassDesc!"));
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Class : Invalid FClassDesc!"));
         return NULL;
     }
 
     UClass *Class = ClassDesc->AsClass();
     if (!Class)
     {
-        UE_LOG(LogUnLuaNova, Log, TEXT("Class : ClassDesc type is not class(Name : %s, Address : %p)"), *ClassDesc->GetName(),ClassDesc);
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Class : ClassDesc type is not class(Name : %s, Address : %p)"), *ClassDesc->GetName(),ClassDesc);
         return NULL;
     }
 
@@ -1528,14 +1529,14 @@ FClassDesc* ScriptStruct_CheckParam(lua_State *L)
     FClassDesc *ClassDesc = (FClassDesc*)lua_touserdata(L, lua_upvalueindex(1));
     if (!ClassDesc)
     {
-        UE_LOG(LogUnLuaNova, Log, TEXT("ScriptStruct : Invalid FClassDesc!"));
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("ScriptStruct : Invalid FClassDesc!"));
         return NULL;
     }
 
     UScriptStruct *ScriptStruct = ClassDesc->AsScriptStruct();
     if (!ScriptStruct)
     {
-        // UE_LOG(LogUnLuaNova, Log, TEXT("ScriptStruct : ClassDesc type is not script struct(Name : %s, Address : %p)"), *ClassDesc->GetName(),ClassDesc);
+        // UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("ScriptStruct : ClassDesc type is not script struct(Name : %s, Address : %p)"), *ClassDesc->GetName(),ClassDesc);
         return NULL;
     }
 

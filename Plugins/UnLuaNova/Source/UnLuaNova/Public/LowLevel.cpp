@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "LowLevel.h"
+#include "UnLuaNovaCompatibility.h"
 #include "LuaCore.h"
 
 namespace UnLuaNova
@@ -120,7 +121,7 @@ namespace UnLuaNova
         {
             if (!ModuleName)
             {
-                UE_LOG(LogUnLuaNova, Warning, TEXT("%s, Invalid module name!"), ANSI_TO_TCHAR(__FUNCTION__));
+                UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("%s, Invalid module name!"), ANSI_TO_TCHAR(__FUNCTION__));
                 return LUA_TNIL;
             }
 

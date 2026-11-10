@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaTimerSubsystem.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "LuaBackend.h"
 #include "LuaEnv.h"
@@ -281,7 +282,7 @@ void UUnLuaNovaTimerSubsystem::Tick(float DeltaTime)
                 // The callback's own stack cannot tell us who registered it. Site is a
                 // snapshot taken at registration, so the log names the real script line
                 // and the owning Env even after the caller's frame is long gone.
-                UE_LOG(LogUnLuaNova, Error, TEXT("UnLuaNova.Timer 回调出错：%s [%s]"),
+                UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("UnLuaNova.Timer 回调出错：%s [%s]"),
                     Message ? UTF8_TO_TCHAR(Message) : TEXT("(no message)"),
                     *Item.Site.Describe());
                 lua_pop(Item.State, 1);

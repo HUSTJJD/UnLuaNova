@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaSettings.h"
+#include "UnLuaNovaCompatibility.h"
 #include "UnLuaNovaTestCommon.h"
 #include "Misc/AutomationTest.h"
 
@@ -33,8 +34,8 @@ struct FUnLuaNovaTest_Issue346 : FUnLuaNovaTestBase
         // 其他测试用例可能产生了一些绑定对象在内存里，在这里肯定是找不到module的
         GetTestRunner().AddExpectedError(TEXT("not found"), EAutomationExpectedErrorFlags::MatchType::Contains, 0);
         GetTestRunner().AddExpectedError(TEXT("Failed to attach"), EAutomationExpectedErrorFlags::MatchType::Contains, 0);
-        UE_LOG(LogTemp, Error, TEXT("dummy not found"));
-        UE_LOG(LogTemp, Error, TEXT("dummy Failed to attach"));
+        UNLUANOVA_LOGF(LogTemp, Error, TEXT("dummy not found"));
+        UNLUANOVA_LOGF(LogTemp, Error, TEXT("dummy Failed to attach"));
         
         FUnLuaNovaTestBase::SetUp();
         

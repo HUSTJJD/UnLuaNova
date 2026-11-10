@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "LowLevel.h"
+#include "UnLuaNovaCompatibility.h"
 #include "UnLuaNovaEx.h"
 #include "LuaCore.h"
 #include "Containers/LuaArray.h"
@@ -262,7 +263,7 @@ static int32 TArray_Reserve(lua_State* L)
     bool bSuccess = Array->Reserve(Size);
     if (!bSuccess)
     {
-        UE_LOG(LogUnLuaNova, Warning, TEXT("%s: 'Reserve' is only valid for empty TArray!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("%s: 'Reserve' is only valid for empty TArray!"), ANSI_TO_TCHAR(__FUNCTION__));
     }
     lua_pushboolean(L, bSuccess);
     return 1;

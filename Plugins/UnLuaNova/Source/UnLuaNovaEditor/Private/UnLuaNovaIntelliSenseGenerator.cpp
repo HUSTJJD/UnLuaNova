@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Misc/EngineVersionComparison.h"
+#include "UnLuaNovaCompatibility.h"
 #include "UnLuaNovaIntelliSenseGenerator.h"
 #include "UnLuaNovaLuauDecls.h"
 #if UE_VERSION_NEWER_THAN(5, 1, 0)
@@ -235,7 +236,7 @@ void FUnLuaNovaIntelliSenseGenerator::ExportLuauDecls(const TArray<const UField*
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("[IntelliSense] %s not found - the Luau declarations have no UnLuaNova API in them."), *ApiFile);
+        UNLUANOVA_LOGF(LogTemp, Warning, TEXT("[IntelliSense] %s not found - the Luau declarations have no UnLuaNova API in them."), *ApiFile);
     }
 
     IFileManager& FileManager = IFileManager::Get();

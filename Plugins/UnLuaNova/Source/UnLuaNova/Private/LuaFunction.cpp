@@ -14,6 +14,7 @@
 
 
 #include "LuaFunction.h"
+#include "UnLuaNovaCompatibility.h"
 #include "UnLuaNovaBase.h"
 #include "LuaOverrides.h"
 #include "LuaOverridesClass.h"
@@ -178,7 +179,7 @@ void ULuaFunction::Override(UFunction* Function, UClass* Class, bool bAddNew)
             // through the function registry, which resolves the Lua module per object.
             // Leave this freshly duplicated ULuaFunction inert - clearing From makes
             // SetActive(), Restore() and Bind() all take their safe no-op paths.
-            UE_LOG(LogUnLuaNova, Warning,
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning,
                 TEXT("ULuaFunction::Override: '%s' is already patched but its original implementation cannot be recovered; keeping the existing thunk"),
                 *Function->GetName());
             From.Reset();

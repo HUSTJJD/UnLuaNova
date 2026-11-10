@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "UnLuaNovaCompatibility.h"
 #include "GameFramework/InputSettings.h"
 #include "Components/InputComponent.h"
 #include "Animation/AnimInstance.h"
@@ -87,7 +88,7 @@ bool UUnLuaNovaManager::Bind(UObject *Object, const TCHAR *InModuleName, int32 I
 
     if (!Error.IsEmpty())
     {
-        UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to attach %s module for object %s,%p!\n%s"), InModuleName, *Object->GetName(), Object, *Error);
+        UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Failed to attach %s module for object %s,%p!\n%s"), InModuleName, *Object->GetName(), Object, *Error);
         return false;
     }
 
@@ -110,7 +111,7 @@ bool UUnLuaNovaManager::Bind(UObject *Object, const TCHAR *InModuleName, int32 I
         bool bResult = ::CallFunction(L, 2, 0);                                 // call 'Initialize'
         if (!bResult)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to call 'Initialize' function!"));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Failed to call 'Initialize' function!"));
         }
         luaL_unref(L, LUA_REGISTRYINDEX, FunctionRef);
     }
@@ -125,7 +126,7 @@ bool UUnLuaNovaManager::BindInstance(UObject* Object, const TCHAR* InModuleName,
     {
         if (OutError)
             *OutError = Reason;
-        UE_LOG(LogUnLuaNova, Warning, TEXT("BindInstance: %s"), Reason);
+        UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("BindInstance: %s"), Reason);
         return false;
     };
 
@@ -208,7 +209,7 @@ bool UUnLuaNovaManager::BindInstance(UObject* Object, const TCHAR* InModuleName,
         else
             lua_pushnil(L);
         if (!::CallFunction(L, 2, 0))
-            UE_LOG(LogUnLuaNova, Warning, TEXT("BindInstance: failed to call 'Initialize'"));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("BindInstance: failed to call 'Initialize'"));
         luaL_unref(L, LUA_REGISTRYINDEX, FunctionRef);
     }
 

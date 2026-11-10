@@ -15,6 +15,7 @@
 #pragma once
 
 #include "Runtime/Launch/Resources/Version.h"
+#include "UnLuaNovaCompatibility.h"
 #include "UnLuaNovaBase.h"
 #include "UnLuaNovaTemplate.h"
 #include "LuaValue.h"
@@ -374,7 +375,7 @@ namespace UnLuaNova
 
     template <typename T> bool IsType(lua_State* L, int32 Index, TType<T>)
     {
-        UE_LOG(LogTemp, Log, TEXT("Unsupported Type Check"));
+        UNLUANOVA_LOGF(LogTemp, Log, TEXT("Unsupported Type Check"));
         return false;
     }
 
@@ -711,7 +712,7 @@ namespace UnLuaNova
         lua_getglobal(L, FuncName);
         if (lua_isfunction(L, -1) == false)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Global function %s doesn't exist!"), UTF8_TO_TCHAR(FuncName));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Global function %s doesn't exist!"), UTF8_TO_TCHAR(FuncName));
             lua_pop(L, 2);
             return FLuaRetValues(L, INDEX_NONE);
         }
@@ -735,14 +736,14 @@ namespace UnLuaNova
         int32 Type = lua_getglobal(L, TableName);
         if (Type != LUA_TTABLE)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Global table %s doesn't exist!"), UTF8_TO_TCHAR(TableName));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Global table %s doesn't exist!"), UTF8_TO_TCHAR(TableName));
             lua_pop(L, 2);
             return FLuaRetValues(L, INDEX_NONE);
         }
         Type = lua_getfield(L, -1, FuncName);
         if (Type != LUA_TFUNCTION)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Function %s of global table %s doesn't exist!"), UTF8_TO_TCHAR(FuncName), UTF8_TO_TCHAR(TableName));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Function %s of global table %s doesn't exist!"), UTF8_TO_TCHAR(FuncName), UTF8_TO_TCHAR(TableName));
             lua_pop(L, 3);
             return FLuaRetValues(L, INDEX_NONE);
         }
@@ -768,7 +769,7 @@ namespace UnLuaNova
         int32 Type = lua_getfield(L, LuaTable.GetIndex(), FuncName);
         if (Type != LUA_TFUNCTION)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Function %s doesn't exist!"), UTF8_TO_TCHAR(FuncName));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Function %s doesn't exist!"), UTF8_TO_TCHAR(FuncName));
             lua_pop(L, 2);
             return FLuaRetValues(L, INDEX_NONE);
         }
@@ -823,7 +824,7 @@ namespace UnLuaNova
         int32 Type = lua_gettable(L, Index);
         if (Type != LUA_TFUNCTION)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Function %s of table doesn't exist!"), UTF8_TO_TCHAR(FuncName));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Function %s of table doesn't exist!"), UTF8_TO_TCHAR(FuncName));
             lua_pop(L, 2);
             return FLuaRetValues(L, INDEX_NONE);
         }

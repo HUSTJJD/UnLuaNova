@@ -25,13 +25,13 @@
             "Name": "UnLuaNova",
             "Type": "Runtime",
             "LoadingPhase": "PreDefault",
-            "WhitelistPlatforms": [ "Win64", "Mac", "IOS", "Android", "Linux" ]
+            "PlatformAllowList": [ "Win64", "Mac", "IOS", "Android", "Linux" ]
         },
         {
             "Name": "UnLuaNovaEditor",
             "Type": "Editor",
             "LoadingPhase": "Default",
-            "WhitelistPlatforms": [ "Win64", "Mac" ]
+            "PlatformAllowList": [ "Win64", "Mac" ]
         }
     ]
 }

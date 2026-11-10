@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "LuaDebugAdapter.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "LuaDebugService.h"
 #include "LuaEnv.h"
@@ -119,7 +120,7 @@ bool FLuaDebugAdapter::Start(int32 InPort)
     FScopeLock Lifecycle(&LifecycleLock);
     if (bRunning)
     {
-        UE_LOG(LogUnLuaNova, Warning, TEXT("lua.dap: already running on port %d"), Port);
+        UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("lua.dap: already running on port %d"), Port);
         return false;
     }
 
@@ -143,7 +144,7 @@ bool FLuaDebugAdapter::Start(int32 InPort)
         return false;
     }
 
-    UE_LOG(LogUnLuaNova, Display, TEXT("lua.dap: listening on 127.0.0.1:%d (DAP, attach from VSCode)"), Port);
+    UNLUANOVA_LOGF(LogUnLuaNova, Display, TEXT("lua.dap: listening on 127.0.0.1:%d (DAP, attach from VSCode)"), Port);
     return true;
 }
 
@@ -164,7 +165,7 @@ void FLuaDebugAdapter::StopServer()
     }
     bRunning = false;
 
-    UE_LOG(LogUnLuaNova, Display, TEXT("lua.dap: stopped"));
+    UNLUANOVA_LOGF(LogUnLuaNova, Display, TEXT("lua.dap: stopped"));
 }
 
 int32 FLuaDebugAdapter::GetPort() const
@@ -178,7 +179,7 @@ bool FLuaDebugAdapter::Listen()
     auto* Subsystem = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
     if (!Subsystem)
     {
-        UE_LOG(LogUnLuaNova, Error, TEXT("lua.dap: no socket subsystem"));
+        UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("lua.dap: no socket subsystem"));
         return false;
     }
 
@@ -196,7 +197,7 @@ bool FLuaDebugAdapter::Listen()
 
     if (!ListenerSocket->Bind(*Addr))
     {
-        UE_LOG(LogUnLuaNova, Error, TEXT("lua.dap: bind failed on port %d (in use?)"), Port);
+        UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("lua.dap: bind failed on port %d (in use?)"), Port);
         Subsystem->DestroySocket(ListenerSocket);
         ListenerSocket = nullptr;
         return false;
@@ -204,7 +205,7 @@ bool FLuaDebugAdapter::Listen()
 
     if (!ListenerSocket->Listen(1))
     {
-        UE_LOG(LogUnLuaNova, Error, TEXT("lua.dap: listen failed"));
+        UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("lua.dap: listen failed"));
         Subsystem->DestroySocket(ListenerSocket);
         ListenerSocket = nullptr;
         return false;
@@ -242,7 +243,7 @@ void FLuaDebugAdapter::AcceptClient()
 
     Accepted->SetNonBlocking(true);
     ClientSocket = Accepted;
-    UE_LOG(LogUnLuaNova, Display, TEXT("lua.dap: client attached"));
+    UNLUANOVA_LOGF(LogUnLuaNova, Display, TEXT("lua.dap: client attached"));
 }
 
 // ── 线协议：Content-Length 分帧 ────────────────────────────────────────────
@@ -488,7 +489,7 @@ void FLuaDebugAdapter::OnAttach(const TSharedRef<FJsonObject>& Request)
         const TArray<UnLuaNova::FLuaEnv*> Envs = UnLuaNova::FLuaEnv::GetAllEnvs();
         if (!Envs.IsValidIndex(EnvIndex))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("lua.dap: no lua env at index %d (%d env(s) exist)"),
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("lua.dap: no lua env at index %d (%d env(s) exist)"),
                 EnvIndex, Envs.Num());
             return;
         }

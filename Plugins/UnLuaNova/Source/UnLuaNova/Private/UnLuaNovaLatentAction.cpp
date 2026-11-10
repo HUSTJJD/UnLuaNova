@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "Engine/World.h"
+#include "UnLuaNovaCompatibility.h"
 #include "Engine/LatentActionManager.h"
 #include "UnLuaNovaLatentAction.h"
 #include "LuaCore.h"
@@ -67,14 +68,14 @@ static int32 UUnLuaNovaLatentAction_CreateInfo(lua_State* L)
 
     if (NumParams <= 0)
     {
-        UE_LOG(LogUnLuaNova, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
     UUnLuaNovaLatentAction* Self = Cast<UUnLuaNovaLatentAction>(UnLuaNova::GetUObject(L, 1));
     if (!Self)
     {
-        UE_LOG(LogUnLuaNova, Log, TEXT("%s: Invalid source class!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s: Invalid source class!"), ANSI_TO_TCHAR(__FUNCTION__));
         return 0;
     }
 
@@ -84,7 +85,7 @@ static int32 UUnLuaNovaLatentAction_CreateInfo(lua_State* L)
         const auto Env = UnLuaNova::FLuaEnv::FindEnv(L);
         if (!Env)
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("%s: invalid L!"), ANSI_TO_TCHAR(__FUNCTION__));
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s: invalid L!"), ANSI_TO_TCHAR(__FUNCTION__));
             return 0;
         }
         Linkage = Env->FindOrAddThread(L);

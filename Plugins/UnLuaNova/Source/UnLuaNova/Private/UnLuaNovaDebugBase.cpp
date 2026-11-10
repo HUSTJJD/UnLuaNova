@@ -755,7 +755,7 @@ namespace UnLuaNova
             return;
 
         luaL_traceback(L, L, "", 0);
-        UE_LOG(LogUnLuaNova, Log, TEXT("%s"), UTF8_TO_TCHAR(lua_tostring(L,-1)));
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s"), UTF8_TO_TCHAR(lua_tostring(L,-1)));
         lua_pop(L, 1);
     }
 }

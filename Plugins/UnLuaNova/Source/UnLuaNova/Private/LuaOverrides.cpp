@@ -1,4 +1,5 @@
 #include "LuaOverrides.h"
+#include "UnLuaNovaCompatibility.h"
 #include "LuaFunction.h"
 #include "UnLuaNovaBase.h"
 #include "LuaOverridesClass.h"
@@ -60,7 +61,7 @@ namespace UnLuaNova
                     // Idempotent rebind: nothing to do, the live thunk stays in place.
                     return;
                 }
-                UE_LOG(LogUnLuaNova, Warning,
+                UNLUANOVA_LOGF(LogUnLuaNova, Warning,
                     TEXT("FLuaOverrides::Override: refusing to stack an override on '%s' (patched=%d, existing=%d)"),
                     *Function->GetName(), 1, Existing != nullptr ? 1 : 0);
                 return;

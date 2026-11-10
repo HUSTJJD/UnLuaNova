@@ -1,4 +1,5 @@
 #include "StaticBinding/StaticBindingRegistry.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "UObject/UnrealType.h"
 #include "UObject/UObjectIterator.h"
@@ -110,7 +111,7 @@ void FStaticBindingRegistry::Resolve(FStaticTypeBinding* Type, FEntry& Entry)
 	UField* Field = ResolveFieldByName(TypeName);
 	if (!Field)
 	{
-		UE_LOG(LogTemp, Warning,
+		UNLUANOVA_LOGF(LogTemp, Warning,
 			TEXT("[StaticBinding] type '%s' could not be resolved; reflective fallback stays in effect."), *TypeName);
 		return;
 	}
@@ -135,7 +136,7 @@ void FStaticBindingRegistry::Resolve(FStaticTypeBinding* Type, FEntry& Entry)
 		FProperty* Prop = Struct->FindPropertyByName(PropName);
 		if (!Prop)
 		{
-			UE_LOG(LogTemp, Verbose, TEXT("[StaticBinding] %s: property '%s' not found."), *TypeName, *PropName.ToString());
+			UNLUANOVA_LOGF(LogTemp, Verbose, TEXT("[StaticBinding] %s: property '%s' not found."), *TypeName, *PropName.ToString());
 			continue;
 		}
 
@@ -160,7 +161,7 @@ void FStaticBindingRegistry::Resolve(FStaticTypeBinding* Type, FEntry& Entry)
 		UFunction* Function = AsClass ? AsClass->FindFunctionByName(FuncName, EIncludeSuperFlag::IncludeSuper) : nullptr;
 		if (!Function)
 		{
-			UE_LOG(LogTemp, Verbose, TEXT("[StaticBinding] %s: function '%s' not found."), *TypeName, *FuncName.ToString());
+			UNLUANOVA_LOGF(LogTemp, Verbose, TEXT("[StaticBinding] %s: function '%s' not found."), *TypeName, *FuncName.ToString());
 			continue;
 		}
 
@@ -220,7 +221,7 @@ void FStaticBindingRegistry::Resolve(FStaticTypeBinding* Type, FEntry& Entry)
 
 			if (!Param || Param->HasAnyPropertyFlags(CPF_ReturnParm))
 			{
-				UE_LOG(LogTemp, Verbose,
+				UNLUANOVA_LOGF(LogTemp, Verbose,
 					TEXT("[StaticBinding] %s.%s: parameter '%s' not found."), *TypeName, *FuncName.ToString(), *ParamName.ToString());
 				// An unresolved parameter keeps Offset 0, and a thunk writes every slot at
 				// its declared offset - two unresolved slots would land on top of each
@@ -269,7 +270,7 @@ void FStaticBindingRegistry::Resolve(FStaticTypeBinding* Type, FEntry& Entry)
 
 		if (!bThunkStillValid && Source->Thunk)
 		{
-			UE_LOG(LogTemp, Verbose,
+			UNLUANOVA_LOGF(LogTemp, Verbose,
 				TEXT("[StaticBinding] %s.%s: signature changed since generation, thunk disabled."),
 				*TypeName, *FuncName.ToString());
 			Source->Thunk = nullptr;

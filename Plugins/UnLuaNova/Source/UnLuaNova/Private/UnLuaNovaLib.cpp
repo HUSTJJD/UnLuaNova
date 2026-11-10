@@ -1,4 +1,5 @@
 #include "UnLuaNovaLib.h"
+#include "UnLuaNovaCompatibility.h"
 #include "LowLevel.h"
 #include "LuaBackend.h"
 #include "LuaCore.h"             // GetCppInstanceFast - containers are userdata with a descriptor header
@@ -43,21 +44,21 @@ namespace UnLuaNova
         static int LogInfo(lua_State* L)
         {
             const auto Msg = GetMessage(L);
-            UE_LOG(LogUnLuaNova, Log, TEXT("%s"), *Msg);
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("%s"), *Msg);
             return 0;
         }
 
         static int LogWarn(lua_State* L)
         {
             const auto Msg = GetMessage(L);
-            UE_LOG(LogUnLuaNova, Warning, TEXT("%s"), *Msg);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("%s"), *Msg);
             return 0;
         }
 
         static int LogError(lua_State* L)
         {
             const auto Msg = GetMessage(L);
-            UE_LOG(LogUnLuaNova, Error, TEXT("%s"), *Msg);
+            UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("%s"), *Msg);
             return 0;
         }
 
@@ -478,14 +479,14 @@ namespace UnLuaNova
             lua_setfield(L, -2, LUA_GNAME);
             luaL_setfuncs(L, UNLUANOVA_LegacyFunctions, 0);
             if (!UnLuaNovaSetChunkEnv(L, -2))
-                UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to set the environment of the legacy support chunk; its globals will be the real ones."));
+                UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Failed to set the environment of the legacy support chunk; its globals will be the real ones."));
             // 0 results, not LUA_MULTRET: this must leave the stack exactly as it found
             // it, because the lua_setfield below addresses -2. With MULTRET a failed
             // chunk left its error message there, and setting a field on a string is an
             // unprotected index error - on Luau that is an abort(), not a Lua error.
             if (lua_pcall(L, 0, 0, 0) != LUA_OK)
             {
-                UE_LOG(LogUnLuaNova, Error, TEXT("Failed to run the legacy support chunk: %s"), UTF8_TO_TCHAR(lua_tostring(L, -1)));
+                UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("Failed to run the legacy support chunk: %s"), UTF8_TO_TCHAR(lua_tostring(L, -1)));
                 lua_pop(L, 1);
             }
             lua_getglobal(L, "Class");

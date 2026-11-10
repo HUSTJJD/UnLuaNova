@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaDebugBase.h"
+#include "UnLuaNovaCompatibility.h"
 
 namespace UnLuaNova
 {
@@ -376,7 +377,7 @@ namespace UnLuaNova
         const int Actual = lua_gettop(L) - 1;
         if (Actual < Expected)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Attempted to call constructor of %s with invalid arguments. %d expected but got %d."), *ClassName, Expected, Actual);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Attempted to call constructor of %s with invalid arguments. %d expected but got %d."), *ClassName, Expected, Actual);
             return 0;
         }
 
@@ -464,7 +465,7 @@ namespace UnLuaNova
         const int Actual = lua_gettop(L); 
         if (Actual < Expected)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Attempted to call constructor of %hs with invalid arguments. %d expected but got %d."), TType<ClassType>::GetName(), Expected, Actual);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Attempted to call constructor of %hs with invalid arguments. %d expected but got %d."), TType<ClassType>::GetName(), Expected, Actual);
             return 0;
         }
 
@@ -547,7 +548,7 @@ namespace UnLuaNova
         const int Actual = lua_gettop(L); 
         if (Actual < Expected)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Attempted to call %s with invalid arguments. %d expected but got %d."), *Name, Expected, Actual);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Attempted to call %s with invalid arguments. %d expected but got %d."), *Name, Expected, Actual);
             return 0;
         }
         TTuple<typename TArgTypeTraits<ArgType>::Type...> Args = GetArgsChecked<typename TArgTypeTraits<ArgType>::Type...>(L, typename TOneBasedIndices<Expected>::Type());
@@ -599,13 +600,13 @@ namespace UnLuaNova
         const int Actual = lua_gettop(L); 
         if (Actual < Expected)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Attempted to call %s::%s with invalid arguments. %d expected but got %d."), *ClassName, *Name, Expected, Actual);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Attempted to call %s::%s with invalid arguments. %d expected but got %d."), *ClassName, *Name, Expected, Actual);
             return 0;
         }
         TTuple<ClassType*, typename TArgTypeTraits<ArgType>::Type...> Args = GetArgsChecked<ClassType*, typename TArgTypeTraits<ArgType>::Type...>(L, typename TOneBasedIndices<Expected>::Type());
         if (Args.template Get<0>() == nullptr)
         {
-            UE_LOG(LogUnLuaNova, Error, TEXT("Attempted to call %s::%s with nullptr of 'this'."), *ClassName, *Name);
+            UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("Attempted to call %s::%s with nullptr of 'this'."), *ClassName, *Name);
             return 0;
         }
         return TInvokingHelper<RetType>::Invoke(L, Func, Args, typename TOneBasedIndices<sizeof...(ArgType)>::Type());

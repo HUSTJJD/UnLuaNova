@@ -1,4 +1,5 @@
 #include "Misc/EngineVersionComparison.h"
+#include "UnLuaNovaCompatibility.h"
 #include "UnLuaNovaPrivate.h"
 #include "UnLuaNovaEditorCore.h"
 #include "Toolbars/UnLuaNovaEditorToolbar.h"
@@ -286,7 +287,7 @@ void FUnLuaNovaEditorToolbar::CreateLuaTemplate_Executed()
 
     if (FPaths::FileExists(FileName))
     {
-        UE_LOG(LogUnLuaNova, Warning, TEXT("%s"), *FText::Format(LOCTEXT("FileAlreadyExists", "Lua file ({0}) is already existed!"), FText::FromString(TemplateName)).ToString());
+        UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("%s"), *FText::Format(LOCTEXT("FileAlreadyExists", "Lua file ({0}) is already existed!"), FText::FromString(TemplateName)).ToString());
         return;
     }
 

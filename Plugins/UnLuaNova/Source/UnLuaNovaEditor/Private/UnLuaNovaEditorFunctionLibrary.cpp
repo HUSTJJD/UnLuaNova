@@ -14,6 +14,7 @@
 
 
 #include "UnLuaNovaEditorFunctionLibrary.h"
+#include "UnLuaNovaCompatibility.h"
 #include "Modules/ModuleManager.h"
 #include "DirectoryWatcherModule.h"
 #include "IDirectoryWatcher.h"
@@ -48,7 +49,7 @@ void UUnLuaNovaEditorFunctionLibrary::FetchNewVersion()
         const auto Client = FUdpSocketBuilder(TEXT("Client")).Build();
         if (!Client->Connect(RemoteAddr.Get()))
         {
-            UE_LOG(LogUnLuaNova, Verbose, TEXT("Unable to fetch latest version, could not connect to server."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Verbose, TEXT("Unable to fetch latest version, could not connect to server."));
             return;
         }
 
@@ -63,7 +64,7 @@ void UUnLuaNovaEditorFunctionLibrary::FetchNewVersion()
         int32 Sent;
         if (!Client->Send((uint8*)Converted.Get(), Converted.Length(), Sent))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Unable to fetch latest version, data sending error."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Unable to fetch latest version, data sending error."));
             Client->Close();
             return;
         }
@@ -81,7 +82,7 @@ void UUnLuaNovaEditorFunctionLibrary::FetchNewVersion()
         Client->Close();
         if (Read == 0)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Unable to fetch latest version, data receiving timeout."));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Unable to fetch latest version, data receiving timeout."));
             return;
         }
 
@@ -90,7 +91,7 @@ void UUnLuaNovaEditorFunctionLibrary::FetchNewVersion()
         if (Received == CurrentVersion)
             return;
         
-        UE_LOG(LogUnLuaNova, Log, TEXT("New version available: %s."), *Received);
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("New version available: %s."), *Received);
     });
 }
 

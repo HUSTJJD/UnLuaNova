@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UELib.h"
+#include "UnLuaNovaCompatibility.h"
 #include "Binding.h"
 #include "Registries/ClassRegistry.h"
 #include "LuaCore.h"
@@ -53,7 +54,7 @@ static int UE_Index(lua_State* L)
         }
         else
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to load a blueprint type %s with UE namespace, use UE.UClass.Load or UE.UObject.Load instead."), UTF8_TO_TCHAR(Name));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to load a blueprint type %s with UE namespace, use UE.UClass.Load or UE.UObject.Load instead."), UTF8_TO_TCHAR(Name));
             return 0;
         }
     }
@@ -70,7 +71,7 @@ static int UE_Index(lua_State* L)
         }
         else
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to load a blueprint enum %s with UE namespace, use UE.UObject.Load instead."), UTF8_TO_TCHAR(Name));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to load a blueprint enum %s with UE namespace, use UE.UObject.Load instead."), UTF8_TO_TCHAR(Name));
             return 0;
         }
     }

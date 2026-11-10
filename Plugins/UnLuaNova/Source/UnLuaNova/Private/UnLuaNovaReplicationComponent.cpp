@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "UnLuaNovaReplicationComponent.h"
+#include "UnLuaNovaCompatibility.h"
 
 #include "LuaCore.h"
 #include "Net/UnrealNetwork.h"
@@ -339,7 +340,7 @@ namespace
         if (lua_pcall(L, 1, 0, 0) != LUA_OK)
         {
             const char* Message = lua_tostring(L, -1);
-            UE_LOG(LogUnLuaNova, Warning, TEXT("%s: '%s' raised %s"),
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("%s: '%s' raised %s"),
                 Context, UTF8_TO_TCHAR(FuncName), UTF8_TO_TCHAR(Message ? Message : ""));
             lua_pop(L, 1); // the error
             return false;
@@ -421,7 +422,7 @@ void UUnLuaNovaReplicationComponent::BeginPlay()
     // field that wants a condition now declares one and this no longer disables anything.
     if (Condition != COND_None)
     {
-        UE_LOG(LogUnLuaNova, Warning,
+        UNLUANOVA_LOGF(LogUnLuaNova, Warning,
             TEXT("Lua replication on '%s': component-wide Condition is obsolete and ignored; ")
             TEXT("declare Condition per field in GetLifetimeReplicatedProps instead."),
             *GetNameSafe(Owner));
@@ -469,7 +470,7 @@ void UUnLuaNovaReplicationComponent::BeginPlay()
     if (!bLoggedPushModel)
     {
         bLoggedPushModel = true;
-        UE_LOG(LogUnLuaNova, Log, TEXT("Lua replication: push model %s (buckets are marked dirty per type)."),
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Lua replication: push model %s (buckets are marked dirty per type)."),
             UNLUANOVA_PUSH_MODEL ? TEXT("compiled in") : TEXT("NOT compiled in - WITH_PUSH_MODEL=0"));
     }
 
@@ -550,7 +551,7 @@ void UUnLuaNovaReplicationComponent::MarkFieldDirty(FName FieldName)
 
     if (Found == INDEX_NONE)
     {
-        UE_LOG(LogUnLuaNova, Warning,
+        UNLUANOVA_LOGF(LogUnLuaNova, Warning,
             TEXT("MarkFieldDirty('%s') on '%s': not a field this module declared as replicated."),
             *FieldName.ToString(), *GetNameSafe(GetOwner()));
         return;
@@ -788,7 +789,7 @@ bool UUnLuaNovaReplicationComponent::SyncSlot(lua_State* L, int32 TableIdx, cons
         lua_pop(L, 1);
         if (!bOk)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Generic field '%s' on '%s' was not replicated: %s"),
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Generic field '%s' on '%s' was not replicated: %s"),
                 *Slot.Name.ToString(), *GetNameSafe(GetOwner()), *Error);
             return false;
         }
@@ -878,7 +879,7 @@ void UUnLuaNovaReplicationComponent::OnRep_SchemaVersion()
         return;
 
     bSchemaMismatchReported = true;
-    UE_LOG(LogUnLuaNova, Error,
+    UNLUANOVA_LOGF(LogUnLuaNova, Error,
         TEXT("'%s' received replicated fields laid out for a different declaration (0x%08X, local 0x%08X); "
              "they will not be applied. Both peers must run the same script, declaring in the same order."),
         *GetNameSafe(GetOwner()), SchemaVersion, LocalSchemaVersion);
@@ -955,7 +956,7 @@ void UUnLuaNovaReplicationComponent::PushSlots(UnLuaNova::ELuaNetConditionGroup 
         if (lua_pcall(Table.L, 2, 0, 0) != LUA_OK)
         {
             const char* Message = lua_tostring(Table.L, -1);
-            UE_LOG(LogUnLuaNova, Warning, TEXT("%s: OnReplicatedProps raised %s"),
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("%s: OnReplicatedProps raised %s"),
                 Context, UTF8_TO_TCHAR(Message ? Message : ""));
             lua_pop(Table.L, 1);
         }
@@ -1113,7 +1114,7 @@ bool UUnLuaNovaReplicationComponent::ApplySlot(lua_State* L, int32 TableIdx, con
         if (!UnLuaNova::DecodeLuaNetValue(L, Text, Spec, Error))
         {
             lua_settop(L, Top);
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Generic field '%s' on '%s' was not applied: %s"),
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Generic field '%s' on '%s' was not applied: %s"),
                 *Slot.Name.ToString(), *GetNameSafe(GetOwner()), *Error);
             return false;
         }

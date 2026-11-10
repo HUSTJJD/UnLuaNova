@@ -15,6 +15,7 @@
 #pragma once
 
 #include "UnLuaNovaInterface.h"
+#include "UnLuaNovaCompatibility.h"
 #include "IssueOverridesTest.generated.h"
 
 UCLASS(BlueprintType, Blueprintable)
@@ -45,6 +46,6 @@ public:
 
 inline int32 UIssueOverridesObject::CollectInfo_Implementation() const
 {
-    UE_LOG(LogTemp, Log, TEXT("CollectInfo C++"));
+    UNLUANOVA_LOGF(LogTemp, Log, TEXT("CollectInfo C++"));
     return 1;
 }

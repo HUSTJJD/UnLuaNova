@@ -150,14 +150,14 @@ public:
     {
         if (UNLIKELY(!PropertyPtr.IsValid()))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to read invalid property '%s'"), *Name);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to read invalid property '%s'"), *Name);
             lua_pushnil(L);
             return;
         }
 
         if (UnLuaNova::LowLevel::IsReleasedPtr(ContainerPtr))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to read property '%s' on released object"), *Name);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to read property '%s' on released object"), *Name);
             lua_pushnil(L);
             return;
         }
@@ -169,14 +169,14 @@ public:
     {
         if (UNLIKELY(!PropertyPtr.IsValid()))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to read invalid property '%s'"), *Name);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to read invalid property '%s'"), *Name);
             lua_pushnil(L);
             return;
         }
 
         if (UnLuaNova::LowLevel::IsReleasedPtr(ValuePtr))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to read property '%s' on released object"), *Name);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to read property '%s' on released object"), *Name);
             lua_pushnil(L);
             return;
         }
@@ -188,14 +188,14 @@ public:
     {
         if (UNLIKELY(!PropertyPtr.IsValid()))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to write invalid property %s"), *Name);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to write invalid property %s"), *Name);
             lua_pushnil(L);
             return false;
         }
 
         if (UNLIKELY(UnLuaNova::LowLevel::IsReleasedPtr(ContainerPtr)))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to write property '%s' on released object"), *Name);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to write property '%s' on released object"), *Name);
             return false;
         }
 
@@ -206,14 +206,14 @@ public:
     {
         if (UNLIKELY(!PropertyPtr.IsValid()))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to write invalid property %s"), *Name);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to write invalid property %s"), *Name);
             lua_pushnil(L);
             return false;
         }
 
         if (UNLIKELY(UnLuaNova::LowLevel::IsReleasedPtr(ValuePtr)))
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("attempt to write property '%s' on released object"), *Name);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("attempt to write property '%s' on released object"), *Name);
             return false;
         }
         

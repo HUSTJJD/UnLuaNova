@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and limitations under the License.
 
 #include "LowLevel.h"
+#include "UnLuaNovaCompatibility.h"
 #include "LuaCore.h"
 #include "LuaDebugService.h"
 #include "LuaEnv.h"
@@ -70,20 +71,20 @@ namespace UnLuaNova
         FString FullFilePath = GetFullPathFromRelativePath(RelativeFilePath);
         if (FullFilePath.IsEmpty())
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("the lua file try to load does not exist! : %s"), *RelativeFilePath);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("the lua file try to load does not exist! : %s"), *RelativeFilePath);
             return false;
         }
 
         if (FullFilePath != GLuaSrcFullPath + RelativeFilePath)
         {
-            UE_LOG(LogUnLuaNova, Log, TEXT("Load lua file from DownloadDir : %s"), *FullFilePath);
+            UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("Load lua file from DownloadDir : %s"), *FullFilePath);
         }
 
         TArray<uint8> Data;
         bool bSuccess = FFileHelper::LoadFileToArray(Data, *FullFilePath, 0);
         if (!bSuccess)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("%s: Failed to load lua file!"), ANSI_TO_TCHAR(__FUNCTION__));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("%s: Failed to load lua file!"), ANSI_TO_TCHAR(__FUNCTION__));
             return false;
         }
 
@@ -103,7 +104,7 @@ namespace UnLuaNova
             // it expected - which is the part worth reading. The status code says none of
             // that, so it stays at Warning: a second line at Warning would only repeat the
             // failure without naming the chunk that failed. See FLuaEnv::LoadBuffer.
-            UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to call luaL_loadbufferx for '%s', error code: %d"), UTF8_TO_TCHAR(ChunkName), Code);
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Failed to call luaL_loadbufferx for '%s', error code: %d"), UTF8_TO_TCHAR(ChunkName), Code);
             ReportLuaCallError(L);                          // report pcall error
         }
 
@@ -115,7 +116,7 @@ namespace UnLuaNova
                 lua_pushvalue(L, Env);  /* environment for loaded function */
                 if (!UnLuaNovaSetChunkEnv(L, -2))
                 {
-                    UE_LOG(LogUnLuaNova, Warning, TEXT("Failed to set the environment of chunk '%s'"), UTF8_TO_TCHAR(ChunkName));
+                    UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Failed to set the environment of chunk '%s'"), UTF8_TO_TCHAR(ChunkName));
                 }
             }
         }
@@ -135,7 +136,7 @@ namespace UnLuaNova
     {
         if (!Chunk)
         {
-            UE_LOG(LogUnLuaNova, Warning, TEXT("%s: Invalid lua chunk!"), ANSI_TO_TCHAR(__FUNCTION__));
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("%s: Invalid lua chunk!"), ANSI_TO_TCHAR(__FUNCTION__));
             return false;
         }
 
@@ -177,7 +178,7 @@ namespace UnLuaNova
             const char *ErrorString = lua_tostring(L, -1);
             luaL_traceback(L, L, ErrorString, 1);
             ErrorString = lua_tostring(L, -1);
-            UE_LOG(LogUnLuaNova, Error, TEXT("Lua error message: %s [%s]"), UTF8_TO_TCHAR(ErrorString), *Owner);
+            UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("Lua error message: %s [%s]"), UTF8_TO_TCHAR(ErrorString), *Owner);
         }
         else if (Type == LUA_TTABLE)
         {
@@ -187,7 +188,7 @@ namespace UnLuaNova
             while (lua_next(L, -2) != 0)
             {
                 const char *ErrorString = lua_tostring(L, -1);
-                UE_LOG(LogUnLuaNova, Error, TEXT("Lua error message %d : %s [%s]"), MessageIndex++, UTF8_TO_TCHAR(ErrorString), *Owner);
+                UNLUANOVA_LOGF(LogUnLuaNova, Error, TEXT("Lua error message %d : %s [%s]"), MessageIndex++, UTF8_TO_TCHAR(ErrorString), *Owner);
                 lua_pop(L, 1);
             }
         }
@@ -246,7 +247,7 @@ namespace UnLuaNova
                         }
                         lua_pop(L, 2);
                     }
-					UE_LOG(LogTemp, Log, TEXT("%s : userdata with difference metatable finded! need %s,get %s,may be local or stack variable pushed to lua..."),
+					UNLUANOVA_LOGF(LogTemp, Log, TEXT("%s : userdata with difference metatable finded! need %s,get %s,may be local or stack variable pushed to lua..."),
                         ANSI_TO_TCHAR(__FUNCTION__), UTF8_TO_TCHAR(MetatableName), *CurMetatableName);
 #endif
                     bool bSuccess = TryToSetMetatable(L, MetatableName);        // set metatable
