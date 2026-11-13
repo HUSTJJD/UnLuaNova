@@ -41,7 +41,7 @@ L0–L1 可以静态完成；**L2–L3 必须在真实 UE 构建上执行**，�
 
 | # | 条件 | 证据 / 命令 | 当前 |
 |---|---|---|---|
-| 1 | 每个后端的 4 变体（Legacy / PushOff / Iris / Cooked）三 peer 拓扑齐全 | `.\Tools\RunDevelopmentTests.ps1 -NetMatrix` + `Saved/ReleaseTests/net-matrix/<Backend>/net/variants/*/DedicatedServer/topology.json` | 未满足：Luau 侧仅 Cooked 有拓扑 |
+| 1 | 每个后端的 4 变体（Legacy / PushOff / Iris / Cooked）三 peer 拓扑齐全 | `RunTests.ps1` 的 `net-matrix-Lua` / `net-matrix-Luau` 阶段 + `Saved/ReleaseTests/test/net-matrix/<Backend>/net/variants/*/DedicatedServer/topology.json` | 未满足：Luau 侧仅 Cooked 有拓扑 |
 | 2 | 每个后端的 8 场景（LateJoin / Reconnect / Dormancy / Relevancy / JoinOrderSwap / PacketLoss / SeamlessReconnect / SchemaMismatch）全部产出拓扑与报告 | 同上 `net/scenarios/*/topology.json` | 未满足：Luau 侧 5 个场景缺失 |
 
 > **矩阵形状（勿按交叉估算）**：`Tools/RunNetMatrix.ps1` 是**两组独立运行**——
@@ -49,7 +49,8 @@ L0–L1 可以静态完成；**L2–L3 必须在真实 UE 构建上执行**，�
 > （`:155-197`）。每个后端合计 **8 + 4 = 12 个 cell**，两个后端 24 个，
 > **不是 8 × 4 = 32 个交叉 cell**。8 个场景从未在 Iris / PushOff / Cooked 下跑过；
 > 若要把这三个变体也纳入场景覆盖，属于新增工作量，应单独立项。
-> `Docs/CN/Testing.md:231-233` 把两组并列在一节，容易被误读成交叉，措辞待修。
+> `Docs/CN/Testing.md` 已明确写成「8 场景 + 4 变体两组独立」。
+> 这两组现在都由 `RunTests.ps1` 自动执行，无需单独跑 `RunNetMatrix.ps1`。
 | 3 | `ValidateRelease.py --net-matrix` 零错误 | 门禁输出 | 未满足 |
 | 4 | 非 owner 的 Server RPC 被拒绝（唯一 token + 精确 CallLog） | DS 场景断言 | 源码有断言，未执行 |
 | 5 | 三 peer `RepSchemaVersion` 一致、`VariantRepSchemaVersion` 有区分度 | 声明报告 | 源码有导出，未执行 |
@@ -86,16 +87,19 @@ RPC 布局不一致时确实拒收；`RefreshDeclaration()` 在 cooked / Shippin
 ## 禁止事项
 
 - 不要手工修改 `feature-matrix.json` 的 `verification`。
-- 不要在未跑 `RunNetMatrix.ps1` 之前把 NET-* 标为 `implemented`，或移除实验标记。
+- 不要在 `RunTests.ps1` 的 `net-matrix-Lua` / `net-matrix-Luau` 阶段未全绿之前把 NET-*
+  标为 `implemented`，或移除实验标记。
 - 不要用一次失败的、或 `provenance.commit` 不等于 HEAD 的运行去刷新发布声明。
 - 不要把「源码里写了断言」当成「断言执行过」。
 
 ## 当前状态（2026-11-13）
 
-`Tools/CheckPromotion.py` 会按本页检查表输出只读结论。当前已知：最新 Release 为
-`passed=false`（`Luau-package-development` 在 UE 6.0 冷 cook 阶段 60 分钟超时），
-8 个页面 marker 为 `not-passed`，Luau 联网矩阵 Editor 进程曾以 255 退出，
-且 5 项源码级真实缺陷仍待修复。**因此当前不具备任何实验能力转正的条件。**
+`Tools/CheckPromotion.py --release-gate --strict` 已作为 `promotion-gate` 阶段由
+`RunTests.ps1` 自动执行（L4 的发布标记与 tag 属人工决策，只报告不阻断）。当前已知：
+最新 Release 为 `passed=false`（`Luau-package-development` 在 UE 6.0 冷 cook 阶段
+60 分钟超时），8 个页面 marker 为 `not-passed`，Luau 联网矩阵 Editor 进程曾以 255
+退出，5 项源码级缺陷虽已修复但**尚未经过编译与运行验证**。
+**因此当前不具备任何实验能力转正的条件。**
 
 ## 延伸阅读
 

@@ -14,6 +14,15 @@ Usage:
     python -B Tools/CheckPromotion.py
     python -B Tools/CheckPromotion.py --json
     python -B Tools/CheckPromotion.py --strict    # exit 1 when anything is unmet
+    python -B Tools/CheckPromotion.py --release-gate --strict \
+        --run Saved/ReleaseTests/test --net-root Saved/ReleaseTests/test/net-matrix
+
+--release-gate is what ReleasePipeline.ps1 calls. It only enforces the items a
+Release run can satisfy by itself (L2/L3: a complete green run bound to HEAD,
+connected-matrix evidence, current-tree execution evidence). The two L4 items -
+a published `passed` claim and a release tag - are human release decisions, so
+they stay visible in the report but do not fail the Release gate. Without that
+split, adding this checker to the pipeline would make every run fail forever.
 """
 
 import argparse
@@ -72,17 +81,25 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     parser.add_argument("--strict", action="store_true", help="exit 1 when any item is unmet")
+    parser.add_argument("--release-gate", action="store_true",
+                        help="only enforce items a Release run can satisfy on its own")
+    parser.add_argument("--run", default=str(RUNS / "test"),
+                        help="Release run root holding release-summary.json")
+    parser.add_argument("--net-root", default=str(NET_ROOT),
+                        help="root holding per-backend net/variants and net/scenarios")
     args = parser.parse_args()
 
     commit = head()
     rows = []
+    run_root = Path(args.run)
+    net_root = Path(args.net_root)
 
-    def add(level, item, ok, detail):
-        rows.append({"level": level, "item": item,
-                     "ok": bool(ok), "detail": str(detail)})
+    def add(level, item, ok, detail, gate=True):
+        rows.append({"level": level, "item": item, "ok": bool(ok),
+                     "detail": str(detail), "gate": bool(gate)})
 
     # L2 - complete Release bound to the current tree.
-    latest = load(RUNS / "test" / "release-summary.json")
+    latest = load(run_root / "release-summary.json")
     if latest is None:
         add("L2", "complete Release summary", False, "missing")
     else:
@@ -103,7 +120,7 @@ def main():
 
     # L3 - connected delivery matrix, four variants + eight scenarios per backend.
     for backend in BACKENDS:
-        base = NET_ROOT / backend
+        base = net_root / backend
         present_v = [v for v in VARIANTS
                      if (base / "net" / "variants" / v / "DedicatedServer" / "topology.json").is_file()]
         add("L3", "net-matrix %s: 4 variants" % backend, len(present_v) == len(VARIANTS),
@@ -121,10 +138,12 @@ def main():
     add("L3", "evidence index has a record for HEAD", bool(current),
         "%d record(s) for %s out of %d" % (len(current), commit[:8] or "-", len(evidence)))
 
-    # L4 - published claim, legal gate, release identity.
+    # L4 - published claim and release identity. These are human decisions made
+    # AFTER a green Release (the pipeline writes the markers; a human cuts the
+    # tag), so they are informational under --release-gate.
     statuses = {marker(p, "release-status") for p in RELEASE_PAGES}
     add("L4", "published release-status == passed on all 8 pages",
-        statuses == {"passed"}, "values=%s" % (sorted(statuses) or "none"))
+        statuses == {"passed"}, "values=%s" % (sorted(statuses) or "none"), gate=False)
     try:
         tags = subprocess.run(["git", "-C", str(ROOT), "tag", "--points-at", "HEAD"],
                               capture_output=True, text=True, timeout=15)
@@ -132,23 +151,31 @@ def main():
     except (OSError, subprocess.SubprocessError):
         tagged = False
     add("L4", "HEAD carries a release tag", tagged,
-        "git tag --points-at HEAD%s" % ("" if tagged else " is empty"))
+        "git tag --points-at HEAD%s" % ("" if tagged else " is empty"), gate=False)
 
     # The outer UEAbilityKit workspace is a separate project with its own licence.
     # It is deliberately not part of this repository's promotion criteria.
 
-    unmet = [r for r in rows if not r["ok"]]
+    gated = [r for r in rows if r["gate"]] if args.release_gate else rows
+    unmet = [r for r in gated if not r["ok"]]
+    informational = [r for r in rows if not r["gate"] and not r["ok"]]
     if args.json:
-        print(json.dumps({"head": commit, "unmet": len(unmet), "checks": rows},
-                         indent=2, ensure_ascii=False))
+        print(json.dumps({"head": commit, "unmet": len(unmet),
+                          "release_gate": bool(args.release_gate),
+                          "informational": [r["item"] for r in informational],
+                          "checks": rows}, indent=2, ensure_ascii=False))
     else:
-        print("Promotion readiness (read-only, HEAD %s)" % (commit[:8] or "unknown"))
+        print("Promotion readiness (read-only, HEAD %s, release-gate=%s)"
+              % (commit[:8] or "unknown", bool(args.release_gate)))
         print("=" * 78)
         for r in rows:
-            print(" [%s] %-4s %-52s %s" % ("OK" if r["ok"] else "!!",
-                                           r["level"], r["item"], r["detail"]))
+            tag = "INFO" if not r["gate"] else ("OK" if r["ok"] else "!!")
+            print(" [%s] %-4s %-52s %s" % (tag, r["level"], r["item"], r["detail"]))
         print("=" * 78)
-        print("%d/%d satisfied; %d unmet." % (len(rows) - len(unmet), len(rows), len(unmet)))
+        print("%d/%d gate items satisfied; %d unmet." % (len(gated) - len(unmet), len(gated), len(unmet)))
+        if informational and not args.release_gate:
+            print("%d release-decision item(s) still open (marker / tag)."
+                  % len(informational))
         if unmet:
             print("Nothing may be marked as a supported release until every L2-L4 item is OK.")
             print("Never edit feature-matrix.json's verification field to get here.")

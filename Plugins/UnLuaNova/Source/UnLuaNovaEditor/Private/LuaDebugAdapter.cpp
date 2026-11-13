@@ -277,7 +277,10 @@ bool FLuaDebugAdapter::ReadMessage(FString& OutJson)
 
     // 头部是 ASCII，直接按字节转
     FUTF8ToTCHAR Converter(Data, HeaderEnd);
-    FString HeaderText(Converter.Length(), Converter.Get());
+    // FString(int32, const TCHAR*) is deprecated since UE 5.4; AppendChars keeps the
+    // explicit byte length without relying on a deprecated constructor.
+    FString HeaderText;
+    HeaderText.AppendChars(Converter.Get(), Converter.Length());
 
     int32 ContentLength = -1;
     TArray<FString> Lines;
@@ -298,7 +301,8 @@ bool FLuaDebugAdapter::ReadMessage(FString& OutJson)
         return false;
 
     FUTF8ToTCHAR BodyConverter(Data + HeaderEnd, ContentLength);
-    OutJson = FString(BodyConverter.Length(), BodyConverter.Get());
+    OutJson.Reset();
+    OutJson.AppendChars(BodyConverter.Get(), BodyConverter.Length());
     ReadBuffer.RemoveAt(0, HeaderEnd + ContentLength, EAllowShrinking::No);
     return true;
 }

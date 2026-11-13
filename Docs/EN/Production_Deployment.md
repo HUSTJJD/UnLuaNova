@@ -8,18 +8,23 @@ description: Pre-release checks, licence scope, security boundaries, diagnostics
 For teams integrating UnLuaNova into a shipping project. Release criteria live in
 [Release Readiness](Release_Readiness.md); API contracts in [API Stability](API_Stability.md).
 
-## 1. Pre-release checks (in order)
+## 1. Pre-release checks (one command)
 
 ```powershell
-python -B Tools/AuditRepository.py
-python -B Tools/CheckPromotion.py
-python -B Tools/ValidateProvenance.py --require-current
-.\Tools\RunDevelopmentTests.ps1 -NetMatrix          # per backend: 8 Legacy scenarios + 4 variants (independent groups)
-.\Tools\RunTests.ps1                                # complete Release
+.\Tools\RunTests.ps1
 ```
 
-`CheckPromotion.py` is read-only and never changes state for you. Nothing ships while any
-item is unmet.
+This one command already contains the repository audit, Python/PowerShell tooling
+regressions, the strict docs site build, `ValidateProvenance.py --require-current`, the
+connected matrix for both backends (8 scenarios + 4 variants each, independent groups
+rather than a cross product), execution-evidence capture for the four carriers,
+`CheckPromotion.py --release-gate --strict` and regeneration of the eight published
+markers. Each is a stage in `release-summary.json`; any failed stage fails the whole run.
+
+`CheckPromotion.py` is read-only and never changes state for you. The pipeline also prints
+the full L0-L4 report, where the published marker and release tag are human decisions -
+reported, not gating. There is no dependency to install, script to run or provenance
+check to perform separately. Nothing ships while any stage is unmet.
 
 ## 2. Licence scope
 

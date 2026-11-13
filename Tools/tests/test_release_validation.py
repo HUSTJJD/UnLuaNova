@@ -533,6 +533,14 @@ class ReleaseValidationTests(unittest.TestCase):
                             ClosedConnectionAddress="127.0.0.1:5555"
                                 if name == "SeamlessReconnect" and label == "Server" else "",
                             VisibleActorIds=[1] if name == "Relevancy" and label == "Client1" else [1, 2])
+                if name == "SchemaMismatch":
+                    # B5: three identical fingerprints only prove agreement. The gate now
+                    # also requires proof that a deliberately different layout was
+                    # injected and refused by the policy layer. Keep the fixture in sync
+                    # with that contract (LuaNetNetScenariosTest.cpp exports these fields).
+                    data.update(InjectedSchemaVersion=67890,
+                                SchemaMismatchRejected=True,
+                                SchemaMismatchReason="policy refused mismatched RPC layout")
                 (directory / f"{label}.json").write_text(json.dumps(data))
                 (directory / "logs" / f"{label}.log").write_text("scenario peer log")
 

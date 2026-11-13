@@ -45,15 +45,14 @@ boundaries, see [Testing and Automation](Testing.md).
 Local filters, Fast, NullRHI and SkipBuild belong to the separate
 `Tools/RunDevelopmentTests.ps1` and are never a release verdict.
 
-## Checks that need no compilation
+## Checks that need no compilation (integrated)
 
-```powershell
-python Tools/AuditRepository.py
-python -B -m unittest discover -s Tools/tests -p "test_*.py"
-```
-
-These commands do not start UE, UBT, CMake or an LSP build. Passing them only means
-the repository checks passed.
+The `repository-audit` and `tooling-tests` stages of `RunTests.ps1` run
+`Tools/AuditRepository.py`, `python -B -m unittest discover -s Tools/tests -p "test_*.py"`
+and `TestReleaseSupport.ps1` for you - **no manual run is needed**. The `docs-site`
+stage also performs `mkdocs build --strict`. None of these starts UE, UBT, CMake or an
+LSP build; passing them only means the repository checks passed, and the verdict still
+comes from the whole run in `release-summary.json`.
 
 ## Further reading
 

@@ -86,8 +86,12 @@ def main():
     status = "passed" if (complete and passed) else "not-passed"
 
     baseline = read_summary("baseline")
+    # The published marker must name the tree that this run actually validated.
+    # Reading baseline first used to pin every marker to the old baseline commit
+    # (347bb8c5), which is not even an ancestor of HEAD - an unreachable claim.
+    # Prefer this run; fall back to baseline only when its provenance is missing.
     commit = ""
-    for source in (baseline, latest):
+    for source in (latest, baseline):
         if isinstance(source, dict):
             value = str(source.get("provenance", {}).get("commit", ""))
             if re.fullmatch(r"[0-9a-f]{7,40}", value):

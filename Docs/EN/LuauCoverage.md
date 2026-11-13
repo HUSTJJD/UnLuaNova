@@ -107,8 +107,9 @@ python Tools/ValidateCoverage.py `
 
 `--backend Lua` is rejected directly: the plain Lua backend has no `lua_getcoverage`,
 so coverage export applies to the Luau backend only. The gate's own unit tests live in
-`Tools/tests/test_validate_coverage.py` (15 cases, no UE startup) and run with
-`python -B -m unittest discover -s Tools/tests -p "test_*.py"`.
+`Tools/tests/test_validate_coverage.py` (15 cases, no UE startup) and are executed by the
+`tooling-tests` stage of `RunTests.ps1`. Coverage export itself is an opt-in diagnostic,
+not a Release gate, so it never needs a manual run for acceptance.
 
 ## Further reading
 

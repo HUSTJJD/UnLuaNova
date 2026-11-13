@@ -80,20 +80,20 @@ UnLua 的 `ULuaFunction::IsOverridable()` 明确排除带 `FUNC_Net` 的函数�
 |---|---|
 | 手工跑用例 | `.\Tools\RunTests.ps1`（零参数，完整 Release） |
 | 无证据链 | `Tools/evidence/index.json` + `release-summary.json` + 8 个页面的生成式 marker |
-| 无来源校验 | `Tools/ValidateProvenance.py --require-current` |
+| 无来源校验 | `RunTests.ps1` 内的 `release-provenance` 阶段（`ValidateProvenance.py --require-current`） |
 
-`RunTests.ps1` 不接受参数；局部筛选、载体、分层、`-BuildOnly` 与联网矩阵属于
-`Tools/RunDevelopmentTests.ps1`。UE 6.0 冷 cook 可用 `UNLUANOVA_RELEASE_TIMEOUT_MINUTES` 调整超时。
+`RunTests.ps1` 不接受参数，联网矩阵也由它自动执行；局部筛选、载体、分层与
+`-BuildOnly` 才属于调试用的 `Tools/RunDevelopmentTests.ps1`。UE 6.0 冷 cook 可用
+`UNLUANOVA_RELEASE_TIMEOUT_MINUTES` 调整超时。
 
 ## 8. 迁移后自检
 
 ```powershell
-python -B Tools/AuditRepository.py
-python -B Tools/CheckPromotion.py
-python -B -m unittest discover -s Tools/tests -p "test_*.py"
+.\Tools\RunTests.ps1
 ```
 
-这三条都不启动 UE，只验证仓库一致性。真正的迁移验收仍需跑一次完整 Release。
+仓库审计、Python 单测、`CheckPromotion.py --release-gate --strict` 与文档站严格构建
+都是这一条命令的阶段，无需单独运行；结果以 `release-summary.json` 为准。
 
 ## 延伸阅读
 

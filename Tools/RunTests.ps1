@@ -3,11 +3,15 @@
     One-command Win64 release validation for Lua and Luau. No parameters.
 .DESCRIPTION
     Run this file with no arguments. It is the only user-facing entry point and it always
-    performs the complete Release: tool bootstrap and regressions, both backend builds,
-    generated static bindings, Editor and cooked Development automation, connected peers,
-    declaration/type checks, memory leak and performance evidence, a Development Server
-    build and Shipping packaging. Missing mandatory evidence fails. See Docs/CN/Testing.md
-    and Docs/EN/Testing.md for the current scope and remaining gaps.
+    performs the COMPLETE Release. Every check in this repository is a stage of this one
+    command: repository audit, Python/PowerShell tooling regressions, building both
+    analyzers, a strict documentation site build, both backend builds, generated static
+    bindings, Editor and cooked Development automation, connected delivery matrix
+    (8 scenarios + 4 variants per backend), declaration/type checks, memory leak and
+    performance evidence, a Development Server build, Shipping packaging, execution
+    evidence capture, provenance and promotion gates, and the eight published release
+    markers. There is no second command to remember. Missing mandatory evidence fails.
+    See Docs/CN/Testing.md and Docs/EN/Testing.md for the current scope and remaining gaps.
 
     The engine and the project are discovered automatically (UNREAL_ENGINE_PATH, the
     .uproject's registered engine build, or a neighbouring source build); results always
@@ -23,10 +27,12 @@
     UnLuaNovaDemo<Backend>{Editor,Server,''} and Backends/<Backend> outputs for DLLs,
     intermediates, staged packages, cooked assets and generated static bindings.
 
-    Selective or partial runs are not a release verdict. Developers who need a filter, a
-    carrier, a tier, -BuildOnly or the connected -NetMatrix use
-    .\Tools\RunDevelopmentTests.ps1 instead; that script is also what ReleasePipeline.ps1
-    calls internally for the per-backend automation stages.
+    Selective or partial runs are not a release verdict. Developers debugging a single
+    filter, carrier, tier or -BuildOnly may use .\Tools\RunDevelopmentTests.ps1, which
+    ReleasePipeline.ps1 also calls internally for the per-backend automation stages.
+    The connected -NetMatrix is no longer a separate opt-in command: this pipeline runs
+    it for both backends into Saved/ReleaseTests/test/net-matrix and judges it inline.
+    Any stage that fails is recorded in release-summary.json and fails the whole run.
 .EXAMPLE
     .\Tools\RunTests.ps1
 #>

@@ -53,7 +53,14 @@ namespace UnLuaNova
     template <typename T> struct TTypeIntelliSense<TSoftClassPtr<T>> { static FString GetName() { return FString::Printf(TEXT("TSoftClassPtr<%s>"), *TTypeIntelliSense<T>::GetName()); } };
     template <typename T> struct TTypeIntelliSense<TSoftObjectPtr<T>> { static FString GetName() { return FString::Printf(TEXT("TSoftObjectPtr<%s>"), *TTypeIntelliSense<T>::GetName()); } };
     template <typename T> struct TTypeIntelliSense<TWeakObjectPtr<T>> { static FString GetName() { return FString::Printf(TEXT("TWeakObjectPtr<%s>"), *TTypeIntelliSense<T>::GetName()); } };
+    // TLazyObjectPtr is deprecated in UE 5.6+ ("to be removed in 6.0"). Keep the
+    // IntelliSense specialisation for engines that still expose the type, but silence
+    // C4996 at its declaration so strict / warnings-as-errors builds stay clean.
+    // When the type is actually removed, delete this specialisation entirely:
+    // TSoftObjectPtr already has its own specialisation above.
+    PRAGMA_DISABLE_DEPRECATION_WARNINGS
     template <typename T> struct TTypeIntelliSense<TLazyObjectPtr<T>> { static FString GetName() { return FString::Printf(TEXT("TLazyObjectPtr<%s>"), *TTypeIntelliSense<T>::GetName()); } };
+    PRAGMA_ENABLE_DEPRECATION_WARNINGS
     template <typename T> struct TTypeIntelliSense<TScriptInterface<T>> { static FString GetName() { return FString::Printf(TEXT("TScriptInterface<%s>"), *TTypeIntelliSense<T>::GetName()); } };
 
     template <typename T, typename Allocator>

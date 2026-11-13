@@ -84,7 +84,8 @@ python Tools/ValidateCoverage.py `
 - 把判定写成 `coverage-gate.json`（`passed` / `errors` / 分母 / 命中数 / 覆盖率），并以退出码 1 结束失败。
 
 `--backend Lua` 会被直接拒绝：纯 Lua 后端没有 `lua_getcoverage`，覆盖率导出只适用于 Luau 后端。
-门禁自身的单元测试在 `Tools/tests/test_validate_coverage.py`（15 项，不启动 UE），随
-`python -B -m unittest discover -s Tools/tests -p "test_*.py"` 一起跑。
+门禁自身的单元测试在 `Tools/tests/test_validate_coverage.py`（15 项，不启动 UE），由
+`RunTests.ps1` 的 `tooling-tests` 阶段自动执行。覆盖率导出本身是 opt-in 诊断能力，
+不属于 Release 验收门禁，无需为了发布手工运行。
 
 相关：[Luau 后端](Luau.md) · [控制台命令](ConsoleCommand.md) · [测试架构](Testing_Architecture.md)

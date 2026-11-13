@@ -14,16 +14,22 @@ git submodule update --init --recursive   # Lua 与 Luau 都是子模块，不�
 
 1. Fork 并新建分支
 2. 改动 + 自测
-3. 跑测试：`.\Tools\RunTests.ps1`
-4. 文档站能构建：`pip install -r requirements-docs.txt` 后 `python -m mkdocs build --strict`（改了 Docs 就必须跑）
-5. 提 PR，说明动机与验证方式；涉及行为变更的，说明对现有项目的影响
+3. 跑验收：`.\Tools\RunTests.ps1` —— **这是唯一需要记住的命令**，不接受参数，
+   已包含仓库审计、Python / PowerShell 工具回归、`mkdocs build --strict` 文档站、
+   双后端自动化与打包、联网矩阵、证据 / 来源 / 转正门禁和发布标记刷新
+4. 提 PR，说明动机与验证方式；涉及行为变更的，说明对现有项目的影响
+
+需要单独装依赖、单独跑脚本、单独校验来源或单独构建文档站的时代已经结束：
+`ReleasePipeline.ps1` 把每一项都做成了阶段，任何一项失败都会写进
+`Saved/ReleaseTests/test/release-summary.json` 并让整轮失败。
 
 ## 代码
 
 * C++ 遵循仓库根目录的 `.clang-format`（Allman / 4 空格 / 120 列）；新写或大改的文件提交前格式化。
   **不要**对继承的 UnLua 源码或 `Source/ThirdParty/` 做全库重排，那会产生无法评审的 diff。
   `.editorconfig` 统一缩进与尾随空白。GitHub Actions 只构建并推送文档站，不跑代码检查；
-  格式与测试由本地 `Tools/RunTests.ps1` 和提交者自律保证。
+  本地 `Tools/RunTests.ps1` 会跑仓库审计、Python 单测、PowerShell 回归与文档站严格构建，
+  格式本身仍靠提交者自律。
 * 后端相关的改动请**两个后端都验证**（`LuaBackend=Luau` 与 `Lua`），
   或者明确用 `UNLUANOVA_HAS_*` 能力宏分支，而不是假定当前后端
 * 新增能力请在 `LuaBackend.h` 里暴露能力宏，并在 `LuaBackend.spec.cpp` 里补用例
@@ -36,9 +42,9 @@ git submodule update --init --recursive   # Lua 与 Luau 都是子模块，不�
 * 新增页面记得加 YAML front matter（`title` / `description`）、页尾「延伸阅读」
 * 行为变更要同步更新 `Docs/CN/*`、`Docs/EN/*`、`CHANGELOG.md`，涉及引擎版本 / 平台 / 后端的
   还要更新《引擎版本与平台支持矩阵》
-* **不要手工改** `release-status` / `release-provenance` 注释。跑完 Release 后流水线会调用
-  `Tools/UpdateReleaseStatus.py` 从摘要自动生成；发布决策前另跑
-  `python -B Tools/ValidateProvenance.py --require-current`
+* **不要手工改** `release-status` / `release-provenance` 注释。流水线在收尾阶段调用
+  `Tools/UpdateReleaseStatus.py` 从本轮摘要自动生成，随即执行 `--check` 自检；
+  `ValidateProvenance.py --require-current` 也是同一轮 Release 的一个阶段，无需另跑
 
 ## 报告问题
 

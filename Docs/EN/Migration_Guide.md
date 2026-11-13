@@ -87,22 +87,21 @@ before production use.
 |---|---|
 | Manual test runs | `.\Tools\RunTests.ps1` (zero parameters, complete Release) |
 | No evidence chain | `Tools/evidence/index.json` + `release-summary.json` + generated markers on eight pages |
-| No provenance check | `Tools/ValidateProvenance.py --require-current` |
+| No provenance check | The `release-provenance` stage inside `RunTests.ps1` (`ValidateProvenance.py --require-current`) |
 
-`RunTests.ps1` takes no parameters; filters, carriers, tiers, `-BuildOnly` and the net matrix
-belong to `Tools/RunDevelopmentTests.ps1`. A cold UE 6.0 cook can use
-`UNLUANOVA_RELEASE_TIMEOUT_MINUTES`.
+`RunTests.ps1` takes no parameters and runs the connected matrix itself; filters, carriers,
+tiers and `-BuildOnly` belong to the debugging tool `Tools/RunDevelopmentTests.ps1`. A cold
+UE 6.0 cook can use `UNLUANOVA_RELEASE_TIMEOUT_MINUTES`.
 
 ## 8. Post-migration checks
 
 ```powershell
-python -B Tools/AuditRepository.py
-python -B Tools/CheckPromotion.py
-python -B -m unittest discover -s Tools/tests -p "test_*.py"
+.\Tools\RunTests.ps1
 ```
 
-None of these start UE; they only verify repository consistency. A real migration still
-needs one complete Release.
+The repository audit, Python unit tests, `CheckPromotion.py --release-gate --strict` and
+the strict docs site build are all stages of this one command - none needs a separate run.
+`release-summary.json` is the verdict.
 
 ## Further reading
 

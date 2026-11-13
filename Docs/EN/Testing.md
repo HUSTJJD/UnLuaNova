@@ -6,7 +6,7 @@ description: "One release command with mandatory evidence and failure reporting"
 # Testing and Automation
 
 <!-- release-status: not-passed -->
-<!-- release-provenance: 347bb8c5 -->
+<!-- release-provenance: 0b5b29b2 -->
 
 Run from the repository root:
 
@@ -221,20 +221,26 @@ No extra command or manual `lua.memstats` toggle is required. Nine reports under
 
 This is scenario-based leak regression, not proof of process-wide memory safety. Native ownership checks do not cover every C++ allocation; GPU/RHI resources, Luau CodeGen executable pages, third-party libraries and long production sessions still need dedicated coverage. Process working-set retention alone is not evidence of a leak. `FullFix-Release-22` passed all four backend/carrier runs and evidence gates: 36 memory reports, with zero residue and accounting errors after closure.
 
-## Static release gates (no UE required)
+## Static release gates (no UE required, already integrated)
 
-These check files and JSON only - no compiler, no editor - so they can run before the
-worktree is frozen:
+**None of these needs to be run separately.** `RunTests.ps1` executes each one as a stage,
+writes the outcome into `Saved/ReleaseTests/test/release-summary.json`, and fails the whole
+run if any stage fails.
 
-```powershell
-python -B Tools/AuditRepository.py --write-matrix
-python -B -m unittest discover -s Tools/tests -p "test_*.py"
-python -B Tools/ValidateProvenance.py --run Saved\ReleaseTests\baseline --summary Saved\ReleaseTests\baseline\release-summary.json
-python -B Tools/GenerateNotices.py --check Saved\StagedBuilds\Windows\NOTICES.txt Saved\StagedBuilds\WindowsServer\NOTICES.txt
-```
+| Stage | What it runs |
+|---|---|
+| `repository-audit` | `AuditRepository.py` - capability matrix, docs, markers and provenance consistency |
+| `tooling-tests` | `unittest discover` (Python tooling regressions) + `TestReleaseSupport.ps1` (PowerShell syntax / timeout / orphan-process regressions) |
+| `docs-site` | `mkdocs build --strict`, with `requirements-docs.txt` installed into the pipeline's own venv |
+| `analyzer-*` | builds LuaLS and luau-lsp from the pinned submodules for the later type checks |
+| `evidence-index` | `RecordEvidence.py` records this run's four carrier reports |
+| `release-provenance` | `ValidateProvenance.py --require-current --run <this run>` binds the four gates to HEAD |
+| `promotion-gate` | `CheckPromotion.py --release-gate --strict` checks this run's summary, connected matrix and execution evidence; the L4 published marker and release tag are human decisions, reported but not gating |
+| `release-claims` | `UpdateReleaseStatus.py` regenerates the eight markers and immediately verifies them with `--check` |
 
-These checks validate file structure, local links, Markdown anchors and evidence consistency
-without a UE build. Runtime behaviour and platform acceptance are covered by the full Release run.
+`Tools/GenerateNotices.py` remains a standalone manifest generator. By the 2026-11-13
+maintainer decision, external provenance / asset-rights questions are no longer a release
+gate for this repository.
 
 ## Development
 
@@ -252,14 +258,11 @@ verdict into a half-covered run:
 belong to that debug driver. The nightly build installer uses it too and only verifies
 compilation.
 
-### Connected network matrix (separate opt-in)
+### Connected network matrix (Release stages, both backends)
 
-Eight connected scenarios (late join, process-level reconnect, dormancy, relevancy, join-order swap, packet loss / reordering, `UNetConnection`-level reconnect, cross-peer declaration mismatch) and the Legacy / PushOff / Iris / Cooked variants each launch three real processes, so they are not part of the ordinary test matrix or the standard Release stages:
+Eight connected scenarios (late join, process-level reconnect, dormancy, relevancy, join-order swap, packet loss / reordering, `UNetConnection`-level reconnect, cross-peer declaration mismatch) and the Legacy / PushOff / Iris / Cooked variants each launch three real processes. It **used to be a separate opt-in command; `RunTests.ps1` now runs it automatically**. The `net-matrix-Lua` / `net-matrix-Luau` stages reuse this run's already-built isolated Game / Server targets (`-SkipBuild`), write to `Saved/ReleaseTests/test/net-matrix/<Backend>/`, are judged inline by `ValidateRelease.py --net-matrix` inside `RunNetMatrix.ps1`, and are re-checked by `promotion-gate` for all four variants plus eight scenarios per backend. Each backend is 8 scenarios + 4 variants = 12 cells, **not an 8x4 cross product**.
 
-```powershell
-.\Tools\RunDevelopmentTests.ps1 -NetMatrix -Backend Lua -SkipBuild
-python Tools\ValidateRelease.py --net-matrix --run Saved\ReleaseTests\net-matrix\Lua --backend Lua --carrier game
-```
+No manual command is needed; `Tools/RunDevelopmentTests.ps1 -NetMatrix` underneath is for debugging only.
 
 `Tools/RunNetMatrix.ps1` is the underlying script. `-ExtraArgs` puts `-UnLuaNovaNetScenarios`, `-UnLuaNovaNetPktLoss=25` and the variant's real engine switch (`-UseIrisReplication=1` or a push-model cvar ini override) on the process command line; `FNetSession` forwards the scenario flag, loss percentage, exact reconnect URL and `UNLUANOVA_TEST_NET_VARIANT` to every peer.
 
@@ -267,10 +270,11 @@ python Tools\ValidateRelease.py --net-matrix --run Saved\ReleaseTests\net-matrix
 
 Each cell runs one filtered connected test and is judged by topology, three peer reports and peer logs - not by the full case inventory - so cells use `-NoReport` and are not compared with `Tools/baseline/*.json`. The UE process exit code, `Copy-Tree`'s topology check and the gate stay fail-closed. `UNLUANOVA_TEST_NET_ROOT` points at a shared directory outside the project so a Development `-game` process cannot remap project-absolute paths into its own cooked root.
 
-`AppendWorldFacts` reads cvar state, `WITH_EDITOR` and `UNetConnection` counters back, while `BuildNetDeclarationReport()` exports FProperty-derived parameter specs and `RepSchemaVersion` / `VariantRepSchemaVersion`, so neither a renamed directory nor a disagreeing declaration can pass. Artifacts land in `net/scenarios/<Name>/` and `net/variants/<Name>/DedicatedServer/`, judged into `metadata/net-matrix-gate.json`. This is **not** UE automation evidence and does not touch `Tools/evidence/index.json`. The gate fails closed on a missing topology, a missing peer log, a PID mismatch, a faked Iris/push-model/Cooked flag, a mismatched or non-discriminating declaration fingerprint, a missing Generic field / UStruct parameter, zero connection byte counters or a scenario that never ran.
+`AppendWorldFacts` reads cvar state, `WITH_EDITOR` and `UNetConnection` counters back, while `BuildNetDeclarationReport()` exports FProperty-derived parameter specs and `RepSchemaVersion` / `VariantRepSchemaVersion`, so neither a renamed directory nor a disagreeing declaration can pass. Artifacts land in `net/scenarios/<Name>/` and `net/variants/<Name>/DedicatedServer/`, judged into `metadata/net-matrix-gate.json`. This is **not** UE automation evidence; this run's `Tools/evidence/index.json` is produced by the `evidence-index` stage from the four carrier reports. The gate fails closed on a missing topology, a missing peer log, a PID mismatch, a faked Iris/push-model/Cooked flag, a mismatched or non-discriminating declaration fingerprint, a missing Generic field / UStruct parameter, zero connection byte counters or a scenario that never ran.
 
-These are maintainer operations on `Tools/ReleasePipeline.ps1`. Day-to-day acceptance is
-just the parameterless `.\Tools\RunTests.ps1` - none of these switches are needed.
+These are pipeline maintenance switches on `Tools/ReleasePipeline.ps1`. Day-to-day
+acceptance is just the parameterless `.\Tools\RunTests.ps1` - none of these switches, and
+none of the scripts above, are needed.
 
 Preview the default plan without writing config, installing tools, compiling or launching UE:
 

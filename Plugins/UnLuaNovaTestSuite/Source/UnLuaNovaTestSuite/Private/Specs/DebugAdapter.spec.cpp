@@ -67,14 +67,18 @@ namespace
             if (HeaderEnd == INDEX_NONE) return false;
 
             const FUTF8ToTCHAR Header(reinterpret_cast<const ANSICHAR*>(Pending.GetData()), HeaderEnd);
-            const FString HeaderText(Header.Length(), Header.Get());
+            // FString(int32, const TCHAR*) is deprecated since UE 5.4. AppendChars keeps
+            // the explicit length and works on every supported engine version.
+            FString HeaderText;
+            HeaderText.AppendChars(Header.Get(), Header.Length());
             int32 Length = -1;
             if (!FParse::Value(*HeaderText, TEXT("Content-Length:"), Length)
                 || Length < 0 || Length > 1024 * 1024 || Pending.Num() - HeaderEnd < Length)
                 return false;
 
             const FUTF8ToTCHAR Body(reinterpret_cast<const ANSICHAR*>(Pending.GetData() + HeaderEnd), Length);
-            Json = FString(Body.Length(), Body.Get());
+            Json.Reset();
+            Json.AppendChars(Body.Get(), Body.Length());
             Pending.RemoveAt(0, HeaderEnd + Length, EAllowShrinking::No);
             return true;
         }

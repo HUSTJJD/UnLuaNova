@@ -65,7 +65,11 @@ namespace UnLuaNova
         case LUA_TNUMBER:
             if (lua_isinteger(L, Index))
             {
-                ReadableValue = FString::Printf(TEXT("%d"), lua_tointeger(L, Index));
+                // lua_Integer is __int64 on the plain-Lua backend but int on Luau.
+                // UE 5.6+ validates printf format strings at compile time ("'%d' expects
+                // 32-bit integral arg"), so pin the argument to a 64-bit type on both
+                // backends and use the matching specifier.
+                ReadableValue = FString::Printf(TEXT("%lld"), static_cast<long long>(lua_tointeger(L, Index)));
             }
             else
             {

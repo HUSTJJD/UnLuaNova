@@ -48,7 +48,8 @@ description: UnLuaNova 公开 API 的稳定性分级、弃用周期、语义化�
 - [发布就绪度](Release_Readiness.md) 的 L2（完整 Release 通过、commit 等于 HEAD）与
   L3（联网矩阵两组独立运行全部零错误：每后端 8 个 Legacy 场景 + 4 个变体，共 12 个 cell，
   **不是 8×4 交叉**）；
-- `Tools/CheckPromotion.py` 全部 L2–L4 项为 OK；
+- `RunTests.ps1` 的 `promotion-gate` 阶段（`CheckPromotion.py --release-gate --strict`）全绿，
+  且完整 L0–L4 报告里的发布标记与 release tag 两项人工决策已确认；
 - 8 个页面的 `release-status` 由 `Tools/UpdateReleaseStatus.py` 生成为 `passed`；
 - 头文件的 `EXPERIMENTAL` 横幅、文档标题与 README 的"不建议生产"措辞统一移除；
 - `Tools/feature-matrix.json` 中 `NET-RPC` / `NET-PROPS` / `NET-TYPES` 的 status 由

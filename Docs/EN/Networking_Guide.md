@@ -138,7 +138,9 @@ lines from a `UGameInstance` world-change callback after compile verification.
 
 ## 7. Acceptance checklist
 
-- All L2–L4 items in `Tools/CheckPromotion.py` are green;
+- All L2-L4 items in `Tools/CheckPromotion.py` are green: `RunTests.ps1` runs
+  `--release-gate --strict` automatically, while the L4 published marker and release tag
+  are human decisions that are reported but do not gate the Release;
 - Per backend, 8 Legacy scenarios + 4 variants (independent groups, 12 cells) produce
   topologies and reports;
 - **Real fault injection implemented this round**: the scenario injects a different

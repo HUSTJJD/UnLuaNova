@@ -158,7 +158,7 @@ means**; both backends use identical iteration counts.
 | 🔁 | **Two backends** | [Lua 5.5.1](https://www.lua.org/) and [Luau](https://luau.org) (default), pinned as submodules |
 | 🧩 | **Glue-free interop** | UCLASS / UPROPERTY / UFUNCTION / USTRUCT / UENUM directly; Blueprint Events and Functions replaceable from Lua; TArray / TMap / TSet are reference semantics |
 | 🔍 | **Observable** | Profiler → Unreal Insights, `lua.dap`, `lua.dbg`, `lua.sandbox`, `lua.memstats`, watchdog |
-| 🩺 | **One-command acceptance** | `Tools/RunTests.ps1`; `Tools/AuditRepository.py` checks the repo without compiling |
+| 🩺 | **One-command acceptance** | `Tools/RunTests.ps1` covers the repository audit, strict docs build, connected matrix, evidence and provenance gates - no other command needed |
 | ♻️ | **Hot reload** | In-editor reload, non-structural reload in PIE, runtime script shipping |
 | 🧪 | **Tests ship with the plugin** | The `UnLuaNovaTestSuite` module plus one command; reports land in `Saved/ReleaseTests/` |
 | 🧱 | **Pure plugin** | No engine fork; the backend is a compile-time choice |
@@ -232,14 +232,22 @@ Migrating from UnLua is a rename: `UnLua` → `UnLuaNova`.
 <summary><b>③ Run the acceptance suite</b></summary>
 
 ```powershell
-.\Tools\RunTests.ps1                 # full release: both backends, networking, type checks, packaging, perf gate
-.\Tools\RunDevelopmentTests.ps1 -Filter UnLuaNova.API
-python Tools/AuditRepository.py      # repository consistency, no compile
+.\Tools\RunTests.ps1
 ```
 
-`RunTests.ps1` takes no parameters: engine discovery, both backends, output directories,
-cache and the complete matrix are all defaults. Filters, carriers, tiers, `-BuildOnly` and
-the connected matrix belong to `Tools/RunDevelopmentTests.ps1`.
+**This is the only command to run.** It takes no parameters and internally performs the
+repository audit, Python/PowerShell tooling regressions, both analyzer builds, a strict
+`mkdocs build --strict` site build, both backends' Editor / cooked / Server / Shipping
+builds and automation, the connected delivery matrix (8 scenarios + 4 variants per
+backend, 12 cells each), execution evidence capture, provenance and promotion gates, and
+finally regenerates the eight published `release-status` / `release-provenance` markers.
+Results land in `Saved/ReleaseTests/test/release-summary.{json,md}`; any failed stage fails
+the whole run.
+
+`Tools/RunDevelopmentTests.ps1` is for local debugging (`-Filter` / `-BuildOnly`) only,
+produces no release verdict and never needs to be run for acceptance. A cold UE 6.0 cook
+may need `$env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180` first - the only knob, and it
+never changes the scope of the run.
 
 </details>
 
@@ -248,11 +256,11 @@ the connected matrix belong to `Tools/RunDevelopmentTests.ps1`.
 ## 🧪 Verification status
 
 <!-- release-status: not-passed -->
-<!-- release-provenance: 347bb8c5 -->
+<!-- release-provenance: 0b5b29b2 -->
 
 The current tree has **not** passed a complete acceptance run. The latest Release (`Saved/ReleaseTests/test/release-summary.json`) is `passed=false`: `Luau-package-development` exceeded the 60-minute stage timeout during a cold UE 6.0 cook. Expect a first cook on a new engine to compile shaders from scratch.
 
-The `release-status` / `release-provenance` comments above are generated from the Release summaries by `Tools/UpdateReleaseStatus.py` and refreshed after every run; they name the comparison baseline, not the current HEAD. Whether the current tree has execution evidence is a separate question decided by `Tools/ValidateProvenance.py --require-current`. Test totals come from `release-summary.json` and are deliberately not hard-coded in a badge.
+The `release-status` / `release-provenance` comments above are generated from the Release summaries by `Tools/UpdateReleaseStatus.py` and refreshed after every run; they name the run that produced the status, while older runs remain in the comparison baseline. Whether the current tree has execution evidence is decided by the `release-provenance` stage of `ReleasePipeline.ps1` (`ValidateProvenance.py --require-current`). Test totals come from `release-summary.json` and are deliberately not hard-coded in a badge.
 
 Reproduce the gate with `.\Tools\RunTests.ps1` (see [Testing and Automation](Docs/EN/Testing.md)); a cold UE 6.0 cook may need `$env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180`. Verified combinations are listed in the [Engine and Platform Support Matrix](Docs/EN/Engine_Support.md).
 

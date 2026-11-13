@@ -1,9 +1,182 @@
 # Changelog
 
 <!-- release-status: not-passed -->
-<!-- release-provenance: 347bb8c5 -->
+<!-- release-provenance: 0b5b29b2 -->
 
 本文件记录面向使用者的版本变更。开发过程中的验证记录与实现细节保留在 Git 历史中。
+
+## 2026-11-13（第五轮：旧布局 DLL 并存与 manifest 冲突）
+
+第五轮日志：Lua 切换**成功**（`Lua-activate-backend.log` 记录了 12 个 Disable），
+但 `Lua-static-bindings` 仍报 `Trying to recreate changed class
+'UUnLuaNovaReplicationComponent' outside of hot reload and live coding`；
+`Luau-activate-backend` 另抛 `Both '...modules' and '...modules.disabled' exist`。
+
+**证据**
+
+- 顶层 `Plugins/UnLuaNova/Binaries/Win64/UnrealEditor-UnLuaNova.dll` 时间戳 11-10、
+  二进制不含 `RpcSchemaVersion`（旧 UCLASS 布局）；`Backends/{Lua,Luau}/` 下同名
+  DLL 时间戳 11-13、含该字段（新布局）。三份 DLL 都注册
+  `UUnLuaNovaReplicationComponent`。
+- 引擎 `UObjectBase.cpp:861` 在 `FClassDeferredRegistry::AddResult::ExistingChanged`
+  （同名类注册两次且 UHT reload version 不同）时 Fatal。仅禁用顶层 manifest
+  不足以阻止 UE 按 `UnrealEditor-<Module>.dll` 回退扫描旧 DLL。
+- UBT 每次构建都重写 live `*.modules`，与上一轮切换留下的 `*.modules.disabled`
+  并存（实测 6 处），触发 `Set-ManifestEnabled` 的 "Resolve by hand" 抛错。
+
+**修复**
+
+- 新增 `legacy-layout-cleanup` 阶段（`RequiredStages` 第 41 项）：把六个
+  `Binaries/Win64` 顶层的 `UnrealEditor-*.dll` 与 `*.modules*` 归档到
+  `Saved/LegacyLayout/<时间戳>/`（可逆、不删除），只保留 `Backends/<Backend>/`
+  的隔离产物，消除新旧 UCLASS 布局并存。
+- `SwitchBackend.ps1`：`Set-ManifestEnabled` 遇到 live + disabled 并存时以 UBT
+  刚写的 live 为准清理过期副本；移除主循环里对应的 throw。DryRun 清单同步。
+
+**验证**：`-Backend Lua -DryRun` 输出 `would drop stale ...` 并正常结束
+（`Active : Lua`）、无异常；210 个 Python 单测 OK；14 个脚本语法解析 0 失败；
+41 个必需阶段均有对应 `Invoke-Stage`。未跑 UE 构建、Release 或联网矩阵。
+
+## 2026-11-13（第四轮：UCLASS 重复注册 / 后端 manifest 枚举根因）
+
+全量重建后，`Lua-static-bindings` 与 `Luau-static-bindings` 的 commandlet 均崩溃：
+`Fatal error: Trying to recreate changed class 'UUnLuaNovaReplicationComponent'
+outside of hot reload and live coding`，随后 `Plugin 'UnLuaNova' failed to load`，
+automation 两后端均报 `0 tests`、基线漂移 `-690` / `-715`。
+
+**根因**：`SwitchBackend.ps1` 的 `Get-ManifestEntries` 用 `Get-ChildItem -File`
+（不递归）枚举 `Binaries/Win64`，只能看到顶层 Default manifest，看不到隔离布局
+`Backends/<Backend>/*.modules`。于是 `$HasTargetIsolated` 恒为 false，Default
+manifest 永远保持 live，Lua / Luau 的 manifest 从未被纳入切换。实测磁盘
+18 个 `*.modules` 全部 live、0 个 `.disabled`，`-Status` 报
+`AMBIGUOUS: Lua, Luau` —— 引擎把同一模块从三套 DLL 加载多次；普通布局的旧 DLL
+不含新增的 `RpcSchemaVersion`，与隔离布局的新 DLL 布局冲突，正是该 fatal error
+的来源。上一轮只补了 `$AnyLive` 检查，掩盖了报错却没有收敛状态。
+
+**修复**：`Get-ManifestEntries` 改为递归枚举（`-Filter '*.modules*'` 同时匹配
+`*.modules.disabled`），按完整相对路径计算 Zone / Live / Disabled；撤掉上一轮的
+`$AnyLive` 直接检查补丁，让枚举结果成为唯一事实来源。
+
+**旁证**：UHT 产物核对——`Inc/Backends/{Lua,Luau}/...gen.cpp` 均含
+`RpcSchemaVersion`，普通布局 `Inc/UnLuaNova/UHT/...gen.cpp` 仍是旧布局，
+印证「旧 DLL + 新 DLL 同时加载」而非 UHT 未重跑。
+
+**验证**：210 个 Python 单测 OK；`-Status` 正确报告三个 zone 的歧义状态，
+`-DryRun -Backend Lua` 正确禁用 Luau 与 Default、保留 Lua；14 个脚本语法解析
+0 失败。未跑 UE 构建、Release 或联网矩阵。
+
+## 2026-11-13（第三轮：审计文案同步）
+
+上一轮把 `AuditRepository.py` 的 provenance 错误从
+`do not match baseline commit ...` 改为 `do not name a known run ...`，但
+`Tools/tests/test_audit_repository.py:148` 仍按旧文案断言，导致 `tooling-tests`
+阶段 210 个单测中 1 个失败。现更新断言，并补一条正向用例：test 摘要指向已发布
+的提交时，即使 baseline 不一致也不会再报 provenance 错误（即新的「baseline /
+test / 当前 HEAD」契约）。
+
+复跑 `python -B -m unittest discover -s Tools/tests -p 'test_*.py'`：
+`Ran 210 tests ... OK`（EXIT=0）。同时扫描确认 `Tools/` 下已无其它硬编码的
+旧阶段数或旧错误文案依赖。仅运行 Python 单测，未跑 UE 构建、Release、mkdocs
+或联网矩阵。
+
+## 2026-11-13（第二轮统一验收反馈修复）
+
+`RunTests.ps1` 第二轮暴露三类问题，逐项修复。
+
+**契约冲突（流水线自我破坏）**
+
+- 上一轮把 `UpdateReleaseStatus.py` 的 provenance 改为优先取本轮 HEAD，
+  但 `AuditRepository.py:396` 仍硬绑定 baseline commit `347bb8c5`。收尾写入
+  `0b5b29b2` 后，下一轮 `repository-audit` 必然失败。现改为接受
+  「baseline / test / 当前 HEAD」任一已知运行的提交；README 中英说明同步改为
+  「产生该状态的那次运行」。
+- `TestReleaseSupport.ps1:234` 硬编码 `blocked.Count -eq 33`（旧阶段数），新增阶段后
+  必然失败。`Write-ReleaseSummary` 增加 `required_stages` 字段，测试改为按名字集合
+  断言所有阶段都出现在摘要里，以后加阶段不会再失效。
+
+**后端激活与缓存污染**
+
+- `SwitchBackend.ps1` 的 manifest 枚举只看 `Binaries/Win64` 顶层文件，看不到隔离布局
+  `Backends/<Backend>/*.modules`，导致 `-Backend Lua|Luau` 恒抛
+  `No live ... found`。补上隔离目录的直接检查（含 `*.disabled` 判定）。
+- 失败轮可能留下「缓存命中但产物不完整」的条目（UBT 写了 DLL / 定义头，却没有
+  modules manifest、cooked 资源或 staged peer），下一轮跳过构建后 automation 报 0 用例、
+  基线漂移 `-690`。现让流水线读到上一轮 `passed=false` 时自动禁用构建缓存、强制全量
+  重建一次；跑绿后恢复正常缓存，无需手工加 `-NoCache`。
+- `release-claims` 增加 `tool-environment` 依赖，缺引擎的 preflight 不再产生
+  `FilePath` 为空的噪声。
+
+**验证**：`AuditRepository.py` 复跑 `EXIT=0`（`Repository audit passed`）；
+`TestReleaseSupport.ps1` 复跑打印 `Release support tests passed.`；14 个 PowerShell AST、
+23 个 Python AST、7 个 JSON、2 个 YAML、75 个 nav 目标、CN/EN 37=37、8 处 marker
+一致全部通过。仅运行了这两个轻量门禁脚本，未跑 UE 构建、Release、mkdocs 或联网矩阵。
+
+## 2026-11-13（首轮统一验收的失败修复）
+
+`RunTests.ps1` 首轮跑到 `tooling-tests` 即失败（210 个单测 2 个失败）：上一轮 B5 把
+`ValidateRelease.py` 的 SchemaMismatch 判定升级为「必须证明真实故障注入与策略层拒收」，
+但 `Tools/tests/test_release_validation.py::scenario_evidence` 的 fixture 没有对应字段。
+已给 fixture 补 `InjectedSchemaVersion` / `SchemaMismatchRejected` /
+`SchemaMismatchReason`；并核对 C++ 侧 `LuaNetNetScenariosTest.cpp:196-199` 确实导出这三项、
+`FUnLuaNovaNetPolicy::NegotiateSchema` 在指纹不同时返回 `SchemaIncompatible` 并填写 Reason。
+复跑流水线同一条 `unittest discover`：**210 tests OK**。
+
+另给 `docs-site` 阶段加自愈探测：缓存命中但 venv 缺 `mkdocs-material` 时按需安装，
+不依赖 pip 缓存指纹是否命中。本轮只运行了 Python 单测（非 UE 构建），
+未跑 UE 构建、Release、mkdocs 或联网矩阵。
+
+## 2026-11-13（唯一入口收敛：RunTests.ps1 覆盖全部 Release 检查）
+
+维护者决策：今后只运行 `.\Tools\RunTests.ps1`，不再记忆任何额外命令。
+`ReleasePipeline.ps1` 把此前散落在验证清单里的每一项都做成了阶段，任一失败都会写入
+`release-summary.json` 并让整轮失败。
+
+**新增阶段**
+
+- `docs-site`：`mkdocs build --strict`（`-f` 指定配置，产物写入本轮目录），
+  `requirements-docs.txt` 由流水线 venv 安装并纳入依赖指纹
+- `net-matrix-Lua` / `net-matrix-Luau`：8 场景 + 4 变体两组独立运行（每后端 12 个 cell，
+  **非 8×4 交叉**），复用本轮已构建的隔离 target（`-SkipBuild`），产物写入
+  `Saved/ReleaseTests/test/net-matrix/<Backend>/`，由 `RunNetMatrix.ps1` 内置的
+  `ValidateRelease.py --net-matrix` 判定
+- `evidence-index`：为四份 carrier 报告调用 `RecordEvidence.py`，补上「证据采集」与
+  「来源判定」之间的断层
+- `release-provenance`：`ValidateProvenance.py --require-current --run <本轮目录>`，
+  校验四份 gate 与当前 HEAD 的绑定
+- `promotion-gate`：`CheckPromotion.py --release-gate --strict`，另打印完整 L0–L4 报告
+- `release-claims`：生成 8 处 marker 后立即执行 `--check` 自检
+
+**缺陷修复**
+
+- `release-claims` 以前是手写块：失败只追加一个 failed stage，不重写
+  `release-summary.json`，摘要里的 `passed` 可能仍为 true。现改为 `Invoke-Stage`，
+  失败必然写回摘要并让整轮 `exit 1`
+- `UpdateReleaseStatus.py` 的 provenance 以前优先取 baseline 的 commit，导致 8 处 marker
+  长期指向已脱离分支的 `347bb8c5`；现优先取本轮 HEAD
+- `CheckPromotion.py` 增加 `--release-gate` / `--run` / `--net-root`：把「已发布的
+  passed 声明」与「release tag」两项人工决策降级为信息项，否则接入流水线会让每轮必然失败
+
+**文档**：CN/EN `Testing`、`Testing_Architecture`、`Production_Deployment`、
+`Migration_Guide`、`Release_Readiness`、`API_Stability`、`Networking_Guide`、
+`LuauCoverage`，以及 `README` / `README_EN` / `CONTRIBUTING` / `RunTests.ps1` 注释，
+全部改为「只运行 `RunTests.ps1`」。
+
+本轮**未运行任何构建、测试、mkdocs 或 UE**，仅做语法级自检。
+
+## 2026-11-13（UE 6.0 首次构建失败修复 / 待重跑验证）
+
+依据 `Saved/ReleaseTests/test/logs/Lua-editor-build.log` 修复；本轮为静态改动，**未重跑构建**。
+
+- 修 `UnLuaNovaDebugBase.cpp:68` 的 `error C7595`：UE 5.6+ 编译期格式串检查
+  （`'%d' expects 32-bit integral arg`）与 plain-Lua 后端 64 位 `lua_Integer` 冲突。
+  改为 `%lld` + `static_cast<long long>`，与 `UnLuaNovaNetTypeSpec.cpp` 既有写法一致，
+  且同时兼容 Luau 后端 32 位 `lua_Integer`
+- 消除同轮 8 条 `C4996`：4 处 `FString(int32, const TCHAR*)` 弃用构造改为
+  `Reset()` + `AppendChars()`（`LuaDebugAdapter.cpp`、`DebugAdapter.spec.cpp`）；
+  `UnLuaNovaEx.inl` 的 `TLazyObjectPtr` IntelliSense 特化用跨平台
+  `PRAGMA_DISABLE_DEPRECATION_WARNINGS` 包裹，功能不变
+- 该次日志只执行了 18 步中的 9 步（UBA 在首个错误后取消剩余步骤）；已全量扫描
+  printf 风格格式串，未发现其他 64 位参数与 `%d` / `%u` 混用
 
 ## 2026-11-13（范围收敛 + 5 项源码缺陷修复 / 待编译与运行验证）
 

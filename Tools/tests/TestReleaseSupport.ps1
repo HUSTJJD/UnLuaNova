@@ -231,7 +231,14 @@ try {
     Assert $Failed 'Missing engine was accepted'
     $Summary = Get-Content (Join-Path $FailedOutput 'release-summary.json') -Raw | ConvertFrom-Json
     Assert ($Summary.complete -and -not $Summary.passed) 'Failed preflight lost the aggregate verdict'
-    Assert (@($Summary.stages | Where-Object status -eq 'blocked').Count -eq 33) 'Unexecuted stages disappeared from summary'
+    # The stage list grows whenever a check is added to the Release. Assert by name
+    # against the pipeline's own required-stage list rather than a hard-coded count:
+    # every stage that never ran must still be present in the summary.
+    $Required = @($Summary.required_stages)
+    $Seen = @($Summary.stages | ForEach-Object { $_.name })
+    $Absent = @($Required | Where-Object { $Seen -notcontains $_ })
+    Assert ($Required.Count -gt 0 -and $Absent.Count -eq 0) `
+        ('Unexecuted stages disappeared from summary: ' + ($Absent -join ', '))
     Assert ((Get-FileHash $Before.Path).Hash -eq $Before.Hash) 'Failed preflight modified project config'
     Write-Host 'Release support tests passed.'
 } finally {

@@ -6,7 +6,7 @@ description: "单入口 release 验证与失败判定"
 # 测试与自动化
 
 <!-- release-status: not-passed -->
-<!-- release-provenance: 347bb8c5 -->
+<!-- release-provenance: 0b5b29b2 -->
 
 维护者只需在仓库根目录运行：
 
@@ -202,16 +202,24 @@ Editor 局部调试默认使用当前 Editor 程序启动全部 peer，避免混
 
 这些是指定场景的泄漏回归，不是全进程内存安全证明。原生资源检查尚不等于覆盖每一处 C++ 分配；GPU/RHI、Luau CodeGen 可执行页、第三方库和长时间线上工作负载仍需专项检测。进程工作集未下降也不能单独判为泄漏。
 
-## 静态发布门禁（无需 UE）
+## 静态发布门禁（无需 UE，已集成到唯一入口）
 
-下面这些只检查仓库里的文件与 JSON，不编译、不启动 UE，可以在冻结工作树之前先跑：
+以下检查**都不需要单独运行**：`RunTests.ps1` 把它们作为阶段自动执行，结果写入
+`Saved/ReleaseTests/test/release-summary.json`，任一阶段失败即整轮失败。
 
-```powershell
-python -B Tools/AuditRepository.py --write-matrix
-python -B -m unittest discover -s Tools/tests -p "test_*.py"
-python -B Tools/ValidateProvenance.py --run Saved\ReleaseTests\baseline --summary Saved\ReleaseTests\baseline\release-summary.json
-python -B Tools/GenerateNotices.py --check Saved\StagedBuilds\Windows\NOTICES.txt Saved\StagedBuilds\WindowsServer\NOTICES.txt
-```
+| 阶段 | 内容 |
+|---|---|
+| `repository-audit` | `AuditRepository.py`：能力矩阵、文档、marker 与来源一致性 |
+| `tooling-tests` | `unittest discover`（Python 工具回归）+ `TestReleaseSupport.ps1`（PowerShell 语法 / 超时 / 孤儿进程回归） |
+| `docs-site` | `mkdocs build --strict`，依赖由 `requirements-docs.txt` 装进流水线自己的 venv |
+| `analyzer-*` | 从 pinned submodule 编译 LuaLS 与 luau-lsp，供后续类型检查使用 |
+| `evidence-index` | `RecordEvidence.py` 为本轮四份 carrier 报告写入执行证据 |
+| `release-provenance` | `ValidateProvenance.py --require-current --run <本轮目录>`，校验四份 gate 与当前 HEAD 的绑定 |
+| `promotion-gate` | `CheckPromotion.py --release-gate --strict`，校验本轮摘要、联网矩阵与执行证据；L4 的发布标记与 tag 属人工决策，只报告不阻断 |
+| `release-claims` | `UpdateReleaseStatus.py` 生成 8 处 marker，随即执行 `--check` 自检 |
+
+`Tools/GenerateNotices.py` 保留为独立的清单生成工具；按 2026-11-13 维护者决策，
+外部来源 / 资产授权问题不再作为本仓库的发布门禁。
 
 ## 开发调试
 
@@ -226,16 +234,18 @@ python -B Tools/GenerateNotices.py --check Saved\StagedBuilds\Windows\NOTICES.tx
 
 `-SkipBuild`、`-BuildOnly`、`-NullRHI`、`-NoReport`、单后端和自定义 filter 都属于这个调试脚本。旧的 nightly build 注册器也用它，仅检查编译，不代表 release 验收。
 
-### 联网矩阵（独立 opt-in）
+### 联网矩阵（Release 阶段，双后端）
 
 八类连接场景（晚加入、进程级重连、dormancy、relevancy、加入顺序互换、丢包/乱序、
 `UNetConnection` 级重连、跨 peer 声明差异）与 Legacy / PushOff / Iris / Cooked
-四个变体各起三个真实进程，不进普通测试矩阵，也不属于常规 Release 阶段：
+四个变体各起三个真实进程。它**曾经是独立 opt-in 命令，现在由 `RunTests.ps1` 自动执行**：
+`net-matrix-Lua` / `net-matrix-Luau` 两个阶段复用本轮已构建的隔离 Game / Server target
+（`-SkipBuild`），产物写入 `Saved/ReleaseTests/test/net-matrix/<Backend>/`，由
+`RunNetMatrix.ps1` 内部的 `ValidateRelease.py --net-matrix` 直接判定，
+`promotion-gate` 再检查两后端各 4 变体 + 8 场景的拓扑齐全。每后端是 8 个场景 +
+4 个变体共 12 个 cell，**不是 8×4 交叉矩阵**。
 
-```powershell
-.\Tools\RunDevelopmentTests.ps1 -NetMatrix -Backend Lua -SkipBuild
-python Tools\ValidateRelease.py --net-matrix --run Saved\ReleaseTests\net-matrix\Lua --backend Lua --carrier game
-```
+无需手工运行任何命令；下层 `Tools/RunDevelopmentTests.ps1 -NetMatrix` 仅供调试。
 
 底层脚本是 `Tools/RunNetMatrix.ps1`；`-ExtraArgs` 把 `-UnLuaNovaNetScenarios`、
 `-UnLuaNovaNetPktLoss=25` 和变体的真实引擎开关（`-UseIrisReplication=1` 或 push-model cvar 的
@@ -258,12 +268,13 @@ ini 覆盖）传到进程命令行，`FNetSession` 再把场景开关、丢包�
 读回状态写进报告，`BuildNetDeclarationReport()` 导出真实 FProperty 参数规格与
 `RepSchemaVersion` / `VariantRepSchemaVersion`，因此改目录名冒充不了变体、声明不一致也混不过去。产物落在
 `net/scenarios/<Name>/` 与 `net/variants/<Name>/DedicatedServer/`，由 `metadata/net-matrix-gate.json`
-判定；它**不是** UE automation evidence，也不写 `Tools/evidence/index.json`。
+判定；它**不是** UE automation evidence。本轮的 `Tools/evidence/index.json` 由
+`evidence-index` 阶段从四份 carrier 报告生成。
 该门禁 fail-closed：缺拓扑、缺 peer 日志、PID 不符、伪造 Iris/push-model/Cooked 标志、
 声明指纹不一致或不可区分、缺 Generic 字段 / UStruct 参数、连接字节计数为零、场景没跑，都会失败。
 
-下面是维护者操作，直接调用 `Tools/ReleasePipeline.ps1`；日常验收只需无参的
-`.\Tools\RunTests.ps1`，不需要以下任何开关。
+下面是流水线维护开关，直接调用 `Tools/ReleasePipeline.ps1`；日常验收只需无参的
+`.\Tools\RunTests.ps1`，不需要以下任何开关，也不需要上面任何脚本。
 
 只看默认计划、不修改配置、不安装工具、不启动编译或 UE：
 

@@ -51,7 +51,9 @@ This cannot be done by editing documentation. All of the following must hold:
 - [Release Readiness](Release_Readiness.md) L2 (complete Release passed, commit equals HEAD)
   and L3 (net matrix zero errors across two independent groups: 8 Legacy scenarios + 4
   variants per backend = 12 cells per backend, **not an 8 x 4 cross product**);
-- every L2–L4 item in `Tools/CheckPromotion.py` is OK;
+- the `promotion-gate` stage of `RunTests.ps1` (`CheckPromotion.py --release-gate --strict`)
+  is green, and the two human decisions in the full L0-L4 report (published marker and
+  release tag) are confirmed;
 - `Tools/UpdateReleaseStatus.py` has generated `release-status: passed` on all eight pages;
 - all `EXPERIMENTAL` banners, doc titles and "not for production" wording are removed;
 - `NET-RPC` / `NET-PROPS` / `NET-TYPES` in `Tools/feature-matrix.json` move from

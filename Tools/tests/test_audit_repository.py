@@ -145,8 +145,19 @@ class AuditRepositoryTests(unittest.TestCase):
             "automation": [{"total": 626}, {"total": 600}, {"total": 641}, {"total": 615}],
         }), encoding="utf-8")
         errors = audit.validate_release_docs(self.root)
-        self.assertTrue(any("do not match baseline commit" in error for error in errors))
+        # A published marker may name the baseline, the test run or the current HEAD.
+        # Once the baseline moves to an unrelated commit, the 347bb8c5 claim is no
+        # longer backed by any known run and must be rejected.
+        self.assertTrue(any("do not name a known run" in error for error in errors))
         self.assertTrue(any("33/33 claim disagrees" in error for error in errors))
+        # New contract: a test summary naming the published commit makes the claim
+        # known again even though the baseline still disagrees.
+        self._write_summary("test", {
+            "complete": True, "passed": False,
+            "provenance": {"commit": "347bb8c5" + "0" * 32},
+        })
+        errors = audit.validate_release_docs(self.root)
+        self.assertFalse(any("do not name a known run" in error for error in errors))
 
     # ── link / anchor checks added for the seventh release-readiness pass ──
 

@@ -129,7 +129,8 @@ UnLuaNova::FUnLuaNovaNetPolicy::Get().CompleteSeamlessTravel();
 
 ## 7. 验收清单
 
-- `Tools/CheckPromotion.py` 的 L2–L4 全绿；
+- `CheckPromotion.py` 的 L2–L4 全绿：`RunTests.ps1` 自动跑 `--release-gate --strict`，
+  L4 的发布标记与 release tag 属人工决策，只报告不阻断；
 - 每后端 8 个 Legacy 场景 + 4 个变体（两组独立，共 12 cell）拓扑与报告齐全；
 - **真实故障注入已实现**（本轮）：场景内注入不同指纹并走真实协商路径，门禁强制要求
   `InjectedSchemaVersion` / `SchemaMismatchRejected` / `SchemaMismatchReason`；待运行验证；

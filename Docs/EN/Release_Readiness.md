@@ -44,7 +44,7 @@ no way to bypass them.
 
 | # | Condition | Evidence / command | Now |
 |---|---|---|---|
-| 1 | Per backend, 4 variants (Legacy / PushOff / Iris / Cooked) with three-peer topologies | `.\Tools\RunDevelopmentTests.ps1 -NetMatrix` + `Saved/ReleaseTests/net-matrix/<Backend>/net/variants/*/DedicatedServer/topology.json` | Unmet: Luau has only Cooked |
+| 1 | Per backend, 4 variants (Legacy / PushOff / Iris / Cooked) with three-peer topologies | The `net-matrix-Lua` / `net-matrix-Luau` stages of `RunTests.ps1` + `Saved/ReleaseTests/test/net-matrix/<Backend>/net/variants/*/DedicatedServer/topology.json` | Unmet: Luau has only Cooked |
 | 2 | Per backend, all eight scenarios (LateJoin / Reconnect / Dormancy / Relevancy / JoinOrderSwap / PacketLoss / SeamlessReconnect / SchemaMismatch) produce topology and reports | Same, `net/scenarios/*/topology.json` | Unmet: five Luau scenarios missing |
 
 > **Matrix shape (do not estimate as a cross product)**: `Tools/RunNetMatrix.ps1`
@@ -53,7 +53,8 @@ no way to bypass them.
 > (`:155-197`). That is **8 + 4 = 12 cells per backend**, 24 for both, **not 8 x 4 = 32
 > cross-product cells**. The scenarios have never run under Iris / PushOff / Cooked;
 > extending them there is new work and should be scoped separately.
-> `Docs/EN/Testing.md` lists both groups in one section, which is easy to misread.
+> `Docs/EN/Testing.md` now states the two independent groups explicitly. Both are
+> executed automatically by `RunTests.ps1`; no separate `RunNetMatrix.ps1` command is needed.
 | 3 | `ValidateRelease.py --net-matrix` reports zero errors | Gate output | Unmet |
 | 4 | A non-owner Server RPC is rejected (unique token + exact CallLog) | DS scenario assertion | Assertion exists in source, unexecuted |
 | 5 | `RepSchemaVersion` matches on all three peers; `VariantRepSchemaVersion` discriminates | Declaration report | Export exists in source, unexecuted |
@@ -92,18 +93,20 @@ rejected; `RefreshDeclaration()` behaves correctly on cooked / Shipping carriers
 ## Prohibited shortcuts
 
 - Never hand-edit `feature-matrix.json`'s `verification`.
-- Never mark NET-* as `implemented`, or remove experimental markers, before `RunNetMatrix.ps1`
-  has passed.
+- Never mark NET-* as `implemented`, or remove experimental markers, before the
+  `net-matrix-Lua` / `net-matrix-Luau` stages of `RunTests.ps1` are green.
 - Never refresh a release claim from a failed run, or one whose `provenance.commit` is not HEAD.
 - Never treat "an assertion exists in source" as "the assertion ran".
 
 ## Current state (2026-11-13)
 
-`Tools/CheckPromotion.py` reports read-only results against this checklist. Known today: the
-latest Release is `passed=false` (`Luau-package-development` hit the 60-minute timeout on a
-cold UE 6.0 cook), the eight markers read `not-passed`, the Luau net-matrix Editor process
-exited with 255, and the five source-level defects listed above still need fixing.
-**No experimental capability currently satisfies the promotion criteria.**
+`Tools/CheckPromotion.py --release-gate --strict` now runs automatically as the
+`promotion-gate` stage of `RunTests.ps1` (the L4 published marker and release tag are
+human decisions, reported but not gating). Known today: the latest Release is
+`passed=false` (`Luau-package-development` hit the 60-minute timeout on a cold UE 6.0
+cook), the eight markers read `not-passed`, the Luau net-matrix Editor process exited
+with 255, and the five source-level defects are fixed but **not yet compiled or
+executed**. **No experimental capability currently satisfies the promotion criteria.**
 
 ## Further reading
 

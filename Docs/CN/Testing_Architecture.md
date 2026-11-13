@@ -26,11 +26,10 @@
 
 局部 filter、Fast、NullRHI 或 SkipBuild 属于独立的 `Tools/RunDevelopmentTests.ps1`，不能作为 release 结果。
 
-## 无编译检查
+## 无编译检查（已集成到唯一入口）
 
-```powershell
-python Tools/AuditRepository.py
-python -B -m unittest discover -s Tools/tests -p "test_*.py"
-```
-
-这些命令不会启动 UE、UBT、CMake 或 LSP 构建。它们通过只能说明仓库检查通过。
+`RunTests.ps1` 的 `repository-audit` 与 `tooling-tests` 阶段分别执行
+`Tools/AuditRepository.py`、`python -B -m unittest discover -s Tools/tests -p "test_*.py"`
+与 `TestReleaseSupport.ps1`，**无需手工运行**；`docs-site` 阶段还会做
+`mkdocs build --strict`。这些检查不启动 UE、UBT、CMake 或 LSP 构建，通过只说明仓库
+检查通过，最终判定仍以 `release-summary.json` 的整轮结果为准。

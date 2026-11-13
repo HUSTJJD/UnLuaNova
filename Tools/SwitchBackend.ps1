@@ -163,19 +163,29 @@ function Get-ManifestEntries {
     param([string] $Root)
 
     $Entries = @{}
-    if (-not (Test-Path -LiteralPath $Root)) { return @() }
-    foreach ($F in @(Get-ChildItem -LiteralPath $Root -File -ErrorAction SilentlyContinue)) {
-        $Name = $F.Name
-        $IsDisabled = $Name.EndsWith($DisabledSuffix)
-        if ($IsDisabled) { $Name = $Name.Substring(0, $Name.Length - $DisabledSuffix.Length) }
-        if ($Name -notlike $ManifestPattern) { continue }
+    $FullRoot = [IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
+    if (-not (Test-Path -LiteralPath $FullRoot)) { return @() }
+    # UBT writes isolated targets' UBT_MODULE_MANIFEST under Backends/<Backend>/.
+    # A flat enumeration only ever sees the ordinary root-level manifest, so
+    # Default + Lua + Luau stay live at once and UE loads the same module from
+    # several DLLs - "Trying to recreate changed class ... outside of hot reload".
+    # -Filter *.modules* keeps the recursive walk to manifest files only and also
+    # matches the *.modules.disabled form.
+    foreach ($F in @(Get-ChildItem -LiteralPath $FullRoot -File -Recurse `
+            -Filter ($ManifestPattern + '*') -ErrorAction SilentlyContinue)) {
+        $Rel = $F.FullName.Substring($FullRoot.Length).TrimStart('\', '/')
+        $IsDisabled = $Rel.EndsWith($DisabledSuffix)
+        $Logical = if ($IsDisabled) {
+            $Rel.Substring(0, $Rel.Length - $DisabledSuffix.Length)
+        } else { $Rel }
+        if ($Logical -notlike $ManifestPattern) { continue }
 
-        $LivePath = Join-Path $Root $Name
+        $LivePath = Join-Path $FullRoot $Logical
         if (-not $Entries.ContainsKey($LivePath)) {
-            $Rel = $LivePath.Substring($Root.Length).TrimStart('\', '/')
-            $Parts = $Rel -split '[\\/]'
+            $Parts = $Logical -split '[\\/]'
             $Zone = "Default"
-            if ($Parts.Count -ge 3 -and $Parts[0] -eq $IsolatedDir -and ($Backends -contains $Parts[1])) {
+            if ($Parts.Count -ge 3 -and $Parts[0] -eq $IsolatedDir -and
+                ($Backends -contains $Parts[1])) {
                 $Zone = $Parts[1]
             }
             $Entries[$LivePath] = [pscustomobject]@{
@@ -196,6 +206,15 @@ function Set-ManifestEnabled {
     $Disabled = "$Path$DisabledSuffix"
     $LiveExists = Test-Path -LiteralPath $Path
     $DisabledExists = Test-Path -LiteralPath $Disabled
+    # UBT rewrites the live manifest on every build, while a switch from the previous
+    # run may have left a *.modules.disabled copy. The live file is authoritative (UBT
+    # just wrote it); drop the stale copy instead of refusing to switch. This is the
+    # normal case after building the backend that was disabled one stage earlier.
+    if ($LiveExists -and $DisabledExists) {
+        if ($DryRun) { Write-Host "DryRun   : would drop stale $Disabled" }
+        else { [System.IO.File]::Delete($Disabled) }
+        $DisabledExists = $false
+    }
     if ($Enabled) {
         if ($LiveExists) { return }
         if (-not $DisabledExists) { return }
@@ -249,9 +268,8 @@ foreach ($Root in $BinariesRoots) {
         @($Entries | Where-Object { $_.Zone -eq $Backend }).Count -gt 0
 
     foreach ($E in $Entries) {
-        if ($E.Live -and $E.Disabled) {
-            throw "Both '$($E.Path)' and '$($E.Path)$DisabledSuffix' exist. Resolve by hand before switching (refusing to delete a manifest)."
-        }
+        # Live + disabled is resolved inside Set-ManifestEnabled: UBT rewrites the
+        # live manifest on every build, so the disabled copy is always the stale one.
         $Enable = $false
         if ($E.Zone -eq "Default") {
             $Enable = ($Backend -eq "Default") -or (-not $HasTargetIsolated)
@@ -284,6 +302,9 @@ Switching backends never compiles; it only changes which prebuilt manifest is li
     $AnyLive = $false
     foreach ($Root in $BinariesRoots) {
         if ($DryRun) { $AnyLive = $true; break }
+        # Since Get-ManifestEntries now walks Backends/<Backend>/ recursively, this
+        # is the single source of truth for what is live. A manifest explicitly
+        # renamed to *.disabled is not live.
         foreach ($E in @(Get-ManifestEntries -Root $Root)) {
             if ($E.Zone -eq $Backend -and $E.Live -and -not $E.Disabled) { $AnyLive = $true }
         }

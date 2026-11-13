@@ -45,25 +45,30 @@ if ($DryRun) {
     Write-Host @'
 Release / Win64 / Lua + Luau (no operations performed):
   1. Lock project; snapshot config/environment and source provenance.
-  2. Initialize pinned submodules; prepare isolated Python tools and MSVC environment.
-  3. Repository audit, Python and PowerShell tooling regressions; build both analyzers.
+  2. Initialize pinned submodules; prepare isolated Python tools and MSVC environment;
+     archive stale ordinary-layout DLLs/manifests so only one backend's UCLASS layout
+     is visible to the engine.
+  3. Repository audit, Python/PowerShell tooling regressions, both analyzers, and a
+     strict documentation site build.
   4. Per backend: enable features; build Editor/generator; generate this backend's bindings; rebuild.
   5. Build/cook/stage Development game and Dedicated Server targets into per-backend staging/cook directories.
   6. Full Editor automation including Slow, connected cooked peers, screenshots and benchmark.
   7. Fresh declaration export and mandatory backend type checking.
   8. Full applicable cooked Development automation with runtime manifest verification.
   9. Build/cook/stage Shipping game (packaging gate, not Shipping runtime certification).
- 10. Validate manifests, memory leak evidence, peer evidence, media and performance baseline.
- 11. Restore original config/environment; write release-summary.json and release-summary.md.
+ 10. Connected delivery matrix: eight scenarios and Legacy / PushOff / Iris / Cooked
+     variants per backend, three peer processes per cell, judged by ValidateRelease.py
+     --net-matrix inside the same run directory.
+ 11. Record execution evidence for the four carriers; enforce provenance, promotion and
+     release-claim gates; write release-summary.json and release-summary.md.
+ 12. Restore original config/environment and backend layout.
 
-Build stages are reused when their inputs did not change (Saved/ReleaseCache); test stages
-always run. Results land in Saved/ReleaseTests/test (or /baseline with -Baseline).
+Every release check in this repository is a stage of this one command. There is no second
+command to remember: docs site, connected matrix, evidence, provenance, promotion and the
+eight published release markers all run here. Build stages are reused when their inputs
+did not change (Saved/ReleaseCache); test stages always run. Results land in
+Saved/ReleaseTests/test (or /baseline with -Baseline).
 Missing/skipped evidence, timeouts, failed/blocked stages and absent performance baselines fail.
-
-The connected delivery matrix (eight connected scenarios and Legacy / PushOff / Iris / Cooked
-variants) is NOT a Release stage: each cell launches three extra processes. Run it
-separately with .\Tools\RunDevelopmentTests.ps1 -NetMatrix and judge it with
-ValidateRelease.py --net-matrix.
 '@
     Write-Host @'
 Backend isolation (default, not a switch): steps 4/5/8 build
@@ -97,6 +102,21 @@ if ($PruneLegacy) {
 }
 if (-not $OutputDir) {
     $OutputDir = Join-Path $ReleaseRoot $(if ($Baseline) { 'baseline' } else { 'test' })
+    # A failed run can leave cache entries for a PARTIAL build: UBT may have written a
+    # DLL and a definitions header but never produced the *.modules manifest, cooked
+    # assets or staged peers. On the next run those stages would be reported as
+    # "cached" and automation would publish zero cases. Force one full rebuild after
+    # any failed run so the single-command workflow heals itself without -NoCache.
+    $PreviousSummary = Join-Path $OutputDir 'release-summary.json'
+    if (-not $NoCache -and (Test-Path -LiteralPath $PreviousSummary)) {
+        try {
+            $Previous = Get-Content -LiteralPath $PreviousSummary -Raw | ConvertFrom-Json
+            if ($Previous.complete -eq $true -and $Previous.passed -ne $true) {
+                Write-Host 'Cache    : disabled - previous Release failed, forcing a full rebuild.' -ForegroundColor DarkYellow
+                $NoCache = $true
+            }
+        } catch { }
+    }
     # A fixed directory has to be emptied: leftover files from the previous run would be
     # published as this run's evidence, and a stale summary is worse than none.
     if (Test-Path -LiteralPath $OutputDir) {
@@ -120,13 +140,22 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 Initialize-ReleaseCache -Directory (Join-Path $RepoRoot 'Saved/ReleaseCache') -Disabled:$NoCache
 $Stages = [Collections.Generic.List[object]]::new()
 $Statuses = @{}
-$RequiredStages = @('tool-environment', 'repository-audit', 'tooling-tests', 'analyzer-LuaLS', 'analyzer-LuauLsp')
+$RequiredStages = @('tool-environment', 'legacy-layout-cleanup', 'repository-audit',
+    'tooling-tests', 'analyzer-LuaLS', 'analyzer-LuauLsp', 'docs-site')
 foreach ($BackendName in @('Lua', 'Luau')) {
     foreach ($Step in @('config', 'editor-build', 'static-bindings', 'package-development', 'server-build', 'package-server',
         'editor-tests', 'declarations', 'typecheck', 'editor-evidence', 'game-tests', 'game-evidence', 'reports', 'package-shipping')) {
         $RequiredStages += "$BackendName-$Step"
     }
+    # The connected matrix is a Release stage now: every cell launches three peer
+    # processes, which is why it used to be an opt-in second command. It is judged
+    # inside RunNetMatrix.ps1 by ValidateRelease.py --net-matrix.
+    $RequiredStages += "net-matrix-$BackendName"
 }
+$RequiredStages += @('evidence-index', 'release-provenance', 'promotion-gate', 'release-claims')
+# Connected-matrix evidence lives under this run's directory, so a fresh Release
+# can never publish topology.json files left behind by an older run.
+$NetMatrixDir = Join-Path $OutputDir 'net-matrix'
 $Started = [DateTime]::UtcNow
 $script:CacheHits = 0
 $LockStream = $null
@@ -280,8 +309,9 @@ function Write-ReleaseSummary {
         output = [ordered]@{ directory = $OutputDir; kind = $(if ($IsBaselineRun) { 'baseline' } else { 'test' });
             baseline = $BaselineRoot };
         reuse = [ordered]@{ enabled = -not $NoCache; reused_stages = $script:CacheHits };
-        scope = 'Win64 Editor and cooked Development automation; packaged Development Dedicated Server peers; Shipping packaging';
-        provenance = $Provenance; stages = @($Stages.ToArray()); automation = $Automation; baseline_comparison = $Baseline }
+        scope = 'Win64 Lua+Luau: repository audit, tooling regressions, strict docs site, Editor and cooked Development automation, connected delivery matrix (8 scenarios + 4 variants per backend), Dedicated Server peers, Shipping packaging, evidence/provenance/promotion gates and published release claims';
+        provenance = $Provenance; required_stages = @($RequiredStages);
+        stages = @($Stages.ToArray()); automation = $Automation; baseline_comparison = $Baseline }
     $Result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $OutputDir 'release-summary.json') -Encoding UTF8
     $Lines = @('# Release Validation', '', "Complete: $Complete. Passed: $Passed.", '',
         $Result.scope, '', "Result directory: ``$OutputDir`` ($($Result.output.kind)).",
@@ -446,17 +476,43 @@ try {
         # Creating a venv over an existing one is allowed but rewrites it; skipping is both
         # faster and one less thing that can break a working environment.
         if (-not (Test-Path -LiteralPath $PythonExe)) { Run $Python @('-m', 'venv', $Venv) 'python-venv' }
+        # The interpreter's presence is not proof of a healthy venv. An interrupted
+        # `python -m venv` leaves pyvenv.cfg and python.exe behind but stops before
+        # ensurepip and the activation scripts; the executable-only check above then
+        # skips recreation and `pip install` dies with "No module named pip", which fails
+        # tool-environment and blocks every downstream stage. Probe pip and bootstrap it
+        # from the interpreter's bundled wheel (offline) before trusting this venv.
+        $VenvRepaired = $false
+        & $PythonExe @('-B', '-m', 'pip', '--version') 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Run $PythonExe @('-m', 'ensurepip', '--default-pip') 'python-ensurepip'
+            & $PythonExe @('-B', '-m', 'pip', '--version') 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "pip is unavailable in $Venv even after ensurepip; delete Saved/ReleaseTools/python and rerun."
+            }
+            $VenvRepaired = $true
+        }
         # pip resolves the whole dependency set on every call, and pinned or not that is a
         # network round trip per package. The venv itself is the cache: same interpreter and
         # same requirements means the installed set is already there.
+        # Both requirement files are part of the fingerprint: the docs toolchain is
+        # installed here because `mkdocs build --strict` is a Release stage, not a
+        # separate command the maintainer has to remember.
         $DependencyFingerprint = ConvertTo-ReleaseFingerprint @("python=$PythonVersion",
-            (Get-ReleaseTreeFingerprint -Roots @((Join-Path $PSScriptRoot 'requirements.txt'))))
+            (Get-ReleaseTreeFingerprint -Roots @(
+                (Join-Path $PSScriptRoot 'requirements.txt'),
+                (Join-Path $RepoRoot 'requirements-docs.txt'))))
         $DependencyKey = 'python-dependencies'
-        if (Test-ReleaseCacheHit -Key $DependencyKey -Fingerprint $DependencyFingerprint -Paths @($PythonExe)) {
+        # A repaired venv has pip but not the third-party set, so a surviving cache entry
+        # must not skip the install: cmake/ninja/mkdocs would be missing downstream.
+        if (-not $VenvRepaired -and (Test-ReleaseCacheHit -Key $DependencyKey -Fingerprint $DependencyFingerprint -Paths @($PythonExe))) {
             Write-Host "  cached - python dependencies already installed ($DependencyKey)" -ForegroundColor DarkGray
             $script:CacheHits++
         } else {
-            Run $PythonExe @('-m', 'pip', 'install', '-r', (Join-Path $PSScriptRoot 'requirements.txt'), 'cmake==3.31.6', 'ninja==1.11.1.3') 'python-dependencies'
+            Run $PythonExe @('-m', 'pip', 'install',
+                '-r', (Join-Path $PSScriptRoot 'requirements.txt'),
+                '-r', (Join-Path $RepoRoot 'requirements-docs.txt'),
+                'cmake==3.31.6', 'ninja==1.11.1.3') 'python-dependencies'
             Set-ReleaseCacheEntry -Key $DependencyKey -Fingerprint $DependencyFingerprint -Paths @($PythonExe)
         }
         $env:PATH = (Join-Path $Venv 'Scripts') + ';' + $env:PATH
@@ -470,7 +526,60 @@ try {
         Run 'git' @('-C', $RepoRoot, 'submodule', 'update', '--init', '--recursive') 'submodules'
         $Provenance.submodules = @(& git -C $RepoRoot submodule status --recursive)
     }
+    # UE's FModuleManager falls back to scanning UnrealEditor-<Module>.dll when a
+    # *.modules manifest is disabled. The backend-isolation refactor left the
+    # ordinary-layout DLLs in the TOP-LEVEL Binaries/Win64/ (built from the old UCLASS
+    # layout), while isolated targets write fresh DLLs under Backends/<Backend>/.
+    # Both get registered in one process; because their UHT reload versions differ the
+    # engine aborts with "Trying to recreate changed class ... outside of hot reload".
+    # Archive the ordinary-layout products once - they are reproducible build
+    # artifacts, this project only uses isolated targets, and nothing is deleted.
+    Invoke-Stage 'legacy-layout-cleanup' {
+        $ArchiveRoot = Join-Path $RepoRoot 'Saved/LegacyLayout'
+        $Stamp = $Started.ToString('yyyyMMdd-HHmmss')
+        $LayoutRoots = @('Binaries/Win64', 'Plugins/UnLuaNova/Binaries/Win64',
+            'Plugins/UnLuaNovaTestSuite/Binaries/Win64')
+        foreach ($Ext in @('LuaProtobuf', 'LuaRapidjson', 'LuaSocket')) {
+            $LayoutRoots += "Plugins/UnLuaNovaExtensions/$Ext/Binaries/Win64"
+        }
+        $Moved = 0
+        foreach ($Rel in $LayoutRoots) {
+            $Root = Join-Path $RepoRoot $Rel
+            if (-not (Test-Path -LiteralPath $Root)) { continue }
+            # Top level only: Backends/<Backend>/ subdirectories hold the live DLLs.
+            $Files = @(Get-ChildItem -LiteralPath $Root -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -like 'UnrealEditor-*.dll' -or $_.Name -like '*.modules*' })
+            if ($Files.Count -eq 0) { continue }
+            $Destination = Join-Path $ArchiveRoot "$Stamp/$Rel"
+            New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+            foreach ($F in $Files) {
+                $Target = Join-Path $Destination $F.Name
+                if (Test-Path -LiteralPath $Target) { [System.IO.File]::Delete($Target) }
+                [System.IO.File]::Move($F.FullName, $Target)
+                $Moved++
+            }
+        }
+        Write-Host "Archived $Moved ordinary-layout file(s) under $ArchiveRoot/$Stamp"
+    } @('tool-environment')
     Invoke-Stage 'repository-audit' { Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'AuditRepository.py')) 'audit' } @('tool-environment')
+    # Strict docs build used to be a separate command (and the only GitHub workflow
+    # job). It belongs in this run: a broken nav or a dangling link is a release
+    # regression, not a docs-only chore. -f makes it independent of the caller's cwd,
+    # and the site lands in this run's directory so stale output cannot be published.
+    Invoke-Stage 'docs-site' {
+        # A cached python-dependencies entry can outlive a venv that was recreated,
+        # partially cleaned, or written by an older fingerprint. Probe the toolchain
+        # instead of failing a long Release on a missing module: install only when
+        # mkdocs-material is genuinely absent.
+        & $PythonExe @('-B', '-c', 'import mkdocs, material') 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Run $PythonExe @('-m', 'pip', 'install', '-r',
+                (Join-Path $RepoRoot 'requirements-docs.txt')) 'docs-dependencies'
+        }
+        Run $PythonExe @('-B', '-m', 'mkdocs', 'build', '--strict',
+            '-f', (Join-Path $RepoRoot 'mkdocs.yml'),
+            '--site-dir', (Join-Path $OutputDir 'site')) 'docs-site'
+    } @('tool-environment')
     Invoke-Stage 'tooling-tests' {
         Run $PythonExe @('-B', '-m', 'unittest', 'discover', '-s', (Join-Path $PSScriptRoot 'tests'), '-p', 'test_*.py') 'python-tests'
         Run-Script 'tests/TestReleaseSupport.ps1' @() 'powershell-tests'
@@ -792,6 +901,42 @@ try {
             -ArtifactsOf { Resolve-ReleaseGameExe $ShippingStage $script:ReleaseGameTarget 'Shipping' } `
             -After { Record-Binary (Get-ReleaseGameExe $ShippingStage $script:ReleaseGameTarget 'Shipping') 'binary-Shipping' }
     }
+
+    # The connected delivery matrix used to be a separate opt-in command. It is a
+    # Release stage now: eight scenarios + four variants per backend, three peer
+    # processes per cell, judged inside RunNetMatrix.ps1 by
+    # ValidateRelease.py --net-matrix. Both backends' isolated Game/Server targets
+    # were built above, so -SkipBuild never recompiles them.
+    foreach ($B in @('Lua', 'Luau')) {
+        Invoke-Stage "net-matrix-$B" {
+            $NetArgs = @('-NetMatrix', '-EnginePath', $EnginePath, '-ProjectPath', $ProjectPath,
+                '-Backend', $B, '-SkipBuild', '-OutputDir', $NetMatrixDir,
+                '-TimeoutMinutes', "$TimeoutMinutes")
+            Run-Script 'RunDevelopmentTests.ps1' $NetArgs "net-matrix-$B"
+        } @('tool-environment', 'Lua-package-development', 'Lua-package-server',
+            'Luau-package-development', 'Luau-package-server')
+    }
+
+    # Record execution evidence for the four carriers. This closes the gap between
+    # "the pipeline collected evidence" and "the provenance gate can prove this run
+    # belongs to HEAD": ValidateProvenance.py --require-current needs at least one
+    # non-historical record in Tools/evidence/index.json for the current commit.
+    Invoke-Stage 'evidence-index' {
+        foreach ($EvidenceBackend in @('Lua', 'Luau')) {
+            $EvidenceLower = $EvidenceBackend.ToLowerInvariant()
+            $Reports = @{
+                Editor = Join-Path $OutputDir "$EvidenceLower/editor/$EvidenceLower"
+                Game   = Join-Path $OutputDir "$EvidenceLower/game"
+            }
+            foreach ($Carrier in @('Editor', 'Game')) {
+                $Label = "evidence-$EvidenceLower-$($Carrier.ToLowerInvariant())"
+                Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'RecordEvidence.py'),
+                    '--report', $Reports[$Carrier], '--backend', $EvidenceBackend,
+                    '--carrier', $Carrier, '--run-id', "release-$EvidenceLower-$($Carrier.ToLowerInvariant())") $Label
+            }
+        }
+    } @('tool-environment', 'Lua-editor-evidence', 'Lua-game-evidence',
+        'Luau-editor-evidence', 'Luau-game-evidence')
 } catch {
     $Stages.Add([ordered]@{ name = 'pipeline'; status = 'failed'; seconds = 0; detail = $_.Exception.Message })
     Write-Warning $_.Exception.Message
@@ -824,8 +969,11 @@ try {
             try { [IO.File]::Delete($LockPath) } catch { }
         }
     }
+    # A stage that never ran is a blocked release stage, not a silently omitted
+    # check. The three final gates run below, so they must not be pre-marked here.
+    $FinalStageNames = @('release-provenance', 'promotion-gate', 'release-claims')
     foreach ($Name in $RequiredStages) {
-        if (-not $Statuses.ContainsKey($Name)) {
+        if ($Name -notin $FinalStageNames -and -not $Statuses.ContainsKey($Name)) {
             $Stages.Add([ordered]@{ name = $Name; status = 'blocked'; seconds = 0; detail = 'Pipeline ended before this stage.' })
         }
     }
@@ -837,15 +985,35 @@ try {
     # manifest generator; it is not a Release stage.
     Write-ReleaseSummary
 
+    # These gates run AFTER a complete summary exists: ValidateProvenance needs the
+    # four gates this run just wrote, and CheckPromotion --release-gate needs
+    # complete=true. They are ordinary Invoke-Stage stages, so a failure is recorded
+    # in release-summary.json - the old hand-written release-claims block only
+    # appended a failed stage without rewriting the summary, a real hole in the verdict.
+    Invoke-Stage 'release-provenance' {
+        Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'ValidateProvenance.py'),
+            '--run', $OutputDir, '--require-current',
+            '--report', (Join-Path $OutputDir 'metadata/provenance-gate.json')) 'release-provenance'
+    } @('tool-environment', 'evidence-index', 'Lua-editor-evidence', 'Lua-game-evidence',
+        'Luau-editor-evidence', 'Luau-game-evidence')
+
+    Invoke-Stage 'promotion-gate' {
+        Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'CheckPromotion.py'),
+            '--release-gate', '--strict', '--run', $OutputDir,
+            '--net-root', $NetMatrixDir) 'promotion-gate'
+        # Full L0-L4 report, including the two human decisions (published marker
+        # and release tag), printed for the maintainer without gating the Release.
+        Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'CheckPromotion.py'),
+            '--run', $OutputDir, '--net-root', $NetMatrixDir) 'promotion-report'
+    } @('release-provenance', 'net-matrix-Lua', 'net-matrix-Luau')
+
     # The eight published release-status / release-provenance comments are generated
-    # from the summaries that just landed, never hand-edited. Doing this after
-    # Write-ReleaseSummary means a later commit cannot leave a stale "passed" claim.
-    try {
+    # from the summary that just landed, never hand-edited. --check immediately proves
+    # the generator agreed with its own output.
+    Invoke-Stage 'release-claims' {
         Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'UpdateReleaseStatus.py')) 'release-claims'
-    } catch {
-        $Stages.Add([ordered]@{ name = 'release-claims'; status = 'failed'; seconds = 0; detail = $_.Exception.Message })
-        Write-Warning $_.Exception.Message
-    }
+        Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'UpdateReleaseStatus.py'), '--check') 'release-claims-check'
+    } @('tool-environment')
 }
 Write-Host "Release summary: $(Join-Path $OutputDir 'release-summary.md')"
 if (-not $NoCache -and $script:CacheHits) {

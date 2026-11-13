@@ -146,7 +146,7 @@ RPC 的 `UFunction` 本来就是运行时构造的，可以直接挂 `FStructPro
 | 🔁 | **双后端** | [Lua 5.5.1](https://www.lua.org/) 与 [Luau](https://luau.org)（默认），子模块固定提交 |
 | 🧩 | **零胶水互操作** | UCLASS / UPROPERTY / UFUNCTION / USTRUCT / UENUM 直接访问；蓝图 Event / Function 可从 Lua 替换；TArray / TMap / TSet 在 Lua 侧是引用语义 |
 | 🔍 | **可观测** | Profiler → Unreal Insights、`lua.dap`、`lua.dbg`、`lua.sandbox`、`lua.memstats`、死循环看门狗 |
-| 🩺 | **一键自检** | `Tools/RunTests.ps1`；`Tools/AuditRepository.py` 不编译也能查仓库一致性 |
+| 🩺 | **一条命令全验收** | `Tools/RunTests.ps1` 覆盖仓库审计、文档站严格构建、联网矩阵、证据与来源门禁，无需其它命令 |
 | ♻️ | **热更新** | 编辑器内 HotReload、PIE 内非结构性热载、运营期脚本下发 |
 | 🧪 | **测试随插件发布** | `UnLuaNovaTestSuite` 模块 + 一条命令，报告落在 `Saved/ReleaseTests/` |
 | 🧱 | **纯插件** | 不 fork 引擎；后端是编译期选择，运行时不共存 |
@@ -218,13 +218,18 @@ Build.bat UnLuaNovaDemoLuauEditor Win64 Development -Project=UnLuaNovaDemo.uproj
 <summary><b>③ 跑验收</b></summary>
 
 ```powershell
-.\Tools\RunTests.ps1                 # 完整 Release：双后端 + 联网 + 类型检查 + 打包 + 性能门禁
-.\Tools\RunDevelopmentTests.ps1 -Filter UnLuaNova.API
-python Tools/AuditRepository.py      # 不编译的仓库一致性检查
+.\Tools\RunTests.ps1
 ```
 
-`RunTests.ps1` 不接受任何参数：引擎路径、双后端、输出目录、缓存与完整矩阵都是默认值。
-局部过滤器、载体、分层、`-BuildOnly` 和联网矩阵属于 `Tools/RunDevelopmentTests.ps1`。
+**这是唯一需要运行的命令。** 它不接受参数，内部依次执行：仓库审计、Python / PowerShell
+工具回归、两个分析器构建、`mkdocs build --strict` 文档站、双后端 Editor / cooked /
+Server / Shipping 构建与自动化、8 场景 + 4 变体联网矩阵（双后端各 12 个 cell）、
+执行证据采集、来源与转正门禁，最后自动刷新 8 处 `release-status` / `release-provenance` 标记。
+结果写入 `Saved/ReleaseTests/test/release-summary.{json,md}`，任一阶段失败即整轮失败。
+
+`Tools/RunDevelopmentTests.ps1` 只用于局部调试（`-Filter` / `-BuildOnly` 等），不产生发布
+结论，也不需要为了验收单独运行。UE 6.0 冷 cook 可先设
+`$env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180`（唯一可调旋钮，不改变验收范围）。
 
 </details>
 
@@ -233,11 +238,11 @@ python Tools/AuditRepository.py      # 不编译的仓库一致性检查
 ## 🧪 验证状态
 
 <!-- release-status: not-passed -->
-<!-- release-provenance: 347bb8c5 -->
+<!-- release-provenance: 0b5b29b2 -->
 
 当前代码树**尚未**通过一次完整的验收。最近一次 Release（`Saved/ReleaseTests/test/release-summary.json`）为 `passed=false`：`Luau-package-development` 在 UE 6.0 冷 cook 阶段超过 60 分钟超时。新引擎首次打包会全量编译 shader，属于预期成本，但需要单独调整超时。
 
-上面的 `release-status` / `release-provenance` 注释由 `Tools/UpdateReleaseStatus.py` 在每次 Release 写出摘要后自动生成，标注的是**对比基线**的提交，不是当前 HEAD；「当前树是否有执行证据」由 `Tools/ValidateProvenance.py --require-current` 单独判定。用例总数以 `release-summary.json` 为准，不再手工写进徽章。
+上面的 `release-status` / `release-provenance` 注释由 `Tools/UpdateReleaseStatus.py` 在每次 Release 写出摘要后自动生成，标注的是**产生该状态的那次运行**的提交；较旧的历史运行保留在对比基线中。「当前树是否有执行证据」由 `ReleasePipeline.ps1` 的 `release-provenance` 阶段（`ValidateProvenance.py --require-current`）判定。用例总数以 `release-summary.json` 为准，不再手工写进徽章。
 
 本地复现执行 `.\Tools\RunTests.ps1`（见 [测试与自动化](Docs/CN/Testing.md)）；UE 6.0 冷 cook 可先设 `$env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180`。已验证组合见 [引擎版本与平台支持矩阵](Docs/CN/Engine_Support.md)。
 

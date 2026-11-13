@@ -8,17 +8,21 @@ description: 正式发布前的部署检查、许可范围、安全边界、诊�
 本页面向把 UnLuaNova 集成进正式项目的团队。发布判定标准见
 [发布就绪度](Release_Readiness.md)，API 契约见 [API 稳定性](API_Stability.md)。
 
-## 1. 发布前检查（按顺序）
+## 1. 发布前检查（只有一条命令）
 
 ```powershell
-python -B Tools/AuditRepository.py
-python -B Tools/CheckPromotion.py
-python -B Tools/ValidateProvenance.py --require-current
-.\Tools\RunDevelopmentTests.ps1 -NetMatrix          # 每后端 8 个 Legacy 场景 + 4 个变体（两组独立，非交叉）
-.\Tools\RunTests.ps1                                # 完整 Release
+.\Tools\RunTests.ps1
 ```
 
-`CheckPromotion.py` 只读，不会替你改任何状态。任何一项未绿都不能发布。
+这条命令内部已包含仓库审计、Python / PowerShell 工具回归、文档站严格构建、
+`ValidateProvenance.py --require-current`、双后端联网矩阵（每后端 8 场景 + 4 变体，
+两组独立而非交叉）、四份 carrier 的执行证据采集、`CheckPromotion.py
+--release-gate --strict` 转正门禁，以及 8 处发布标记的自动刷新。
+每一项都是 `release-summary.json` 里的一个阶段，任一失败即整轮失败。
+
+`CheckPromotion.py` 只读，不会替你改任何状态；流水线在 `--release-gate --strict`
+之外还会打印完整 L0–L4 报告，其中发布标记与 release tag 属人工决策，只报告不阻断。
+不需要单独装依赖、单独跑脚本或单独校验来源。任何阶段未绿都不能发布。
 
 ## 2. 许可范围
 
