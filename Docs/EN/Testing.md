@@ -5,7 +5,7 @@ description: "One release command with mandatory evidence and failure reporting"
 
 # Testing and Automation
 
-<!-- release-status: passed -->
+<!-- release-status: not-passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 Run from the repository root:
@@ -180,7 +180,16 @@ DAP session tests use OS-assigned loopback ports and nonblocking game-thread pol
 
 Read `Saved/ReleaseTests/test/release-summary.md` or `release-summary.json` (`Saved/ReleaseTests/baseline/` with `-Baseline`). Those two directories are the entire history: the run being judged, and the run it is judged against, each overwritten by its own next run. A `test` run adds a "Compared With Baseline" section listing stages that passed in the baseline but not now, and carriers that lost tests or gained failures; the comparison is reported, not enforced.
 
-Stages report `passed`, `cached`, `failed` or `blocked`. `cached` means the stage's inputs did not change and the previous run's artifacts were reused (see below). Any failure or blocked dependency returns nonzero. An in-progress summary has `complete=false`. Each external stage has a default 60-minute timeout, adjustable with `-TimeoutMinutes`.
+Stages report `passed`, `cached`, `failed` or `blocked`. `cached` means the stage's inputs did not change and the previous run's artifacts were reused (see below). Any failure or blocked dependency returns nonzero. An in-progress summary has `complete=false`. Each external stage has a default 60-minute timeout.
+
+`RunTests.ps1` deliberately takes no parameters, so the timeout is adjusted through an **environment variable** rather than a command-line switch:
+
+```powershell
+$env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180   # 1..1440, default 60
+.\Tools\RunTests.ps1
+```
+
+It changes only the timeout of each external stage, **not the scope of the Release**; the complete matrix still runs. A first UE 6.0 package triggers a FULL COOK and a full shader compile (one permutation can exceed 100 seconds), so 60 minutes is usually not enough on a cold cache. For local debugging, `Tools/RunDevelopmentTests.ps1` still exposes `-TimeoutMinutes`.
 
 ## Build artifact reuse
 

@@ -1,6 +1,6 @@
 # 版本说明
 
-<!-- release-status: passed -->
+<!-- release-status: not-passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 ## 当前版本

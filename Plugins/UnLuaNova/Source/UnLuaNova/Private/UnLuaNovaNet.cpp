@@ -12,6 +12,7 @@
 
 #include "UnLuaNovaNet.h"
 #include "UnLuaNovaCompatibility.h"
+#include "UnLuaNovaNetPolicy.h"
 
 #include "Engine/EngineBaseTypes.h"
 #include "LuaEnv.h"
@@ -21,11 +22,47 @@
 #include "UnLuaNovaNetPayload.h"
 #include "UnLuaNovaNetTypeSpec.h"
 #include "UObject/UnrealType.h"
+#include "Misc/Crc.h"
 #include <initializer_list>
 
 namespace UnLuaNova
 {
     TMap<TWeakObjectPtr<UClass>, FUnLuaNovaNet::FRepPropsEntry> FUnLuaNovaNet::RepProps;
+
+    // B3. Replicated-field SchemaVersion never covered RPCs: two peers could declare
+    // different RPC sets (or different parameter specs) and only find out through an
+    // offline report. Keep the declared RPC layout per class so the component can
+    // replicate its fingerprint and reject a mismatched peer at runtime.
+    static TMap<TWeakObjectPtr<UClass>, TArray<FLuaRpcDecl>> GRpcDecls;
+
+    static uint32 ComputeRpcLayout(const TArray<FLuaRpcDecl>& Rpcs)
+    {
+        if (Rpcs.Num() == 0)
+            return 0;
+        FString Canonical;
+        Canonical.Reserve(256);
+        for (const FLuaRpcDecl& R : Rpcs)
+        {
+            Canonical += FString::Printf(TEXT("%s|%d|%d|"), *R.Name.ToString(),
+                static_cast<int32>(R.Kind), R.bReliable ? 1 : 0);
+            for (const FLuaRpcParam& P : R.Params)
+            {
+                Canonical += FString::Printf(TEXT("%s:%d:%s,"), *P.Name.ToString(),
+                    static_cast<int32>(P.Type), *P.TypeSpec);
+            }
+            Canonical += TEXT(";");
+        }
+        return FCrc::StrCrc32(*Canonical);
+    }
+
+    uint32 FUnLuaNovaNet::GetRpcLayoutVersion(const UClass* Class)
+    {
+        if (!Class)
+            return 0;
+        const TWeakObjectPtr<UClass> Key(const_cast<UClass*>(Class));
+        const TArray<FLuaRpcDecl>* Found = GRpcDecls.Find(Key);
+        return Found ? ComputeRpcLayout(*Found) : 0u;
+    }
 
     // ------------------------------------------------------------------ parsing
 
@@ -395,7 +432,25 @@ namespace UnLuaNova
         if (!L || !Class)
             return;
 
+        // Stable-feature gate: never construct a dynamic UFunction when the project
+        // disabled declared networking, during a seamless travel, or when RPC
+        // authorization is required but no policy has been installed.
+        FString PolicyReason;
+        const UnLuaNova::ELuaNetPolicyResult DeclVerdict =
+            UnLuaNova::FUnLuaNovaNetPolicy::Get().CanDeclare(
+                Class, TArray<UnLuaNova::FLuaRpcDecl>(),
+                TArray<UnLuaNova::FLuaRepDecl>(), PolicyReason);
+        if (DeclVerdict != UnLuaNova::ELuaNetPolicyResult::Ok)
+        {
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning,
+                TEXT("Skipping RPC declaration on '%s': %s (%s)"),
+                *Class->GetName(), *PolicyReason,
+                UnLuaNova::LexToString(DeclVerdict));
+            return;
+        }
+
         const int32 ModuleIdx = lua_absindex(L, ModuleTableIdx);
+        TArray<FLuaRpcDecl> Collected;
 
         static const struct { const char* Field; ELuaRpcKind Kind; } Kinds[] =
         {
@@ -435,6 +490,7 @@ namespace UnLuaNova
                         lua_pop(L, 1);
                         continue;
                     }
+                    Collected.Add(Decl);
 
                     if (Class->FindFunctionByName(Decl.Name, EIncludeSuperFlag::ExcludeSuper))
                     {
@@ -468,6 +524,10 @@ namespace UnLuaNova
 
             lua_pop(L, 1); // the kind table
         }
+
+        // Always overwrite, including with an empty list: after a hot reload the old
+        // RPC layout must not survive as a stale fingerprint.
+        GRpcDecls.Add(TWeakObjectPtr<UClass>(Class), MoveTemp(Collected));
     }
 
     // ------------------------------------------------------------------ replication
@@ -476,6 +536,20 @@ namespace UnLuaNova
     {
         if (!L || !Class)
             return false;
+
+        FString PolicyReason;
+        const UnLuaNova::ELuaNetPolicyResult DeclVerdict =
+            UnLuaNova::FUnLuaNovaNetPolicy::Get().CanDeclare(
+                Class, TArray<UnLuaNova::FLuaRpcDecl>(),
+                TArray<UnLuaNova::FLuaRepDecl>(), PolicyReason);
+        if (DeclVerdict != UnLuaNova::ELuaNetPolicyResult::Ok)
+        {
+            UNLUANOVA_LOGF(LogUnLuaNova, Warning,
+                TEXT("Skipping replicated-field declaration on '%s': %s (%s)"),
+                *Class->GetName(), *PolicyReason,
+                UnLuaNova::LexToString(DeclVerdict));
+            return false;
+        }
 
         const int32 Top = lua_gettop(L);
         const int32 ModuleIdx = lua_absindex(L, ModuleTableIdx);

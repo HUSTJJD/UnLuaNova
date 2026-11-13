@@ -12,6 +12,10 @@
 
 #pragma once
 
+// EXPERIMENTAL API - Lua-declared networking. Interfaces in this header may change
+// without a deprecation cycle and are not recommended for production use. See
+// Docs/CN/LuaNetworking.md for the supported subset.
+
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Engine/EngineBaseTypes.h"
@@ -114,6 +118,19 @@ public:
     UFUNCTION(BlueprintCallable, Category = "UnLuaNova|Net")
     void FlushNetUpdate();
 
+    /**
+     * Re-read the owner's Lua declaration and rebuild every bucket, slot map and
+     * schema version. BeginPlay calls this once, but it is deliberately re-entrant:
+     * a module bound after BeginPlay, a hot reload that changed the layout, or a
+     * seamless travel can all call it again instead of being stuck with the frozen
+     * BeginPlay state.
+     */
+    UFUNCTION(BlueprintCallable, Category = "UnLuaNova|Net")
+    void RefreshDeclaration();
+
+    /** Refresh every live replication component. Call after a script reload / travel. */
+    static void RefreshAllDeclarations();
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UnLuaNova|Net")
     ELuaNetUpdateMode UpdateMode = ELuaNetUpdateMode::Polled;
 
@@ -143,6 +160,7 @@ protected:
     UFUNCTION() void OnRep_Objects();
     UFUNCTION() void OnRep_Generics();
     UFUNCTION() void OnRep_SchemaVersion();
+    UFUNCTION() void OnRep_RpcSchemaVersion();
 
     // One RepNotify per conditional group. A group arrives as one property, so its notify
     // pushes every bucket in it rather than a single type.
@@ -162,6 +180,9 @@ private:
     /** Set once a schema mismatch has been reported, so it is not reported per rep. */
     bool bSchemaMismatchReported = false;
 
+    /** Policy generation this component last rebuilt its declaration against. */
+    uint32 ObservedGeneration = 0;
+
     float PollAccumulator = 0.f;
 
     /** Field -> (bucket, index), derived from the Lua declaration at BeginPlay. */
@@ -175,6 +196,12 @@ private:
     uint32 SchemaVersion = 0;
 
     uint32 LocalSchemaVersion = 0;
+
+    /** Same idea for the RPC layout: replicated-field SchemaVersion never covered RPCs. */
+    UPROPERTY(ReplicatedUsing = OnRep_RpcSchemaVersion)
+    uint32 RpcSchemaVersion = 0;
+
+    uint32 LocalRpcSchemaVersion = 0;
 
     // --- the payload -------------------------------------------------------
     //

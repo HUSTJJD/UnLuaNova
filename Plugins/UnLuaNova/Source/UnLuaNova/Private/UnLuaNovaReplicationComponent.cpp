@@ -21,7 +21,9 @@
 #include "UnLuaNovaModule.h"
 #include "UnLuaNovaNet.h"
 #include "UnLuaNovaNetPayload.h"
+#include "UnLuaNovaNetPolicy.h"
 #include "UnLuaNovaNetTypeSpec.h"
+#include "UObject/UObjectIterator.h"
 
 /**
  * Push model is a compile-time capability (WITH_PUSH_MODEL) that a project can also switch
@@ -396,6 +398,8 @@ void UUnLuaNovaReplicationComponent::GetLifetimeReplicatedProps(TArray<FLifetime
     // to be there before the data is interpreted, so it is allowed to be polled.
     FDoRepLifetimeParams MetaParams;
     DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, SchemaVersion, MetaParams);
+    // B3: RPC declarations get their own fingerprint, replicated and checked at runtime.
+    DOREPLIFETIME_WITH_PARAMS_FAST(UUnLuaNovaReplicationComponent, RpcSchemaVersion, MetaParams);
 
     // Conditional groups. One registration each, with the condition the group exists for:
     // UE decides per property, from this registration, and caches it per class - so a Lua
@@ -428,16 +432,35 @@ void UUnLuaNovaReplicationComponent::BeginPlay()
             *GetNameSafe(Owner));
     }
 
+    RefreshDeclaration();
+}
+
+void UUnLuaNovaReplicationComponent::RefreshDeclaration()
+{
+    AActor* Owner = GetOwner();
+    if (!Owner)
+        return;
+
+    ObservedGeneration = UnLuaNova::FUnLuaNovaNetPolicy::Get().CurrentGeneration();
+
     const TArray<UnLuaNova::FLuaRepDecl>& Decls = UnLuaNova::FUnLuaNovaNet::GetReplicatedProps(Owner->GetClass());
     if (Decls.Num() == 0)
     {
-        // Nothing declared means nothing to replicate; leave ticking off so a component
-        // someone added "just in case" costs nothing.
+        // Not declared YET. This state must not be frozen: a module bound after
+        // BeginPlay (late join, hot reload, post-travel rebind) can call
+        // RefreshDeclaration again via the tick check or RefreshAllDeclarations().
+        // The old code returned here permanently and left the component inert.
+        bDeclared = false;
+        bSchemaMismatchReported = false;
+        Slots.Empty();
+        LocalSchemaVersion = 0;
+        LocalRpcSchemaVersion = 0;
         SetComponentTickEnabled(false);
         return;
     }
 
     bDeclared = true;
+    bSchemaMismatchReported = false;
     UnLuaNova::BuildSlots(Decls, Slots);
 
     int32 Counts[int32(UnLuaNova::ELuaNetConditionGroup::Max)][int32(UnLuaNova::ELuaNetBucket::Max)];
@@ -465,6 +488,7 @@ void UUnLuaNovaReplicationComponent::BeginPlay()
     }
 
     LocalSchemaVersion = UnLuaNova::ComputeSchemaVersion(Decls);
+    LocalRpcSchemaVersion = UnLuaNova::FUnLuaNovaNet::GetRpcLayoutVersion(Owner->GetClass());
 
     static bool bLoggedPushModel = false;
     if (!bLoggedPushModel)
@@ -481,6 +505,7 @@ void UUnLuaNovaReplicationComponent::BeginPlay()
     if (bAuthority)
     {
         SchemaVersion = LocalSchemaVersion;
+        RpcSchemaVersion = LocalRpcSchemaVersion;
         PullAllSlots();
 
         // Every bucket has to go out at least once whatever the pull managed to read: with
@@ -497,6 +522,17 @@ void UUnLuaNovaReplicationComponent::BeginPlay()
     }
 }
 
+void UUnLuaNovaReplicationComponent::RefreshAllDeclarations()
+{
+    for (TObjectIterator<UUnLuaNovaReplicationComponent> It; It; ++It)
+    {
+        if (IsValid(*It))
+        {
+            (*It)->RefreshDeclaration();
+        }
+    }
+}
+
 void UUnLuaNovaReplicationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     bDeclared = false;
@@ -507,6 +543,15 @@ void UUnLuaNovaReplicationComponent::EndPlay(const EEndPlayReason::Type EndPlayR
 void UUnLuaNovaReplicationComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+    // A hot reload or a seamless travel advances the policy generation. When that
+    // happens, re-read the declaration once instead of keeping the BeginPlay layout.
+    // Components whose tick is off (no declaration yet) are covered by the explicit
+    // RefreshAllDeclarations() call made after a reload / travel.
+    if (UnLuaNova::FUnLuaNovaNetPolicy::Get().CurrentGeneration() != ObservedGeneration)
+    {
+        RefreshDeclaration();
+    }
 
     if (!bDeclared || UpdateMode != ELuaNetUpdateMode::Polled)
         return;
@@ -879,10 +924,43 @@ void UUnLuaNovaReplicationComponent::OnRep_SchemaVersion()
         return;
 
     bSchemaMismatchReported = true;
+    // Route the mismatch through the policy layer: an approved hot-reload migration
+    // can be accepted here, while an unexplained layout difference stays rejected
+    // with an explicit, loggable reason (ELuaNetPolicyResult::SchemaIncompatible).
+    FString Reason;
+    const UnLuaNova::ELuaNetPolicyResult Verdict =
+        UnLuaNova::FUnLuaNovaNetPolicy::Get().NegotiateSchema(
+            GetOwner(), LocalSchemaVersion, SchemaVersion, Reason);
+    if (Verdict == UnLuaNova::ELuaNetPolicyResult::Ok)
+    {
+        bSchemaMismatchReported = false;
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("'%s' accepted an approved schema migration: %s"),
+            *GetNameSafe(GetOwner()), *Reason);
+        return;
+    }
     UNLUANOVA_LOGF(LogUnLuaNova, Error,
-        TEXT("'%s' received replicated fields laid out for a different declaration (0x%08X, local 0x%08X); "
-             "they will not be applied. Both peers must run the same script, declaring in the same order."),
-        *GetNameSafe(GetOwner()), SchemaVersion, LocalSchemaVersion);
+        TEXT("'%s' schema negotiation failed (%s): %s"),
+        *GetNameSafe(GetOwner()), UnLuaNova::LexToString(Verdict), *Reason);
+}
+
+void UUnLuaNovaReplicationComponent::OnRep_RpcSchemaVersion()
+{
+    if (!bDeclared || RpcSchemaVersion == LocalRpcSchemaVersion)
+        return;
+
+    FString Reason;
+    const UnLuaNova::ELuaNetPolicyResult Verdict =
+        UnLuaNova::FUnLuaNovaNetPolicy::Get().NegotiateRpcLayout(
+            GetOwner(), LocalRpcSchemaVersion, RpcSchemaVersion, Reason);
+    if (Verdict == UnLuaNova::ELuaNetPolicyResult::Ok)
+    {
+        UNLUANOVA_LOGF(LogUnLuaNova, Log, TEXT("'%s' accepted an approved RPC layout migration: %s"),
+            *GetNameSafe(GetOwner()), *Reason);
+        return;
+    }
+    UNLUANOVA_LOGF(LogUnLuaNova, Error,
+        TEXT("'%s' RPC layout negotiation failed (%s): %s"),
+        *GetNameSafe(GetOwner()), UnLuaNova::LexToString(Verdict), *Reason);
 }
 
 void UUnLuaNovaReplicationComponent::PushBucket(UnLuaNova::ELuaNetBucket Bucket)
@@ -905,6 +983,13 @@ void UUnLuaNovaReplicationComponent::PushSlots(UnLuaNova::ELuaNetConditionGroup 
     if (SchemaVersion != LocalSchemaVersion)
     {
         OnRep_SchemaVersion();
+        return;
+    }
+    // A peer with a different RPC layout must not have its buckets applied either:
+    // the field indices are derived from the same declaration pass as the RPC set.
+    if (RpcSchemaVersion != LocalRpcSchemaVersion)
+    {
+        OnRep_RpcSchemaVersion();
         return;
     }
 

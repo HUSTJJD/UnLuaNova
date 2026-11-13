@@ -684,7 +684,10 @@ namespace UnLuaNova
             }
         }
 
-        // --- spec-driven shape validation (server side only) ----------------
+        // --- spec-driven shape validation (encode AND decode) ---------------
+        // Used by EncodeLuaNetValue before writing and by DecodeLuaNetValue after
+        // reading. Keeping one implementation prevents the two sides from drifting
+        // into different ideas of what a declared spec permits.
 
         bool CheckShape(lua_State* L, int32 Idx, const FLuaNetTypeSpec& Spec, FString& Error, int32 Depth)
         {
@@ -873,6 +876,23 @@ namespace UnLuaNova
         {
             lua_settop(L, Top);
             OutError = TEXT("Trailing data in generic payload.");
+            return false;
+        }
+
+        // B1 fix. The write side validates the Lua value against the declared type
+        // spec, but the read side used to trust the self-describing payload: it only
+        // compared the TOP-LEVEL tag. A peer declaring Array:Int could therefore
+        // receive an object payload and have it pushed into Lua unchecked. Re-run
+        // the same recursive shape check on the decoded value before handing it to
+        // the script. DecodeTagged only produces nil/boolean/number/string/table,
+        // which is exactly the value space CheckShape validates on the write side.
+        // An explicit nil ('x') is a legitimate payload value and is allowed.
+        if (lua_type(L, -1) != LUA_TNIL && !CheckShape(L, -1, Spec, OutError, 0))
+        {
+            const FString Reason = OutError;
+            lua_settop(L, Top);
+            OutError = FString::Printf(
+                TEXT("Decoded generic payload violates the declared type spec: %s"), *Reason);
             return false;
         }
         return true;

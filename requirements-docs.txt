@@ -1,0 +1,9 @@
+# Documentation toolchain for `mkdocs build --strict`.
+# mkdocs.yml uses pymdownx.slugs.slugify, pymdownx.details/superfences/tasklist/
+# tabbed/emoji and material.extensions.emoji.*; all of them are provided by
+# mkdocs-material rather than declared separately.
+#
+# The major version is bounded so an upstream 10.x cannot break --strict unexpectedly.
+# Commit an exact pin only after verifying the documentation build locally:
+#   python -m mkdocs build --strict --site-dir _site
+mkdocs-material>=9.5,<10

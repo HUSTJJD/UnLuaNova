@@ -124,6 +124,8 @@ public class Lua : ModuleRules
 
 #if UE_5_6_OR_LATER
         CppCompileWarningSettings.NonInlinedGenCppWarningLevel = WarningLevel.Off;
+#elif UE_5_5_OR_LATER
+        NonInlinedGenCppWarningLevel = WarningLevel.Off;
 #else
         bEnableNonInlinedGenCppWarnings = false;
 #endif
@@ -141,6 +143,8 @@ public class Lua : ModuleRules
         {
 #if UE_5_6_OR_LATER
             CppCompileWarningSettings.ShadowVariableWarningLevel = WarningLevel.Off;
+#elif UE_5_5_OR_LATER
+            ShadowVariableWarningLevel = WarningLevel.Off;
 #else
             bEnableShadowVariableWarnings = false;
 #endif

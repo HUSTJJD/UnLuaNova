@@ -31,6 +31,16 @@ REPO = TOOLS.parent
 OUTER = REPO.parent.parent
 OUTER_UNLUANOVA = OUTER / "Tools" / "unluanova"
 
+# The outer workspace is a *separate* repository (UEAbilityKit) that happens to
+# sit next to this submodule on the maintainer's machine. A standalone checkout
+# -- any independent clone -- has no Tools/unluanova at all. Those checks are
+# valuable locally but must skip, not fail, when the outer workspace is absent.
+OUTER_AVAILABLE = (
+    (OUTER_UNLUANOVA / "state.py").is_file()
+    and (OUTER_UNLUANOVA / "doctor.py").is_file()
+)
+OUTER_SKIP_REASON = "outer UEAbilityKit workspace is absent in this checkout"
+
 PLUGIN_SOURCE = REPO / "Plugins" / "UnLuaNova" / "Source"
 EXT_SOURCE = REPO / "Plugins" / "UnLuaNovaExtensions"
 TESTSUITE_SOURCE = REPO / "Plugins" / "UnLuaNovaTestSuite"
@@ -350,6 +360,7 @@ class BackendIsolationTests(unittest.TestCase):
             with self.subTest(needle=needle):
                 self.assertIn(needle, generator)
 
+    @unittest.skipUnless(OUTER_AVAILABLE, OUTER_SKIP_REASON)
     def test_outer_doctor_understands_isolated_layout(self):
         state_py = (OUTER_UNLUANOVA / "state.py").read_text(encoding="utf-8-sig")
         for needle in (
@@ -387,6 +398,7 @@ class BackendIsolationTests(unittest.TestCase):
                                  f"unbalanced braces in {path.name}")
 
 
+@unittest.skipUnless(OUTER_AVAILABLE, OUTER_SKIP_REASON)
 class OuterDoctorFunctionalTests(unittest.TestCase):
     """Exercise the outer doctor against synthetic Binaries trees (no Unreal build)."""
 

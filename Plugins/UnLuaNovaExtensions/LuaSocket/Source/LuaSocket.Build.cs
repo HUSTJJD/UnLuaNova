@@ -117,7 +117,13 @@ public class LuaSocket : ModuleRules
         // Same story for the deprecations: _CRT_SECURE_NO_WARNINGS above cannot reach
         // <stdio.h>, because the shared PCH has already included it, so the deprecated
         // declarations are already baked in by the time any of our macros is seen.
+        // CppCompileWarningSettings only exists on ModuleRules from UE 5.6 onwards
+        // (see Lua.Build.cs / Luau.Build.cs). Older engines never promote these to
+        // errors, so simply leaving the setting alone is correct there - assigning it
+        // unconditionally made this Build.cs fail to compile on UE < 5.6.
+#if UE_5_6_OR_LATER
         CppCompileWarningSettings.DeprecationWarningLevel = WarningLevel.Off;
+#endif
 
         // Third-party C: do not let UE's strict settings fail the build.
         // BuildSettingsVersion.V7 (UE 5.8) promotes these three to errors, and

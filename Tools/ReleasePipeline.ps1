@@ -16,6 +16,26 @@ param([string] $EnginePath = '', [string] $ProjectPath = '', [string] $OutputDir
     [switch] $DryRun)
 
 $ErrorActionPreference = 'Stop'
+
+# RunTests.ps1 deliberately takes no parameters, so the one knob a cold engine
+# upgrade needs is an environment variable rather than a switch. UE 6.0 performs a
+# FULL COOK on a cold DDC and a single shader permutation can exceed 100 seconds;
+# the 60-minute default is not enough for that first run. Example:
+#   $env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180; .\Tools\RunTests.ps1
+# The override applies to every external stage through Run below. It is deliberately
+# NOT a partial-run switch: the complete Release matrix is still always executed.
+if ($env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES) {
+    $OverrideMinutes = 0
+    if (-not [int]::TryParse($env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES, [ref]$OverrideMinutes) -or
+        $OverrideMinutes -lt 1 -or $OverrideMinutes -gt 1440) {
+        throw "UNLUANOVA_RELEASE_TIMEOUT_MINUTES must be an integer in 1..1440 (got '$($env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES)')."
+    }
+    if ($OverrideMinutes -ne $TimeoutMinutes) {
+        Write-Host "Timeout   : $OverrideMinutes min (UNLUANOVA_RELEASE_TIMEOUT_MINUTES)" -ForegroundColor DarkGray
+        $TimeoutMinutes = $OverrideMinutes
+    }
+}
+
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $PowerShellExe = (Get-Process -Id $PID).Path
 . (Join-Path $PSScriptRoot 'ReleaseSupport.ps1')
@@ -810,7 +830,22 @@ try {
         }
     }
     $script:Finished = $true
+
+    # The notices-compliance stage was removed on 2026-11-13 by maintainer decision:
+    # external legal provenance questions are out of scope for this repository's
+    # release gate. Tools/GenerateNotices.py remains available as a standalone
+    # manifest generator; it is not a Release stage.
     Write-ReleaseSummary
+
+    # The eight published release-status / release-provenance comments are generated
+    # from the summaries that just landed, never hand-edited. Doing this after
+    # Write-ReleaseSummary means a later commit cannot leave a stale "passed" claim.
+    try {
+        Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'UpdateReleaseStatus.py')) 'release-claims'
+    } catch {
+        $Stages.Add([ordered]@{ name = 'release-claims'; status = 'failed'; seconds = 0; detail = $_.Exception.Message })
+        Write-Warning $_.Exception.Message
+    }
 }
 Write-Host "Release summary: $(Join-Path $OutputDir 'release-summary.md')"
 if (-not $NoCache -and $script:CacheHits) {

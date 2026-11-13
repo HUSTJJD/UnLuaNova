@@ -1,0 +1,21 @@
+# Unreal binary assets must never be treated as text: no line-ending conversion,
+# no textual diff, no accidental merge of two binary revisions into a corrupt file.
+# Deliberately no `* text=auto` and no eol rules - adding them now would make Git
+# want to renormalize every already-committed source file. Only declare the binaries.
+*.uasset  binary
+*.umap    binary
+*.uexp    binary
+*.ubulk   binary
+*.ufont   binary
+*.locres  binary
+*.locmeta binary
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.bmp     binary
+*.ico     binary
+*.dll     binary
+*.lib     binary
+*.pdb     binary
+*.exe     binary
+*.zip     binary

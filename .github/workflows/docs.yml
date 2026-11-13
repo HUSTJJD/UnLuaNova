@@ -1,11 +1,17 @@
 name: Documentation
 
+# GitHub Actions only builds and publishes the documentation site. Unreal Engine is
+# far too large for a hosted runner: all compilation, automation tests, type checks,
+# packaging and release gates run locally through Tools/RunTests.ps1. Do not add
+# code-checking jobs to this workflow.
+
 on:
   push:
     branches: ["master"]
     paths:
       - "Docs/**"
       - "mkdocs.yml"
+      - "requirements-docs.txt"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -26,8 +32,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install MkDocs Material
-        run: pip install mkdocs-material
+      - name: Install MkDocs toolchain
+        # requirements-docs.txt keeps the major version bounded so --strict does not
+        # break on an upstream release. Pin an exact version locally once verified.
+        run: pip install -r requirements-docs.txt
       - name: Build docs
         # --strict turns warnings into a build failure, which is the only way a broken
         # internal link gets noticed before it is on the site. It is off by default and has

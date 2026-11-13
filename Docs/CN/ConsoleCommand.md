@@ -328,6 +328,24 @@ python Tools/ValidateCoverage.py --report Saved/Coverage/coverage-Luau.json `
 
 ---
 
+## `lua.codegen` — Luau 原生编译（默认关闭）
+
+`lua.codegen.enabled=1`（默认 0）只影响**开关之后加载的 chunk**；`lua.codegen.modules`
+可按模块名子串收窄。`lua.codegen on/off` 与 CVar 是同一个状态。
+
+| 项 | 契约 |
+|---|---|
+| 后端 / 架构 | 仅 Luau；由上游 `luau_codegen_supported()` 运行期判定（x64 / arm64）。其他目标忽略开关并告警 |
+| 已验收范围 | UE 5.8.3 / Win64 x64；arm64、打包 Shipping、原生调试附加未做运行验收 |
+| 可执行内存 | 上游自行申请可执行代码页；宿主不接管 W^X / 代码页回收策略 |
+| 失败语义 | `luau_codegen_compile()` 返回 void，无逐 chunk 成功信号；无法编译时继续解释执行 |
+| 计数 | `lua.codegen` 输出的是**请求数**（`GetNativeCodeGenRequestCount()`），不是成功编译数 |
+
+它是默认关闭的可选优化，不是正确性依赖：不开时所有 chunk 走解释执行，功能集一致。
+完整契约见 [Luau 后端](Luau.md) 与 [生产部署与运维](Production_Deployment.md)。
+
+---
+
 ## 延伸阅读
 
 - [调试](Debugging.md) — 断点调试 Lua 脚本

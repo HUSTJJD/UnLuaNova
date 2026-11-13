@@ -14,6 +14,7 @@
 
 #include "Engine/World.h"
 #include "UnLuaNovaCompatibility.h"
+#include "UnLuaNovaNetPolicy.h"
 #include "Components/InputComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "LuaEnv.h"
@@ -975,6 +976,11 @@ namespace UnLuaNova
         const int Top = lua_gettop(L);
         DoString("Lua.HotReload()");
         lua_settop(L, Top);
+
+        // Invalidate any RPC ID / field index computed before the reload and drop
+        // unapproved staged schema migrations. Declarations are re-negotiated on the
+        // next bind; see FUnLuaNovaNetPolicy::OnHotReload / NegotiateSchema.
+        UnLuaNova::FUnLuaNovaNetPolicy::Get().NotifyModulesReloaded();
     }
 
     int32 FLuaEnv::FindThread(const lua_State* Thread)

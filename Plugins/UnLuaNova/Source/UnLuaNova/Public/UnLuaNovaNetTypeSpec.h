@@ -12,6 +12,10 @@
 
 #pragma once
 
+// EXPERIMENTAL API - Lua-declared networking. Interfaces in this header may change
+// without a deprecation cycle and are not recommended for production use. See
+// Docs/CN/LuaNetworking.md for the supported subset.
+
 #include "CoreMinimal.h"
 #include "UnLuaNovaNetDecl.h"
 

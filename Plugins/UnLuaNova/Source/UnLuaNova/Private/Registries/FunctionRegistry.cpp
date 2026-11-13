@@ -1,5 +1,8 @@
 #include "Registries/FunctionRegistry.h"
 #include "UnLuaNovaCompatibility.h"
+#include "UnLuaNovaBase.h"
+#include "UnLuaNovaNetPolicy.h"
+#include "UObject/UnrealType.h"
 #include "LuaBackend.h"
 #include "LuaEnv.h"
 #include "UnLuaNovaManager.h"
@@ -70,6 +73,36 @@ namespace UnLuaNova
 
     void FFunctionRegistry::Invoke(ULuaFunction* Function, UObject* Context, FFrame& Stack, RESULT_DECL)
     {
+        // B4. The engine's own owner check only guards Server RPCs, and declared
+        // RPCs are built at runtime, so no _Validate function exists. Every declared
+        // RPC reaches this Lua thunk: apply the host's application-level policy here
+        // before resolving or invoking the handler.
+        if (Function && Function->IsLuaDeclaredRpc())
+        {
+            ELuaRpcKind Kind = ELuaRpcKind::Server;
+            if (Function->HasAnyFunctionFlags(FUNC_NetMulticast))
+                Kind = ELuaRpcKind::Multicast;
+            else if (Function->HasAnyFunctionFlags(FUNC_NetClient))
+                Kind = ELuaRpcKind::Client;
+
+            FString Reason;
+            const ELuaNetPolicyResult Verdict = FUnLuaNovaNetPolicy::Get().CanInvoke(
+                Context, Function->GetFName(), Kind, Reason);
+            if (Verdict != ELuaNetPolicyResult::Ok)
+            {
+                UNLUANOVA_LOGF(LogUnLuaNova, Warning,
+                    TEXT("Declared RPC '%s' refused (%s): %s"),
+                    *Function->GetName(), LexToString(Verdict), *Reason);
+                // Consume the call through the overridden function so the VM stack
+                // stays consistent. Newly declared RPCs normally have no override,
+                // which means nothing is executed at all.
+                const auto Overridden = Function->GetOverridden();
+                if (Overridden && Stack.Code)
+                    Overridden->Invoke(Context, Stack, RESULT_PARAM);
+                return;
+            }
+        }
+
         const auto SelfRef = GetOrBindSelfRef(Env, Context);
         const auto L = Env->GetMainState();
 

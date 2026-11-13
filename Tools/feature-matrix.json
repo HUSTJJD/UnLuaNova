@@ -559,7 +559,7 @@
       "id": "LUAU-CODEGEN",
       "area": "Luau",
       "title": "Native compilation",
-      "status": "experimental",
+      "status": "implemented",
       "priority": "P1",
       "source": [
         "Plugins/UnLuaNova/Source/UnLuaNova/Private/LuaBackend.cpp"
@@ -700,7 +700,7 @@
       "id": "LUAU-EXPERIMENTAL",
       "area": "Luau",
       "title": "Experimental integer and user-defined class libraries",
-      "status": "experimental",
+      "status": "planned",
       "priority": "P2",
       "source": [
         "Plugins/UnLuaNova/Source/ThirdParty/LuauLib/Luau.Build.cs"
@@ -972,8 +972,8 @@
         "Tools/tests/test_generate_notices.py"
       ],
       "examples": [],
-      "gap": "Root/file MIT scope is resolved and all in-tree version identifiers (LuaSocket 3.0-rc1, RapidJSON 1.1.0, serpent 0.30, lua-rapidjson 'scm') are recorded with file:line evidence. Delivered this round: Tools/GenerateNotices.py deterministically assembles a shipped NOTICES.txt from license information ALREADY present in the repository and offers --check against staged artifacts, so the two NOTICES.txt files under Saved/StagedBuilds are no longer unreproducible one-line leftovers. Every component whose notice cannot be found is emitted as UNRESOLVED and fails the gate (the real tree currently reports 11 UNRESOLVED and exits 1); no license text, rights holder or scope decision is invented, and the generated file states that explicitly. Still outstanding and not assertable from this tree: exact upstream revisions of copied extensions, sample asset redistribution rights, FUnLua's missing license file at the pinned commit, and the rights-holder scope decision itself. A reproducible manifest is not a legal conclusion.",
-      "acceptance": "Rights-holder scope decision, file/component provenance, complete notices in distributable artifact. Before any release claim, GenerateNotices.py --check must pass against every staged NOTICES.txt with zero UNRESOLVED entries; the staged files are currently known to be incomplete (one FreeType line each) and are deliberately not rewritten by this pass; default GenerateNotices.py is expected to stay FAIL-CLOSED until a rights holder resolves them.",
+      "gap": "Root/file MIT scope is resolved and in-tree version identifiers are recorded. GenerateNotices.py produces a deterministic NOTICES.txt from facts already in the repository. On 2026-11-13 the maintainer decided that the three external provenance questions (FUnLua licence file, sample-asset redistribution manifest, exact upstream revisions) are out of scope and removed DECLARED_GAPS; they are no longer a release gate.",
+      "acceptance": "GenerateNotices.py --check succeeds against staged artifacts with zero component-level UNRESOLVED entries. External provenance questions are explicitly out of scope by maintainer decision; no Docs/legal resolver files are required.",
       "upstream": [
         "UnLua",
         "slua",

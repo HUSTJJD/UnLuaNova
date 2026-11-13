@@ -1,0 +1,28 @@
+root = true
+
+# Do not set end_of_line here: the inherited sources are mixed and a global
+# rule would cause editors to rewrite whole files. Keep it to indentation and
+# whitespace hygiene for new edits.
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cpp,h,hpp,inl,cs}]
+indent_style = space
+indent_size = 4
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+[*.{lua,luau}]
+indent_style = space
+indent_size = 4
+
+[*.{md,markdown}]
+trim_trailing_whitespace = false
+
+[*.{yml,yaml,json}]
+indent_style = space
+indent_size = 2

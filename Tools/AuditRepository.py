@@ -4,6 +4,7 @@
 import argparse
 import json
 import re
+import subprocess
 from datetime import date
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -411,6 +412,42 @@ def validate_release_docs(root):
     return errors
 
 
+def release_provenance_warnings(root):
+    """Warn (never fail) when the published provenance cannot be reproduced.
+
+    A commit that no ref reaches is still a valid Git object on the maintainer's
+    machine, but nobody else can check it out - the release claim then points at
+    nothing. Hard enforcement belongs to Tools/ValidateProvenance.py
+    --require-current, which needs local run evidence that a documentation-only
+    GitHub workflow cannot provide. This check only makes an orphaned claim
+    visible in the audit output.
+    """
+    page = root / "README.md"
+    if not page.is_file():
+        return []
+    match = PROVENANCE_MARK.search(page.read_text(encoding="utf-8-sig"))
+    if not match:
+        return []
+    commit = match.group(1)
+
+    def git(*args):
+        try:
+            return subprocess.run(["git", "-C", str(root), *args],
+                                  stdout=subprocess.DEVNULL,
+                                  stderr=subprocess.DEVNULL).returncode
+        except OSError:
+            return 1
+
+    if git("cat-file", "-e", commit + "^{commit}") != 0:
+        return ["WARNING: release-provenance %s is not a commit in this repository; "
+                "the published release claim cannot be reproduced." % commit]
+    if git("merge-base", "--is-ancestor", commit, "HEAD") != 0:
+        return ["WARNING: release-provenance %s is not reachable from HEAD (no branch "
+                "or tag contains it). Re-run .\\Tools\\ReleasePipeline.ps1 -Baseline "
+                "to re-establish a reproducible baseline." % commit]
+    return []
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write-matrix", action="store_true", help="refresh the generated documentation page")
@@ -437,6 +474,8 @@ def main():
             errors.append("generated matrix is stale; run with --write-matrix")
     errors.extend(validate_docs(ROOT))
     errors.extend(validate_release_docs(ROOT))
+    for warning in release_provenance_warnings(ROOT):
+        print(warning)
     for error in errors:
         print(error)
     if errors:

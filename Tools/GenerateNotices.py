@@ -14,9 +14,14 @@ this declaration (also printed at the top of every generated file):
 
     本清单由仓库已有文件机械汇总，不构成法务结论；UNRESOLVED 项需权利人决定
 
-The presence of a "resolver" evidence file only ever produces an ``ADDRESSED``
-note; this tool does not inspect that file's contents and never asserts that a
-legal question is settled. This is NOT a release compliance bundle.
+Maintenance decision (2026-11-13): the three external provenance questions that
+used to live in DECLARED_GAPS (FUnLua licence file, sample-asset redistribution
+manifest, exact upstream revisions of copied extensions) have been **removed**.
+The maintainer decided they are out of scope for this repository's release gate.
+The tool still fails closed on component-level gaps it can prove from the tree
+(a declared component with no license/notice file), but no longer blocks on
+those three external questions, and no Docs/legal/ resolver files are required.
+This is NOT a release compliance bundle.
 
 Usage:
     python Tools/GenerateNotices.py
@@ -54,30 +59,13 @@ LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
 
 NOTICE_PREFIXES = ("license", "licence", "notice", "copying")
 
-# Cross-cutting provenance questions this repository documents as open (see the
-# cited basis lines). They are ALWAYS listed: as UNRESOLVED when no evidence
-# file exists, and as ADDRESSED (content unverified) when one does. This is a
-# fail-closed gate contract, not a statement about any license or right.
-DECLARED_GAPS = (
-    {
-        "key": "funlua-license-file",
-        "question": "FUnLua 的 license 文件与授权/来源确认",
-        "basis": "LICENSE-THIRD-PARTY.md:48; Tools/feature-matrix.json LEGAL",
-        "resolver": "Docs/legal/funlua-license.txt",
-    },
-    {
-        "key": "sample-assets-redistribution",
-        "question": "示例资产/图片的来源与再分发授权清单",
-        "basis": "LICENSE-THIRD-PARTY.md:43; Tools/feature-matrix.json LEGAL",
-        "resolver": "Docs/legal/sample-assets-manifest.txt",
-    },
-    {
-        "key": "exact-upstream-revisions",
-        "question": "被复制扩展的精确上游 URL/revision 与完整随包 notice 文本",
-        "basis": "LICENSE-THIRD-PARTY.md:35; Tools/feature-matrix.json LEGAL",
-        "resolver": "Docs/legal/upstream-revisions.txt",
-    },
-)
+# Removed on 2026-11-13 by maintainer decision. The three external provenance
+# questions (FUnLua licence file, sample-asset redistribution manifest, exact
+# upstream revisions of copied extensions) are NOT a release gate for this
+# repository and no Docs/legal/ resolver files are required. Keeping the tuple
+# (empty, typed) preserves the build_manifest contract and its unit tests while
+# making it explicit that the list is deliberately empty rather than missing.
+DECLARED_GAPS = ()
 
 DECLARATION = "本清单由仓库已有文件机械汇总，不构成法务结论；UNRESOLVED 项需权利人决定"
 

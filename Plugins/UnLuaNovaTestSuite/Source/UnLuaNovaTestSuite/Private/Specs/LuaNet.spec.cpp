@@ -25,6 +25,7 @@
 #include "LuaFunction.h"
 #include "UnLuaNovaManager.h"
 #include "UnLuaNovaNet.h"
+#include "UnLuaNovaNetPolicy.h"
 #include "UnLuaNovaNetPayload.h"
 #include "UnLuaNovaNetTypeSpec.h"
 #include "UnLuaNovaTestHelpers.h"
@@ -983,6 +984,32 @@ void FNetSpec::Define()
 
             lua_pop(L, 1);
             UnLuaNova::FUnLuaNovaNet::Cleanup(nullptr);
+        });
+
+        It(TEXT("策略层拒绝不匹配的复制 schema 与 RPC 布局"), EAsyncExecution::TaskGraphMainThread, [this]()
+        {
+            UnLuaNova::FUnLuaNovaNetPolicy& Policy = UnLuaNova::FUnLuaNovaNetPolicy::Get();
+            Policy.Initialize();
+            // The expected denials would otherwise emit Error logs and fail the spec.
+            Policy.SetDeniedLogger([](const UnLuaNova::FLuaNetPolicyEvent&) {});
+
+            FString SchemaReason;
+            TEST_TRUE(Policy.NegotiateSchema(nullptr, 0x12345678u, 0x87654321u, SchemaReason)
+                == UnLuaNova::ELuaNetPolicyResult::SchemaIncompatible);
+            TEST_FALSE(SchemaReason.IsEmpty());
+
+            FString RpcReason;
+            TEST_TRUE(Policy.NegotiateRpcLayout(nullptr, 0xAAAABBBBu, 0xCCCCDDDDu, RpcReason)
+                == UnLuaNova::ELuaNetPolicyResult::SchemaIncompatible);
+            TEST_FALSE(RpcReason.IsEmpty());
+
+            FString OkReason;
+            TEST_TRUE(Policy.NegotiateSchema(nullptr, 42u, 42u, OkReason)
+                == UnLuaNova::ELuaNetPolicyResult::Ok);
+            TEST_TRUE(Policy.NegotiateRpcLayout(nullptr, 42u, 42u, OkReason)
+                == UnLuaNova::ELuaNetPolicyResult::Ok);
+
+            Policy.ClearDeniedLogger();
         });
     });
 }

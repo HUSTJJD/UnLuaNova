@@ -22,6 +22,7 @@
 // session, with fields that can only be produced by a peer that really ran the scenario.
 
 #include "NetSession.h"
+#include "UnLuaNovaNetPolicy.h"
 #include "UnLuaNovaTestCommon.h"
 #include "UnLuaNovaTestHelpers.h"
 
@@ -172,6 +173,31 @@ namespace UnLuaNovaTestSuite
             AppendWorldFacts(GetRunWorld(), *Data);
             Data->SetStringField(TEXT("Scenario"), Scenario);
             Data->SetStringField(TEXT("SessionId"), SessionId);
+
+            // B5. The old SchemaMismatch scenario injected no fault at all: the gate
+            // only proved that all peers exported the SAME fingerprint. Here each peer
+            // feeds a deliberately different layout fingerprint through the real
+            // negotiation path and records that it was refused. The denial logger is
+            // silenced for this single probe so the expected Error does not fail the
+            // automation test itself.
+            if (Scenario == TEXT("SchemaMismatch"))
+            {
+                double LocalAsDouble = 0.0;
+                Data->TryGetNumberField(TEXT("RepSchemaVersion"), LocalAsDouble);
+                const uint32 LocalVersion = static_cast<uint32>(LocalAsDouble);
+                const uint32 InjectedVersion = LocalVersion ^ 0x9E3779B9u;
+                FString Reason;
+                UnLuaNova::FUnLuaNovaNetPolicy::Get().SetDeniedLogger(
+                    [](const UnLuaNova::FLuaNetPolicyEvent&) {});
+                const UnLuaNova::ELuaNetPolicyResult Verdict =
+                    UnLuaNova::FUnLuaNovaNetPolicy::Get().NegotiateSchema(
+                        nullptr, LocalVersion, InjectedVersion, Reason);
+                UnLuaNova::FUnLuaNovaNetPolicy::Get().ClearDeniedLogger();
+                Data->SetNumberField(TEXT("InjectedSchemaVersion"), static_cast<double>(InjectedVersion));
+                Data->SetBoolField(TEXT("SchemaMismatchRejected"),
+                    Verdict == UnLuaNova::ELuaNetPolicyResult::SchemaIncompatible);
+                Data->SetStringField(TEXT("SchemaMismatchReason"), Reason);
+            }
             Data->SetBoolField(TEXT("Complete"), bComplete);
             Data->SetNumberField(TEXT("ClientsAtSpawn"), ClientsAtSpawn);
             Data->SetNumberField(TEXT("ClientsFinal"), ClientsFinal);

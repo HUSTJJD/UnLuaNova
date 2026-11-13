@@ -14,6 +14,7 @@
 
 #include "Misc/EngineVersionComparison.h"
 #include "UnLuaNovaCompatibility.h"
+#include "UnLuaNovaNetPolicy.h"
 
 #if WITH_EDITOR
 #include "ISettingsModule.h"
@@ -61,6 +62,7 @@ namespace UnLuaNova
 #endif
 
             RegisterSettings();
+            UnLuaNova::FUnLuaNovaNetPolicy::Get().Initialize();
 
 #if ALLOW_CONSOLE
             ConsoleCommands = MakeUnique<FUnLuaNovaConsoleCommands>(this);
@@ -99,6 +101,8 @@ namespace UnLuaNova
 
         virtual void ShutdownModule() override
         {
+            UnLuaNova::FUnLuaNovaNetPolicy::Get().Shutdown();
+
             // Everything above was bound with AddRaw, so the handles have to come back off
             // here: a module unload (Live Coding, editor shutdown) destroys this object
             // while the delegates still point at it, and the next map load then calls
@@ -203,7 +207,25 @@ namespace UnLuaNova
                 return;
 
             // Default-phase modules may register classes after this PreDefault module starts.
-            const auto& Paths = GetDefault<UUnLuaNovaSettings>()->PreBindClasses;
+            const UUnLuaNovaSettings* Settings = GetDefault<UUnLuaNovaSettings>();
+            const auto& Paths = Settings->PreBindClasses;
+
+            // Lua-declared RPCs must exist before a NetDriver caches the class. An
+            // unresolvable PreBindClasses entry used to be a silent no-op that only
+            // surfaced as a missing RPC on one peer. Report it at startup instead.
+            if (Settings->bDeclaredNetworking)
+            {
+                for (const FSoftClassPath& Path : Paths)
+                {
+                    if (!Path.ResolveClass())
+                    {
+                        UNLUANOVA_LOGF(LogUnLuaNova, Warning,
+                            TEXT("PreBindClasses entry '%s' did not resolve. Lua-declared RPCs on that class will NOT be registered before the NetDriver caches it; load the class before connecting."),
+                            *Path.ToString());
+                    }
+                }
+            }
+
             for (UClass* Class : TObjectRange<UClass>())
             {
                 if (PreBoundClasses.Contains(Class))

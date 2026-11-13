@@ -36,7 +36,7 @@ These values are read from the vendored sources themselves, not from the current
 
 ## Development Tools and Build Artifacts
 
-- `Tools/luau-lsp` and `Tools/lua-language-server` are separate pinned tool submodules, not runtime libraries. Include their license files and transitive notices if distributing their binaries.
+- `Tools/lua-language-server` (LuaLS) and `Tools/luau-lsp` are separate pinned tool submodules, not runtime libraries. The superproject records only a gitlink; each checkout carries its own `LICENSE` / `LICENSE.md`, which governs those sources, and this repository does not relicense them. Before distributing their compiled binaries, take the exact license identifier and copyright holder **from the license file inside the pinned checkout** (not from upstream HEAD), include that full text, and add the transitive notices: LuaLS has nested submodules under `3rd/` and `meta/3rd/`, and luau-lsp vendors `luau/`. Neither tool is a runtime dependency of the plugin.
 - `Tools/LuauPerfgraph/perfgraph.py` is a launcher for the pinned Luau `tools/perfgraph.py` and `tools/svg.py`; the upstream code remains under Luau's MIT notices.
 - Python packages, imageio-ffmpeg and its bundled ffmpeg require package/binary-specific license inventory if redistributed. The requirement file alone is not that inventory.
 - Unreal Engine is an external dependency with separate Epic terms; this repository's license does not grant rights to engine code or assets.

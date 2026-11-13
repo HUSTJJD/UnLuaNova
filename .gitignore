@@ -5,6 +5,7 @@ Build/
 DerivedDataCache/
 Intermediate/
 Saved/
+Crash*/
 Content/Collections/
 Content/Developers/
 Plugins/*/Binaries/
@@ -22,7 +23,15 @@ IOS/
 *.VC.db
 *.xcworkspace
 /.idea
-/TPSProject.sln.DotSettings.user
+# IDE-local files. The previous rule named a different project (TPSProject) and
+# therefore never matched anything here; as a result two machine-local files
+# (UnLuaNovaDemo.sln.DotSettings and UnLuaNovaDemo.code-workspace) were committed.
+# Those two are already tracked - remove them from the index with
+#   git rm --cached UnLuaNovaDemo.sln.DotSettings UnLuaNovaDemo.code-workspace
+# (the files stay on disk).
+*.sln.DotSettings
+*.sln.DotSettings.user
+*.code-workspace
 /Plugins/Developer/RiderLink
 /Benchmark
 /Plugins/UnLuaNova/Source/UnLuaNovaDefaultParamCollector/obj
@@ -34,6 +43,8 @@ Plugins/UnLuaNova/Source/UnLuaNovaDefaultParamCollectorUbtPlugin/obj
 *.slnx
 /.vsconfig
 *.ubtplugin.csproj.props
+*.pyc
+.pytest_cache/
 
 # MkDocs build output
 /_site/

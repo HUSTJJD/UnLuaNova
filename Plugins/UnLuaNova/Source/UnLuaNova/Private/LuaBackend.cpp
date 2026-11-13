@@ -213,6 +213,12 @@ namespace UnLuaNova
 
 #else // plain-Lua backend
 
+// The stubs below are deliberate capability boundaries, not unfinished work: every
+// UNLUANOVA_HAS_* macro behind them is 0 on this backend, and the call sites stay
+// unbranched. Do not "fill them in" - add a real implementation only when the
+// capability macro becomes 1. The full degradation matrix is documented in
+// Docs/CN/Backend_Capability_Matrix.md and Docs/EN/Backend_Capability_Matrix.md.
+
 namespace UnLuaNova
 {
     // Exported from the public header, so both backends have to provide it. There is no

@@ -9,7 +9,7 @@ _UnLua's release line stopped at v2.3.6 (2023-11). This is where the scattered c
 
 [![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.8.3-ff3b30?style=for-the-badge&logo=unrealengine&logoColor=white)](https://www.unrealengine.com/)
 [![Backends](https://img.shields.io/badge/Lua-5.5.1%20%2F%20Luau%200.743-blue?style=for-the-badge)](Plugins/UnLuaNova/Source/ThirdParty/VERSIONS.md)
-[![Tests](https://img.shields.io/badge/Tests-2752%20passed%20%2F%200%20failed-1a7f37?style=for-the-badge)](Docs/EN/Testing.md)
+[![Tests](https://img.shields.io/badge/Tests-Release%20gated-1a7f37?style=for-the-badge)](Docs/EN/Testing.md)
 [![License](https://img.shields.io/badge/License-MIT-1a7f37?style=for-the-badge)](LICENSE)
 [![Docs](https://img.shields.io/badge/Docs-MkDocs-526CFE?style=for-the-badge)](https://hustjjd.github.io/UnLuaNova/)
 [![中文](https://img.shields.io/badge/中文-README-2496ed?style=for-the-badge)](README.md)
@@ -247,10 +247,14 @@ the connected matrix belong to `Tools/RunDevelopmentTests.ps1`.
 
 ## 🧪 Verification status
 
-<!-- release-status: passed -->
+<!-- release-status: not-passed -->
 <!-- release-provenance: 347bb8c5 -->
 
-The current release has passed the full build, automation and packaging acceptance run. Reproduce it locally with `.\Tools\RunTests.ps1`; commands and artifacts are described in [Testing and Automation](Docs/EN/Testing.md).
+The current tree has **not** passed a complete acceptance run. The latest Release (`Saved/ReleaseTests/test/release-summary.json`) is `passed=false`: `Luau-package-development` exceeded the 60-minute stage timeout during a cold UE 6.0 cook. Expect a first cook on a new engine to compile shaders from scratch.
+
+The `release-status` / `release-provenance` comments above are generated from the Release summaries by `Tools/UpdateReleaseStatus.py` and refreshed after every run; they name the comparison baseline, not the current HEAD. Whether the current tree has execution evidence is a separate question decided by `Tools/ValidateProvenance.py --require-current`. Test totals come from `release-summary.json` and are deliberately not hard-coded in a badge.
+
+Reproduce the gate with `.\Tools\RunTests.ps1` (see [Testing and Automation](Docs/EN/Testing.md)); a cold UE 6.0 cook may need `$env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180`. Verified combinations are listed in the [Engine and Platform Support Matrix](Docs/EN/Engine_Support.md).
 
 ---
 
@@ -263,8 +267,8 @@ Known limitations for users:
 | **Declarative networking (experimental)** | Eight replication conditions, each with its own storage group; `Custom` / `Dynamic` / `Never` / `NetGroup` and the Replay* family are rejected explicitly. `UStruct` and container type specs are supported. Engine-level seamless travel (`ServerTravel`), hot reload and authorization checks are out of scope |
 | **Generated thunks** | Final dispatch still goes through `UObject::ProcessEvent`; static binding removes the runtime reflection lookup and marshalling |
 | **Luau native codegen** | Opt-in via `lua.codegen.enabled=1` (default 0), narrow it with `lua.codegen.modules`. Applies only to chunks loaded after the switch, and only on Luau + x64/arm64 |
-| **Engine versions and platforms** | Verified on UE **5.8.3 / Win64**. Other engine versions, Linux / Mac / iOS / Android and consoles need their own acceptance |
-| **Per-instance binding** | `BindInstance` / `UnbindInstance` are available; class-level binding remains the default cache and must be established first. Overrides form a class-level union of function names and instance-bound objects resolve Lua functions per call. See `Docs/CN/InstanceBinding.md` |
+| **Engine versions and platforms** | UE **5.8.3 / Win64** is the verified baseline; UE 6.0 has version-adaptation branches but no passing Release yet. See the [support matrix](Docs/EN/Engine_Support.md) - other platforms are declared build targets, not accepted configurations |
+| **Per-instance binding** | `BindInstance` / `UnbindInstance` are available; class-level binding remains the default cache and must be established first. Overrides form a class-level union of function names and instance-bound objects resolve Lua functions per call. See [Per-instance module binding](Docs/EN/InstanceBinding.md) |
 | **Sandbox** | `lua.sandbox` is off by default; path checks are not an OS-level sandbox. Untrusted scripts need their own capability policy |
 
 See [Features](Docs/EN/Features.md), the [Programming guide](Docs/EN/UnLuaNova_Programming_Guide.md) and [Release notes](Docs/EN/ReleaseNotes.md).
@@ -276,12 +280,12 @@ See [Features](Docs/EN/Features.md), the [Programming guide](Docs/EN/UnLuaNova_P
 | Category | Entry points |
 |---|---|
 | Start here | [Quickstart](Docs/EN/Quickstart_For_UE_Newbie.md) · [Programming guide](Docs/EN/UnLuaNova_Programming_Guide.md) · [API](Docs/EN/API.md) · [Examples](Docs/EN/Showcase.md) |
-| Deeper | [Architecture](Docs/EN/Architecture.md) · [C++ API](Docs/EN/CxxApi.md) · [Settings](Docs/EN/Settings.md) |
+| Deeper | [Architecture](Docs/EN/Architecture.md) · [API](Docs/EN/API.md) · [C++ API](Docs/EN/CxxApi.md) · [Static export binding](Docs/EN/StaticExportBinding.md) · [Settings](Docs/EN/Settings.md) |
 | Backends | [Luau capabilities and compatibility](Docs/EN/Luau.md) · [Standard library](Docs/EN/StdLib.md) |
-| Tooling | [Debugging](Docs/EN/Debugging.md) · [Console commands](Docs/EN/ConsoleCommand.md) · [Testing](Docs/EN/Testing.md) |
-| Status | [Release notes](Docs/EN/ReleaseNotes.md) · [FAQ](Docs/EN/FAQ.md) |
+| Tooling | [Debugging](Docs/EN/Debugging.md) · [Console commands](Docs/EN/ConsoleCommand.md) · [IntelliSense](Docs/EN/IntelliSense.md) · [Testing](Docs/EN/Testing.md) |
+| Status | [Engine and platform support matrix](Docs/EN/Engine_Support.md) · [Release notes](Docs/EN/ReleaseNotes.md) · [FAQ](Docs/EN/FAQ.md) |
 
-**Verified environment**: Windows 11 · Unreal Engine **5.8.3** (source build) · Win64 · Visual Studio 2026 18.10 (MSVC 14.50) · Lua 5.5.1 / Luau 0.743+1
+**Verified environment** (of the last passing baseline): Windows 11 · Unreal Engine **5.8.3** (source build) · Win64 · Visual Studio 2026 18.10 (MSVC 14.50) · Lua 5.5.1 / Luau 0.743+1. See the [support matrix](Docs/EN/Engine_Support.md) for the full scope.
 
 ---
 

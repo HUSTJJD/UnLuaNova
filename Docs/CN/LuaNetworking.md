@@ -91,7 +91,7 @@ end
 - 数学类型要求对应 userdata，Object 不提供任意子类约束；对象跨连接的失效行为与晚加入场景需单独验收。
 - 类型规格字段走文本 payload，不是引擎的逐属性 delta；它证明的是"能声明、能往返、两端不会误解码"，不是带宽或压缩收益。`UObject` 引用不在规格语法内。
 - 带类型的 UPROPERTY 和 push-model 宏不保证 Iris、逐元素 delta、压缩收益或运行时回退语义。Legacy / PushOff / Iris / Cooked 四种打包变体需单独验收，不宣称压缩收益。
-- 条件组的脏标记粒度是"整组"而非"每个类型"：一个组是一个 UPROPERTY，组内任一字段变化都会重发整组；无条件字段仍保持按类型脏标记。
-- 热重载与权限检查需单独验收；跨 peer 声明差异由 `RepSchemaVersion` 报告导出检测。
+- 热重载、Seamless Travel 与 RPC 鉴权已有策略层入口，但底层仍在完善；用法、四个开关与
+  错误码见 [正式使用指南](Networking_Guide.md)。跨 peer 声明差异由 `RepSchemaVersion` 报告导出检测。
 
-[测试架构](Testing_Architecture.md) · [对象绑定](LuaDrivenObjects.md)
+[正式使用指南](Networking_Guide.md) · [发布就绪度](Release_Readiness.md) · [测试架构](Testing_Architecture.md) · [对象绑定](LuaDrivenObjects.md)

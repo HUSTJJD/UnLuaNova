@@ -5,8 +5,10 @@ repo_url: https://github.com/HUSTJJD/UnLuaNova
 repo_name: HUSTJJD/UnLuaNova
 edit_uri: blob/master/Docs/
 docs_dir: Docs
-exclude_docs: |
-  Archive/
+# There is no Docs/Archive/ directory yet. Keep the rule commented out so an empty
+# exclusion does not look like a real, deliberate policy:
+# exclude_docs: |
+#   Archive/
 
 theme:
   name: material
@@ -56,13 +58,16 @@ nav:
       - CN/index.md
       - 入门:
           - UE 新手快速上手: CN/Quickstart_For_UE_Newbie.md
+          - 从 UnLua 迁移: CN/Migration_Guide.md
           - 功能清单: CN/Features.md
           - 相对 UnLua：原理与优势: CN/WhyUnLuaNova.md
           - slua / FUnLua 源码对照: CN/Comparison_sluaunreal.md
       - 编程:
           - 编程指南: CN/UnLuaNova_Programming_Guide.md
           - 实例级模块绑定: CN/InstanceBinding.md
+          - 声明式网络正式使用指南: CN/Networking_Guide.md
           - Luau 后端: CN/Luau.md
+          - 双后端能力矩阵: CN/Backend_Capability_Matrix.md
           - API 参考: CN/API.md
           - C++ API 参考: CN/CxxApi.md
           - Lua 驱动对象: CN/LuaDrivenObjects.md
@@ -84,6 +89,10 @@ nav:
           - 测试与自动化: CN/Testing.md
           - 测试架构与验收: CN/Testing_Architecture.md
       - 参考:
+          - 正式发布就绪度与判定标准: CN/Release_Readiness.md
+          - API 稳定性与版本策略: CN/API_Stability.md
+          - 生产部署与运维: CN/Production_Deployment.md
+          - 引擎版本与平台支持矩阵: CN/Engine_Support.md
           - Showcase 示例: CN/Showcase.md
           - 版本说明: CN/ReleaseNotes.md
           - 许可与来源: CN/License.md
@@ -92,12 +101,16 @@ nav:
       - EN/index.md
       - Getting Started:
           - Quickstart for UE Newcomers: EN/Quickstart_For_UE_Newbie.md
+          - Migration Guide: EN/Migration_Guide.md
           - Features: EN/Features.md
           - Why UnLuaNova: EN/WhyUnLuaNova.md
           - slua / FUnLua Source Comparison: EN/Comparison_sluaunreal.md
       - Programming:
           - Programming Guide: EN/UnLuaNova_Programming_Guide.md
+          - Per-instance Module Binding: EN/InstanceBinding.md
+          - Declared Networking Production Guide: EN/Networking_Guide.md
           - Luau Backend: EN/Luau.md
+          - Dual-backend Capability Matrix: EN/Backend_Capability_Matrix.md
           - API Reference: EN/API.md
           - C++ API Reference: EN/CxxApi.md
           - Lua-driven Objects: EN/LuaDrivenObjects.md
@@ -115,8 +128,14 @@ nav:
       - Diagnostics and Quality:
           - Debugging: EN/Debugging.md
           - IntelliSense: EN/IntelliSense.md
+          - Luau Coverage Export and Gate: EN/LuauCoverage.md
           - Testing and Automation: EN/Testing.md
+          - Test Architecture and Acceptance: EN/Testing_Architecture.md
       - Reference:
+          - Release Readiness and Definition of Done: EN/Release_Readiness.md
+          - API Stability and Versioning: EN/API_Stability.md
+          - Production Deployment and Operations: EN/Production_Deployment.md
+          - Engine and Platform Support Matrix: EN/Engine_Support.md
           - Showcase Samples: EN/Showcase.md
           - Release notes: EN/ReleaseNotes.md
           - License: EN/License.md

@@ -183,6 +183,7 @@ namespace UnLuaNova
         static bool FeatureOOP() { return UNLUANOVA_HAS_STDLIB_OOP != 0 && GetDefault<UUnLuaNovaSettings>()->bOOP; }
         static bool FeatureDataDrivenBinding() { return GetDefault<UUnLuaNovaSettings>()->bDataDrivenBinding; }
         static bool FeatureDebugAdapter() { return GetDefault<UUnLuaNovaSettings>()->bDebugAdapter; }
+        static bool FeatureDeclaredNetworking() { return GetDefault<UUnLuaNovaSettings>()->bDeclaredNetworking; }
 
         /**
          * Profiler 的 self time 是"实测"还是"采样归因"。
@@ -216,6 +217,7 @@ namespace UnLuaNova
             {"oop", FeatureOOP},
             {"datadrivenbinding", FeatureDataDrivenBinding},
             {"debugadapter", FeatureDebugAdapter},
+            {"declarednetworking", FeatureDeclaredNetworking},
         };
 
         static int HasFeature(lua_State* L)

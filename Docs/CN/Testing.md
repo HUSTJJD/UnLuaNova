@@ -5,7 +5,7 @@ description: "单入口 release 验证与失败判定"
 
 # 测试与自动化
 
-<!-- release-status: passed -->
+<!-- release-status: not-passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 维护者只需在仓库根目录运行：
@@ -158,7 +158,16 @@ DAP 会话测试使用系统分配的回环端口，由游戏线程逐帧处理�
 
 总结果在 `Saved/ReleaseTests/test/release-summary.md` 和 `release-summary.json`；加 `-Baseline` 则写到 `Saved/ReleaseTests/baseline/`。结果只保留这两份：本轮的 `test` 与用来对比的 `baseline`，每轮覆盖自己那一份（不再按时间戳分目录）。跑 `test` 时总结果会附一节「与基线对比」，列出基线通过而本轮未通过的阶段，以及哪个载体少了用例或多了失败；对比只报告、不改变本轮判定。
 
-每个阶段记录 `passed`、`cached`、`failed` 或 `blocked`；`cached` 表示该阶段的输入没有变化、直接复用了上一轮产物（见下）。任一失败或依赖阻塞均返回非零退出码。执行中 `complete=false`，不能视为完成。每个独立外部阶段默认最多 60 分钟，可统一通过 `-TimeoutMinutes` 调整。
+每个阶段记录 `passed`、`cached`、`failed` 或 `blocked`；`cached` 表示该阶段的输入没有变化、直接复用了上一轮产物（见下）。任一失败或依赖阻塞均返回非零退出码。执行中 `complete=false`，不能视为完成。每个独立外部阶段默认最多 60 分钟。
+
+`RunTests.ps1` 刻意不接受任何参数，所以超时通过**环境变量**调整，而不是命令行开关：
+
+```powershell
+$env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180   # 1..1440，默认 60
+.\Tools\RunTests.ps1
+```
+
+该变量只改变每个外部阶段的超时，**不改变 Release 的范围**；完整矩阵仍会执行。UE 6.0 首次打包会触发 FULL COOK 与全量 shader 编译（单项可达 100 秒以上），冷缓存下 60 分钟通常不够。需要局部调试时仍用 `Tools/RunDevelopmentTests.ps1` 的 `-TimeoutMinutes`。
 
 ## 构建产物复用
 

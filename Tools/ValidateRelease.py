@@ -525,6 +525,18 @@ def validate_net_scenario(run, name, backend):
         for label, data in reports.items():
             if data.get("Props") != props or data.get("Rpcs") != server.get("Rpcs"):
                 errors.append(f"SchemaMismatch: declaration export differs on {label}")
+        # B5. "Every peer exports the same fingerprint" only proves agreement; it never
+        # proves the rejection path. Require each peer to have injected a deliberately
+        # different layout fingerprint and observed the policy layer refuse it.
+        version = server.get("RepSchemaVersion")
+        for label, data in reports.items():
+            injected = data.get("InjectedSchemaVersion")
+            if not isinstance(injected, (int, float)) or injected == version:
+                errors.append(f"SchemaMismatch: no different schema was injected on {label}")
+            if data.get("SchemaMismatchRejected") is not True:
+                errors.append(f"SchemaMismatch: rejection was not proven on {label}")
+            if not data.get("SchemaMismatchReason"):
+                errors.append(f"SchemaMismatch: no rejection reason recorded on {label}")
     else:
         errors.append(f"{name}: unknown scenario")
     return errors

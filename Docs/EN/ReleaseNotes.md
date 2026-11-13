@@ -1,6 +1,6 @@
 # Release notes
 
-<!-- release-status: passed -->
+<!-- release-status: not-passed -->
 <!-- release-provenance: 347bb8c5 -->
 
 The current UnLuaNova release targets **Unreal Engine 5.8.3 / Win64** and is distributed

@@ -12,6 +12,11 @@
 
 #pragma once
 
+// EXPERIMENTAL API - Lua-declared networking. Interfaces in this header may change
+// without a deprecation cycle and are not recommended for production use. Engine-level
+// seamless travel, hot reload and authorization checks are out of scope. See
+// Docs/CN/LuaNetworking.md for the supported subset.
+
 #include "CoreMinimal.h"
 #include "UnLuaNovaNetDecl.h"
 
@@ -71,6 +76,14 @@ namespace UnLuaNova
 
         /** Declarations registered for a class, empty when it declared none. */
         static const TArray<FLuaRepDecl>& GetReplicatedProps(const UClass* Class);
+
+        /**
+         * Fingerprint of the RPC layout declared for a class (names, kinds, reliable
+         * flags, parameter types and type specs). This is deliberately separate from
+         * the replicated-field SchemaVersion: both are copied to peers so a mismatch
+         * in EITHER layout is rejected at runtime. 0 means no RPCs were declared.
+         */
+        static uint32 GetRpcLayoutVersion(const UClass* Class);
 
         /**
          * Release 'Env' from every declaration it bound, plus any whose class has already

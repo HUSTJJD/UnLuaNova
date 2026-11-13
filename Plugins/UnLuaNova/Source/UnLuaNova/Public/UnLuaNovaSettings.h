@@ -127,6 +127,33 @@ public:
     UPROPERTY(Config, EditAnywhere, Category="Features", Meta=(DisplayName="Debug Adapter Port"))
     int32 DebugAdapterPort = 5699;
 
+    // ==== 声明式网络（Lua-declared networking） =================================
+    // 这是一组安全边界，不是性能开关。关掉总开关后，运行期不会再构造任何 UFunction，
+    // 也不会注册复制字段；脚本可用 UnLuaNova.HasFeature('declarednetworking') 查询。
+
+    /** 总开关：允许 Lua 声明 RPC 与复制字段。默认开启；关闭后整条路径不可用。 */
+    UPROPERTY(Config, EditAnywhere, Category="Networking", Meta=(DisplayName="Declared Networking"))
+    bool bDeclaredNetworking = true;
+
+    /**
+     * 要求为声明/调用 RPC 安装应用层鉴权处理器（C++ 通过
+     * FUnLuaNovaNetPolicy::SetAuthorizationHandler）。引擎自带的 owner 检查始终有效。
+     * 默认 false；开启但没装处理器是**配置错误**，策略层会 fail-closed 拒绝，而不是放行。
+     */
+    UPROPERTY(Config, EditAnywhere, Category="Networking", Meta=(DisplayName="Require RPC Authorization"))
+    bool bRequireRpcAuthorization = false;
+
+    /**
+     * 允许热重载改变复制字段布局。关闭时布局变更会被明确拒绝并提示重建网络环境；
+     * 开启时新布局只作为「待协商迁移」暂存，所有 peer 协商通过后才生效。
+     */
+    UPROPERTY(Config, EditAnywhere, Category="Networking", Meta=(DisplayName="Allow Hot-Reload Schema Change"))
+    bool bAllowHotReloadSchemaChange = false;
+
+    /** Seamless travel 期间保留已注册的类 schema，并递增代际以阻止旧世界的 RPC ID 复用。 */
+    UPROPERTY(Config, EditAnywhere, Category="Networking", Meta=(DisplayName="Preserve Schema Across Seamless Travel"))
+    bool bPreserveSchemaAcrossSeamlessTravel = true;
+
     /** List of classes to bind on startup. */
     UPROPERTY(config, EditAnywhere, Category=Runtime, meta = (MetaClass="/Script/CoreUObject.Object", AllowAbstract="True", DisplayName = "List of classes to bind on startup"))
     TArray<FSoftClassPath> PreBindClasses;

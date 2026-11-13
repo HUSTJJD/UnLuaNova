@@ -9,7 +9,7 @@ _UnLua 的发布线停在 v2.3.6（2023-11）。这里把散落的社区成果�
 
 [![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.8.3-ff3b30?style=for-the-badge&logo=unrealengine&logoColor=white)](https://www.unrealengine.com/)
 [![Backends](https://img.shields.io/badge/Lua-5.5.1%20%2F%20Luau%200.743-blue?style=for-the-badge)](Plugins/UnLuaNova/Source/ThirdParty/VERSIONS.md)
-[![Tests](https://img.shields.io/badge/双后端用例-2752%20通过%20%2F%200%20失败-1a7f37?style=for-the-badge)](Docs/CN/Testing.md)
+[![Tests](https://img.shields.io/badge/双后端用例-Release%20门禁-1a7f37?style=for-the-badge)](Docs/CN/Testing.md)
 [![License](https://img.shields.io/badge/License-MIT-1a7f37?style=for-the-badge)](LICENSE)
 [![Docs](https://img.shields.io/badge/Docs-MkDocs-526CFE?style=for-the-badge)](https://hustjjd.github.io/UnLuaNova/)
 [![English](https://img.shields.io/badge/English-README-2496ed?style=for-the-badge)](README_EN.md)
@@ -232,10 +232,14 @@ python Tools/AuditRepository.py      # 不编译的仓库一致性检查
 
 ## 🧪 验证状态
 
-<!-- release-status: passed -->
+<!-- release-status: not-passed -->
 <!-- release-provenance: 347bb8c5 -->
 
-当前版本已通过完整的构建、自动化测试与打包验收。运行 `.\Tools\RunTests.ps1` 可在本地复现；命令、流程与产物说明见 [测试与自动化](Docs/CN/Testing.md)。
+当前代码树**尚未**通过一次完整的验收。最近一次 Release（`Saved/ReleaseTests/test/release-summary.json`）为 `passed=false`：`Luau-package-development` 在 UE 6.0 冷 cook 阶段超过 60 分钟超时。新引擎首次打包会全量编译 shader，属于预期成本，但需要单独调整超时。
+
+上面的 `release-status` / `release-provenance` 注释由 `Tools/UpdateReleaseStatus.py` 在每次 Release 写出摘要后自动生成，标注的是**对比基线**的提交，不是当前 HEAD；「当前树是否有执行证据」由 `Tools/ValidateProvenance.py --require-current` 单独判定。用例总数以 `release-summary.json` 为准，不再手工写进徽章。
+
+本地复现执行 `.\Tools\RunTests.ps1`（见 [测试与自动化](Docs/CN/Testing.md)）；UE 6.0 冷 cook 可先设 `$env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180`。已验证组合见 [引擎版本与平台支持矩阵](Docs/CN/Engine_Support.md)。
 
 ---
 
@@ -248,7 +252,7 @@ python Tools/AuditRepository.py      # 不编译的仓库一致性检查
 | **声明式网络（实验）** | 支持 8 种复制条件（每种独立存储组），`Custom` / `Dynamic` / `Never` / `NetGroup` 与 Replay 系列等无存储组的条件会被显式拒绝；`UStruct` / 容器通过类型规格支持。引擎级 seamless travel（`ServerTravel`）、热重载与权限检查不在支持范围内 |
 | **生成 thunk** | 最终派发仍经由 `UObject::ProcessEvent`；静态绑定省去的是反射查找与参数编组 |
 | **Luau 原生编译** | 需显式开启 `lua.codegen.enabled=1`（默认 0），可用 `lua.codegen.modules` 限定模块；仅对切换后加载的 chunk 生效，且仅支持 Luau + x64/arm64 |
-| **平台与引擎版本** | 已验证 UE **5.8.3 / Win64**；其他引擎版本、Linux / Mac / iOS / Android 与主机平台需单独验收 |
+| **平台与引擎版本** | 已验证基线为 UE **5.8.3 / Win64**；UE 6.0 已有适配分支但尚无通过的完整 Release。详见 [支持矩阵](Docs/CN/Engine_Support.md)——声明的其余平台是编译目标，不是已验收配置 |
 | **同类实例绑定** | `BindInstance` / `UnbindInstance` 已提供；默认仍按 `UClass` 缓存，须先完成类级绑定，覆写为类级函数名并集，实例路径逐次解析 Lua 函数。见 [实例级模块绑定](Docs/CN/InstanceBinding.md) |
 | **沙盒** | `lua.sandbox` 默认关闭；路径检查不是 OS 级沙盒，不可信脚本需另定能力策略 |
 
@@ -264,9 +268,9 @@ python Tools/AuditRepository.py      # 不编译的仓库一致性检查
 | 深入 | [架构](Docs/CN/Architecture.md) · [API](Docs/CN/API.md) · [C++ API](Docs/CN/CxxApi.md) · [静态导出绑定](Docs/CN/StaticExportBinding.md) · [设置](Docs/CN/Settings.md) |
 | 后端 | [Luau 能力与兼容边界](Docs/CN/Luau.md) · [内置库](Docs/CN/StdLib.md) |
 | 工具 | [调试](Docs/CN/Debugging.md) · [控制台命令](Docs/CN/ConsoleCommand.md) · [智能提示](Docs/CN/IntelliSense.md) · [测试](Docs/CN/Testing.md) |
-| 现状 | [版本说明](Docs/CN/ReleaseNotes.md) · [FAQ](Docs/CN/FAQ.md) |
+| 现状 | [引擎版本与平台支持矩阵](Docs/CN/Engine_Support.md) · [版本说明](Docs/CN/ReleaseNotes.md) · [FAQ](Docs/CN/FAQ.md) |
 
-**验证环境**：Windows 11 · Unreal Engine **5.8.3**（源码构建）· Win64 · Visual Studio 2026 18.10（MSVC 14.50）· Lua 5.5.1 / Luau 0.743+1
+**验证环境**（上一次通过的基线）：Windows 11 · Unreal Engine **5.8.3**（源码构建）· Win64 · Visual Studio 2026 18.10（MSVC 14.50）· Lua 5.5.1 / Luau 0.743+1。完整范围见 [支持矩阵](Docs/CN/Engine_Support.md)。
 
 ---
 

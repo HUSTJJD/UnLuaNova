@@ -1,0 +1,22 @@
+# Repository C++ style for newly written code. See CONTRIBUTING.md.
+# This is a forward-looking contract, not a license to reformat the inherited
+# UnLua sources: a whole-tree clang-format run would produce an unreviewable diff
+# and would also touch the vendored ThirdParty trees, which are excluded below.
+---
+Language: Cpp
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+BreakBeforeBraces: Allman
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+IndentCaseLabels: true
+NamespaceIndentation: None
+PointerAlignment: Left
+SortIncludes: false
+SpaceBeforeParens: ControlStatements
+Standard: c++17
+...

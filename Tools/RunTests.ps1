@@ -14,6 +14,11 @@
     land in Saved/ReleaseTests/test. Build stages whose inputs did not change are reused
     from Saved/ReleaseCache; test, evidence and report stages always run.
 
+    This entry point stays parameterless by design. The only supported adjustment is
+    the environment variable UNLUANOVA_RELEASE_TIMEOUT_MINUTES (1..1440, default 60):
+    a cold UE 6.0 cook compiles shaders from scratch and can exceed the default.
+    It changes the timeout of every external stage, never the scope of the Release.
+
     Backend isolation is unconditional: every carrier uses
     UnLuaNovaDemo<Backend>{Editor,Server,''} and Backends/<Backend> outputs for DLLs,
     intermediates, staged packages, cooked assets and generated static bindings.
