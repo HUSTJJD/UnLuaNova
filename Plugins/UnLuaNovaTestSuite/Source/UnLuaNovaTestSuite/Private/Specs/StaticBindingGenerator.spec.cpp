@@ -32,6 +32,7 @@
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
 
 #include "Commandlets/UnLuaNovaStaticBindingGeneratorCommandlet.h"
+#include "Commandlets/UnLuaNovaStaticBindingGenerator.h"
 
 BEGIN_DEFINE_SPEC(FStaticBindingGeneratorSpec, "UnLuaNova.Editor.StaticBindingGenerator", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 END_DEFINE_SPEC(FStaticBindingGeneratorSpec)
@@ -47,7 +48,7 @@ static bool SpecGenerate(const FString& OutputDir, FString& OutContent)
     if (Commandlet->Main(Params) != 0)
         return false;
 
-    const FString Generated = OutputDir / TEXT("UnLuaNovaStaticBinding_Generated.cpp");
+    const FString Generated = OutputDir / UnLuaNova::GetStaticBindingGeneratedFileName();
     return FFileHelper::LoadFileToString(OutContent, *Generated);
 }
 
@@ -97,7 +98,7 @@ void FStaticBindingGeneratorSpec::Define()
         const int32 Result = Commandlet->Main(Params);
         TEST_EQUAL(Result, 0);
 
-        const FString Generated = OutputDir / TEXT("UnLuaNovaStaticBinding_Generated.cpp");
+        const FString Generated = OutputDir / UnLuaNova::GetStaticBindingGeneratedFileName();
         TestTrue(*Generated, IFileManager::Get().FileExists(*Generated));
 
         FString Content;

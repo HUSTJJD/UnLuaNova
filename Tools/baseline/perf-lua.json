@@ -1,7 +1,7 @@
 {
 	"Backend": "Lua",
-	"EngineVersion": "5.8.3-0+UE5",
-	"MeasuredUtc": "2026-11-05T13:11:09.174Z",
+	"EngineVersion": "6.0.0-0+UE6",
+	"MeasuredUtc": "2026-11-13T19:33:21.885Z",
 	"Machine": "davidsjian-PC2",
 	"Tolerance": 1.25,
 	"Measurement":
@@ -14,86 +14,86 @@
 		{
 			"Case": "Native",
 			"Iterations": 20000,
-			"PerOpUs": 0.0013241024580871678,
-			"WarmupBatches": 9545,
-			"WarmupMs": 250.00589713454247,
+			"PerOpUs": 0.0011947192874640525,
+			"WarmupBatches": 10386,
+			"WarmupMs": 250.01909956336021,
 			"Samples": [
 				{
-					"ElapsedMs": 100.0245027244091,
-					"Batches": 3862
+					"ElapsedMs": 100.02049803733826,
+					"Batches": 4195
 				},
 				{
-					"ElapsedMs": 100.016999989748,
-					"Batches": 3674
-				},
-				{
-					"ElapsedMs": 100.02269968390465,
-					"Batches": 3777
-				},
-				{
-					"ElapsedMs": 100.00810027122498,
-					"Batches": 3740
+					"ElapsedMs": 100.00870004296303,
+					"Batches": 4174
 				},
 				{
 					"ElapsedMs": 100.02189874649048,
-					"Batches": 3780
+					"Batches": 4186
+				},
+				{
+					"ElapsedMs": 100.00069811940193,
+					"Batches": 4156
+				},
+				{
+					"ElapsedMs": 100.0203974545002,
+					"Batches": 4206
 				}
 			]
 		},
 		{
 			"Case": "Reflection",
 			"Iterations": 20000,
-			"PerOpUs": 0.51548201590776443,
-			"WarmupBatches": 24,
-			"WarmupMs": 250.04449859261513,
+			"PerOpUs": 0.37437714636325836,
+			"WarmupBatches": 34,
+			"WarmupMs": 253.24840098619461,
 			"Samples": [
 				{
-					"ElapsedMs": 109.33079943060875,
-					"Batches": 11
+					"ElapsedMs": 103.36960107088089,
+					"Batches": 14
 				},
 				{
-					"ElapsedMs": 103.80829870700836,
-					"Batches": 10
+					"ElapsedMs": 103.68929803371429,
+					"Batches": 14
 				},
 				{
-					"ElapsedMs": 100.58340057730675,
-					"Batches": 10
+					"ElapsedMs": 104.82560098171234,
+					"Batches": 14
 				},
 				{
-					"ElapsedMs": 108.76580327749252,
-					"Batches": 10
+					"ElapsedMs": 108.85749757289886,
+					"Batches": 14
 				},
 				{
-					"ElapsedMs": 103.09640318155289,
-					"Batches": 10
+					"ElapsedMs": 100.11580213904381,
+					"Batches": 13
 				}
 			]
 		},
 		{
 			"Case": "Lua",
 			"Iterations": 20000,
-			"PerOpUs": 1.5295687597244978,
+			"PerOpUs": 1.4478750061243773,
 			"WarmupBatches": 9,
-			"WarmupMs": 279.85339984297752,
+			"WarmupMs": 257.93009996414185,
 			"Samples": [
 				{
-					"ElapsedMs": 125.00980123877525,
+					"ElapsedMs": 113.98350074887276,
 					"Batches": 4
 				},
 				{
-					"ElapsedMs": 121.85249850153923,
+					"ElapsedMs": 113.41109871864319,
 					"Batches": 4
 				},
 				{
-					"ElapsedMs": 122.36550077795982,
+					"ElapsedMs": 115.83000048995018,
 					"Batches": 4
 				},
 				{
-					"ElapsedMs": 128.9111003279686,
+					"ElapsedMs": 116.58589914441109,
 					"Batches": 4
 				},
 				{
-					"ElapsedMs": 115.94319716095924,
+					"ElapsedMs": 115.83969742059708,
 					"Batches": 4
 				}
 			]
@@ -101,144 +101,144 @@
 		{
 			"Case": "VM.Arithmetic",
 			"Iterations": 200000,
-			"PerOpUs": 0.0094482829829431927,
-			"WarmupBatches": 140,
-			"WarmupMs": 250.98329782485962,
+			"PerOpUs": 0.0082800244210196328,
+			"WarmupBatches": 148,
+			"WarmupMs": 250.26100128889084,
 			"Samples": [
 				{
-					"ElapsedMs": 101.04440152645111,
-					"Batches": 52
+					"ElapsedMs": 101.80789977312088,
+					"Batches": 51
 				},
 				{
-					"ElapsedMs": 100.60020163655281,
-					"Batches": 54
+					"ElapsedMs": 101.46690160036087,
+					"Batches": 61
 				},
 				{
-					"ElapsedMs": 100.15179961919785,
-					"Batches": 53
+					"ElapsedMs": 101.01629793643951,
+					"Batches": 61
 				},
 				{
-					"ElapsedMs": 100.23720189929008,
-					"Batches": 52
+					"ElapsedMs": 101.21979936957359,
+					"Batches": 62
 				},
 				{
-					"ElapsedMs": 100.89049860835075,
-					"Batches": 54
+					"ElapsedMs": 101.26619786024094,
+					"Batches": 64
 				}
 			]
 		},
 		{
 			"Case": "VM.Call",
 			"Iterations": 200000,
-			"PerOpUs": 0.031406031921505928,
-			"WarmupBatches": 38,
-			"WarmupMs": 255.20449876785278,
+			"PerOpUs": 0.025278099812567234,
+			"WarmupBatches": 46,
+			"WarmupMs": 251.18749961256981,
 			"Samples": [
 				{
-					"ElapsedMs": 105.98680004477501,
-					"Batches": 16
+					"ElapsedMs": 101.11239925026894,
+					"Batches": 20
 				},
 				{
-					"ElapsedMs": 101.43559798598289,
-					"Batches": 16
+					"ElapsedMs": 103.65840047597885,
+					"Batches": 20
 				},
 				{
-					"ElapsedMs": 100.49930214881897,
-					"Batches": 16
+					"ElapsedMs": 100.93019902706146,
+					"Batches": 19
 				},
 				{
-					"ElapsedMs": 100.1398004591465,
-					"Batches": 17
+					"ElapsedMs": 103.33679988980293,
+					"Batches": 21
 				},
 				{
-					"ElapsedMs": 101.60119831562042,
-					"Batches": 17
+					"ElapsedMs": 104.36380282044411,
+					"Batches": 21
 				}
 			]
 		},
 		{
 			"Case": "VM.TableGrow",
 			"Iterations": 200000,
-			"PerOpUs": 0.012649149633944035,
-			"WarmupBatches": 96,
-			"WarmupMs": 251.50959938764572,
+			"PerOpUs": 0.0098914802804881442,
+			"WarmupBatches": 130,
+			"WarmupMs": 252.12350115180016,
 			"Samples": [
 				{
-					"ElapsedMs": 101.19319707155228,
-					"Batches": 40
+					"ElapsedMs": 101.02679952979088,
+					"Batches": 52
 				},
 				{
-					"ElapsedMs": 100.77589750289917,
-					"Batches": 38
+					"ElapsedMs": 101.79180279374123,
+					"Batches": 51
 				},
 				{
-					"ElapsedMs": 101.34860128164291,
-					"Batches": 43
+					"ElapsedMs": 101.17809846997261,
+					"Batches": 52
 				},
 				{
-					"ElapsedMs": 100.10290145874023,
-					"Batches": 41
+					"ElapsedMs": 100.89309886097908,
+					"Batches": 51
 				},
 				{
-					"ElapsedMs": 101.71649977564812,
-					"Batches": 36
+					"ElapsedMs": 100.50350055098534,
+					"Batches": 49
 				}
 			]
 		},
 		{
 			"Case": "VM.TableRead",
 			"Iterations": 200000,
-			"PerOpUs": 0.010645468025765522,
-			"WarmupBatches": 106,
-			"WarmupMs": 251.73329934477806,
+			"PerOpUs": 0.0082242952995612972,
+			"WarmupBatches": 157,
+			"WarmupMs": 250.86019933223724,
 			"Samples": [
 				{
-					"ElapsedMs": 100.13720020651817,
-					"Batches": 46
+					"ElapsedMs": 102.05020010471344,
+					"Batches": 63
 				},
 				{
-					"ElapsedMs": 101.1430025100708,
-					"Batches": 51
+					"ElapsedMs": 100.33640265464783,
+					"Batches": 61
 				},
 				{
-					"ElapsedMs": 100.83140060305595,
-					"Batches": 47
+					"ElapsedMs": 100.1489982008934,
+					"Batches": 62
 				},
 				{
-					"ElapsedMs": 100.06739944219589,
-					"Batches": 47
+					"ElapsedMs": 100.58940201997757,
+					"Batches": 57
 				},
 				{
-					"ElapsedMs": 100.38689896464348,
-					"Batches": 53
+					"ElapsedMs": 100.8618026971817,
+					"Batches": 60
 				}
 			]
 		},
 		{
 			"Case": "Lua.Container.PointsAreCoplanar",
 			"Iterations": 20000,
-			"PerOpUs": 29.581359960138798,
+			"PerOpUs": 18.963270075619221,
 			"WarmupBatches": 1,
-			"WarmupMs": 463.57700228691101,
+			"WarmupMs": 390.63359797000885,
 			"Samples": [
 				{
-					"ElapsedMs": 525.11129900813103,
+					"ElapsedMs": 384.01290029287338,
 					"Batches": 1
 				},
 				{
-					"ElapsedMs": 530.72639927268028,
+					"ElapsedMs": 430.82470074295998,
 					"Batches": 1
 				},
 				{
-					"ElapsedMs": 591.62719920277596,
+					"ElapsedMs": 379.26540151238441,
 					"Batches": 1
 				},
 				{
-					"ElapsedMs": 611.25370115041733,
+					"ElapsedMs": 336.2497016787529,
 					"Batches": 1
 				},
 				{
-					"ElapsedMs": 639.36960324645042,
+					"ElapsedMs": 330.36390319466591,
 					"Batches": 1
 				}
 			]

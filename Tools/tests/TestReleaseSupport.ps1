@@ -36,11 +36,13 @@ try {
     $LuaDir = Join-Path $GeneratedRoot 'Lua'
     $LuauDir = Join-Path $GeneratedRoot 'Luau'
     New-Item -ItemType Directory -Path $LuaDir, $LuauDir -Force | Out-Null
-    $LuaSource = Join-Path $LuaDir 'UnLuaNovaStaticBinding_Generated.cpp'
-    $LuauSource = Join-Path $LuauDir 'UnLuaNovaStaticBinding_Generated.cpp'
+    $LuaSource = Join-Path $LuaDir 'UnLuaNovaStaticBinding_Generated_Lua.cpp'
+    $LuauSource = Join-Path $LuauDir 'UnLuaNovaStaticBinding_Generated_Luau.cpp'
     Assert ((Get-ReleaseStaticBindingSource $Project 'Lua') -eq $LuaSource) 'Lua binding layout was not resolved'
     Assert ((Get-ReleaseStaticBindingSource $Project 'Luau') -eq $LuauSource) 'Luau binding layout was not resolved'
     Assert ($LuaSource -ne $LuauSource) 'The two backends still share one generated source'
+    Assert ((Split-Path -Leaf $LuaSource) -ne (Split-Path -Leaf $LuauSource)) `
+        'UBT would see duplicate generated .cpp basenames across backend directories'
     $Rejected = $false
     try { Get-ReleaseStaticBindingSource $Project 'Other' | Out-Null } catch { $Rejected = $true }
     Assert $Rejected 'An unknown backend was accepted as a binding directory'
@@ -69,7 +71,7 @@ try {
     $LegacyProject = Join-Path $Temporary 'legacy/Demo.uproject'
     $LegacyDir = Join-Path $Temporary 'legacy/Source/Demo/Generated/Backends/Lua'
     New-Item -ItemType Directory -Path $LegacyDir -Force | Out-Null
-    $LegacySource = Join-Path $LegacyDir 'UnLuaNovaStaticBinding_Generated.cpp'
+    $LegacySource = Join-Path $LegacyDir 'UnLuaNovaStaticBinding_Generated_Lua.cpp'
     Assert ((Get-ReleaseStaticBindingSource $LegacyProject 'Lua') -eq $LegacySource) 'Legacy binding layout was not resolved'
 
     # Only the cooked game's missing HTML template is an allowed UE automation error.
@@ -240,6 +242,57 @@ try {
     Assert ($Required.Count -gt 0 -and $Absent.Count -eq 0) `
         ('Unexecuted stages disappeared from summary: ' + ($Absent -join ', '))
     Assert ((Get-FileHash $Before.Path).Hash -eq $Before.Hash) 'Failed preflight modified project config'
+
+    # legacy-layout-cleanup archives the ordinary-layout DLLs, so UE can only resolve
+    # cross-plugin imports when the active backend's isolated directories are on PATH.
+    # Guard both the wiring in the pipeline and the switch's replace-not-append contract.
+    $PipelineText = [IO.File]::ReadAllText((Join-Path $Tools 'ReleasePipeline.ps1'))
+    Assert ($PipelineText.Contains('Set-ReleaseBackendDllPath $B $RepoRoot')) `
+        'The editor-build activation hook stopped registering isolated DLL directories'
+    $OriginalPath = $env:PATH
+    try {
+        $FakeRoot = Join-Path $Temporary 'dllroot'
+        $LuaDirs = @()
+        $LuauDirs = @()
+        foreach ($Rel in (Get-ReleaseBinariesRoots)) {
+            $LuaDir = Join-Path $FakeRoot "$Rel/Backends/Lua"
+            $LuauDir = Join-Path $FakeRoot "$Rel/Backends/Luau"
+            New-Item -ItemType Directory -Path $LuaDir, $LuauDir -Force | Out-Null
+            $LuaDirs += $LuaDir
+            $LuauDirs += $LuauDir
+        }
+        Assert ($LuaDirs.Count -eq 6) 'The isolated binaries root contract changed'
+        $script:ReleaseBasePath = $OriginalPath
+        Set-ReleaseBackendDllPath 'Lua' $FakeRoot
+        $Parts = @($env:PATH.Split(';'))
+        Assert ((@($Parts | Where-Object { $LuaDirs -contains $_ })).Count -eq 6) 'Lua DLL directories are missing from PATH'
+        Assert (-not (@($Parts | Where-Object { $LuauDirs -contains $_ })).Count) 'Luau DLL directories leaked into the Lua PATH'
+        Set-ReleaseBackendDllPath 'Luau' $FakeRoot
+        $Parts = @($env:PATH.Split(';'))
+        Assert ((@($Parts | Where-Object { $LuauDirs -contains $_ })).Count -eq 6) 'Luau DLL directories are missing from PATH'
+        Assert (-not (@($Parts | Where-Object { $LuaDirs -contains $_ })).Count) 'Switching backends left the previous backend on PATH'
+        $Rejected = $false
+        try { Set-ReleaseBackendDllPath 'Other' $FakeRoot } catch { $Rejected = $true }
+        Assert $Rejected 'An unknown backend was accepted for DLL path registration'
+    } finally {
+        $env:PATH = $OriginalPath
+        [Environment]::SetEnvironmentVariable('PATH', $OriginalPath, 'Process')
+    }
+    # The single-command entry point cannot create a baseline Release summary, so that
+    # promotion item has to stay informational or no RunTests.ps1 run could ever pass.
+    $PromotionText = [IO.File]::ReadAllText((Join-Path $Tools 'CheckPromotion.py'))
+    $BaselineItem = $PromotionText.IndexOf('"baseline is reachable from HEAD"')
+    Assert ($BaselineItem -ge 0) 'The baseline promotion item disappeared'
+    $ItemTail = $PromotionText.Substring($BaselineItem,
+        [Math]::Min(400, $PromotionText.Length - $BaselineItem))
+    Assert ($ItemTail.Contains('gate=False')) 'The baseline promotion item became a hard gate again'
+    # An engine upgrade must be able to rebuild the stale performance baseline from the
+    # run's own measurement, and the pipeline has to call it before the editor evidence gate.
+    $SupportText = [IO.File]::ReadAllText((Join-Path $Tools 'ReleaseSupport.ps1'))
+    Assert ($SupportText.Contains('function Sync-ReleasePerfBaseline')) 'Performance baseline rebuild helper disappeared'
+    $PipelineText2 = [IO.File]::ReadAllText((Join-Path $Tools 'ReleasePipeline.ps1'))
+    Assert ($PipelineText2.Contains('Sync-ReleasePerfBaseline $B $EditorDir')) `
+        'The editor evidence gate stopped rebuilding stale performance baselines'
     Write-Host 'Release support tests passed.'
 } finally {
     $Resolved = [IO.Path]::GetFullPath($Temporary)

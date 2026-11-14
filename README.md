@@ -238,7 +238,7 @@ Server / Shipping 构建与自动化、8 场景 + 4 变体联网矩阵（双后�
 ## 🧪 验证状态
 
 <!-- release-status: not-passed -->
-<!-- release-provenance: 0b5b29b2 -->
+<!-- release-provenance: d8905e1c -->
 
 当前代码树**尚未**通过一次完整的验收。最近一次 Release（`Saved/ReleaseTests/test/release-summary.json`）为 `passed=false`：`Luau-package-development` 在 UE 6.0 冷 cook 阶段超过 60 分钟超时。新引擎首次打包会全量编译 shader，属于预期成本，但需要单独调整超时。
 

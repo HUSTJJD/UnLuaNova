@@ -47,7 +47,8 @@ Release / Win64 / Lua + Luau (no operations performed):
   1. Lock project; snapshot config/environment and source provenance.
   2. Initialize pinned submodules; prepare isolated Python tools and MSVC environment;
      archive stale ordinary-layout DLLs/manifests so only one backend's UCLASS layout
-     is visible to the engine.
+     is visible, and expose the active backend's isolated DLL directories on PATH so
+     the engine can resolve cross-plugin DLL imports.
   3. Repository audit, Python/PowerShell tooling regressions, both analyzers, and a
      strict documentation site build.
   4. Per backend: enable features; build Editor/generator; generate this backend's bindings; rebuild.
@@ -534,14 +535,15 @@ try {
     # engine aborts with "Trying to recreate changed class ... outside of hot reload".
     # Archive the ordinary-layout products once - they are reproducible build
     # artifacts, this project only uses isolated targets, and nothing is deleted.
+    # That also removes the only copies UE could use to resolve cross-plugin DLL
+    # imports: AddBinariesDirectory registers the TOP-LEVEL Binaries/Win64 only, never
+    # Backends/<Backend>/. The editor-build -After hook therefore has to call
+    # Set-ReleaseBackendDllPath after activating the backend; without it a commandlet
+    # dies with "Missing import: UnrealEditor-UnLuaNova.dll" and GetLastError=126.
     Invoke-Stage 'legacy-layout-cleanup' {
         $ArchiveRoot = Join-Path $RepoRoot 'Saved/LegacyLayout'
         $Stamp = $Started.ToString('yyyyMMdd-HHmmss')
-        $LayoutRoots = @('Binaries/Win64', 'Plugins/UnLuaNova/Binaries/Win64',
-            'Plugins/UnLuaNovaTestSuite/Binaries/Win64')
-        foreach ($Ext in @('LuaProtobuf', 'LuaRapidjson', 'LuaSocket')) {
-            $LayoutRoots += "Plugins/UnLuaNovaExtensions/$Ext/Binaries/Win64"
-        }
+        $LayoutRoots = @(Get-ReleaseBinariesRoots)
         $Moved = 0
         foreach ($Rel in $LayoutRoots) {
             $Root = Join-Path $RepoRoot $Rel
@@ -720,6 +722,12 @@ try {
                 # on a cache hit, so a reused build still activates the right backend before
                 # the static binding generator / editor commandlets start loading modules.
                 Run-Script 'SwitchBackend.ps1' @('-Backend', $B, '-ProjectPath', $ProjectPath, '-Platform', 'Win64') "$B-activate-backend"
+                # UE resolves DLL imports through the top-level Binaries/Win64 directories
+                # plus PATH, and legacy-layout-cleanup archived the ordinary-layout DLLs.
+                # Put this backend's isolated directories on the inherited PATH so every
+                # commandlet, cook, package and peer launched from here can load the
+                # cross-plugin dependencies (UnrealEditor-UnLuaNova.dll, *-Lua/Luau.dll).
+                Set-ReleaseBackendDllPath $B $RepoRoot
             }
         Invoke-Stage "$B-static-bindings" {
             # The generator writes only into this backend's Generated/Backends/<Backend>/,
@@ -852,6 +860,10 @@ try {
             if (-not $EditorStarted -or -not (Test-Path $Perf) -or (Get-Item $Perf).LastWriteTimeUtc -lt $EditorStarted) {
                 throw 'Missing fresh benchmark artifact.'
             }
+            # An engine upgrade invalidates the committed performance baseline's scope.
+            # ValidateRelease.py only checks performance for the editor carrier, so this
+            # is the one place that has to rebuild it from this run's real measurement.
+            Sync-ReleasePerfBaseline $B $EditorDir
             Run $PythonExe @('-B', (Join-Path $PSScriptRoot 'ValidateRelease.py'), '--run', $EditorDir, '--backend', $B, '--carrier', 'editor') "$B-editor-evidence"
         } @('tool-environment', "$B-editor-tests")
         Invoke-Stage "$B-game-tests" {
@@ -909,9 +921,17 @@ try {
     # were built above, so -SkipBuild never recompiles them.
     foreach ($B in @('Lua', 'Luau')) {
         Invoke-Stage "net-matrix-$B" {
+            # The cells launch Editor peers through the same module-loading path as the
+            # generator commandlets. PATH still points at whichever backend the last
+            # editor build activated (Luau), so a Lua cell loaded Luau DLLs and its
+            # LuaProtobuf/LuaSocket plugins failed to load. Switch it per backend.
+            Set-ReleaseBackendDllPath $B $RepoRoot
+            # ReleaseManaged must reach every connected cell: without it each peer run
+            # tries to take the very RunTests.lock this pipeline already owns, and all
+            # 24 cells fail with "Another development test run is already active".
             $NetArgs = @('-NetMatrix', '-EnginePath', $EnginePath, '-ProjectPath', $ProjectPath,
                 '-Backend', $B, '-SkipBuild', '-OutputDir', $NetMatrixDir,
-                '-TimeoutMinutes', "$TimeoutMinutes")
+                '-TimeoutMinutes', "$TimeoutMinutes", '-ReleaseManaged')
             Run-Script 'RunDevelopmentTests.ps1' $NetArgs "net-matrix-$B"
         } @('tool-environment', 'Lua-package-development', 'Lua-package-server',
             'Luau-package-development', 'Luau-package-server')
@@ -961,6 +981,7 @@ try {
             elseif (Test-Path -LiteralPath $IniPath) { [IO.File]::Delete($IniPath) }
         }
         foreach ($Name in $EnvironmentNames) { [Environment]::SetEnvironmentVariable($Name, $SavedEnvironment[$Name], 'Process') }
+        if ($script:ReleaseBasePath) { $env:PATH = $script:ReleaseBasePath }
     } catch {
         $Stages.Add([ordered]@{ name = 'restore'; status = 'failed'; seconds = 0; detail = $_.Exception.Message })
     } finally {

@@ -938,7 +938,10 @@ void UUnLuaNovaReplicationComponent::OnRep_SchemaVersion()
             *GetNameSafe(GetOwner()), *Reason);
         return;
     }
-    UNLUANOVA_LOGF(LogUnLuaNova, Error,
+    // Rejection is an expected policy outcome (see FUnLuaNovaNetPolicy::Deny): an Error
+    // here would fail every automation spec that deliberately injects a mismatched
+    // schema, even though the component correctly refused to apply the buckets.
+    UNLUANOVA_LOGF(LogUnLuaNova, Warning,
         TEXT("'%s' schema negotiation failed (%s): %s"),
         *GetNameSafe(GetOwner()), UnLuaNova::LexToString(Verdict), *Reason);
 }

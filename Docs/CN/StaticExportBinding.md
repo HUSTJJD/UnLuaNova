@@ -115,7 +115,7 @@ StaticBindingSelection=Modules
 产物缺失或类型有增删就重新生成，日志会写明做了什么：
 
 ```
-StaticBinding: no generated file yet, generating into .../Generated/Backends/Luau/UnLuaNovaStaticBinding_Generated.cpp
+StaticBinding: no generated file yet, generating into .../Generated/Backends/Luau/UnLuaNovaStaticBinding_Generated_Luau.cpp
 StaticBinding: wrote ... (312 types, thunk coverage 2211/4078).
 It is C++ - rebuild once for it to take effect; until then the reflective path stays in use.
 ```

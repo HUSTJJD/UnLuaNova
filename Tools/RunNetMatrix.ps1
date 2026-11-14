@@ -47,7 +47,10 @@ param(
     [switch] $SkipBuild,
     # Every cell runs against the prebuilt backend-isolated Game/Server targets; there is
     # no ordinary-target path.
-    [switch] $DryRun
+    [switch] $DryRun,
+    # Set by ReleasePipeline.ps1: the parent pipeline already owns RunTests.lock, so
+    # every cell must verify the release token instead of trying to take the lock again.
+    [switch] $ReleaseManaged
 )
 
 $ErrorActionPreference = 'Stop'
@@ -127,7 +130,8 @@ function Invoke-Cell([string] $Label, [string] $BackendName, [string] $Filter, [
         # the UE process exit code and the fail-closed Copy-Tree/gate below still do.
         & $RunDevTests -Backend $BackendName -Carrier $Carrier -Tier All -Filter $Filter `
             -OutputDir $Scratch -ExtraArgs $ExtraArgs -SkipBuild:$SkipBuild `
-            -TimeoutMinutes $TimeoutMinutes -EnginePath $EnginePath -ProjectPath $ProjectPath -NoReport
+            -TimeoutMinutes $TimeoutMinutes -EnginePath $EnginePath -ProjectPath $ProjectPath -NoReport `
+            -ReleaseManaged:$ReleaseManaged
         if ($LASTEXITCODE -ne 0) { throw "NetMatrix cell failed: $Label ($LASTEXITCODE)" }
     } finally {
         foreach ($Name in $Names) {
@@ -159,7 +163,13 @@ foreach ($B in $Backends) {
                 'PushOff' { '-ini:Engine:[ConsoleVariables]:Net.IsPushModelEnabled=0' }
                 default { '' }
             }
-            $CellArgs = (@("-UnLuaNovaNetVariant=$Variant") + @($Flags | Where-Object { $_ })) -join ' '
+            # The Cooked cell drives real packaged binaries. Without an explicit cooked
+            # map the game falls back to a default startup map, finds no cooked content in
+            # the isolated staging tree and exits with "No COOKED content was found".
+            # ReleasePipeline's $B-game-tests uses the same empty test map successfully.
+            $CookedMap = if ($Variant -eq 'Cooked') { '/UnLuaNovaTestSuite/Tests/Misc/Empty' } else { '' }
+            $CellArgs = (@($CookedMap | Where-Object { $_ }) +
+                @("-UnLuaNovaNetVariant=$Variant") + @($Flags | Where-Object { $_ })) -join ' '
             $PeerExe = ''
             $ServerExe = ''
             if ($Variant -eq 'Cooked' -and -not $DryRun) {

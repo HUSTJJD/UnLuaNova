@@ -103,7 +103,11 @@ namespace UnLuaNova
             DeniedLogger(Event);
             return;
         }
-        UNLUANOVA_LOGF(LogUnLuaNova, Error,
+        // A denied declaration / RPC / schema is a policy decision that was handled, not
+        // an engine failure. Logging it at Error makes UE's automation framework mark
+        // every spec that exercises the rejection path as failed (it counts Error logs
+        // emitted during a test). Warning keeps it visible without corrupting the result.
+        UNLUANOVA_LOGF(LogUnLuaNova, Warning,
             TEXT("UnLuaNova.Net policy denied: result=%s reason='%s' object='%s' rpc='%s' "
                  "schema local=0x%08X remote=0x%08X generation=%u"),
             LexToString(Event.Result), *Event.Reason, *Event.ObjectPath,

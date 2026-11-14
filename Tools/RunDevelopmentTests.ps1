@@ -103,7 +103,7 @@ if ($NetMatrix) {
     # manifests are activated per backend by RunNetMatrix/RunDevelopmentTests below.
     & (Join-Path $PSScriptRoot 'RunNetMatrix.ps1') -EnginePath $EnginePath -ProjectPath $ProjectPath `
         -OutputDir $OutputDir -Backend $Backend -TimeoutMinutes $TimeoutMinutes `
-        -SkipBuild:$SkipBuild -DryRun:$DryRun
+        -SkipBuild:$SkipBuild -DryRun:$DryRun -ReleaseManaged:$ReleaseManaged
     exit $LASTEXITCODE
 }
 Write-Host 'Development run: this result is not a release verdict.' -ForegroundColor Yellow

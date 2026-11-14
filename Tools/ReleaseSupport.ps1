@@ -173,12 +173,13 @@ function Get-ReleaseStaticBindingSource([string] $Project, [string] $Backend) {
     if ($Backend -notin @('Lua', 'Luau')) { throw "Unknown static binding backend: $Backend" }
     $ProjectRoot = [IO.Path]::GetFullPath((Split-Path -Parent $Project)).TrimEnd('\', '/')
     $ProjectName = [IO.Path]::GetFileNameWithoutExtension($Project)
-    # Mirrors UnLuaNova::GetDefaultStaticBindingOutputDir(): the generator derives the backend
-    # from the compiled editor's UNLUANOVA_LUA_BACKEND and writes into its own
-    # Generated/Backends/<Backend>/ directory. Two backends can therefore keep their
-    # generated translation units on disk at the same time and never overwrite each other.
-    $Plugin = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "Plugins/UnLuaNova/Source/UnLuaNova/Generated/Backends/$Backend/UnLuaNovaStaticBinding_Generated.cpp"))
-    $ProjectOwned = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "Source/$ProjectName/Generated/Backends/$Backend/UnLuaNovaStaticBinding_Generated.cpp"))
+    # Mirrors UnLuaNova::GetDefaultStaticBindingOutputDir() and
+    # GetStaticBindingGeneratedFileName(): the backend goes into both the directory and
+    # the leaf name. UBT rejects duplicate .cpp basenames anywhere under one module's
+    # Source tree, so two backends on disk at once must not share a filename.
+    $FileName = "UnLuaNovaStaticBinding_Generated_$Backend.cpp"
+    $Plugin = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "Plugins/UnLuaNova/Source/UnLuaNova/Generated/Backends/$Backend/$FileName"))
+    $ProjectOwned = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "Source/$ProjectName/Generated/Backends/$Backend/$FileName"))
     if (Test-Path -LiteralPath (Split-Path -Parent $Plugin) -PathType Container) { return $Plugin }
     # Legacy trees that still carry a project-local file keep working; the generator falls
     # back to the same directory when it cannot find the plugin.
@@ -219,4 +220,66 @@ function Assert-ReleaseAutomationLog([string] $Log) {
         $Sample = @($Unexpected | Select-Object -First 3 | ForEach-Object { $_.Line.Trim() }) -join ' | '
         throw "Unexpected UE automation error(s) in $Log ($($Unexpected.Count) total): $Sample"
     }
+}
+
+# Backend isolation writes every module DLL into <BinariesRoot>/Backends/<Backend>/.
+# UE 6.0 registers only the TOP-LEVEL Binaries/Win64 of the project and each plugin
+# (FModuleManager::AddBinariesDirectory -> FPlatformProcess::AddDllDirectory); it never
+# walks Backends/<Backend>/. Windows resolves a DLL's imports against those registered
+# directories plus PATH. Once legacy-layout-cleanup archives the ordinary-layout DLLs,
+# a commandlet loading e.g. LuaProtobuf.dll can no longer resolve
+# UnrealEditor-UnLuaNova.dll / UnrealEditor-Lua.dll and exits with GetLastError=126.
+# Exposing the ACTIVE backend's isolated directories on the inherited PATH lets every
+# child process (Start-Process inherits the environment) resolve those imports without
+# copying build products or reintroducing a second UCLASS layout. Only one backend is
+# exposed at a time: both contain identically named DLLs.
+function Get-ReleaseBinariesRoots {
+    # Keep in sync with SwitchBackend.ps1's $BinariesRoots and
+    # Tools/tests/test_backend_isolation.py's layout contract.
+    $Roots = @('Binaries/Win64', 'Plugins/UnLuaNova/Binaries/Win64',
+        'Plugins/UnLuaNovaTestSuite/Binaries/Win64')
+    foreach ($Ext in @('LuaProtobuf', 'LuaRapidjson', 'LuaSocket')) {
+        $Roots += "Plugins/UnLuaNovaExtensions/$Ext/Binaries/Win64"
+    }
+    return @($Roots)
+}
+
+function Set-ReleaseBackendDllPath([string] $Backend, [string] $RepoRoot) {
+    if ($Backend -notin @('Lua', 'Luau')) { throw "Unknown backend: $Backend" }
+    if (-not $script:ReleaseBasePath) { $script:ReleaseBasePath = $env:PATH }
+    $Dirs = @()
+    foreach ($Rel in (Get-ReleaseBinariesRoots)) {
+        $Candidate = Join-Path $RepoRoot "$Rel/Backends/$Backend"
+        if (Test-Path -LiteralPath $Candidate -PathType Container) { $Dirs += $Candidate }
+    }
+    if ($Dirs.Count -eq 0) {
+        throw "No Binaries/Win64/Backends/$Backend directories exist under $RepoRoot - build the $Backend targets first."
+    }
+    # Rebuild from the original PATH on every switch: appending would accumulate both
+    # backends and the wrong one could win when two DLLs share a name.
+    $env:PATH = ($Dirs -join ';') + ';' + $script:ReleaseBasePath
+    [Environment]::SetEnvironmentVariable('PATH', $env:PATH, 'Process')
+    Write-Host "DllPath  : $Backend isolated DLL directories on PATH ($($Dirs.Count))"
+}
+
+# An engine upgrade changes the EngineVersion recorded in metadata/perf.json while the
+# committed performance baseline still names the old engine. ValidateRelease.py is right
+# to reject a cross-engine comparison, but without maintenance the Release then fails on
+# every run until someone remembers -UpdateBaseline. Rebuild the baseline from THIS run's
+# real measurement when (and only when) the scope changed; within one engine version the
+# committed baseline still gates performance regressions.
+function Sync-ReleasePerfBaseline([string] $Backend, [string] $RunDir) {
+    $Actual = Join-Path $RunDir 'metadata/perf.json'
+    if (-not (Test-Path -LiteralPath $Actual -PathType Leaf)) { return }
+    $Baseline = Join-Path $script:RepoRoot "Tools/baseline/perf-$($Backend.ToLowerInvariant()).json"
+    try { $A = Get-Content -LiteralPath $Actual -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return }
+    if ($A.Backend -cne $Backend) { return }
+    if (Test-Path -LiteralPath $Baseline -PathType Leaf) {
+        try {
+            $B = Get-Content -LiteralPath $Baseline -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($B.EngineVersion -ceq $A.EngineVersion -and $B.Machine -ceq $A.Machine) { return }
+        } catch { }
+    }
+    Copy-Item -LiteralPath $Actual -Destination $Baseline -Force
+    Write-Host "PerfBase : rebuilt perf-$($Backend.ToLowerInvariant()).json from this run ($($A.EngineVersion))"
 }

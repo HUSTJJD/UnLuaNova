@@ -960,8 +960,10 @@ void FNetSpec::Define()
 
             TEST_TRUE(UnLuaNova::RunChunk(L, "return {HP=1}"));
             const int32 Table = lua_absindex(L, -1);
-            AddExpectedError(TEXT("received replicated fields laid out for a different declaration"), EAutomationExpectedErrorFlags::Contains, 1);
-
+            // PushBucket routes the mismatch through FUnLuaNovaNetPolicy now. The old
+            // "received replicated fields laid out ..." Error no longer exists, and the
+            // policy denial is a handled Warning, so no expected-error declaration is
+            // needed. bSchemaMismatchReported below is the "reported once" contract.
             Component->PushBucket(UnLuaNova::ELuaNetBucket::Int);
 
             lua_getfield(L, Table, "HP");

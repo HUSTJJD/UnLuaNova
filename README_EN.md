@@ -256,7 +256,7 @@ never changes the scope of the run.
 ## 🧪 Verification status
 
 <!-- release-status: not-passed -->
-<!-- release-provenance: 0b5b29b2 -->
+<!-- release-provenance: d8905e1c -->
 
 The current tree has **not** passed a complete acceptance run. The latest Release (`Saved/ReleaseTests/test/release-summary.json`) is `passed=false`: `Luau-package-development` exceeded the 60-minute stage timeout during a cold UE 6.0 cook. Expect a first cook on a new engine to compile shaders from scratch.
 

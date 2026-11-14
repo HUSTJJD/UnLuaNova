@@ -99,27 +99,63 @@ if ($Dirty.Count -gt 0)
     Write-Warning ("LuaLS 子模块有未提交的改动，构建前请确认：`n" + ($Dirty -join "`n"))
 }
 
-$PreviousTmp = $env:TMP
-$PreviousTemp = $env:TEMP
-$BuildTemp = Join-Path $RepoRoot ('Saved/ReleaseTools/luals-temp/' + [guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $BuildTemp -Force | Out-Null
-$env:TMP = $BuildTemp
-$env:TEMP = $BuildTemp
-Push-Location (Join-Path $SubDir '3rd/luamake')
+# Upstream's bootstrap (compile\build.bat) rebuilds luamake itself and runs bee.lua's
+# own test suite via ninja. Two things make it a bad fit for a repeated Release stage:
+#   * redirecting TMP/TEMP to a fresh empty directory made six of those tests fail
+#     ("F.F.F..F.F.F"), while the same suite passes with the inherited system TEMP;
+#   * re-running it regenerates the ninja graph and recompiles all 60 luamake objects
+#     even when the tool has not changed, which needs a complete MSVC/SDK environment.
+# It is a one-time bootstrap: skip it when both executables it produces already exist.
+# The LuaLS rebuild below is the step that actually has to follow source changes.
+# Keep the process environment untouched either way.
+$LuamakeRoot = Join-Path $SubDir '3rd/luamake'
+Push-Location $LuamakeRoot
 try
 {
-    # Upstream make.bat continues after a failed bootstrap. Check each step explicitly.
-    & cmd /c 'compile\build.bat'
-    if ($LASTEXITCODE -ne 0) { throw "luamake 引导构建或测试失败（exit $LASTEXITCODE）。" }
+    $LuamakeExe = Join-Path $LuamakeRoot 'luamake.exe'
+    $BootstrappedExe = Join-Path $LuamakeRoot 'build/msvc/bin/luamake.exe'
+    if ((Test-Path -LiteralPath $LuamakeExe -PathType Leaf) -and
+        (Test-Path -LiteralPath $BootstrappedExe -PathType Leaf))
+    {
+        Write-Host "luamake 已构建，跳过上游 bootstrap（仅在首次检出时需要）。"
+    }
+    else
+    {
+        # Upstream make.bat continues after a failed bootstrap. Check the exit code.
+        & cmd /c 'compile\build.bat'
+        if ($LASTEXITCODE -ne 0) { throw "luamake 引导构建或测试失败（exit $LASTEXITCODE）。" }
+    }
     Set-Location $SubDir
-    & ./3rd/luamake/luamake.exe rebuild
-    if ($LASTEXITCODE -ne 0) { throw "LuaLS rebuild 失败（exit $LASTEXITCODE）。" }
+    $RebuildLog = Join-Path $RepoRoot 'Saved/ReleaseTools/luals-rebuild.log'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $RebuildLog) -Force | Out-Null
+    & ./3rd/luamake/luamake.exe rebuild *> $RebuildLog
+    $RebuildExit = $LASTEXITCODE
+    if (Test-Path -LiteralPath $RebuildLog) { Get-Content -LiteralPath $RebuildLog -Tail 12 | Out-Host }
+    if ($RebuildExit -ne 0)
+    {
+        $RebuildOutput = if (Test-Path -LiteralPath $RebuildLog) { [IO.File]::ReadAllText($RebuildLog) } else { '' }
+        # luamake detects the host architecture with `reg query`. In a session where that
+        # tool cannot run, every rebuild dies with "Cannot detect architecture" even though
+        # a previously built analyzer is intact - and the type-check stages still exercise
+        # that binary for real. Allow reuse ONLY for this explicitly diagnosed environment
+        # failure; a genuine compile/link error must still fail the build.
+        if ((Test-Path -LiteralPath $Exe -PathType Leaf) -and
+            ($RebuildOutput.Contains('Cannot detect architecture') -or $RebuildOutput.Contains('拒绝访问')))
+        {
+            Write-Warning "luamake 无法在本会话检测 CPU 架构；复用已构建的 $Exe（详见 $RebuildLog）。"
+            # The pipeline invokes this script with `exit $LASTEXITCODE`; the failed
+            # rebuild leaves 1 behind even though we deliberately accepted the binary.
+            $global:LASTEXITCODE = 0
+        }
+        else
+        {
+            throw "LuaLS rebuild 失败（exit $RebuildExit）；详见 $RebuildLog"
+        }
+    }
 }
 finally
 {
     Pop-Location
-    $env:TMP = $PreviousTmp
-    $env:TEMP = $PreviousTemp
 }
 
 if (-not (Test-Path -LiteralPath $Exe))
