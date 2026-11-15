@@ -240,7 +240,7 @@ Server / Shipping 构建与自动化、8 场景 + 4 变体联网矩阵（双后�
 ## 🧪 验证状态
 
 <!-- release-status: passed -->
-<!-- release-provenance: 4a87d214 -->
+<!-- release-provenance: 5f9c9004 -->
 
 **v1.0.0** 的通过判定来自验证基线 `4a87d214` 的一次完整 Release：`complete=true`、`passed=true`，41 个必需阶段全部 passed/cached；`net-matrix-Lua` / `net-matrix-Luau` 均 passed；双后端 Editor / Game 自动化 691 / 662 / 716 / 687 全通过。发布提交 `31e2af3f`（tag `v1.0.0`）只追加版本身份与文档，其 tag message 明确写明这一验证基线。当前验证环境为 **UE 6.0 / Win64**；UE 5.8.3 / Win64 为历史 baseline，其余引擎版本与非 Win64 平台均为「已适配 / 编译目标，未验收」。
 

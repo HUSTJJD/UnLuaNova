@@ -259,7 +259,7 @@ never changes the scope of the run.
 ## 🧪 Verification status
 
 <!-- release-status: passed -->
-<!-- release-provenance: 4a87d214 -->
+<!-- release-provenance: 5f9c9004 -->
 
 The **v1.0.0** pass verdict comes from one complete Release on verification baseline `4a87d214`: `complete=true`, `passed=true`, all 41 required stages passed/cached; both `net-matrix-Lua` and `net-matrix-Luau` passed; Editor / Game automation passed 691 / 662 / 716 / 687 on the two backends. The release commit `31e2af3f` (tag `v1.0.0`) adds version identity and documentation only, and its tag message names that verification baseline explicitly. The current validation environment is **UE 6.0 / Win64**; UE 5.8.3 / Win64 is the historical baseline, and all other engine versions and non-Win64 platforms are adapted or declared build targets, not accepted configurations.
 

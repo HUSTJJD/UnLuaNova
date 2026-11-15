@@ -6,7 +6,7 @@ runtime hot updates, measurable performance.
 [English documentation](EN/index.md) · [中文文档](CN/index.md) · [GitHub](https://github.com/HUSTJJD/UnLuaNova)
 
 <!-- release-status: passed -->
-<!-- release-provenance: 4a87d214 -->
+<!-- release-provenance: 5f9c9004 -->
 
 ## Documentation
 

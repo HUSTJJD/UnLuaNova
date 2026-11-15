@@ -1,7 +1,7 @@
 {
   "schema": "unluanova-evidence/1",
   "run_id": "release-lua-editor",
-  "commit": "4a87d2147539c103da9fec4f67bec454d68b065b",
+  "commit": "5f9c900469e6b38fab2736cf8e91bb0423009267",
   "historical": false,
   "source": "Saved/ReleaseTests/test/lua/editor/lua",
   "worktree_dirty": true,
@@ -12,7 +12,7 @@
   "backend": "Lua",
   "machine": "davidsjian-PC2",
   "cpu": "AMD Ryzen 7 4700G with Radeon Graphics",
-  "report_created_on": "2026.11.15-08.26.03",
+  "report_created_on": "2026.11.15-16.58.52",
   "report_totals": {
     "succeeded": 677,
     "succeeded_with_warnings": 14,

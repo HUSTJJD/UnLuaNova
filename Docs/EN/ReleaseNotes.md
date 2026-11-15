@@ -1,7 +1,7 @@
 # Release notes
 
 <!-- release-status: passed -->
-<!-- release-provenance: 4a87d214 -->
+<!-- release-provenance: 5f9c9004 -->
 
 **UnLuaNova v1.0.0** (first stable release, 2026-11-15) passed a complete Release on
 **Unreal Engine 6.0 / Win64** (41/41 stages on both backends); UE 5.8.3 / Win64 remains

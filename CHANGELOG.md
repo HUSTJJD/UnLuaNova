@@ -1,7 +1,7 @@
 # Changelog
 
 <!-- release-status: passed -->
-<!-- release-provenance: 4a87d214 -->
+<!-- release-provenance: 5f9c9004 -->
 
 本文件按版本记录面向使用者的变更。顶部 `Unreleased` 收集尚未发布的变更，随后是各版本条目；
 新增条目按 Added / Changed / Fixed 分组。v1.0.0 之后的日期章节是开发过程记录（含内部轮次编号与
