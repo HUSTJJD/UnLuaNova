@@ -1,0 +1,101 @@
+name: Lightweight gates
+
+# Engine-free checks that every contributor can reproduce on a hosted runner.
+# Unreal Engine compilation, automation, packaging and the 41-stage Release
+# gate stay on the maintainer's machine through Tools/RunTests.ps1. The docs
+# workflow (docs.yml) only publishes the site; this workflow guards the code.
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "lightweight-gates-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  python-and-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install documentation toolchain
+        run: pip install -r requirements-docs.txt
+
+      - name: Python unit tests
+        # The 200+ tool tests cover release validation, provenance, evidence,
+        # report generation, backend isolation and the repository audit itself.
+        run: python -B -m unittest discover -s Tools/tests -p "test_*.py" -v
+
+      - name: Repository audit (CI mode)
+        # --ci keeps every structural check (capability matrix, links, anchors,
+        # nav, release markers) and skips only the check that needs local
+        # Saved/ReleaseTests evidence, which a fresh clone cannot have.
+        run: python -B Tools/AuditRepository.py --ci
+
+      - name: Release marker single-writer check
+        run: |
+          if [ -f Saved/ReleaseTests/test/release-summary.json ]; then
+            python -B Tools/UpdateReleaseStatus.py --check
+          else
+            echo "No local Release summary on a fresh clone; marker agreement is checked by the audit."
+          fi
+
+      - name: Strict documentation build
+        # --strict turns a broken internal link or a page missing from nav into
+        # a failure. This is the same command the Release pipeline runs.
+        run: mkdocs build --strict --site-dir _site
+
+      - name: Reject machine-local paths and engine GUIDs
+        run: python -B Tools/CheckNoLocalPaths.py
+
+      - name: Markdown release claims are consistent
+        # Catch the historical failure mode: a page that still says the tree has
+        # not passed while the generated markers say otherwise.
+        run: |
+          python -B - <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          root = Path(".")
+          pages = [root / p for p in (
+              "README.md", "README_CN.md", "CHANGELOG.md", "Docs/index.md",
+              "Docs/CN/Engine_Support.md", "Docs/EN/Engine_Support.md",
+              "Docs/CN/Networking_Guide.md", "Docs/EN/Networking_Guide.md",
+              "Docs/CN/Migration_Guide.md", "Docs/EN/Migration_Guide.md",
+              "Docs/CN/Production_Deployment.md", "Docs/EN/Production_Deployment.md",
+              "Docs/CN/Release_Readiness.md", "Docs/EN/Release_Readiness.md",
+          )]
+          stale = re.compile(r"passed=false|待晋升|仍处于.*实验|尚无通过的完整 Release|"
+                             r"has not passed a complete acceptance|pending promotion|"
+                             r"not passed a complete Release", re.IGNORECASE)
+          hits = []
+          for page in pages:
+              if not page.is_file():
+                  continue
+              for number, line in enumerate(page.read_text(encoding="utf-8-sig").splitlines(), 1):
+                  if stale.search(line) and not line.lstrip().startswith("<!--"):
+                      hits.append("%s:%d: %s" % (page.as_posix(), number, line.strip()[:140]))
+          if hits:
+              print("Stale release claims:")
+              print("\n".join("  " + hit for hit in hits))
+              sys.exit(1)
+          print("Release claims are free of stale verdicts in %d pages." % len(pages))
+          PY

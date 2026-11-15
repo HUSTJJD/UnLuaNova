@@ -1,0 +1,35 @@
+; ============================================================================
+; 示例工程覆盖项：复制为 <你的工程>/Config/DefaultUnLuaNova.ini
+;
+; 全插件只有一份默认配置：Plugins/UnLuaNova/Config/DefaultUnLuaNova.ini，
+; 两个 section 都写在那里。工程侧这一份「只写覆盖项」，不要整份抄：
+; 抄了之后插件升级改默认值，工程这份会停在旧值上，还看不出来。
+;
+; 本文件涉及的键名与默认值位置：
+;   bDataDrivenBinding         默认 False  [/Script/UnLuaNova.UnLuaNovaSettings]
+;   +ClassModuleBindings       默认空      [/Script/UnLuaNova.UnLuaNovaSettings]
+;   LuaBackend                 默认 Luau   [/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]
+;   bStaticBinding             默认 True   [/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]
+;   bAutoGenerateStaticBinding 默认 True   [/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]
+;   StaticBindingSelection     默认 ExportedReflected
+;                                          [/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]
+;
+; 标 [需重编] 的键（含 LuaBackend、bStaticBinding）是编译期开关，由
+; UnLuaNova.Build.cs 读取**工程** Config/ 下这份 ini，不读插件自带那份。
+; 切换后端后必须重新编译。后端怎么选见 README「切换 Lua 后端」一节；
+; 这个最小示例沿用默认 Luau，所以下面不写 LuaBackend（写了也不构成覆盖）。
+; ============================================================================
+
+[/Script/UnLuaNova.UnLuaNovaSettings]
+
+; 默认 False，是一条安全边界。用下面的类→模块映射或「UnLuaNova Binding」
+; 绑定组件去绑一个**没有实现 IUnLuaNovaInterface** 的蓝图时，需要打开它，
+; 否则映射和组件都不会生效。走接口 + GetModuleName 的绑定方式则不需要动它。
+bDataDrivenBinding=True
+
+; 类 → Lua 模块映射（数组，可追加多行）。
+;   Class      = 蓝图或原生类的软类路径（蓝图生成类以 _C 结尾）；短类名改用 ClassName=
+;   ModuleName = 相对 Content/Script/ 的模块路径，点号分隔，
+;                "MyActor" 即 Content/Script/MyActor.lua
+; 把路径换成自己工程里真实存在的蓝图；下面这行先注释掉，确认蓝图存在后再启用。
+;+ClassModuleBindings=(Class="/Game/Blueprints/BP_MyActor.BP_MyActor_C",ModuleName="MyActor")

@@ -5,11 +5,19 @@ description: Full example, policy switches, RPC authorization, hot-reload schema
 
 # Declared Networking Production Guide
 
-> **Status**: this page describes the target contract for a supported release and the
-> policy layer added in this round. The capability is still pending promotion: the latest
-> Release is `passed=false` and the connected matrix has not completed. Satisfy L2–L4 of
-> [Release Readiness](Release_Readiness.md) before production use. For syntax see
-> [Lua-declared Networking](LuaNetworking.md).
+> **Status**: declared networking was promoted to **Stable** on 2026-11-15 as a fully
+> supported contract; this page describes that contract and the policy layer. Verified
+> scope: the Legacy / PushOff / Iris / Cooked carriers and eight connected scenarios on
+> both the Lua and Luau backends. The verdict comes from one complete Release on the
+> `4a87d214` verification baseline (`complete=true`, `passed=true`, 41/41 stages
+> passed/cached), with both `net-matrix-Lua` and `net-matrix-Luau` passed. Not supported:
+> engine-level seamless travel (`ServerTravel`), declarative-networking hot reload, and
+> RPC authorization (`bRequireRpcAuthorization` defaults to `False`); the host-installed
+> application-layer policies and explicit entry points in sections 3-5 are outside the
+> Stable verification scope. L2-L4 criteria are in [Release Readiness](Release_Readiness.md).
+> Whether the current tree has execution evidence is determined by
+> `Saved/ReleaseTests/test/release-summary.json`; the sole acceptance entry point is
+> `Tools/RunTests.ps1`. For syntax see [Lua-declared Networking](LuaNetworking.md).
 
 ## 1. Complete example
 
@@ -102,8 +110,8 @@ with the result code, reason, object, RPC name, local/remote schemas and generat
 > This limitation is fixed: the one-shot `BeginPlay` freeze has been replaced by a
 > re-entrant `RefreshDeclaration()`, and hot reload / travel completion automatically
 > call `RefreshAllDeclarations()` to rebuild slots, SchemaVersion and the RPC layout
-> fingerprint. **The change has not been compiled or run yet** - see the defect table in
-> [Release Readiness](Release_Readiness.md).
+> fingerprint. **The change has been compiled and run by the 41/41-stage complete Release
+> of 2026-11-15** - see the defect table in [Release Readiness](Release_Readiness.md).
 
 ## 5. Seamless travel
 
@@ -120,8 +128,9 @@ and refuses new declarations during the travel (`TravelInProgress`), so RPC IDs 
 indices from the old world cannot be reused. `CompleteSeamlessTravel()` also calls
 `RefreshAllDeclarations()` automatically to re-parse declarations for the new world.
 This is an **explicit entry point**, not an auto-registered engine delegate: an unverified
-delegate signature must not enter a release branch. For automatic hooking, call these two
-lines from a `UGameInstance` world-change callback after compile verification.
+delegate signature must not enter a release branch, and engine-level seamless travel
+(`ServerTravel`) is not supported. If a host wants automatic hooking, call these two lines
+from a `UGameInstance` world-change callback and validate that hooking in its own project.
 
 ## 6. Error codes
 
@@ -145,9 +154,11 @@ lines from a `UGameInstance` world-change callback after compile verification.
   topologies and reports;
 - **Real fault injection implemented this round**: the scenario injects a different
   fingerprint through the real negotiation path, and the gate requires
-  `InjectedSchemaVersion` / `SchemaMismatchRejected` / `SchemaMismatchReason`; pending run verification;
+  `InjectedSchemaVersion` / `SchemaMismatchRejected` / `SchemaMismatchReason`; run-verified
+  by the 41/41-stage complete Release;
 - **Explicit RPC layout rejection implemented this round**: a replicated
-  `RpcSchemaVersion` plus `OnRep_RpcSchemaVersion` / `PushSlots` guards; pending compile/run verification;
+  `RpcSchemaVersion` plus `OnRep_RpcSchemaVersion` / `PushSlots` guards; compiled and
+  run-verified by the 41/41-stage complete Release;
 - Non-owner Server RPC rejection, real NetEmulation convergence for PacketLoss, and a
   staged exe for Cooked.
 

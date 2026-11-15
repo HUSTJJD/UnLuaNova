@@ -1,6 +1,7 @@
 import copy
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -112,7 +113,7 @@ class AuditRepositoryTests(unittest.TestCase):
 
     def test_missing_or_conflicting_release_markers_fail(self):
         self._write_release_pages()
-        page = self.root / "README_EN.md"
+        page = self.root / "README_CN.md"
         page.write_text(page.read_text(encoding="utf-8").replace(
             "release-status: not-passed", "release-status: passed"), encoding="utf-8")
         errors = audit.validate_release_docs(self.root)
@@ -158,6 +159,62 @@ class AuditRepositoryTests(unittest.TestCase):
         })
         errors = audit.validate_release_docs(self.root)
         self.assertFalse(any("do not name a known run" in error for error in errors))
+
+    # ── release commit / declared verification baseline ──
+
+    def _git(self, *args):
+        return subprocess.run(
+            ["git", "-C", str(self.root), "-c", "user.name=Audit Test",
+             "-c", "user.email=audit@example.com", *args],
+            capture_output=True, text=True, timeout=15)
+
+    def _make_release_history(self, declared=True, ancestor=True):
+        """Two commits: a verified tree, then a docs-only release commit on top."""
+        self._git("init", "-q")
+        self._git("commit", "--allow-empty", "-q", "-m", "verification run")
+        baseline = self._git("rev-parse", "HEAD").stdout.strip()
+        self._git("commit", "--allow-empty", "-q", "-m", "release: v1.0.0")
+        if declared:
+            self._git("tag", "-a", "v1.0.0", "-m",
+                      "Passing verdict bound to verification baseline %s "
+                      "(the promotion commit)." % (baseline if ancestor else "f" * 40))
+        return baseline
+
+    def test_tag_declared_baseline_is_accepted(self):
+        baseline = self._make_release_history()
+        self._write_release_pages(commit=baseline[:8])
+        self.assertEqual(audit.declared_baselines(self.root), {baseline[:8]})
+        errors = audit.validate_release_docs(self.root)
+        self.assertFalse(any("do not name a known run" in error for error in errors),
+                         errors)
+
+    def test_undeclared_ancestor_is_still_rejected(self):
+        baseline = self._make_release_history(declared=False)
+        self._write_release_pages(commit=baseline[:8])
+        self.assertEqual(audit.declared_baselines(self.root), set())
+        errors = audit.validate_release_docs(self.root)
+        self.assertTrue(any("do not name a known run" in error for error in errors))
+
+    def test_declared_non_ancestor_is_rejected(self):
+        self._make_release_history(ancestor=False)
+        self._write_release_pages(commit="f" * 8)
+        self.assertEqual(audit.declared_baselines(self.root), set())
+        errors = audit.validate_release_docs(self.root)
+        self.assertTrue(any("do not name a known run" in error for error in errors))
+
+    def test_ci_mode_skips_only_the_local_run_check(self):
+        self._write_release_pages(commit="1234567")
+        self._write_summary("baseline", {"provenance": {"commit": "deadbeef" + "0" * 32}})
+        strict = audit.validate_release_docs(self.root)
+        self.assertTrue(any("do not name a known run" in error for error in strict))
+        relaxed = audit.validate_release_docs(self.root, require_local_runs=False)
+        self.assertFalse(any("do not name a known run" in error for error in relaxed))
+        # Structural disagreement between the published pages is still an error.
+        page = self.root / "README_CN.md"
+        page.write_text(page.read_text(encoding="utf-8").replace(
+            "release-status: not-passed", "release-status: passed"), encoding="utf-8")
+        relaxed = audit.validate_release_docs(self.root, require_local_runs=False)
+        self.assertTrue(any("release status markers disagree" in error for error in relaxed))
 
     # ── link / anchor checks added for the seventh release-readiness pass ──
 

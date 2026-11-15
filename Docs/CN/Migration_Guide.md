@@ -72,7 +72,7 @@ UnLuaNova 默认**全导出**（opt-out），构建期为导出类型生成 mars
 UnLua 的 `ULuaFunction::IsOverridable()` 明确排除带 `FUNC_Net` 的函数，脚本只能重写引擎已声明
 的 RPC。UnLuaNova 允许脚本自己声明 Server/Client/Multicast RPC 与复制字段 —— 见
 [Lua 声明式网络](LuaNetworking.md) 与 [正式教程](Networking_Guide.md)。
-**该能力当前处于待晋升状态**，生产使用前先读 [发布就绪度](Release_Readiness.md)。
+**该能力已于 2026-11-15 转正为 Stable**，验收范围与边界见 [发布就绪度](Release_Readiness.md)。
 
 ## 7. 验证方式
 

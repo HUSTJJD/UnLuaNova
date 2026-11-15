@@ -40,7 +40,7 @@ VARIANTS = ("Legacy", "PushOff", "Iris", "Cooked")
 SCENARIOS = ("LateJoin", "Reconnect", "Dormancy", "Relevancy",
              "JoinOrderSwap", "PacketLoss", "SeamlessReconnect", "SchemaMismatch")
 RELEASE_PAGES = (
-    "README.md", "README_EN.md", "CHANGELOG.md", "Docs/index.md",
+    "README.md", "README_CN.md", "CHANGELOG.md", "Docs/index.md",
     "Docs/CN/ReleaseNotes.md", "Docs/EN/ReleaseNotes.md",
     "Docs/CN/Testing.md", "Docs/EN/Testing.md",
 )

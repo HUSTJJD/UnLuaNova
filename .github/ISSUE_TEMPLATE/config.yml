@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 在线文档
+    url: https://hustjjd.github.io/UnLuaNova/
+    about: 使用指南、API、引擎版本与平台支持矩阵、发布说明；提问前请先查阅。
+  - name: 常见问题 FAQ
+    url: https://hustjjd.github.io/UnLuaNova/CN/FAQ/
+    about: 常见问题与已知边界（含沙盒不是 OS 级安全边界）；源码见 Docs/CN/FAQ.md。
+  - name: 安全漏洞（请用私有报告，不要开公开 issue）
+    url: https://github.com/HUSTJJD/UnLuaNova/security/advisories/new
+    about: 通过 GitHub Security Advisories 私有提交，详见仓库根目录 SECURITY.md。

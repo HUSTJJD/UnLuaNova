@@ -100,19 +100,23 @@ reports in a real multi-process session; an RPC layout mismatch is actually reje
 
 ## Current state (2026-11-15): v1.0.0 released
 
-`Saved/ReleaseTests/test/release-summary.json`: `complete=true`, `passed=true`,
-**41/41 stages passed/cached**, bound to the verification baseline `4a87d214`; both
-`net-matrix-Lua` and `net-matrix-Luau` passed, `promotion-gate` passed, and
+The v1.0.0 pass verdict comes from one complete Release on the `4a87d214` verification
+baseline: `complete=true`, `passed=true`, **41/41 stages passed/cached**, with both
+backends' Editor/Game automation (691/662/716/687) passing; both `net-matrix-Lua` and
+`net-matrix-Luau` passed, `promotion-gate` passed, and
 `CheckPromotion.py --release-gate --strict` reports **7/7, 0 unmet**.
 `UpdateReleaseStatus.py` has generated `release-status: passed` on all eight pages.
+**Whether the current tree has execution evidence is determined by
+`Saved/ReleaseTests/test/release-summary.json`; the sole acceptance entry point is
+`Tools/RunTests.ps1`** - rerun it to rebind the local gate to the current HEAD.
 
 `NET-RPC` / `NET-PROPS` / `NET-TYPES` are now `implemented` (`verification` stays
 `pending-runtime`); every `EXPERIMENTAL` banner, experimental title and "not for
 production" wording has been removed. **Declared networking is Stable.**
 
 The L4 release tag `v1.0.0` was created on the release commit by the maintainer
-(informational, not gating `--release-gate`). The verdict refers to the `4a87d214`
-baseline; rerun `RunTests.ps1` to rebind the local gate to a newer HEAD.
+(informational, not gating `--release-gate`); the verdict refers to the `4a87d214`
+baseline.
 
 ## Further reading
 

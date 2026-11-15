@@ -54,6 +54,44 @@ By default, binding an object to Lua needs `GetModuleName` filled in by hand (or
 fill it from the Blueprint path). Subclass `ULuaModuleLocator` to derive it automatically -
 for example stripping a `BP_` prefix - so it is always clear which script binds which asset.
 
+### Class module bindings
+
+In `DefaultUnLuaNova.ini`:
+
+```ini
+[/Script/UnLuaNova.UnLuaNovaSettings]
++ClassModuleBindings=(Class="/Script/UAKDemo.AKDemoCharacter",ModuleName="UAKDemoCharacter")
++ClassModuleBindings=(ClassName="MyNativeActor",ModuleName="Gameplay.NativeActor")
+```
+
+- `Class` takes a full soft class path; short class names go in `ClassName`, not `Class`
+  (UE clears an invalid path there).
+- The current class's full path is matched first, then the inheritance chain against `ClassName`
+  or the class name in the path; binding a base class also covers its subclasses.
+- **Strings only, no `Class` asset resolution**: `TryBind` runs during UObject construction,
+  where a `LoadObject` would be asking for trouble.
+- The editor does not cache "this class is unbound", so edits take effect immediately; packaged
+  builds do cache.
+
+### Allow data-driven binding
+
+`bDataDrivenBinding` lets objects that **do not implement `IUnLuaNovaInterface`** be bound to a
+Lua module. **Off by default.**
+
+```ini
+[/Script/UnLuaNova.UnLuaNovaSettings]
+bDataDrivenBinding=true
+```
+
+This is a safety boundary, not a performance switch: with it on, any object matching the class
+module bindings table or a binding component gets a script attached without the object knowing.
+It is a **setting** rather than a constant in code because "whether to take that risk" is a
+project decision - the library should neither make it for the project nor weld the switch to a
+particular locator subclass.
+
+With it off, binding happens only on objects implementing the interface or going through dynamic
+binding, byte-for-byte the same as older versions.
+
 ### Pre-bind class list
 
 Types such as `UBlueprintFunctionLibrary` and `UAnimNotifyState` survive leaving PIE, so
@@ -71,6 +109,55 @@ such resident types here and their subclasses are bound right after the environm
 ### Generate IntelliSense
 
 Whether to generate hint files for Lua - see [IntelliSense](../EN/IntelliSense.md).
+
+### Auto-generate IntelliSense on startup
+
+When the output directory does not exist yet, the editor exports once at startup (gated by the
+previous setting - turn generation off and nothing is generated).
+
+It runs **only the first time**; once the directory exists, incremental updates are left to the
+toolbar and directory watching, so every launch is not slowed down. The reason it exists: without
+output there is no completion, and "no completion" is easily mistaken for "this solution does not
+work".
+
+### Where the defaults live
+
+**The whole plugin has a single config file**: `Config/DefaultUnLuaNova.ini`, holding both the
+runtime and editor sections. The plugin ships `Plugins/UnLuaNova/Config/DefaultUnLuaNova.ini`
+with every default written out in comments - **open it to see every switch**. The project-side
+`Config/DefaultXxx.ini` should contain **only overrides**; do not copy the whole file over, or a
+plugin upgrade that changes a default will leave your copy stuck at the old value with no visible
+sign of it.
+
+Keys marked `[needs recompile]` have a catch: `UnLuaNova.Build.cs` reads **only** the project's
+`Config/` ini, not the plugin's. Change those switches in the project copy; writing them into the
+plugin copy does not affect the build.
+
+`LuaBackend` is not a UPROPERTY - Build.cs reads it straight from the project ini, so it does not
+appear in the editor UI and can only be set in the project's `Config/DefaultUnLuaNova.ini`.
+
+### Feature flags (one format)
+
+Every feature flag in the plugin lives in this section, in one fixed format: the key is
+`b<CamelCase>` and the query name is the lowercase form without the `b`.
+
+| Key | Query name | Default | Meaning |
+|---|---|---|---|
+| `bTimer` | `timer` | true | Bundled `UnLuaNova.Timer` (**recompile on change**) |
+| `bEvent` | `event` | true | Bundled `UnLuaNova.Event` (**recompile on change**) |
+| `bOOP` | `oop` | true | Bundled `UnLuaNova.OOP` (**recompile on change**) |
+| `bDataDrivenBinding` | `datadrivenbinding` | false | Data-driven binding (see above) |
+| `bDebugAdapter` | `debugadapter` | true | `lua.dap` |
+| `DebugAdapterPort` | - | 5699 | Default port for `lua.dap` |
+
+Scripts ask only through `UnLuaNova.HasFeature('<query name>')` (case-insensitive); backend
+capabilities (`sandbox` / `vector` / `buffer` ...) are not configurable but go through the same
+entry point. See the [standard library](StdLib.md).
+
+!!! note "No feature flags in editor settings"
+    `UUnLuaNovaEditorSettings` (`DefaultUnLuaNova.ini`) only covers editor behaviour and build
+    configuration (hot reload, IntelliSense, backend choice, ...). Feature flags all belong to
+    `UUnLuaNovaSettings`, so the same thing is never configured in two places under two names.
 
 ### Auto startup
 
@@ -97,6 +184,36 @@ shipping. On by default. *Requires a recompile.*
 
 Lets Lua reach the original implementation through `self.Overridden`. On by default.
 *Requires a recompile.*
+
+### Static binding
+
+**On by default.** At build time the plugin generates binding tables for selected UE types:
+properties are read/written directly by `Offset + Kind` (skipping `FPropertyDesc`'s virtual
+marshalling and `TWeakFieldPtr` checks), and functions go through compile-time-typed thunks
+(types as template arguments, marshalling collapsing to a few stores).
+
+Generation is **automatic**: at editor startup the plugin compares a fingerprint of the type set
+in the output and regenerates when it is missing or types were added or removed - no manual
+Commandlet run.
+
+Related keys (all under `[/Script/UnLuaNovaEditor.UnLuaNovaEditorSettings]`):
+
+| Key | Default | Effect |
+|:---|:---|:---|
+| `bStaticBinding` | `True` | Master switch |
+| `bAutoGenerateStaticBinding` | `True` | Regenerate when output is missing or stale |
+| `StaticBindingSelection` | `ExportedReflected` | Scope: `ExportedReflected` / `Modules` / `All` |
+| `StaticBindingModules` | empty | Module list when `Selection=Modules` |
+| `StaticBindingOutputDir` | empty | Output dir, default `Source/<project module>/Generated` |
+
+The default `ExportedReflected` scope covers only the dozen or so types the plugin already
+exports statically (`UObject`, `UClass`, `UWorld` and math structs); the list is read from the
+runtime export registry, not hard-coded.
+
+*Note: the output is C++, so a **recompile** is needed after generation for it to take effect.
+Under the default scope that rebuild is light; switching the scope to `All` makes type changes
+trigger large rebuilds frequently, in which case turning off auto-generation and letting CI
+produce the output is a better fit. See [static export binding](StaticExportBinding.md).*
 
 ### Enable FText support
 

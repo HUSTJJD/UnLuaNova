@@ -94,19 +94,20 @@ RPC 布局不一致时确实拒收；`RefreshDeclaration()` 在 cooked / Shippin
 
 ## 当前状态（2026-11-15）：v1.0.0 已正式发布
 
-`Saved/ReleaseTests/test/release-summary.json`：`complete=true`、`passed=true`、
-**41/41 阶段 passed/cached**，发布验证绑定 `4a87d214`（v1.0.0 的验证基线）；
-`net-matrix-Lua` / `net-matrix-Luau` 均 passed，`promotion-gate` passed，
-`CheckPromotion.py --release-gate --strict` 为 **7/7，0 unmet**。
+v1.0.0 的通过判定来自验证基线 `4a87d214` 的一次完整 Release：`complete=true`、
+`passed=true`、**41/41 阶段 passed/cached**，双后端 Editor/Game 自动化
+（691/662/716/687）全通过；`net-matrix-Lua` / `net-matrix-Luau` 均 passed，
+`promotion-gate` passed，`CheckPromotion.py --release-gate --strict` 为 **7/7，0 unmet**。
 8 个页面的 `release-status` 已由 `UpdateReleaseStatus.py` 生成为 `passed`。
+**当前代码树是否有执行证据以 `Saved/ReleaseTests/test/release-summary.json` 为准，
+唯一验收入口是 `Tools/RunTests.ps1`**；重跑该命令即可把本机门禁重新绑定到当前 HEAD。
 
 `NET-RPC` / `NET-PROPS` / `NET-TYPES` 已由 `experimental` 晋升为 `implemented`
 （`verification` 恒为 `pending-runtime`），头文件与中英文文档的 `EXPERIMENTAL` 标记、
 实验性标题及"不建议生产"措辞均已移除。**声明式网络已转正为 Stable。**
 
 L4 的 release tag `v1.0.0` 已由维护者创建在发布提交上（informational，不阻断
-`--release-gate`）。发布判定以验证基线 `4a87d214` 为准；tag 提交之后若需把本机门禁
-重新绑定到新 HEAD，重跑一次 `RunTests.ps1` 即可。
+`--release-gate`）；发布判定以验证基线 `4a87d214` 为准。
 
 ## 延伸阅读
 

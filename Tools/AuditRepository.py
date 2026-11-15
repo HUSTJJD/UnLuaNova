@@ -337,7 +337,7 @@ def render_matrix(data, evidence=None):
 
 RELEASE_PAGES = (
     Path("README.md"),
-    Path("README_EN.md"),
+    Path("README_CN.md"),
     Path("CHANGELOG.md"),
     Path("Docs/index.md"),
     Path("Docs/CN/ReleaseNotes.md"),
@@ -347,6 +347,48 @@ RELEASE_PAGES = (
 )
 STATUS_MARK = re.compile(r"<!--\s*release-status:\s*(passed|not-passed)\s*-->")
 PROVENANCE_MARK = re.compile(r"<!--\s*release-provenance:\s*([0-9a-f]{7,40})\s*-->")
+# A tag on HEAD may declare the commit whose Release verdict it publishes. The
+# release commit itself only adds version identity and documentation, so the
+# executable tree was validated by that earlier commit, not by HEAD.
+BASELINE_DECLARATION = re.compile(
+    r"(?:verification|validation)\s+baseline\s*[:\-]?\s*([0-9a-f]{7,40})",
+    re.IGNORECASE,
+)
+
+
+def declared_baselines(root):
+    """Commits that tags on HEAD name as the run behind a published verdict.
+
+    Without this exemption a release commit deadlocks the next run: the published
+    marker still names the verified tree, but `repository-audit` runs before the
+    pipeline can regenerate the markers and rejects that commit as unknown. The
+    exemption is deliberately narrow - the commit must be named by a tag pointing
+    at HEAD, exist as a Git object, and be an ancestor of HEAD. Drift to an
+    orphan, a descendant or an undeclared commit is still rejected. Whether the
+    current tree has execution evidence remains ValidateProvenance.py's job.
+    """
+    def git(*args):
+        try:
+            return subprocess.run(["git", "-C", str(root), *args],
+                                  capture_output=True, text=True, timeout=15)
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    tags = git("tag", "--points-at", "HEAD")
+    if not tags or tags.returncode != 0:
+        return set()
+    found = set()
+    for tag in tags.stdout.split():
+        message = git("for-each-ref", "--format=%(contents)", "refs/tags/" + tag)
+        if not message or message.returncode != 0:
+            continue
+        for match in BASELINE_DECLARATION.finditer(message.stdout):
+            commit = match.group(1)
+            obj = git("cat-file", "-e", commit + "^{commit}")
+            ancestor = git("merge-base", "--is-ancestor", commit, "HEAD")
+            if obj and obj.returncode == 0 and ancestor and ancestor.returncode == 0:
+                found.add(commit[:8])
+    return found
 
 
 def load_release_summary(root, kind):
@@ -360,8 +402,14 @@ def load_release_summary(root, kind):
         return {"error": f"{kind}: unreadable release summary"}
 
 
-def validate_release_docs(root):
-    """Published release claims must name one run and agree across languages and evidence."""
+def validate_release_docs(root, require_local_runs=True):
+    """Published release claims must name one run and agree across languages and evidence.
+
+    `require_local_runs=False` is for a fresh CI clone with no Saved/ReleaseTests/:
+    the "known run" check needs local execution evidence that such a checkout cannot
+    have. Marker agreement, status/summary agreement and the numeric claims are
+    still checked. Local release runs always use the default strict mode.
+    """
     errors = []
     texts = {}
     for page in RELEASE_PAGES:
@@ -390,12 +438,12 @@ def validate_release_docs(root):
 
     baseline = load_release_summary(root, "baseline")
     latest = load_release_summary(root, "test")
-    # A published marker names the run whose verdict produced the claim. The pipeline
-    # regenerates the markers at the end of every run from that run's summary, so by
-    # the next audit the test summary has already been cleared. Accept any commit that
-    # belongs to a real release run in this checkout (baseline or test) plus the current
-    # HEAD. Pinning every claim to the historical baseline made each run invalidate the
-    # markers it had just written - a self-inflicted failure on every second run.
+    # A published marker names the run whose verdict produced the claim, not
+    # necessarily HEAD. Accept: (1) a real local run (baseline or test), (2) HEAD,
+    # (3) a verification baseline explicitly declared by a tag on HEAD. Case 3 is
+    # what makes a release commit publishable: it adds version identity and docs
+    # only, so its verdict legitimately comes from the preceding verified tree.
+    # Anything else - an orphan, a descendant, an undeclared ancestor - is drift.
     allowed = set()
     for source in (baseline, latest):
         if source and "error" not in source:
@@ -409,7 +457,8 @@ def validate_release_docs(root):
             allowed.add(head.stdout.strip()[:8])
     except (OSError, subprocess.SubprocessError):
         pass
-    if commits and allowed:
+    allowed |= declared_baselines(root)
+    if commits and allowed and require_local_runs:
         unknown = sorted({value[:8] for value in commits.values()} - allowed)
         if unknown:
             errors.append("release provenance markers do not name a known run (%s); expected one of %s"
@@ -473,6 +522,9 @@ def release_provenance_warnings(root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write-matrix", action="store_true", help="refresh the generated documentation page")
+    parser.add_argument("--ci", action="store_true",
+                        help="CI clone without local Release evidence: keep every structural check, "
+                             "skip only the check that needs Saved/ReleaseTests/")
     args = parser.parse_args()
     try:
         data = json.loads((ROOT / MATRIX).read_text(encoding="utf-8"))
@@ -495,7 +547,7 @@ def main():
         elif (ROOT / PAGE).is_file() and (ROOT / PAGE).read_text(encoding="utf-8") != expected:
             errors.append("generated matrix is stale; run with --write-matrix")
     errors.extend(validate_docs(ROOT))
-    errors.extend(validate_release_docs(ROOT))
+    errors.extend(validate_release_docs(ROOT, require_local_runs=not args.ci))
     for warning in release_provenance_warnings(ROOT):
         print(warning)
     for error in errors:
@@ -521,6 +573,9 @@ def main():
     print("Checked release status/provenance markers and local release summaries.")
     print("Not checked: runtime behavior, real code coverage, remote URL reachability or local "
           "release evidence when Saved/ReleaseTests/ is absent (as on CI).")
+    if args.ci:
+        print("CI mode: skipped the local-run provenance check only; structural release "
+              "claims, markers, links and the capability matrix were still validated.")
     return 0
 
 

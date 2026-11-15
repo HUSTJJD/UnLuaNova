@@ -5,9 +5,12 @@ description: Verified, adapted and unvalidated combinations of engine version, L
 
 # Engine and Platform Support Matrix
 
-This page is the **single authoritative statement of support scope**. README badges
-and the `.uplugin` `PlatformAllowList` describe build targets and declarations, not
-acceptance status. Where they disagree, this page wins.
+This page is the **single authoritative statement of support scope and acceptance
+status**. README badges and the `.uplugin` `PlatformAllowList` describe build targets
+and declarations, not acceptance status; where they disagree, this page wins.
+**Whether the current tree has execution evidence is determined by
+`Saved/ReleaseTests/test/release-summary.json`; the sole acceptance entry point is
+`Tools/RunTests.ps1`.**
 
 ## Status definitions
 
@@ -21,8 +24,8 @@ acceptance status. Where they disagree, this page wins.
 
 | Engine | Adaptation | Lua 5.5.1 | Luau 0.743-1 | Platform | Status |
 |---|---|---|---|---|---|
-| UE 5.8.3 | `UE_5_8_OR_LATER` / `UE_VERSION_OLDER_THAN(5,8,0)` | ✓ | ✓ | Win64 | Verified (2026-11-03 baseline, `347bb8c5`) |
-| UE 6.0 | `!UE_VERSION_OLDER_THAN(6,0,0)` plus replacements for APIs removed in 6.0 | ✓ | ✓ | Win64 | Verified (2026-11-15 v1.0.0 Release, `4a87d214`, 41/41 stages on both backends) |
+| UE 5.8.3 | `UE_5_8_OR_LATER` / `UE_VERSION_OLDER_THAN(5,8,0)` | ✓ | ✓ | Win64 | Verified (historical baseline, 2026-11-03, `347bb8c5`) |
+| UE 6.0 | `!UE_VERSION_OLDER_THAN(6,0,0)` plus replacements for APIs removed in 6.0 | ✓ | ✓ | Win64 | Verified (current validation baseline; 2026-11-15 v1.0.0 Release, `4a87d214`, 41/41 stages on both backends) |
 | UE 5.1 – 5.7 | `UE_VERSION_NEWER_THAN` / `OLDER_THAN` branches | — | — | Win64 | Adapted, unverified |
 | UE 4.x | Compatibility layer inherited in `UnLuaNovaCompatibility.h` | — | — | — | Not supported; fork legacy only |
 | Mac / Linux / iOS / Android / consoles | Declared as build targets by `.uplugin` `PlatformAllowList` | — | — | non-Win64 | Unvalidated |
@@ -53,10 +56,11 @@ not being forcibly unified, but **every new branch must also update this page**.
   `AutomationTestToolset`, `ConfigSettingsToolset`, ...) come from the engine or the
   parent workspace and are **not in this repository**. Pick what you need; do not copy
   the whole plugin list verbatim.
-- The first UE 6.0 package triggers a FULL COOK and a full shader compile, and a single
-  stage can exceed the default 60 minutes. `RunTests.ps1` deliberately stays
-  parameterless; adjust it through an environment variable (see
-  [Testing and Automation](Testing.md)):
+- On a fresh environment the first UE 6.0 package triggers a FULL COOK and a full shader
+  compile, and a single stage can exceed the default 60 minutes. This is a cold-start
+  environment note, not the verdict of the v1.0.0 Release (that Release passed 41/41
+  stages on the `4a87d214` baseline). `RunTests.ps1` deliberately stays parameterless;
+  adjust it through an environment variable (see [Testing and Automation](Testing.md)):
 
   ```powershell
   $env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180

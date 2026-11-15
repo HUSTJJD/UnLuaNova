@@ -5,10 +5,15 @@ description: Lua 声明式网络的完整示例、策略配置、RPC 鉴权、�
 
 # 声明式网络正式使用指南
 
-> **状态说明**：本页描述正式发布后的目标契约与本轮新增的策略层用法。
-> 当前该能力仍处于待晋升状态，最新 Release 为 `passed=false`，联网矩阵未跑全。
-> 生产启用前必须先满足 [发布就绪度](Release_Readiness.md) 的 L2–L4。
-> 参考语法见 [Lua 声明式网络](LuaNetworking.md)。
+> **状态说明**：声明式网络已于 2026-11-15 转正为 **Stable**（正式受支持的契约），
+> 本页描述其目标契约与策略层用法。验收范围：Legacy / PushOff / Iris / Cooked 四种复制载体
+> 与 8 个连接场景，在 Lua 与 Luau 双后端通过；判定来自验证基线 `4a87d214` 的一次完整 Release
+> （`complete=true`、`passed=true`、41/41 阶段 passed/cached），`net-matrix-Lua` /
+> `net-matrix-Luau` 均 passed。不支持：引擎级 seamless travel（`ServerTravel`）、声明式网络
+> 热重载、RPC 鉴权（`bRequireRpcAuthorization` 默认 `False`）；第 3–5 节的宿主应用层策略与
+> 显式入口不属于 Stable 验收范围。L2–L4 判定见 [发布就绪度](Release_Readiness.md)。
+> 当前代码树是否有执行证据以 `Saved/ReleaseTests/test/release-summary.json` 为准，
+> 唯一验收入口是 `Tools/RunTests.ps1`。参考语法见 [Lua 声明式网络](LuaNetworking.md)。
 
 ## 1. 完整示例
 
@@ -96,7 +101,8 @@ RPC 名、本地/远端 schema 与 generation。
 
 > 底层限制已修：`BeginPlay` 的一次性冻结已改为可重入的 `RefreshDeclaration()`，
 > 热重载 / travel 完成时会自动调用 `RefreshAllDeclarations()` 重建槽位、SchemaVersion
-> 与 RPC 布局指纹。该改动**尚未编译或运行验证**，见发布就绪度的缺陷清单。
+> 与 RPC 布局指纹。该改动**已由 2026-11-15 的 41/41 阶段完整 Release 编译并运行验证**，
+> 见发布就绪度的缺陷清单。
 
 ## 5. Seamless Travel
 
@@ -112,7 +118,8 @@ UnLuaNova::FUnLuaNovaNetPolicy::Get().CompleteSeamlessTravel();
 新的声明（`TravelInProgress`），从而避免旧世界的 RPC ID / 字段下标被新世界复用；
 `CompleteSeamlessTravel()` 还会自动调用 `RefreshAllDeclarations()` 为新世界重建声明。
 这是**显式入口**而非自动注册的引擎委托——未经验证的委托签名不应进入发布分支；
-若需要自动挂接，应在编译验证通过后于 `UGameInstance` 的 world 切换回调里调用上面两行。
+引擎级 seamless travel（`ServerTravel`）不在支持范围内。若宿主需要自动挂接，
+由宿主在 `UGameInstance` 的 world 切换回调里调用上面两行并自行验收。
 
 ## 6. 错误码
 
@@ -133,9 +140,10 @@ UnLuaNova::FUnLuaNovaNetPolicy::Get().CompleteSeamlessTravel();
   L4 的发布标记与 release tag 属人工决策，只报告不阻断；
 - 每后端 8 个 Legacy 场景 + 4 个变体（两组独立，共 12 cell）拓扑与报告齐全；
 - **真实故障注入已实现**（本轮）：场景内注入不同指纹并走真实协商路径，门禁强制要求
-  `InjectedSchemaVersion` / `SchemaMismatchRejected` / `SchemaMismatchReason`；待运行验证；
+  `InjectedSchemaVersion` / `SchemaMismatchRejected` / `SchemaMismatchReason`；已由 41/41 阶段
+  完整 Release 运行验证；
 - **RPC 布局不一致的显式拒绝已实现**（本轮）：新增 `RpcSchemaVersion` 副本与
-  `OnRep_RpcSchemaVersion` / `PushSlots` 守卫；待编译与运行验证；
+  `OnRep_RpcSchemaVersion` / `PushSlots` 守卫；已由 41/41 阶段完整 Release 编译并运行验证；
 - 非 owner Server RPC 拒绝、PacketLoss 真实 NetEmulation 收敛、Cooked 使用 staged exe。
 
 ## 延伸阅读

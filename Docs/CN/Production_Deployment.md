@@ -76,7 +76,7 @@ RPC 鉴权处理器通过 C++ `FUnLuaNovaNetPolicy::SetAuthorizationHandler` 安
 1. 升级前保存当前 `Saved/ReleaseTests/baseline/release-summary.json` 与 commit。
 2. 插件升级后**不要**用工程侧的整份 ini 覆盖新默认值；只保留差异项。
 3. 生成源码 `Source/UnLuaNova/Generated/Backends/<后端>/` 按后端隔离，不要提交。
-4. 回滚以 git tag 为准；仓库现有的 22 个 tag 全部继承自上游 UnLua，不是本插件的发布版本。
+4. 回滚以 git tag 为准；仓库现有 22 个 tag，其中 `v1.0.0` 是 UnLuaNova 自己的首个正式 tag（打在发布提交上），其余 21 个继承自上游 UnLua，不是本插件的发布版本。
 5. 发布声明由 `Tools/UpdateReleaseStatus.py` 从摘要生成，任何情况下都不要手工改 8 个页面的 marker。
 
 ## 延伸阅读

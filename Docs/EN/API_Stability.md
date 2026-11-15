@@ -52,8 +52,11 @@ final evidence:
 - [Release Readiness](Release_Readiness.md) L2 (complete Release passed, commit equals HEAD)
   and L3 (net matrix zero errors across two independent groups: 8 Legacy scenarios + 4
   variants per backend = 12 cells per backend, **not an 8 x 4 cross product**) ->
-  `Saved/ReleaseTests/test/release-summary.json`: `complete=true, passed=true, 41/41 stages`,
-  `provenance.commit=4a87d214 == HEAD`; both `net-matrix-Lua` and `net-matrix-Luau` passed.
+  one complete Release on the `4a87d214` verification baseline: `complete=true`,
+  `passed=true`, `41/41 stages`, `provenance.commit=4a87d214 == HEAD`; both `net-matrix-Lua`
+  and `net-matrix-Luau` passed. Whether the current tree has execution evidence is
+  determined by `Saved/ReleaseTests/test/release-summary.json`; the sole acceptance entry
+  point is `Tools/RunTests.ps1`.
 - the `promotion-gate` stage of `RunTests.ps1` (`CheckPromotion.py --release-gate --strict`)
   is green -> 7/7 gate items, 0 unmet; the release tag is an informational L4 decision.
 - `Tools/UpdateReleaseStatus.py` has generated `release-status: passed` on all eight pages.
@@ -66,12 +69,12 @@ Cooked carriers and all eight connected scenarios, on both the Lua and Luau back
 
 ## Versions and tags
 
-- Semantic versioning; `.uplugin` `VersionName` must match the release tag (all five are
-  placeholder `1.0.0` today).
-- The 22 existing tags (`v1.0.0` … `v2.3.6`) are inherited from upstream Tencent/UnLua
-  and are **not UnLuaNova releases**.
-- The first supported release must create an UnLuaNova tag and record the fork point in
-  CHANGELOG.
+- Semantic versioning; `.uplugin` `VersionName` must match the release tag (all five now
+  carry the official `1.0.0` release version).
+- `v1.0.0` has been released and tagged as UnLuaNova's own first official tag; the other
+  21 tags inherited from upstream Tencent/UnLua are **not this project's releases**.
+- The first official tag `v1.0.0` has been created on release commit `31e2af3f`; the
+  release verdict refers to the `4a87d214` baseline.
 
 ## Further reading
 

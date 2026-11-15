@@ -47,8 +47,10 @@ description: UnLuaNova 公开 API 的稳定性分级、弃用周期、语义化�
 
 - [发布就绪度](Release_Readiness.md) 的 L2（完整 Release 通过、commit 等于 HEAD）与
   L3（联网矩阵两组独立运行全部零错误：每后端 8 个 Legacy 场景 + 4 个变体，共 12 个 cell，
-  **不是 8×4 交叉**）→ `Saved/ReleaseTests/test/release-summary.json`：`complete=true, passed=true, 41/41 stages`，
+  **不是 8×4 交叉**）→ 验证基线 `4a87d214` 的一次完整 Release：`complete=true, passed=true, 41/41 stages`，
   `provenance.commit=4a87d214 == HEAD`；`net-matrix-Lua` / `net-matrix-Luau` 均 passed。
+  当前代码树是否有执行证据以 `Saved/ReleaseTests/test/release-summary.json` 为准，
+  唯一验收入口是 `Tools/RunTests.ps1`。
 - `RunTests.ps1` 的 `promotion-gate` 阶段（`CheckPromotion.py --release-gate --strict`）全绿
   → 7/7 gate items，0 unmet；release tag 是 L4 的人工决策（informational，不阻断）。
 - 8 个页面的 `release-status` 由 `Tools/UpdateReleaseStatus.py` 生成为 `passed` → 已生成。
@@ -61,9 +63,9 @@ description: UnLuaNova 公开 API 的稳定性分级、弃用周期、语义化�
 
 ## 版本与标签
 
-- 采用语义化版本；`.uplugin` 的 `VersionName` 必须与发布 tag 一致（当前 5 份都是占位的 `1.0.0`）。
-- 仓库现有的 22 个 tag（`v1.0.0` … `v2.3.6`）全部继承自上游 Tencent/UnLua，**不是 UnLuaNova 的发布**。
-- 首个正式发布必须创建 UnLuaNova 自己的 tag，并在 CHANGELOG 写明与上游的分叉点。
+- 采用语义化版本；`.uplugin` 的 `VersionName` 必须与发布 tag 一致（当前 5 份均为正式的 `1.0.0`，不再是占位值）。
+- `v1.0.0` 已发布并打 tag，是 UnLuaNova 自己的首个正式 tag；从上游 Tencent/UnLua 继承的其余 21 个 tag **不是本项目的发布**。
+- 首个正式 tag `v1.0.0` 已创建在发布提交 `31e2af3f` 上；发布判定以验证基线 `4a87d214` 为准。
 
 ## 延伸阅读
 

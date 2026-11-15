@@ -101,4 +101,4 @@ Profiler conversion uses the pinned submodule tool and its svg dependency:
 python Tools/LuauPerfgraph/perfgraph.py Saved/Profiling/profile.out > profile.svg
 ```
 
-There is no --width option. New io/CodeGen/buffer regression source, plus the module-contract, memory-quota, reload-rollback and timer-diagnostics specs, awaits maintainer build and execution. See [testing](Testing.md).
+There is no `--width` option. For io / CodeGen / buffer usage, see [testing](Testing.md).

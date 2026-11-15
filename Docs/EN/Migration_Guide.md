@@ -78,8 +78,8 @@ UnLua's `ULuaFunction::IsOverridable()` explicitly excludes `FUNC_Net` functions
 could only re-implement engine-declared RPCs. UnLuaNova lets scripts declare their own
 Server/Client/Multicast RPCs and replicated fields — see
 [Lua-declared Networking](LuaNetworking.md) and the [production guide](Networking_Guide.md).
-**This capability is pending promotion**; read [Release Readiness](Release_Readiness.md)
-before production use.
+**This capability was promoted to Stable on 2026-11-15**; see
+[Release Readiness](Release_Readiness.md) for the verified scope and boundaries.
 
 ## 7. Verification
 

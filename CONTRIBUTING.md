@@ -6,6 +6,27 @@
 2. **你的贡献会按 [LICENSE](LICENSE)（MIT）授权。** 提交前请确认你能接受；
    你仍然保留自己代码的版权，授予的是许可而不是转让。
 
+## 许可边界与 CLA
+
+本子模块（`Plugins/UnLuaNova/`，仓库 HUSTJJD/UnLuaNova）是采用 [LICENSE](LICENSE)（MIT）的
+独立项目，Copyright (c) 2019-2026 Tencent and the UnLuaNova contributors。
+**向本仓库提交 PR 不需要签 CLA**，上面两条承诺不变：贡献按 MIT 授权，你保留自己代码的版权，
+授予的是许可而不是转让。
+
+需要区分的是上层父仓库 UEAbilityKit（本子模块所在的上层工程，<https://github.com/HUSTJJD/UEAbilityKit>）：
+它是**另一个独立项目**，采用 PolyForm Small Business License 1.0.0 并附带
+`LICENSE-COMMERCIAL.md`，其 `CLA.md` 要求所有 PR 签署 CLA。该 CLA 约束的是**父仓库自身的贡献**，
+不适用于本子模块（`Plugins/UnLuaNova/`）的 PR；父仓库的 `NOTICE` 与 `LICENSE-COMMERCIAL.md`
+已明确把 `Plugins/UnLuaNova/` 列为「MIT，不在 PolyForm 授权范围内」的例外。
+因此只向本仓库贡献时，无需阅读或签署父仓库的 CLA；**若要向父仓库贡献，请另行阅读其 `CLA.md`**
+以及与之配套的贡献指引。
+
+第三方与继承组件的许可边界：本项目 fork 自 Tencent/UnLua（MIT），并引入 Lua、Luau、LuaSocket、
+lua-protobuf、lua-rapidjson，以及 `Tools/` 下的 LuaLS、luau-lsp 等组件；它们仍按各自许可由
+各自版权人授予，本仓库的 MIT 不覆盖、也不重新授权它们，完整清单与 notice 见
+[LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md)。Unreal Engine 本身受 Epic 的独立条款约束，
+本许可不授予引擎代码或资产的任何权利。
+
 ## 提交流程
 
 ```bash

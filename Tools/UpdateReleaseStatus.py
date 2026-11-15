@@ -12,9 +12,12 @@ Rules, kept in sync with Tools/AuditRepository.py:validate_release_docs:
 
   * status     = "passed" iff the latest (`test`) run is complete AND passed;
                  otherwise "not-passed". A partial run is never a release verdict.
-  * provenance = the commit of the `baseline` run (the comparison baseline),
-                 falling back to the latest run when no baseline exists. It names
-                 the run the published claim refers to, NOT the current HEAD.
+  * provenance = the commit of the latest (`test`) run, falling back to the
+                 `baseline` run only when the latest has no usable commit. It
+                 names the run that produced the published claim, NOT necessarily
+                 HEAD: a docs-only release commit publishes the verdict of the
+                 earlier verified tree, which AuditRepository.declared_baselines
+                 accepts when the release tag declares that verification baseline.
                  "Does the current tree have execution evidence?" is a different
                  question, answered by Tools/ValidateProvenance.py --require-current.
 
@@ -39,7 +42,7 @@ RUNS = ROOT / "Saved" / "ReleaseTests"
 # Must stay identical to Tools/AuditRepository.py:RELEASE_PAGES.
 RELEASE_PAGES = (
     Path("README.md"),
-    Path("README_EN.md"),
+    Path("README_CN.md"),
     Path("CHANGELOG.md"),
     Path("Docs/index.md"),
     Path("Docs/CN/ReleaseNotes.md"),

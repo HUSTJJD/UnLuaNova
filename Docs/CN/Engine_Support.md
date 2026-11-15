@@ -5,8 +5,9 @@ description: UnLuaNova 已验证 / 已适配 / 未验收的引擎版本、Lua �
 
 # 引擎版本与平台支持矩阵
 
-本页是支持范围的**唯一权威说明**。README 徽章和 `.uplugin` 的 `PlatformAllowList`
-描述的是构建目标与声明，不等于验收状态。两者冲突时以本页为准。
+本页是支持范围与验收状态的**唯一权威说明**。README 徽章和 `.uplugin` 的 `PlatformAllowList`
+描述的是构建目标与声明，不等于验收状态；两者冲突时以本页为准。
+**当前代码树是否有执行证据以 `Saved/ReleaseTests/test/release-summary.json` 为准，唯一验收入口是 `Tools/RunTests.ps1`。**
 
 ## 状态定义
 
@@ -20,8 +21,8 @@ description: UnLuaNova 已验证 / 已适配 / 未验收的引擎版本、Lua �
 
 | 引擎 | 适配方式 | Lua 5.5.1 | Luau 0.743-1 | 平台 | 状态 |
 |---|---|---|---|---|---|
-| UE 5.8.3 | `UE_5_8_OR_LATER` / `UE_VERSION_OLDER_THAN(5,8,0)` | ✓ | ✓ | Win64 | 已验证（2026-11-03 baseline，`347bb8c5`） |
-| UE 6.0 | `!UE_VERSION_OLDER_THAN(6,0,0)` 与 UE 6.0 移除 API 的替换 | ✓ | ✓ | Win64 | 已验证（2026-11-15 v1.0.0 Release，`4a87d214`，双后端 41/41） |
+| UE 5.8.3 | `UE_5_8_OR_LATER` / `UE_VERSION_OLDER_THAN(5,8,0)` | ✓ | ✓ | Win64 | 已验证（历史 baseline，2026-11-03，`347bb8c5`） |
+| UE 6.0 | `!UE_VERSION_OLDER_THAN(6,0,0)` 与 UE 6.0 移除 API 的替换 | ✓ | ✓ | Win64 | 已验证（当前验证基线；2026-11-15 v1.0.0 Release，验证基线 `4a87d214`，双后端 41/41 阶段） |
 | UE 5.1 – 5.7 | `UE_VERSION_NEWER_THAN` / `OLDER_THAN` 分支 | — | — | Win64 | 已适配，未验收 |
 | UE 4.x | `UnLuaNovaCompatibility.h` 继承的兼容层 | — | — | — | 不承诺；仅为 fork 遗留 |
 | Mac / Linux / iOS / Android / 主机 | `.uplugin` 的 `PlatformAllowList` 声明为可编译目标 | — | — | 非 Win64 | 未验收 |
@@ -48,8 +49,10 @@ description: UnLuaNova 已验证 / 已适配 / 未验收的引擎版本、Lua �
 - `.uproject` 显式启用的部分插件（`ModelContextProtocol`、`ToolsetRegistry`、
   `EditorToolset`、`AutomationTestToolset`、`ConfigSettingsToolset` 等）由引擎或父工程提供，
   **不在本仓库内**。集成到自己的工程时按需要取舍，不要照抄整份插件列表。
-- 首次在 UE 6.0 上打包会触发 FULL COOK 与全量 shader 编译，单个阶段可能超过默认 60 分钟。
-  `RunTests.ps1` 保持零参数设计，通过环境变量调整（详见 [测试与自动化](Testing.md)）：
+- 全新环境首次在 UE 6.0 上打包会触发 FULL COOK 与全量 shader 编译，单个阶段可能超过默认
+  60 分钟；这是冷启动环境提示，不是 v1.0.0 发布验证的结论（该 Release 在验证基线
+  `4a87d214` 上 41/41 阶段通过）。`RunTests.ps1` 保持零参数设计，通过环境变量调整
+  （详见 [测试与自动化](Testing.md)）：
 
   ```powershell
   $env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180

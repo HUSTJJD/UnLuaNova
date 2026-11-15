@@ -44,7 +44,7 @@ self["function name with space"](self) -- “实例函数”
 
 ## `UE.XXX` 好像访问不到我创建的蓝图类型？
 
-从 `2.2.0` 版本开始，`UE.XXX` 只支持访问C++类型，蓝图类型需要先通过 `UE.UClass.Load` 加载再使用。
+在 v1.0.0 中，`UE.XXX` 只支持访问 C++ 类型，蓝图类型需要先通过 `UE.UClass.Load` 加载再使用。
 
 ## 多继承层次里不能覆写接口的方法吗？
 
@@ -86,9 +86,9 @@ UnLuaNova.PackagePath = UnLuaNova.PackagePath .. ';Plugins/UnLuaNovaExtensions/L
 
 PS：默认值是`Content/Script/?.lua;Plugins/UnLuaNova/Content/Script/?.lua`。
 
-## 有哪些产品正在使用UnLuaNova？
+## 有哪些产品正在使用 UnLuaNova？
 
-腾讯内部已知的有四十款左右项目在使用UnLuaNova，外部项目暂时无法统计。
+UnLuaNova 是社区独立续作，不是腾讯官方产品，也没有官方的产品使用统计，不借用任何腾讯背书。常被引用的「腾讯内部约四十款项目在用」指的是上游 Tencent/UnLua 的历史使用情况，不适用于本项目。上游 UnLua 的官方发布线停在 v2.3.6（2023-11），但其 develop 分支此后仍由社区维护（UE5.6 编译修复、GC 崩溃修复，至 2026-04），并非无人维护；本仓库是在该 fork 之上独立演进的续作。本项目自身的采用情况暂无统计。
 
 ---
 

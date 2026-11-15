@@ -1,9 +1,10 @@
 name: Documentation
 
-# GitHub Actions only builds and publishes the documentation site. Unreal Engine is
+# This workflow only builds and publishes the documentation site. Unreal Engine is
 # far too large for a hosted runner: all compilation, automation tests, type checks,
 # packaging and release gates run locally through Tools/RunTests.ps1. Do not add
-# code-checking jobs to this workflow.
+# code-checking jobs to this workflow - the engine-free lightweight gates (Python
+# unit tests, repository audit, strict docs build, path hygiene) live in ci.yml.
 
 on:
   push:

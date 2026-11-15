@@ -23,7 +23,7 @@ Windows 11 · Unreal Engine 6.0 (source build, v1.0.0 Release) · Win64 · Visua
 
 ## Known limitations
 
-- Lua-declared networking is Stable and verified on all four carriers and eight connected scenarios. Engine-level seamless travel (`ServerTravel`) is out of scope.
+- Lua-declared networking is Stable and verified on all four carriers and eight connected scenarios on both backends. Not supported: engine-level seamless travel (`ServerTravel`), declarative-networking hot reload, and RPC authorization (`bRequireRpcAuthorization` defaults to `False`).
 - Validated on UE 6.0 / Win64 (v1.0.0) and UE 5.8.3 / Win64 (baseline). Other engine versions and platforms require separate validation.
 - Luau native codegen is opt-in and limited to x64 / arm64.
 - `lua.sandbox` is off by default; path checks are not an OS-level sandbox.

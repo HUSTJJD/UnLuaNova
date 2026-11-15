@@ -35,7 +35,7 @@ A: Set `ENABLE_INTELLISENSE=1` in `UnLuaNovaIntelliSense.Build.cs` and regenerat
 
 ## Q: Which products are using UnLuaNova?
 
-A: There more than 20 projects using UnLuaNova in Tencent, but unavailable to count projects out of Tencent.
+A: UnLuaNova is an independent community continuation, not an official Tencent product. It has no official adoption statistics and claims no Tencent endorsement. The often-quoted "around forty projects inside Tencent" describes the historical use of upstream Tencent/UnLua, not this project. Upstream's official release line stopped at v2.3.6 (2023-11), but its `develop` branch was still maintained by the community afterwards (UE5.6 build fixes, GC crash fixes, through 2026-04), so it was not abandoned; this repository evolves independently on top of that fork. There is no adoption count for UnLuaNova itself.
 
 ## Q: Is there any info of G6IDE?
 

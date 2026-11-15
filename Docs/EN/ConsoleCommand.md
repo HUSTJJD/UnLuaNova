@@ -5,6 +5,11 @@ description: "lua.do / lua.profiler / lua.memstats / lua.memquota / lua.dbg / lu
 
 # Console Commands
 
+## Overview
+
+Run debug commands directly while the game is running - calling methods on a specific object,
+editing properties, and so on - to make debugging the game environment more convenient.
+
 Press `~` for the engine console. UnLuaNova registers the commands below; see
 `UnLuaNovaConsoleCommands` if you want to add your own.
 
@@ -158,10 +163,41 @@ kind, plus the case-sensitivity and cooked staging rules. It is off by default b
 searcher declining in favour of the next one is normal. Read the full contract from
 `package.resolution()`; see [module resolution](Luau.md#module-resolution-and-unload-contract).
 
+### lua.dap \[start \[port\] \| stop \| status\]
+
+DAP (Debug Adapter Protocol) service: turns the headless debug service into one an IDE can
+attach to.
+
+| Subcommand | Effect |
+|---|---|
+| `start [port]` | Start the service (port defaults to `DebugAdapterPort` in `DefaultUnLuaNova.ini`, falling back to `5699`) and wait for the IDE to connect in **attach** mode |
+| `stop` | Stop the service and disconnect clients |
+| `status` | Print whether it is running and on which port |
+
+On the VSCode side, set `request: "attach"` and connect to `127.0.0.1:5699` for breakpoints,
+stepping and locals. It is gated by the shared `bDebugAdapter` flag (on by default): when off,
+`lua.dap start` refuses outright. While a breakpoint is hit the game thread **spin-blocks**
+waiting for `Continue()`, so the editor UI stalls with it - this is expected; breakpoint edits
+made while paused take effect only after `Continue()`.
+
+`pause` and `evaluate` are supported:
+
+* `pause`: request a stop on the **next line**. Lua cannot be interrupted forcibly, so this
+  means "make the next line the stop point"; the actual stop happens shortly afterwards. On the
+  Luau backend it is implemented by temporarily arming single-step (disarmed as soon as it lands).
+* `evaluate`: evaluate while a breakpoint is hit. The expression is compiled into
+  `return (function(<that frame's locals...>) return <expression> end)(...)`, so `self.HP` and
+  `i + 1` mean exactly what they look like. **Upvalues are not included** (they would require
+  pushing the function object, which differs between the two backends, and nobody has needed it
+  yet). When not paused (or without a `frameId`), evaluation is against globals only, for
+  watch / repl use.
+
+See [debugging](Debugging.md).
+
 ### lua.dbg \[subcommand\]
 
 Headless debug service. It has no UI of its own: the commands exist so an external front end
-(a future DAP adapter) can drive it, and so can you.
+(the `lua.dap` DAP adapter) can drive it, and so can you.
 
 | Subcommand | Meaning |
 |---|---|
@@ -226,6 +262,36 @@ an unbounded allocation into a Lua string. This is host policy, not Lua io seman
 
 *Off by default, because it changes the behaviour of existing scripts. It relies on Luau's
 native sandbox and is unsupported on the Lua 5.5 backend.*
+
+### lua.coverage \[dump \[file\]\|status\]
+
+Export line-hit counters from Luau's compile-time instrumentation (Luau backend only; the plain
+Lua backend reports unsupported explicitly).
+
+```
+luau.coverage 1          ; must be set before scripts load, 1=statements, 2=statements and expressions
+lua.coverage status
+lua.coverage dump                              ; Saved/Coverage/coverage-Luau.json
+lua.coverage dump D:/work/coverage-run-a.json
+```
+
+`status` reports only the level; `dump` writes a full JSON snapshot with sources named by
+reachable globals / `package.loaded` paths, per-line `hits` per function, declared exclusions and
+totals. It errors - without writing an empty report - when there is no reachable Lua function, no
+Env, or the file cannot be written. Counters are not reset by a dump, so successive dumps are
+cumulative.
+
+The export must be judged by a gate, not by reading the JSON `totals` directly:
+
+```powershell
+python Tools/ValidateCoverage.py --report Saved/Coverage/coverage-Luau.json `
+    --require-source "_G.UnLuaNova.Event" --min-coverage 0.5 `
+    --out Saved/Coverage/coverage-gate.json
+```
+
+*Note: chunks already `require`d are not instrumented retroactively; C closures have no counters;
+this is an opt-in diagnostic capability and is not part of the 33 Release stages. For the full
+format, fail-closed rules and limits see [Luau coverage export and gate](LuauCoverage.md).*
 
 ---
 

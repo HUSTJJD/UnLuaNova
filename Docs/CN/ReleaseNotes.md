@@ -31,7 +31,7 @@ v1.0.0 在 UE 6.0 / Win64（源码引擎）上验证，使用项目关联的 UE�
 ## 已知边界
 
 - **平台**：v1.0.0 面向 Win64；其他平台需单独验收。
-- **声明式网络已转正**：Legacy / PushOff / Iris / Cooked 四种载体与八个连接场景，在 Lua / Luau 双后端通过完整发布验证；不宣称压缩收益或运行时回退。
+- **声明式网络已转正**：Legacy / PushOff / Iris / Cooked 四种载体与八个连接场景，在 Lua / Luau 双后端通过完整发布验证；不宣称压缩收益或运行时回退。不支持：引擎级 seamless travel（`ServerTravel`）、声明式网络热重载、RPC 鉴权（`bRequireRpcAuthorization` 默认 `False`）。
 - **Luau 原生编译**：CodeGen 需显式开启（`lua.codegen.enabled`），且目标架构与可执行内存策略有限制。
 - **沙盒**：默认关闭（`lua.sandbox=0`）；开启后也只是 VM 级可选硬化，不等同于 OS 级沙盒或不可信脚本的完整隔离。
 - **类型检查**：由外部 LuaLS / luau-lsp 完成，不发生在游戏运行时。
