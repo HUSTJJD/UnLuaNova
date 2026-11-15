@@ -356,6 +356,20 @@ BASELINE_DECLARATION = re.compile(
 )
 
 
+def _git(root, *args):
+    try:
+        return subprocess.run(["git", "-C", str(root), *args],
+                              capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _is_ancestor(root, commit):
+    obj = _git(root, "cat-file", "-e", commit + "^{commit}")
+    ancestor = _git(root, "merge-base", "--is-ancestor", commit, "HEAD")
+    return bool(obj and obj.returncode == 0 and ancestor and ancestor.returncode == 0)
+
+
 def declared_baselines(root):
     """Commits that reachable tags name as the run behind a published verdict.
 
@@ -367,30 +381,48 @@ def declared_baselines(root):
     orphan, a descendant or an undeclared commit is still rejected. Whether the
     current tree has execution evidence remains ValidateProvenance.py's job.
     """
-    def git(*args):
-        try:
-            return subprocess.run(["git", "-C", str(root), *args],
-                                  capture_output=True, text=True, timeout=15)
-        except (OSError, subprocess.SubprocessError):
-            return None
-
     # Reachable tags, not only tags pointing at HEAD: once a release tag is cut,
     # follow-up commits move HEAD forward while the published claim still names
     # the earlier verification baseline. --merged keeps the exemption narrow.
-    tags = git("tag", "--merged", "HEAD")
+    tags = _git(root, "tag", "--merged", "HEAD")
     if not tags or tags.returncode != 0:
         return set()
     found = set()
     for tag in tags.stdout.split():
-        message = git("for-each-ref", "--format=%(contents)", "refs/tags/" + tag)
+        message = _git(root, "for-each-ref", "--format=%(contents)", "refs/tags/" + tag)
         if not message or message.returncode != 0:
             continue
         for match in BASELINE_DECLARATION.finditer(message.stdout):
             commit = match.group(1)
-            obj = git("cat-file", "-e", commit + "^{commit}")
-            ancestor = git("merge-base", "--is-ancestor", commit, "HEAD")
-            if obj and obj.returncode == 0 and ancestor and ancestor.returncode == 0:
+            if _is_ancestor(root, commit):
                 found.add(commit[:8])
+    return found
+
+
+def archived_run_commits(root):
+    """Commits of locally archived Release runs that are ancestors of HEAD.
+
+    At the start of a new run the pipeline atomically archives the previous
+    release-summary.json, so the commit named by the published marker has just
+    left `test/` but is still a real local run. Accepting only archived commits
+    that are also ancestors keeps the "known run" contract: an orphan, a future
+    commit or an unrelated branch is still rejected.
+    """
+    archive = root / "Saved" / "ReleaseTests" / ".archive"
+    if not archive.is_dir():
+        return set()
+    found = set()
+    for summary in archive.glob("*/release-summary.json"):
+        try:
+            data = json.loads(summary.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        commit = str(data.get("provenance", {}).get("commit", ""))[:8]
+        if commit and re.fullmatch(r"[0-9a-f]{7,8}", commit) \
+                and _is_ancestor(root, commit):
+            found.add(commit)
     return found
 
 
@@ -461,6 +493,7 @@ def validate_release_docs(root, require_local_runs=True):
     except (OSError, subprocess.SubprocessError):
         pass
     allowed |= declared_baselines(root)
+    allowed |= archived_run_commits(root)
     if commits and allowed and require_local_runs:
         unknown = sorted({value[:8] for value in commits.values()} - allowed)
         if unknown:

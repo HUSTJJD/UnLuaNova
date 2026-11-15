@@ -211,6 +211,26 @@ class AuditRepositoryTests(unittest.TestCase):
         errors = audit.validate_release_docs(self.root)
         self.assertTrue(any("do not name a known run" in error for error in errors))
 
+    def test_archived_run_commit_is_accepted(self):
+        """A run archived when the next Release starts is still a known run."""
+        baseline = self._make_release_history(declared=False)
+        self._write_summary(".archive/20260101-abc/release-summary.json",
+                            {"provenance": {"commit": baseline}, "passed": False})
+        self._write_release_pages(commit=baseline[:8])
+        self.assertEqual(audit.archived_run_commits(self.root), {baseline[:8]})
+        errors = audit.validate_release_docs(self.root)
+        self.assertFalse(any("do not name a known run" in e for e in errors), errors)
+
+    def test_archived_orphan_commit_is_rejected(self):
+        """An archived hash that is not a real ancestor is still drift."""
+        self._make_release_history(declared=False)
+        self._write_summary(".archive/20260101-abc/release-summary.json",
+                            {"provenance": {"commit": "f" * 40}, "passed": True})
+        self._write_release_pages(commit="f" * 8)
+        self.assertEqual(audit.archived_run_commits(self.root), set())
+        errors = audit.validate_release_docs(self.root)
+        self.assertTrue(any("do not name a known run" in e for e in errors))
+
     def test_ci_mode_skips_only_the_local_run_check(self):
         self._write_release_pages(commit="1234567")
         self._write_summary("baseline", {"provenance": {"commit": "deadbeef" + "0" * 32}})
