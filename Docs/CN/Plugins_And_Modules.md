@@ -18,11 +18,12 @@ description: "UnLuaNova / UnLuaNovaExtensions / UnLuaNovaTestSuite 的组成与�
 
 UnLuaNova扩展示例插件，在需要集成一些第三方库时可以参考它的实现。
 
-这三个插件**默认都是关闭的**——它们是可选扩展，只有 UnLuaNova 本身是必需的，所以 `.uplugin`
-里 `EnabledByDefault` 保持 `false`，用到别的工程时不会被默认带进去。需要时在工程的 `.uproject`
+这三个插件**默认都是关闭的**——它们是可选扩展，只有 UnLuaNova 本身是必需的，所以 `.uplugin` 不设置
+`EnabledByDefault`（UE 缺省即为 `false`），用到别的工程时不会被默认带进去。需要时在工程的 `.uproject`
 里把对应的 `"Enabled"` 改成 `true` 即可，三者之间没有依赖，可以只开其中一个。
 
-本工程（UnLuaNovaDemo）把三个都打开了：自动化测试要覆盖它们，见[测试与自动化](Testing.md)。
+本工程（UnLuaNovaDemo）把三个都打开了，用于示例与手动冒烟验证；测试覆盖见
+[扩展插件测试](Extensions_Testing.md) 与 [测试与自动化](Testing.md)。
 
 模块列表：
 * [LuaSocket](https://github.com/lunarmodules/luasocket) 一些纯Lua调试器可能会需要这个库

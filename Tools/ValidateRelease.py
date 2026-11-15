@@ -153,8 +153,116 @@ def validate_memory(run, backend, carrier):
     return errors
 
 
-def validate_performance(actual, baseline, backend, require_samples=False):
+# --- performance baseline reset ---------------------------------------------
+# Tools/ReleaseSupport.ps1::Sync-ReleasePerfBaseline rebuilds the committed
+# baseline from THIS run's measurement when the engine or machine changes. That
+# round is "self compared to self", so the 25% regression gate is meaningless.
+# It must be reported as an explicit, auditable information item (not a silent
+# pass, and not a hard failure that would block every engine-upgrade release).
+BASELINE_RESET_FILENAME = "perf-baseline-reset.json"
+BASELINE_RESET_FIELDS = ("backend", "reason", "old_engine", "new_engine",
+                         "old_sha256", "new_sha256", "utc", "commit")
+BASELINE_RESET_NOTICE = "本轮为基线重置，25% 回退门禁不适用"
+RESET_MARKER = "PERF_BASELINE_RESET_GATE_NOT_APPLICABLE"
+# --run points at a carrier dir (<out>/<backend>/editor/<backend>) while the
+# runner writes the event to the run-root metadata (a few levels up).
+MAX_RESET_SEARCH_PARENTS = 6
+
+
+def find_baseline_reset(run_dir):
+    """Locate this round's baseline_reset event, or None.
+
+    The runner writes the auditable event to Saved/ReleaseTests/test/metadata/
+    (the run-root metadata dir), while ValidateRelease.py is invoked per carrier
+    with --run pointing at a nested directory. Check the carrier metadata first,
+    then walk a bounded number of parents so either layout resolves to the same
+    event. Never look outside the run tree.
+    """
+    if run_dir is None:
+        return None
+    run_dir = Path(run_dir)
+    candidates = [run_dir / "metadata" / BASELINE_RESET_FILENAME]
+    for parent in list(run_dir.parents)[:MAX_RESET_SEARCH_PARENTS]:
+        candidates.append(parent / "metadata" / BASELINE_RESET_FILENAME)
+    for candidate in candidates:
+        try:
+            if candidate.is_file():
+                return candidate
+        except OSError:
+            continue
+    return None
+
+
+def load_baseline_reset(path, backend):
+    """Return (event, errors) for a present baseline_reset event.
+
+    A malformed or incomplete event is a hard error: a broken audit trail must
+    never be silently accepted as an ordinary pass. An event whose backend does
+    not match this carrier is ignored (each backend has its own baseline).
+    """
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        return None, ["baseline_reset event %s: %s" % (path, exc)]
+    if not isinstance(data, dict):
+        return None, ["baseline_reset event %s: expected a JSON object" % path]
     errors = []
+    for field in BASELINE_RESET_FIELDS:
+        value = data.get(field)
+        if not isinstance(value, str) or not value.strip():
+            errors.append("baseline_reset event: missing or invalid field '%s'" % field)
+    if errors:
+        return None, errors
+    if data["backend"] != backend:
+        return None, []
+    return data, []
+
+
+def emit_baseline_reset_notice(reset_path, event, backend):
+    """Print an explicit, auditable '25% gate not applicable' marker.
+
+    Deliberately NOT a silent pass and NOT a hard failure: an engine or machine
+    change must still be publishable. The notice goes to the stage log and is
+    persisted as perf-baseline-reset.md next to the event so the release report
+    carries it.
+    """
+    line = ("INFO: %s: %s (backend=%s, reason=%s, %s -> %s, commit=%s)"
+            % (RESET_MARKER, BASELINE_RESET_NOTICE, backend, event["reason"],
+               event["old_engine"], event["new_engine"], event["commit"]))
+    print(line)
+    md = (
+        "# Performance baseline reset\n\n"
+        "%s。\n\n" % BASELINE_RESET_NOTICE
+        + "- backend: `%s`\n" % backend
+        + "- reason: `%s`\n" % event["reason"]
+        + "- old_engine: `%s`\n" % event["old_engine"]
+        + "- new_engine: `%s`\n" % event["new_engine"]
+        + "- old_sha256: `%s`\n" % event["old_sha256"]
+        + "- new_sha256: `%s`\n" % event["new_sha256"]
+        + "- utc: `%s`\n" % event["utc"]
+        + "- commit: `%s`\n\n" % event["commit"]
+        + "本轮性能测量被直接写入已提交基线，属于「自己比自己」，"
+        "因此 25% 回退门禁不适用。换引擎或换机器后，应在后续一轮保持基线不变，"
+        "再让该门禁真正生效。\n"
+    )
+    out = Path(reset_path).parent / "perf-baseline-reset.md"
+    try:
+        out.write_text(md, encoding="utf-8")
+    except OSError as exc:
+        print("INFO: %s: could not write summary: %s" % (RESET_MARKER, exc))
+    return line
+
+
+def validate_performance(actual, baseline, backend, require_samples=False, run_dir=None):
+    errors = []
+    # A baseline_reset event means the committed baseline was rebuilt from THIS
+    # run's measurement. Detect it before the comparison so the 25% gate can be
+    # reported as explicitly not-applicable instead of silently passing.
+    reset_event = None
+    reset_path = find_baseline_reset(run_dir)
+    if reset_path is not None:
+        reset_event, reset_errors = load_baseline_reset(reset_path, backend)
+        errors.extend(reset_errors)
     for field in ("Backend", "EngineVersion", "Machine"):
         if not actual.get(field) or actual.get(field) != baseline.get(field):
             errors.append(f"Performance baseline scope differs: {field}")
@@ -207,10 +315,15 @@ def validate_performance(actual, baseline, backend, require_samples=False):
                 errors.append(f"Performance summary differs from sample median: {name}")
     if current.keys() != previous.keys():
         errors.append("Performance case inventory changed; baseline cannot cover this run")
+    if reset_event is not None:
+        # Informational, not a failure: make the "self compared to self" round
+        # explicit and durable instead of silently returning green.
+        emit_baseline_reset_notice(reset_path, reset_event, backend)
     for name in current.keys() & previous.keys():
         if current[name]["Iterations"] != previous[name]["Iterations"]:
             errors.append(f"Performance iteration count changed: {name}")
-        if current[name]["PerOpUs"] > previous[name]["PerOpUs"] * 1.25:
+        # The 25% regression gate does not apply on a baseline-reset round.
+        if reset_event is None and current[name]["PerOpUs"] > previous[name]["PerOpUs"] * 1.25:
             errors.append(f"Performance regression exceeds 25%: {name}")
     return errors
 
@@ -683,7 +796,8 @@ def validate_run(run, backend, carrier, root=ROOT):
     if carrier == "editor":
         checks["typecheck"] = lambda: validate_typecheck(read_json(run / f"{backend.lower()}-analyze.json"))
         checks["performance"] = lambda: validate_performance(read_json(run / "metadata/perf.json"),
-            read_json(root / f"Tools/baseline/perf-{backend.lower()}.json"), backend, require_samples=True)
+            read_json(root / f"Tools/baseline/perf-{backend.lower()}.json"), backend,
+            require_samples=True, run_dir=run)
         checks["media"] = lambda: validate_media(run)
     for name, check in checks.items():
         try:

@@ -65,6 +65,19 @@ jobs:
       - name: Reject machine-local paths and engine GUIDs
         run: python -B Tools/CheckNoLocalPaths.py
 
+      - name: Build.cs backend-layout blocks are identical
+        # Six Build.cs files carry an identical backend-isolation block. UBT has
+        # no reliable shared-fragment mechanism, so the invariant is enforced
+        # by a checker instead of by a refactor we cannot compile-verify here.
+        run: python -B Tools/CheckBuildLayoutConsistency.py
+
+      - name: Cross-project comparison stays honest
+        # Must report "not-established" until all three projects have aligned
+        # real runs. This step fails if anyone publishes a speed claim early.
+        run: |
+          mkdir -p "$RUNNER_TEMP/unluanova-crossproject"
+          python -B Tools/CrossProject/bootstrap_external.py status --root "$RUNNER_TEMP/unluanova-crossproject"
+
       - name: Markdown release claims are consistent
         # Catch the historical failure mode: a page that still says the tree has
         # not passed while the generated markers say otherwise.
@@ -75,8 +88,10 @@ jobs:
           from pathlib import Path
 
           root = Path(".")
+          # CHANGELOG.md is excluded on purpose: it records past verdicts by
+          # design, so a historical "passed=false" line is a fact, not drift.
           pages = [root / p for p in (
-              "README.md", "README_CN.md", "CHANGELOG.md", "Docs/index.md",
+              "README.md", "README_CN.md", "Docs/index.md",
               "Docs/CN/Engine_Support.md", "Docs/EN/Engine_Support.md",
               "Docs/CN/Networking_Guide.md", "Docs/EN/Networking_Guide.md",
               "Docs/CN/Migration_Guide.md", "Docs/EN/Migration_Guide.md",

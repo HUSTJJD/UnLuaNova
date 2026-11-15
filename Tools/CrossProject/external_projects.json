@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "file_role": "Machine-readable manifest for the three-way cross-project benchmark (UnLuaNova / slua-unreal / FUnLua). Consumed by bootstrap_external.py (prepare / check / status).",
+  "honesty_note": "This manifest describes HOW to reproduce a comparison, not a result. No commit hash is invented here: every 'pin' is UNKNOWN until a maintainer performs a real checkout and records the exact commit that was actually built and run. No performance numbers, ratios, or conclusions are stored. See Docs/CN/CrossProject_Benchmark.md and Docs/EN/CrossProject_Benchmark.md.",
+  "alignment_reference": {
+    "contract_file": "Tools/CrossProject/WORKLOAD.md",
+    "normalizer": "Tools/CrossProject/runner.py",
+    "distribution": "Tools/CrossProject/metrics.py",
+    "workload_revision": "1",
+    "results_dir": "Tools/CrossProject/results/",
+    "note": "All three projects must be run on the same machine, engine, config, carrier, case set and iteration counts. runner.py and metrics.py enforce this fail-closed; a comparison table is only legitimate after all three have aligned real runs."
+  },
+  "readme_2_08x_boundary": {
+    "value": "2.08x",
+    "meaning": "UnLuaNova self-comparison: Luau vs Lua 5.5.1 on the historical UE 5.8.3 baseline (2026-10-24), same machine and build.",
+    "is_not": "Not a comparison against slua-unreal or FUnLua. No 'faster than slua' claim is made anywhere in this repository.",
+    "evidence": "README.md (the 2.08x row and the 'Conditions / self-baseline / not a same-machine comparison against slua-unreal / FUnLua' notes)."
+  },
+  "projects": {
+    "unluanova": {
+      "role": "this-repo",
+      "display_name": "UnLuaNova",
+      "repo_url": "https://github.com/HUSTJJD/UnLuaNova.git",
+      "repo_url_note": "Local 'git remote origin' of this checkout, read on 2026-11-15; not a claim about any other fork.",
+      "pin": "UNKNOWN",
+      "pin_source": "Maintainer must record the exact commit hash of the tree that was actually built and benchmarked. Fill after a real run; do not infer from HEAD or from a tag name alone.",
+      "license": "MIT (repository root license)",
+      "license_evidence": "LICENSE-THIRD-PARTY.md: 'The repository root license is MIT'. Root license covers only UnLuaNova's own source; vendored components keep their own licenses.",
+      "license_verified": true,
+      "ue_version": "UNKNOWN",
+      "ue_version_note": "Confirm the exact engine version actually used for the run. It must be identical to the engine used by the two external projects. The runner template's '5.8.3' is illustrative only, not a verified requirement.",
+      "workload": {
+        "contract_source": "Tools/CrossProject/workload/unluanova/cases.lua",
+        "expected_entry_in_project": "Content/Script/CrossProjectBench.lua",
+        "entry_confirmed": false,
+        "note": "README.md: 'UnLuaNova side implementation ... pending a real run in a real project to confirm every UE call is reachable'. The workload entry has NOT been confirmed in a real build by this tool."
+      },
+      "project_name_aliases": ["UnLuaNova", "unluanova"],
+      "expected_layout": {
+        "relative_checkout_dir": ".",
+        "required_markers": [],
+        "confirmed": false,
+        "note": "This project is the repository itself, not a clone. Its 'structure' is validated via the in-repo workload contract files, which the check command verifies directly."
+      },
+      "note": "Baseline side of the three-way comparison. Has framework code and a self-comparison baseline (Lua 5.5.1 vs Luau) but NO real cross-project run record. A single-project self-baseline is not a cross-project conclusion."
+    },
+    "slua-unreal": {
+      "role": "external",
+      "display_name": "slua-unreal",
+      "repo_url": "https://github.com/Tencent/sluaunreal",
+      "repo_url_note": "From README.md and LICENSE-THIRD-PARTY.md ('Comparison-only Sources'). Verified as a URL, not as a buildable benchmark pin.",
+      "pin": "UNKNOWN",
+      "pin_source": "Docs/CN/Comparison_sluaunreal.md and LICENSE-THIRD-PARTY.md cite a specific commit for SOURCE READING only. That reference is deliberately NOT copied here as a benchmark pin: it has not been verified to build and run this workload. The maintainer must check out the project, build it, run the benchmark, and record the exact commit actually used.",
+      "license": "BSD-3-Clause",
+      "license_evidence": "Docs/CN/Comparison_sluaunreal.md ('slua-unreal 为 BSD-3-Clause，不能误写为 MIT'); LICENSE-THIRD-PARTY.md ('slua-unreal ... BSD-3-Clause, with separately licensed dependencies').",
+      "license_verified": true,
+      "ue_version": "UNKNOWN",
+      "ue_version_note": "Confirm slua-unreal's supported/used engine version after a real checkout, and ensure it matches the other two projects exactly. The example SetProject('slua-unreal','Lua','5.8.3') in README.md is illustrative, not a verified requirement.",
+      "workload": {
+        "contract_source": "Tools/CrossProject/workload/external/cases.lua",
+        "expected_entry_in_project": "Content/Script/CrossProjectBench.lua",
+        "entry_confirmed": false,
+        "note": "Adapter uses UEAPI.Static / UEAPI.Vector and tries UE / UE4 / slua / import(). README.md: 'pending target-project API verification'. The script directory and the reachability of every UE call have NOT been confirmed by this tool."
+      },
+      "project_name_aliases": ["slua-unreal", "slua_unreal", "sluaunreal", "slua", "SLua"],
+      "expected_layout": {
+        "relative_checkout_dir": "Saved/CrossProject/external/slua-unreal",
+        "required_markers": ["Content/Script/CrossProjectBench.lua"],
+        "confirmed": false,
+        "note": "Only the files this tool is responsible for placing are asserted (the copied workload entry + a valid checkout directory). The upstream project's internal layout is NOT guessed here; maintainers must confirm it after a real checkout. This field is 'confirmed: false' because the project has never been checked out by this tool."
+      },
+      "note": "HAS NOT been run. The external adapter is written but the project is not in this repository and has never been built or benchmarked here. BSD-3-Clause; design reference only, no implementation copied."
+    },
+    "funlua": {
+      "role": "external",
+      "display_name": "FUnLua",
+      "repo_url": "https://github.com/fcscript/FUnLua",
+      "repo_url_note": "From README.md and LICENSE-THIRD-PARTY.md ('Comparison-only Sources'). Verified as a URL, not as a buildable benchmark pin.",
+      "pin": "UNKNOWN",
+      "pin_source": "Docs/CN/Comparison_sluaunreal.md and LICENSE-THIRD-PARTY.md cite a specific commit for SOURCE READING only. That reference is deliberately NOT copied here as a benchmark pin: it has not been verified to build and run this workload. The maintainer must check out the project, build it, run the benchmark, and record the exact commit actually used.",
+      "license": "UNVERIFIED (README claims MIT; LICENSE.TXT missing from the audited tree)",
+      "license_evidence": "Docs/CN/Comparison_sluaunreal.md ('FUnLua README 链接 LICENSE.TXT，但该文件未在其源码树中找到'); LICENSE-THIRD-PARTY.md ('README claims MIT and links LICENSE.TXT, absent from the audited tree. Do not copy implementation until the grant and provenance are verified.').",
+      "license_verified": false,
+      "ue_version": "UNKNOWN",
+      "ue_version_note": "Confirm FUnLua's supported/used engine version after a real checkout, and ensure it matches the other two projects exactly. The example SetProject('FUnLua', ...) in README.md is illustrative, not a verified requirement.",
+      "workload": {
+        "contract_source": "Tools/CrossProject/workload/external/cases.lua",
+        "expected_entry_in_project": "Content/Script/CrossProjectBench.lua",
+        "entry_confirmed": false,
+        "note": "Same external adapter as slua-unreal (UEAPI.Static / UEAPI.Vector). Script directory and UE-call reachability NOT confirmed by this tool."
+      },
+      "project_name_aliases": ["FUnLua", "funlua", "FCScript"],
+      "expected_layout": {
+        "relative_checkout_dir": "Saved/CrossProject/external/funlua",
+        "required_markers": ["Content/Script/CrossProjectBench.lua"],
+        "confirmed": false,
+        "note": "Only the files this tool is responsible for placing are asserted. Upstream internal layout is NOT guessed. 'confirmed: false' because the project has never been checked out by this tool."
+      },
+      "note": "HAS NOT been run. Additionally, its license grant is UNVERIFIED in the audited source tree (no LICENSE.TXT found), so provenance must be confirmed before any implementation is copied. Design reference only, no implementation copied."
+    }
+  },
+  "notes": [
+    "Current cross-project conclusion: NOT ESTABLISHED. No real cross-project run records exist in Tools/CrossProject/results/.",
+    "The README's 2.08x is UnLuaNova's Lua-5.5.1-vs-Luau self-comparison; it is not a comparison with slua-unreal or FUnLua.",
+    "A comparison table is legitimate ONLY after all three projects have aligned real runs (same machine / engine / config / carrier / case set / iteration counts) validated fail-closed by runner.py and metrics.py.",
+    "CI does not run this benchmark: it requires real UE engine builds of three separate projects on one machine, which is outside CI. See Docs/EN/CrossProject_Benchmark.md.",
+    "'UNKNOWN' values are intentional. They are blanks for maintainers to fill after real, verifiable checkouts and runs - not values to be guessed."
+  ]
+}

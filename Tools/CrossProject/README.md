@@ -19,6 +19,9 @@
 | `workload/unluanova/cases.lua` | UnLuaNova 侧实现（可直接跑） |
 | `workload/external/cases.lua` | 外部绑定通用适配器，slua-unreal / FUnLua 各配一次项目名即可 |
 | `results/` | runner 产出的归一化 JSON 与 `comparison.md`（首次运行时生成） |
+| `bootstrap_external.py` | 外部项目接入引导：`prepare` / `check` / `status`，离线可自检，stdout 为结构化 JSON |
+| `external_projects.json` | 三方仓库 URL / pin（当前全部 `UNKNOWN`，无编造 commit）/ 许可 / 工作负载入口 / UE 版本 |
+| `Docs/CN/CrossProject_Benchmark.md` · `Docs/EN/CrossProject_Benchmark.md` | 复现步骤、对齐契约逐条 fail-closed 说明、`results/` 格式、CI 里为何不做（中英一一对应） |
 
 ## 设计取舍
 
@@ -156,6 +159,35 @@ revision、meta 字段与失败上报由 `Tools/tests/test_crossproject_workload
 
 在它们跑起来之前，**任何"比 slua 快"的说法都不成立**。README 中的性能数据只陈述
 自比数据与实现机制，就是这个原因。
+
+## 外部项目引导脚本（prepare / check / status）
+
+`bootstrap_external.py` 把"接入 slua-unreal / FUnLua"脚本化，但**不跑基准、不产出任何性能
+数字、不推断快慢**。它读取 `external_projects.json`（三方仓库 URL / pin / 许可 / 工作负载
+入口 / UE 版本；当前三个 pin 都是 `UNKNOWN`，没有编造任何 commit hash，许可与 UE 版本按
+`Docs/CN/Comparison_sluaunreal.md`、`LICENSE-THIRD-PARTY.md` 的核实结果标注），三个命令都
+有 `--dry-run` / `--offline` 语义、不联网即可完整自检：
+
+```powershell
+python -B Tools/CrossProject/bootstrap_external.py prepare --root <工作区> --offline --dry-run  # 校验：不联网、不写文件
+python -B Tools/CrossProject/bootstrap_external.py check   --root <工作区> --offline            # 只读结构化 JSON 就绪报告
+python -B Tools/CrossProject/bootstrap_external.py status --root <工作区>                       # 三方真实运行记录的诚实状态
+```
+
+- `prepare`：校验 pin 是否填写、目录结构、工作负载契约文件；只有**所有 pin 都是真实固定
+  提交**时才 clone/检出（默认落在 `<root>/Saved/CrossProject/external/`，`Saved/` 已 gitignore）。
+  pin 为 `UNKNOWN` 时在联网之前就 fail-closed 拒绝，网络 / git 失败给可诊断错误、不静默跳过。
+- `check`：只读校验引擎路径、外部工程是否已准备、工作负载入口、元数据能否对齐；不猜引擎
+  安装、不编造引擎 / 机器 / CPU 身份，找不到引擎路径时输出可诊断错误信息。
+- `status`：从 `results/` 只读事实元数据，**从不读 `PerOpUs` / `Samples` 数值、不计算比率、
+  不命名赢家**；`results/` 为空时明确输出 `conclusion: not-established`，`comparison` 恒为
+  `null`。要读仓库里的标准结果，把仓库根目录作为 `--root`（默认），或用 `--results-dir`。
+
+完整复现步骤、对齐契约每一条字段与 fail-closed 原因、`results/` 格式、CI 里为什么不做，见
+`Docs/CN/CrossProject_Benchmark.md` 与 `Docs/EN/CrossProject_Benchmark.md`（一一对应）。
+
+**这些脚本与文档不推翻上面的诚实表述**：slua-unreal / FUnLua 仍未被跑过，跨项目结论仍未
+建立；外部项目的 pin 仍需维护者在真实检出、构建、运行后填写。
 
 ## 状态
 

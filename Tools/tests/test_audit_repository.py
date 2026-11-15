@@ -188,6 +188,15 @@ class AuditRepositoryTests(unittest.TestCase):
         self.assertFalse(any("do not name a known run" in error for error in errors),
                          errors)
 
+    def test_tag_on_ancestor_still_declares_baseline(self):
+        """Follow-up commits after a release tag must not invalidate the claim."""
+        baseline = self._make_release_history()
+        self._git("commit", "--allow-empty", "-q", "-m", "follow-up docs")
+        self._write_release_pages(commit=baseline[:8])
+        self.assertEqual(audit.declared_baselines(self.root), {baseline[:8]})
+        errors = audit.validate_release_docs(self.root)
+        self.assertFalse(any("do not name a known run" in e for e in errors), errors)
+
     def test_undeclared_ancestor_is_still_rejected(self):
         baseline = self._make_release_history(declared=False)
         self._write_release_pages(commit=baseline[:8])

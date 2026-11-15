@@ -17,6 +17,7 @@
 // This header is also the only file that pulls in a backend's headers, and it does so
 // through UnLuaNovaBackend_Lua.h / UnLuaNovaBackend_Luau.h: no other file should include
 // lua.h, lualib.h, lauxlib.h or luacode.h, because both backends own those names.
+// API stability: Bounded - backend-specific contract; see the backend capability matrix. Contract: Docs/CN/API_Stability.md
 
 #pragma once
 

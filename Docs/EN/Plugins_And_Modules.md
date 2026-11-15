@@ -23,13 +23,14 @@ Modules:
 An extensions plugin that exists as a worked example: read it when you need to integrate a
 third-party Lua library.
 
-Both of these are **disabled by default** - they are optional, only `UnLuaNova` itself is
-required, so their `.uplugin` keeps `EnabledByDefault` false and they are not dragged into
-another project by accident. Set `"Enabled"` to `true` for the one you want in the project's
+All three are **disabled by default** - they are optional, only `UnLuaNova` itself is
+required, so their `.uplugin` files omit `EnabledByDefault` (UE defaults to `false`) and
+they are not dragged into another project by accident. Set `"Enabled"` to `true` for the one you want in the project's
 `.uproject`; there is no dependency between them, so you can enable just one.
 
-This demo project (`UnLuaNovaDemo`) enables all of them, because the automated tests have to
-cover them - see [Testing and Automation](Testing.md).
+This demo project (`UnLuaNovaDemo`) enables all three for the samples and manual smoke
+checks - see [Extension Plugin Tests](Extensions_Testing.md) and
+[Testing and Automation](Testing.md).
 
 Modules:
 

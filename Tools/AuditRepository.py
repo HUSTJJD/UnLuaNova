@@ -357,13 +357,13 @@ BASELINE_DECLARATION = re.compile(
 
 
 def declared_baselines(root):
-    """Commits that tags on HEAD name as the run behind a published verdict.
+    """Commits that reachable tags name as the run behind a published verdict.
 
     Without this exemption a release commit deadlocks the next run: the published
     marker still names the verified tree, but `repository-audit` runs before the
     pipeline can regenerate the markers and rejects that commit as unknown. The
-    exemption is deliberately narrow - the commit must be named by a tag pointing
-    at HEAD, exist as a Git object, and be an ancestor of HEAD. Drift to an
+    exemption is deliberately narrow - the commit must be named by a tag reachable
+    from HEAD, exist as a Git object, and be an ancestor of HEAD. Drift to an
     orphan, a descendant or an undeclared commit is still rejected. Whether the
     current tree has execution evidence remains ValidateProvenance.py's job.
     """
@@ -374,7 +374,10 @@ def declared_baselines(root):
         except (OSError, subprocess.SubprocessError):
             return None
 
-    tags = git("tag", "--points-at", "HEAD")
+    # Reachable tags, not only tags pointing at HEAD: once a release tag is cut,
+    # follow-up commits move HEAD forward while the published claim still names
+    # the earlier verification baseline. --merged keeps the exemption narrow.
+    tags = git("tag", "--merged", "HEAD")
     if not tags or tags.returncode != 0:
         return set()
     found = set()

@@ -23,8 +23,12 @@ exactly which of the new fields are consumed and how.
 This tool accumulates every problem (fail-closed, no silent early exit), keeps
 `historical_runs` out of `current_tree_runs`, and can demand at least one
 non-historical record whose commit matches the current HEAD
-(`--require-current`). Static structure being legal never means the current
-tree was executed; the output says so explicitly.
+(`--require-current`). Under `--require-current` it additionally hard-fails
+when (a) no release summary was cross-checked, (b) the latest release summary
+is not `complete`/`passed`, or (c) `git status --porcelain` reports uncommitted,
+non-product worktree changes. In diagnostic (non-`--require-current`) mode
+those three are warnings only. Static structure being legal never means the
+current tree was executed; the output says so explicitly.
 
 Usage:
     python Tools/ValidateProvenance.py
@@ -93,6 +97,24 @@ COMMIT_RE = re.compile(r"[0-9a-fA-F]{7,40}")
 # record cannot be smuggled past a lenient consumer.
 REQUIRED_RECORD_FIELDS = ("commit", "backend", "carrier", "engine", "machine")
 
+# --- strict --require-current checks -----------------------------------------
+# Static structure being legal never proves the tree was executed. Audit found
+# that a --require-current run could still report a green verdict while
+# `summary_checked=false`, while the latest release-summary.json said the round
+# failed, and while the working tree carried uncommitted source changes. Under
+# --require-current those three conditions are now HARD failures; in ordinary
+# diagnostic mode they are warnings only (so daily diagnosis keeps working).
+#
+# Tools/ReleasePipeline.ps1 writes <run>/release-summary.json just before the
+# final gates run, so that is the authoritative "latest summary" for this run.
+SUMMARY_FILENAME = "release-summary.json"
+
+# Build products / caches that must never make the worktree look "dirty".
+# `git status --porcelain` already hides gitignored files; this list is applied
+# on top so a tracked/copied product directory (or a nested plugin-level one
+# such as Plugins/UnLuaNova/Saved/...) cannot masquerade as a source change.
+WORKTREE_IGNORED_DIRS = ("Saved", "Intermediate", "Binaries", "DerivedDataCache")
+
 
 def git_head():
     """Return the current HEAD hash, or None when git is unavailable.
@@ -110,6 +132,49 @@ def git_head():
         return value or None
     except (OSError, ValueError):
         return None
+
+
+def _worktree_path(line):
+    """Extract the path from one `git status --porcelain` line."""
+    raw = line[3:] if len(line) >= 3 else line
+    if " -> " in raw:  # rename/copy: keep the destination path
+        raw = raw.split(" -> ", 1)[1]
+    raw = raw.strip()
+    if len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+        raw = raw[1:-1]  # porcelain quotes paths with spaces/non-ASCII
+    return raw.replace("\\", "/")
+
+
+def _is_product_path(path):
+    ignored = {d.lower() for d in WORKTREE_IGNORED_DIRS}
+    return any(part and part.lower() in ignored for part in path.split("/"))
+
+
+def git_worktree_changes(root):
+    """Return uncommitted, non-product worktree changes; None when git fails.
+
+    A read-only `git status --porcelain` query. Gitignored build products are
+    already hidden by git; WORKTREE_IGNORED_DIRS is applied on top so a tracked
+    or copied Saved/Intermediate/Binaries/DerivedDataCache directory can never
+    count as a source change either. Returning None means "could not
+    determine", which is treated as fail-closed under --require-current.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    except (OSError, ValueError):
+        return None
+    if out.returncode != 0:
+        return None
+    changes = []
+    for line in out.stdout.decode("utf-8", "replace").splitlines():
+        if not line.strip():
+            continue
+        if _is_product_path(_worktree_path(line)):
+            continue
+        changes.append(line.rstrip())
+    return changes
 
 
 def _resolve_evidence_file(base, value):
@@ -375,13 +440,60 @@ def validate_summary(summary_path, gates_all_green):
     return errors, consistent
 
 
+def find_latest_summary(run_dir):
+    """Locate this run's latest release summary, or None.
+
+    Tools/ReleasePipeline.ps1 writes <run>/release-summary.json immediately
+    before the final gates run, so that is the authoritative summary for the
+    round. The lookup is confined to the run root: a summary borrowed from a
+    different run must never stand in for this one.
+    """
+    if run_dir is None:
+        return None
+    direct = Path(run_dir) / SUMMARY_FILENAME
+    try:
+        return direct if direct.is_file() else None
+    except OSError:
+        return None
+
+
+def validate_current_summary(summary_path):
+    """Strict --require-current checks on the resolved release summary.
+
+    All-green static gates from a round that did not both `complete` and
+    `pass` are not proof of a verified Release. Returns a list of problems;
+    empty means the summary describes a complete, passed round.
+    """
+    path = Path(summary_path)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        return ["current summary %s: %s" % (path, exc)]
+    if not isinstance(data, dict):
+        return ["current summary %s: expected a JSON object" % path]
+    errors = []
+    if data.get("complete") is not True:
+        errors.append("latest release summary: complete is not true "
+                      "(the Release round did not finish)")
+    if data.get("passed") is not True:
+        errors.append("latest release summary: passed is not true "
+                      "(the Release round did not pass)")
+    return errors
+
+
 def evaluate(index_path=None, run_dir=None, summary_path=None,
-             require_current=False, head=None, git_head_fn=None):
+             require_current=False, head=None, git_head_fn=None,
+             worktree_fn=None, strict_worktree=False):
     """Run every static check and return a machine-readable report dict.
 
-    `head` overrides git (for tests); `git_head_fn` injects the HEAD reader.
-    Nothing here prints or writes files, so callers/tests can inspect the raw
-    result. All problems are accumulated, not short-circuited.
+    `head` overrides git (for tests); `git_head_fn` injects the HEAD reader;
+    `worktree_fn` injects a zero-arg callable returning the worktree change
+    list (or None when git is unavailable). When `worktree_fn` is None the
+    worktree is simply not checked by this library call; main() wires the real
+    git reader so the CLI gate is fail-closed. Under --require-current the
+    summary/worktree strict checks are hard failures; otherwise they are
+    warnings only. Nothing prints or writes files here, so callers/tests can
+    inspect the raw result. All problems are accumulated, not short-circuited.
     """
     if git_head_fn is None:
         git_head_fn = git_head
@@ -435,12 +547,60 @@ def evaluate(index_path=None, run_dir=None, summary_path=None,
                          "not proof that the four gates belong to one real run")
 
     # --- summary ------------------------------------------------------------
+    # An explicit --summary keeps its original gate cross-check in every mode.
+    # Under --require-current, when no summary is supplied we locate this run's
+    # latest release-summary.json so the strict checks below can prove the
+    # round actually completed and passed (the pipeline does not pass
+    # --summary to the provenance gate).
     summary_checked = summary_path is not None
     summary_consistent = True
-    if summary_checked:
+    effective_summary = summary_path
+    auto_summary = False
+    if effective_summary is None and require_current and effective_run is not None:
+        candidate = find_latest_summary(effective_run)
+        if candidate is not None:
+            effective_summary = candidate
+            summary_checked = True
+            auto_summary = True
+
+    if effective_summary is not None and not auto_summary:
         s_errors, summary_consistent = validate_summary(
-            summary_path, gate_details["all_green"])
+            effective_summary, gate_details["all_green"])
         structural_errors.extend(s_errors)
+
+    # Strict complete/passed checks require a real current-tree verification.
+    strict_summary_errors = []
+    if require_current and effective_summary is not None:
+        strict_summary_errors = validate_current_summary(effective_summary)
+    if auto_summary:
+        summary_consistent = not strict_summary_errors
+
+    # --- strict issues (hard under --require-current, warnings otherwise) ---
+    strict_issues = []
+    if not summary_checked:
+        strict_issues.append("no release summary was cross-checked "
+                             "(summary_checked=false)")
+    strict_issues.extend(strict_summary_errors)
+
+    worktree_changes = None
+    if worktree_fn is not None:
+        worktree_changes = worktree_fn()
+        if worktree_changes is None:
+            strict_issues.append("cannot determine worktree status "
+                                 "(git unavailable)")
+        elif worktree_changes:
+            issue = ("worktree has uncommitted changes: "
+                     + "; ".join(worktree_changes[:5]))
+            if strict_worktree:
+                strict_issues.append(issue)
+            else:
+                # RecordEvidence.py rewrites the tracked Tools/evidence/ index and
+                # UpdateReleaseStatus.py rewrites the published markers while the
+                # pipeline is still running, so a dirty tree is expected mid-run.
+                # Hard enforcement belongs to the release decision point.
+                notes.append("WARNING: " + issue +
+                             " (mid-pipeline: expected; pass --strict-worktree "
+                             "at the release decision point)")
 
     errors = list(structural_errors)
 
@@ -454,6 +614,11 @@ def evaluate(index_path=None, run_dir=None, summary_path=None,
             current_errors.append("no current-tree execution evidence")
         elif current_tree_runs == 0:
             current_errors.append("no current-tree execution evidence")
+        current_errors.extend("--require-current: " + m for m in strict_issues)
+    else:
+        # Ordinary diagnosis: report these as warnings, never as failures.
+        for issue in strict_issues:
+            notes.append("WARNING: " + issue + " (diagnostic mode: not a failure)")
     errors.extend(current_errors)
 
     report = {
@@ -476,6 +641,9 @@ def evaluate(index_path=None, run_dir=None, summary_path=None,
         "all_gates_green": gate_details["all_green"],
         "summary_checked": summary_checked,
         "summary_consistent": summary_consistent,
+        "worktree_checked": worktree_fn is not None,
+        "worktree_changes": worktree_changes,
+        "strict_issues": list(strict_issues),
         "evidence_index": str(index_path),
         "run": str(effective_run) if run_checked else None,
         "summary": str(summary_path) if summary_checked else None,
@@ -529,6 +697,16 @@ def render_report(report):
                          "record matches HEAD).")
         else:
             lines.append("--require-current: FAILED -> no current-tree execution evidence")
+        lines.append("--require-current: real execution is enforced (the release "
+                     "summary must be cross-checked with complete+passed=true; "
+                     "add --strict-worktree at the release decision point to also "
+                     "demand a clean tree); failures are listed as ERROR lines below.")
+    if report.get("worktree_checked"):
+        changes = report.get("worktree_changes")
+        state = "clean" if changes == [] else ("UNKNOWN" if changes is None else "DIRTY")
+        lines.append("Worktree: %s (%d non-product change(s)); strict_issues=%d."
+                     % (state, 0 if changes is None else len(changes),
+                        len(report.get("strict_issues", []))))
     for note in report["notes"]:
         lines.append("NOTE: " + note)
     for error in report["errors"]:
@@ -555,14 +733,27 @@ def main(argv=None):
                         help="override git HEAD (for tests)")
     parser.add_argument("--report", type=Path, default=None,
                         help="write the machine-readable conclusion as JSON")
+    parser.add_argument("--strict-worktree", action="store_true",
+                        help="under --require-current, also fail on uncommitted "
+                             "changes; use at the release decision point, not mid-pipeline")
     args = parser.parse_args(argv)
 
+    # Real worktree/HEAD verification only applies when HEAD is read from the
+    # repository itself. --head overrides the tree identity for diagnostics and
+    # tests, so there is no "current tree" to compare against in that case.
+    # The release pipeline never passes --head, so its --require-current gate
+    # always runs the real git status check.
+    worktree_fn = None
+    if args.head is None:
+        worktree_fn = lambda: git_worktree_changes(ROOT)
     report = evaluate(
         index_path=args.evidence_index,
         run_dir=args.run,
         summary_path=args.summary,
         require_current=args.require_current,
         head=args.head,
+        worktree_fn=worktree_fn,
+        strict_worktree=args.strict_worktree,
     )
     print(render_report(report))
 

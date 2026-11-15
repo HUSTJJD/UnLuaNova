@@ -1,0 +1,78 @@
+name: Mobile Acceptance (precheck only)
+
+# Standalone workflow. It does NOT build Unreal Engine and does NOT claim any
+# Android / iOS acceptance. See Docs/CN/Mobile_Acceptance.md and
+# Docs/EN/Mobile_Acceptance.md.
+#
+# GitHub-hosted runners ship NO UE source engine, NO provisioned Android
+# device/emulator and NO Apple signing identity. Therefore the only honest
+# verdict this workflow can produce is "not-run". A real acceptance requires a
+# self-hosted runner with a UE source build, the matching SDKs and a real device.
+# This workflow deliberately does not modify ci.yml or docs.yml.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-precheck:
+    name: Android precheck (Windows, not-run expected)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Android acceptance precheck
+        # A hosted Windows runner has NO UE source engine and NO device. The
+        # -PrecheckOnly switch runs the read-only toolchain probes only (env
+        # vars, engine Build.version, adb devices, arm64 target) and emits
+        # verdict=not-run. We NEVER invoke RunUAT / a build here, and never
+        # fabricate a pass. The engine root is discovered from env / registry,
+        # never hardcoded. Expected verdict: not-run.
+        shell: pwsh
+        run: .\Tools\RunAndroidAcceptance.ps1 -PrecheckOnly
+
+      - name: Upload precheck result
+        # Always upload so the honest not-run verdict is auditable as an artifact.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-precheck-json
+          path: Saved/MobileAcceptance/android-*.json
+          if-no-files-found: warn
+
+  ios-precheck:
+    name: iOS precheck (macOS, not-run)
+    runs-on: macos-14
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Static toolchain check (no UE build)
+        # A hosted macOS runner has Xcode but NO UE source engine, NO Apple
+        # signing identity and NO provisioned iOS device. It CANNOT build or
+        # validate Unreal Engine / iOS here; we only report the toolchain facts
+        # and print not-run. Never pretend a build or acceptance happened.
+        # Real iOS acceptance needs self-hosted macOS + UE source engine +
+        # Xcode + iOS SDK + a physical device. On Windows hosts it is physically
+        # impossible (macOS + Xcode + iOS SDK are required).
+        shell: bash
+        run: |
+          echo "OS: $(sw_vers -productName) $(sw_vers -productVersion)"
+          if command -v xcodebuild >/dev/null 2>&1; then
+            echo "xcodebuild: present (hosted runner only)"
+          else
+            echo "xcodebuild: absent"
+          fi
+          echo "UE source engine on hosted runner: ABSENT (not shipped by GitHub)"
+          echo "iOS device / signing identity: NOT provisioned on hosted runner"
+          echo "verdict=not-run"
+          echo "Real iOS acceptance needs self-hosted macOS + UE source engine + Xcode + iOS SDK + a physical device."

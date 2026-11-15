@@ -274,12 +274,59 @@ function Sync-ReleasePerfBaseline([string] $Backend, [string] $RunDir) {
     $Baseline = Join-Path $script:RepoRoot "Tools/baseline/perf-$($Backend.ToLowerInvariant()).json"
     try { $A = Get-Content -LiteralPath $Actual -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return }
     if ($A.Backend -cne $Backend) { return }
-    if (Test-Path -LiteralPath $Baseline -PathType Leaf) {
+    $B = $null
+    $BaselineExists = Test-Path -LiteralPath $Baseline -PathType Leaf
+    if ($BaselineExists) {
         try {
             $B = Get-Content -LiteralPath $Baseline -Raw -Encoding UTF8 | ConvertFrom-Json
             if ($B.EngineVersion -ceq $A.EngineVersion -and $B.Machine -ceq $A.Machine) { return }
         } catch { }
     }
+
+    # Overwriting the committed baseline is a baseline RESET: from this round on
+    # the run is "self compared to self", so the 25% regression gate cannot say
+    # anything about a regression. Capture the OLD committed state BEFORE the
+    # copy and leave an auditable baseline_reset event so ValidateRelease.py can
+    # explicitly report the gate as not applicable (never a silent green pass).
+    $OldEngine = if ($B -and $B.EngineVersion) { [string]$B.EngineVersion } else { 'absent' }
+    $NewEngine = if ($A.EngineVersion) { [string]$A.EngineVersion } else { 'absent' }
+    $OldMachine = if ($B -and $B.Machine) { [string]$B.Machine } else { 'absent' }
+    $NewMachine = if ($A.Machine) { [string]$A.Machine } else { 'absent' }
+    $OldSha256 = if ($BaselineExists) { (Get-FileHash -LiteralPath $Baseline -Algorithm SHA256).Hash.ToLowerInvariant() } else { 'absent' }
+    $NewSha256 = (Get-FileHash -LiteralPath $Actual -Algorithm SHA256).Hash.ToLowerInvariant()
+    $Reasons = @()
+    if (-not $BaselineExists) {
+        $Reasons += 'baseline-absent'
+    } else {
+        if ($OldEngine -cne $NewEngine) { $Reasons += 'EngineVersion' }
+        if ($OldMachine -cne $NewMachine) { $Reasons += 'Machine' }
+    }
+    if (-not $Reasons.Count) { $Reasons += 'scope' }
+    $Reason = ($Reasons -join '+') + ' changed; committed baseline rebuilt from this run'
+    $Utc = [DateTime]::UtcNow.ToString('o')
+    $Commit = 'unknown'
+    try {
+        $Head = & git -C $script:RepoRoot rev-parse HEAD 2>$null
+        if ($LASTEXITCODE -eq 0 -and $Head) { $Commit = ([string]$Head).Trim() }
+    } catch { }
+
     Copy-Item -LiteralPath $Actual -Destination $Baseline -Force
+
+    $ResetEvent = [ordered]@{
+        event = 'baseline_reset'; backend = $Backend; reason = $Reason
+        old_engine = $OldEngine; new_engine = $NewEngine
+        old_sha256 = $OldSha256; new_sha256 = $NewSha256
+        utc = $Utc; commit = $Commit
+    }
+    $ResetJson = $ResetEvent | ConvertTo-Json -Depth 4
+    $Utf8 = [Text.UTF8Encoding]::new($false)
+    # Run-root metadata is the auditable artifact (the path named by the audit);
+    # the carrier-local copy is what ValidateRelease.py --run <carrier dir>
+    # reads to detect this round's reset.
+    $RunRootMeta = Join-Path $script:RepoRoot 'Saved/ReleaseTests/test/metadata'
+    New-Item -ItemType Directory -Path $RunRootMeta -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $RunRootMeta 'perf-baseline-reset.json'), $ResetJson, $Utf8)
+    [IO.File]::WriteAllText((Join-Path (Join-Path $RunDir 'metadata') 'perf-baseline-reset.json'), $ResetJson, $Utf8)
+    Write-Host "WARNING: baseline_reset for $Backend ($OldEngine -> $NewEngine): rebuilt the committed baseline from this run; the 25% regression gate does NOT apply this round" -ForegroundColor Yellow
     Write-Host "PerfBase : rebuilt perf-$($Backend.ToLowerInvariant()).json from this run ($($A.EngineVersion))"
 }

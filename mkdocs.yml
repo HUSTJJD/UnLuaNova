@@ -96,11 +96,15 @@ nav:
           - Luau Coverage Export and Gate: EN/LuauCoverage.md
           - Testing and Automation: EN/Testing.md
           - Test Architecture and Acceptance: EN/Testing_Architecture.md
+          - Extension Plugin Tests: EN/Extensions_Testing.md
+          - Cross-project Benchmark: EN/CrossProject_Benchmark.md
       - Reference:
           - Release Readiness and Definition of Done: EN/Release_Readiness.md
           - API Stability and Versioning: EN/API_Stability.md
           - Production Deployment and Operations: EN/Production_Deployment.md
           - Engine and Platform Support Matrix: EN/Engine_Support.md
+          - Script Delivery: EN/ScriptDelivery.md
+          - Mobile Acceptance: EN/Mobile_Acceptance.md
           - Showcase Samples: EN/Showcase.md
           - Release notes: EN/ReleaseNotes.md
           - License: EN/License.md
@@ -141,11 +145,15 @@ nav:
           - Luau 覆盖率导出与门禁: CN/LuauCoverage.md
           - 测试与自动化: CN/Testing.md
           - 测试架构与验收: CN/Testing_Architecture.md
+          - 扩展插件测试: CN/Extensions_Testing.md
+          - 跨项目性能对照: CN/CrossProject_Benchmark.md
       - 参考:
           - 正式发布就绪度与判定标准: CN/Release_Readiness.md
           - API 稳定性与版本策略: CN/API_Stability.md
           - 生产部署与运维: CN/Production_Deployment.md
           - 引擎版本与平台支持矩阵: CN/Engine_Support.md
+          - 运营期脚本下发: CN/ScriptDelivery.md
+          - 移动端验收路径: CN/Mobile_Acceptance.md
           - Showcase 示例: CN/Showcase.md
           - 版本说明: CN/ReleaseNotes.md
           - 许可与来源: CN/License.md
