@@ -22,7 +22,7 @@ acceptance status. Where they disagree, this page wins.
 | Engine | Adaptation | Lua 5.5.1 | Luau 0.743-1 | Platform | Status |
 |---|---|---|---|---|---|
 | UE 5.8.3 | `UE_5_8_OR_LATER` / `UE_VERSION_OLDER_THAN(5,8,0)` | ✓ | ✓ | Win64 | Verified (2026-11-03 baseline, `347bb8c5`) |
-| UE 6.0 | `!UE_VERSION_OLDER_THAN(6,0,0)` plus replacements for APIs removed in 6.0 | ✓ | ✓ | Win64 | Adapted, unverified: the latest Release timed out after 60 minutes in the `Luau-package-development` cold cook |
+| UE 6.0 | `!UE_VERSION_OLDER_THAN(6,0,0)` plus replacements for APIs removed in 6.0 | ✓ | ✓ | Win64 | Verified (2026-11-15 v1.0.0 Release, `4a87d214`, 41/41 stages on both backends) |
 | UE 5.1 – 5.7 | `UE_VERSION_NEWER_THAN` / `OLDER_THAN` branches | — | — | Win64 | Adapted, unverified |
 | UE 4.x | Compatibility layer inherited in `UnLuaNovaCompatibility.h` | — | — | — | Not supported; fork legacy only |
 | Mac / Linux / iOS / Android / consoles | Declared as build targets by `.uplugin` `PlatformAllowList` | — | — | non-Win64 | Unvalidated |

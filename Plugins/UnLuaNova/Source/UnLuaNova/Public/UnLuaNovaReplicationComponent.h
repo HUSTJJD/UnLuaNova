@@ -12,9 +12,10 @@
 
 #pragma once
 
-// EXPERIMENTAL API - Lua-declared networking. Interfaces in this header may change
-// without a deprecation cycle and are not recommended for production use. See
-// Docs/CN/LuaNetworking.md for the supported subset.
+// STABLE API - Lua-declared networking. Promoted after a complete green Release
+// (L2/L3): Legacy / PushOff / Iris / Cooked carriers plus all eight connected
+// scenarios on both backends. Breaking changes now require a deprecation cycle.
+// See Docs/CN/LuaNetworking.md for the supported subset.
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"

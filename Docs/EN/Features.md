@@ -8,6 +8,6 @@
 | Luau | Syntax, libraries, vector, buffer, debug primitives, optional CodeGen | External type checker; experimental libraries follow flags |
 | Tools | DAP, profiling, memory/coroutine diagnostics, declarations | Packaged builds require separate validation |
 | Runtime | Event, OOP, Timer, HotReload | Timer lifetime and shared upvalue semantics are known limitations |
-| Network | RPC, typed replication buckets, per-condition replication groups, `UStruct`/container type specs | Experimental; eight conditions have their own storage group, unsupported conditions are rejected, and multi-Env schemas use joint ownership. Declarative networking is not a mature capability |
+| Network | RPC, typed replication buckets, per-condition replication groups, `UStruct`/container type specs | Stable; eight conditions have their own storage group, unsupported conditions are rejected, and multi-Env schemas use joint ownership. All four carriers and eight connected scenarios are verified |
 
 See [Luau](Luau.md) and [runtime modules](StdLib.md).

@@ -1,7 +1,7 @@
 {
   "schema": "unluanova-evidence/1",
   "run_id": "release-luau-game",
-  "commit": "f1a86f3da4190bdcfb8c50a52b6953fbf495f226",
+  "commit": "4a87d2147539c103da9fec4f67bec454d68b065b",
   "historical": false,
   "source": "Saved/ReleaseTests/test/luau/game",
   "worktree_dirty": true,
@@ -12,7 +12,7 @@
   "backend": "Luau",
   "machine": "davidsjian-PC2",
   "cpu": "AMD Ryzen 7 4700G with Radeon Graphics",
-  "report_created_on": "2026.11.14-10.27.21",
+  "report_created_on": "2026.11.15-09.20.22",
   "report_totals": {
     "succeeded": 665,
     "succeeded_with_warnings": 22,

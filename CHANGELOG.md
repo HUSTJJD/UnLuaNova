@@ -1,9 +1,47 @@
 # Changelog
 
-<!-- release-status: not-passed -->
-<!-- release-provenance: 69454972 -->
+<!-- release-status: passed -->
+<!-- release-provenance: 4a87d214 -->
 
 本文件记录面向使用者的版本变更。开发过程中的验证记录与实现细节保留在 Git 历史中。
+
+## v1.0.0 — 2026-11-15（首个正式版本：声明式网络转正，41/41 阶段全绿）
+
+首个正式版本：插件 `VersionName=1.0.0`，git tag `v1.0.0`。验证环境为 UE 6.0 / Win64，
+UE 5.8.3 / Win64 保留为历史 baseline。
+
+**发布判定**（`Saved/ReleaseTests/test/release-summary.json`，验证基线 `4a87d214`）：`complete=true`、
+`passed=true`，41 个必需阶段全部 passed/cached；`net-matrix-Lua` / `net-matrix-Luau` 均 passed；
+`promotion-gate` passed；`CheckPromotion.py --release-gate --strict` **7/7、0 unmet**；
+8 个页面的 `release-status` 已生成为 `passed`。
+
+`NET-RPC` / `NET-PROPS` / `NET-TYPES` 已由 `experimental` 晋升为 `implemented`，声明式网络
+转为 **Stable**：6 个头文件的 `EXPERIMENTAL` 横幅、中英文文档的实验性标题与"不建议生产"
+措辞全部移除。Iris 复制模型首次与 Legacy / PushOff / Cooked 一起纳入正式验收。
+
+**本轮修复（均经编译与真实多进程运行验证，未修改引擎）**
+
+- **Iris 下的动态声明式 RPC 全链路打通**：
+  - Iris 接收端用 `Object->IsA(Function->GetOwnerClass())` 校验，而动态 RPC 的 Outer 是
+    `ULuaOverridesClass`。改为把声明式 RPC 的 Outer 指向 Actor 的 UClass，并新增
+    `DeclaredOwnerClass` 保留 override 生命周期所需的类信息。
+  - `ULuaFunction::SetActive` 对每个 RPC 调用 `SetUpRuntimeReplicationData()` 会重建并清空
+    `UClass::NetFields`，使 Iris 的 `FNetRPC` 表只剩字典序最后一个 RPC。`DeclareRPCs` 在
+    声明结束后统一重新发布全部 RPC 并排序。
+  - `PreBindClasses` 的 `ResolveClass()` 只查已加载对象，Default-phase 模块的类在
+    `OnPostEngineInit` 时尚未加载；改为 `TryLoadClass<UObject>()` 主动加载，保证声明式
+    RPC 在 NetDriver 缓存 protocol 之前注册。peer 命令行补充 `net.Iris.EnableRPCs=1`。
+- **Reconnect**：服务端改以 `topology.json` 中 Client1 的 `launch_count` 作为进程替换的真实证据。
+  **SeamlessReconnect**：改为 Client1 主动关闭并重开自己的 `UNetConnection`，服务端只观察
+  连接集合的消失与恢复，不再"关闭第一个连接"（那可能关掉 Client2）。
+- **UAT 构建环境**：`BuildCookRun -build` 的 UBT/UBA 调用在本机出现 `cl.exe` / `ispc.exe`
+  无诊断退出 1。流水线改为先用已验证的 `Build.bat` 编译目标（Development / Shipping / Server），
+  UAT 只负责 cook / stage / package。
+- **诊断能力**：`RunNetMatrix.ps1` 新增 `-OnlyCells` / `-SkipGate` / `-Diagnostic`，可只跑
+  单个 cell 定位问题，无需重跑完整 Release。
+
+**环境项**：外部提交推进 HEAD 后由 `UpdateReleaseStatus.py` 同步发布标记；ISPC 子进程死锁时
+UBT 重试恢复。L4 的 release tag 属人工决策（informational，不阻断 `--release-gate`）。
 
 ## 2026-11-14（第十一轮：联网矩阵进程隔离、Cooked 载体与发布基建）
 

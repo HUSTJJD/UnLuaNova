@@ -75,7 +75,7 @@ Nine reasons, each with the **mechanism** behind it — no adjectives.
 
 ---
 
-## 🧪 Declarative networking: RPCs declared by Lua (experimental)
+## Declarative networking: RPCs declared by Lua
 
 In UnLua, Lua can **only re-implement RPCs the engine already declared** -
 `ULuaFunction::IsOverridable()` explicitly excludes functions carrying `FUNC_Net`.
@@ -116,7 +116,7 @@ that this was an architectural boundary was wrong. `UObject` references keep the
 Object bucket because a text payload cannot carry a NetGUID.
 
 > [!WARNING]
-> Declarative networking is still **experimental**: its API and behaviour may change, and production use is not recommended. Engine-level seamless travel (`ServerTravel`), hot reload and authorization checks are out of scope. Eight replication conditions each have their own storage group, and conditions with no storage group are rejected explicitly. See [Lua-declared networking (experimental)](Docs/EN/LuaNetworking.md).
+> Declarative networking was promoted to **Stable** on 2026-11-15: the Legacy / PushOff / Iris / Cooked carriers and all eight connected scenarios pass a complete Release on both backends. Engine-level seamless travel (`ServerTravel`) is out of scope. Eight replication conditions each have their own storage group; conditions without one are rejected explicitly. See [Lua-declared networking](Docs/EN/LuaNetworking.md).
 
 ---
 
@@ -162,7 +162,7 @@ means**; both backends use identical iteration counts.
 | ♻️ | **Hot reload** | In-editor reload, non-structural reload in PIE, runtime script shipping |
 | 🧪 | **Tests ship with the plugin** | The `UnLuaNovaTestSuite` module plus one command; reports land in `Saved/ReleaseTests/` |
 | 🧱 | **Pure plugin** | No engine fork; the backend is a compile-time choice |
-| 🌐 | **Declarative networking (experimental)** | Lua declares its own RPCs and replicated fields; eight conditions each have a storage group, and parameters/fields accept `UStruct` and container type specs, limits in the [networking doc](Docs/EN/LuaNetworking.md) |
+| 🌐 | **Declarative networking** | Lua declares its own RPCs and replicated fields; eight conditions each have a storage group, and parameters/fields accept `UStruct` and container type specs, limits in the [networking doc](Docs/EN/LuaNetworking.md) |
 
 ---
 
@@ -175,7 +175,7 @@ means**; both backends use identical iteration counts.
 | **FUnLua** | Solid object-reference tree, property invalidation, per-instance binding design | Its license file is missing at the pinned commit, so its source is not referenced until verified |
 | **UE-AngelScript** | Static types, VSCode LSP, breakpoints as a first-class citizen | **Requires a source engine fork**; no runtime hot updates |
 | **Verse / Blueprint** | Official, zero integration | No runtime hot updates; iteration is bound to releases |
-| **UnLuaNova** | No engine fork + two backends + hot updates + observability + acceptance + MIT + declarative networking (experimental) | Declarative networking is experimental and its API may change; validated on UE 5.8.3 / Win64 |
+| **UnLuaNova** | No engine fork + two backends + hot updates + observability + acceptance + MIT + declarative networking | Declarative networking is Stable; validated on UE 6.0 / Win64 |
 
 **One-line boundary**: if you can accept a **source engine fork**, target PC/console single-player and do
 not need runtime updates, UE-AngelScript is the more complete experience. If you **cannot fork the
@@ -255,8 +255,8 @@ never changes the scope of the run.
 
 ## 🧪 Verification status
 
-<!-- release-status: not-passed -->
-<!-- release-provenance: 69454972 -->
+<!-- release-status: passed -->
+<!-- release-provenance: 4a87d214 -->
 
 The current tree has **not** passed a complete acceptance run. The latest Release (`Saved/ReleaseTests/test/release-summary.json`) is `passed=false`: `Luau-package-development` exceeded the 60-minute stage timeout during a cold UE 6.0 cook. Expect a first cook on a new engine to compile shaders from scratch.
 
@@ -272,10 +272,10 @@ Known limitations for users:
 
 | Area | Limit |
 |---|---|
-| **Declarative networking (experimental)** | Eight replication conditions, each with its own storage group; `Custom` / `Dynamic` / `Never` / `NetGroup` and the Replay* family are rejected explicitly. `UStruct` and container type specs are supported. Engine-level seamless travel (`ServerTravel`), hot reload and authorization checks are out of scope |
+| **Declarative networking** | Eight replication conditions, each with its own storage group; `Custom` / `Dynamic` / `Never` / `NetGroup` and the Replay* family are rejected explicitly. `UStruct` and container type specs are supported. Engine-level seamless travel (`ServerTravel`), hot reload and authorization checks are out of scope |
 | **Generated thunks** | Final dispatch still goes through `UObject::ProcessEvent`; static binding removes the runtime reflection lookup and marshalling |
 | **Luau native codegen** | Opt-in via `lua.codegen.enabled=1` (default 0), narrow it with `lua.codegen.modules`. Applies only to chunks loaded after the switch, and only on Luau + x64/arm64 |
-| **Engine versions and platforms** | UE **5.8.3 / Win64** is the verified baseline; UE 6.0 has version-adaptation branches but no passing Release yet. See the [support matrix](Docs/EN/Engine_Support.md) - other platforms are declared build targets, not accepted configurations |
+| **Engine versions and platforms** | **v1.0.0** passed a complete Release (41/41 stages, both backends) on UE **6.0 / Win64**; UE **5.8.3 / Win64** is the earlier verified baseline. See the [support matrix](Docs/EN/Engine_Support.md) - other platforms are declared build targets, not accepted configurations |
 | **Per-instance binding** | `BindInstance` / `UnbindInstance` are available; class-level binding remains the default cache and must be established first. Overrides form a class-level union of function names and instance-bound objects resolve Lua functions per call. See [Per-instance module binding](Docs/EN/InstanceBinding.md) |
 | **Sandbox** | `lua.sandbox` is off by default; path checks are not an OS-level sandbox. Untrusted scripts need their own capability policy |
 

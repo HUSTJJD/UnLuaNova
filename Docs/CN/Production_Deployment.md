@@ -63,7 +63,7 @@ RPC 鉴权处理器通过 C++ `FUnLuaNovaNetPolicy::SetAuthorizationHandler` 安
 
 ## 5. 打包与平台
 
-- 已验证基线：**UE 5.8.3 / Win64**；UE 6.0 有适配分支但尚无通过的完整 Release。
+- **v1.0.0 验证环境**：**UE 6.0 / Win64**（双后端 41/41 完整 Release）；**UE 5.8.3 / Win64** 为历史 baseline。
   完整矩阵见 [支持矩阵](Engine_Support.md)。
 - UE 6.0 首次打包触发 FULL COOK 与全量 shader 编译，单阶段可能超过默认 60 分钟：
   `$env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180` 后再跑 `RunTests.ps1`。

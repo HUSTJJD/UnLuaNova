@@ -4,8 +4,8 @@
 
 [中文文档](CN/index.md) · [English](EN/index.md) · [GitHub](https://github.com/HUSTJJD/UnLuaNova)
 
-<!-- release-status: not-passed -->
-<!-- release-provenance: 69454972 -->
+<!-- release-status: passed -->
+<!-- release-provenance: 4a87d214 -->
 
 ## 文档导航
 
@@ -17,4 +17,4 @@
 | 配置与工具 | [设置](CN/Settings.md) · [控制台命令](CN/ConsoleCommand.md) · [调试](CN/Debugging.md) · [测试](CN/Testing.md) | [Settings](EN/Settings.md) · [Console commands](EN/ConsoleCommand.md) · [Debugging](EN/Debugging.md) · [Testing](EN/Testing.md) |
 | 参考 | [Showcase 示例](CN/Showcase.md) · [版本说明](CN/ReleaseNotes.md) · [许可](CN/License.md) · [FAQ](CN/FAQ.md) | [Showcase](EN/Showcase.md) · [Release notes](EN/ReleaseNotes.md) · [License](EN/License.md) · [FAQ](EN/FAQ.md) |
 
-许可：**MIT**。当前版本面向 Unreal Engine 5.8.3 / Win64。
+许可：**MIT**。当前版本 **v1.0.0**，已在 Unreal Engine 6.0 / Win64 完成双后端完整发布验证（UE 5.8.3 / Win64 为历史 baseline）。

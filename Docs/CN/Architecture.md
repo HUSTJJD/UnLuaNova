@@ -6,7 +6,7 @@
 
 | 路径（仓库根起） | 职责 |
 |---|---|
-| Plugins/UnLuaNova/Source/UnLuaNova | 游戏运行时：Env、绑定、覆写、库、诊断与实验网络 |
+| Plugins/UnLuaNova/Source/UnLuaNova | 游戏运行时：Env、绑定、覆写、库、诊断与声明式网络 |
 | Plugins/UnLuaNova/Source/UnLuaNovaEditor | 编辑器工具、声明/绑定生成、DAP 适配器 |
 | Plugins/UnLuaNova/Source/UnLuaNovaDefaultParamCollector | UBT 默认参数收集插件 |
 | Plugins/UnLuaNova/Source/ThirdParty | Lua / Luau 子模块、UBT wrapper |
@@ -50,7 +50,7 @@ Env 拥有 VM、注册表和诊断状态；UE 拥有 UObject 与 World。Lua 持
 
 GC 默认由 VM 自动调度；TimeSliced 模式通过每帧预算发出 GC step。预算不是硬性最长停顿保证，不能等同多线程 GC，也不能保证相同延迟收益。
 
-## 工具和实验网络
+## 工具和声明式网络
 
 编辑器生成绑定与类型声明，外部 LuaLS/luau-lsp 做静态分析，运行时并不执行类型检查。调试服务与 DAP 分属运行时/编辑器模块；打包目标不自动具备完整 IDE 链路。
 

@@ -238,7 +238,7 @@ CVar are the same state.
 | Item | Contract |
 |---|---|
 | Backend / architecture | Luau only; upstream `luau_codegen_supported()` decides at runtime (x64 / arm64). Other targets ignore the switch and warn |
-| Verified scope | UE 5.8.3 / Win64 x64; arm64, packaged Shipping and native-debug attach have no run acceptance |
+| Verified scope | UE 6.0 / Win64 x64 (v1.0.0) and UE 5.8.3 / Win64 x64 (baseline); arm64, Shipping runtime and native-debug attach have no run acceptance |
 | Executable memory | Upstream allocates executable pages; the host does not take over W^X or reclamation |
 | Failure semantics | `luau_codegen_compile()` returns void with no per-chunk success signal; an uncompilable chunk keeps interpreting |
 | Counter | `lua.codegen` reports **request count** (`GetNativeCodeGenRequestCount()`), not successfully compiled functions |

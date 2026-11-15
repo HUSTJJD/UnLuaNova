@@ -25,7 +25,7 @@ identical. The contract below is public; anything outside it is explicitly not g
 
 | Item | Contract |
 |---|---|
-| Backend / architecture | Luau only; decided at runtime by upstream `luau_codegen_supported()` (x64 / arm64). Other targets compile with `UNLUANOVA_HAS_NATIVE_CODEGEN=0`: the switch is ignored with a warning rather than silently taking another path. Runtime acceptance here is UE 5.8.3 / Win64 x64; arm64 is compile-time supported but not runtime-validated in this repository |
+| Backend / architecture | Luau only; decided at runtime by upstream `luau_codegen_supported()` (x64 / arm64). Other targets compile with `UNLUANOVA_HAS_NATIVE_CODEGEN=0`: the switch is ignored with a warning rather than silently taking another path. Runtime acceptance here is UE 6.0 / Win64 x64 (v1.0.0) and UE 5.8.3 / Win64 x64 (baseline); arm64 is compile-time supported but not runtime-validated in this repository |
 | Scope | Only chunks loaded after the switch; `lua.codegen.modules` narrows by module-name substring; `lua.codegen on/off` and the CVar are one state |
 | Executable memory | Upstream Luau allocates its own executable code pages. The host does not own the W^X / page-reclaim policy, and does not guarantee native debugger attachment or stepping into natively compiled functions while CodeGen is on |
 | Failure semantics | Upstream `luau_codegen_compile()` returns void with no per-chunk success signal; a chunk that cannot be compiled keeps interpreted execution. The `lua.codegen` counter is a **request count** (`GetNativeCodeGenRequestCount()`), not a count of compiled functions; the old getter remains as a documented alias |

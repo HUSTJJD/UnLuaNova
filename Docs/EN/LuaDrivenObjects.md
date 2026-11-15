@@ -121,7 +121,7 @@ if (Call.IsValid())
 
 ## Networking and Instance Binding Boundaries
 
-Declared RPCs and replicated fields have an [experimental implementation](LuaNetworking.md). Ordinary overrides and declared RPC registration are different paths. Conditions, int64, schemas and packaged builds require separate validation.
+Declared RPCs and replicated fields are [Stable](LuaNetworking.md). Ordinary overrides and declared RPC registration are different paths. Conditions, int64, schemas and packaged carriers have completed connected validation.
 
 Binding a non-Blueprint UObject does not provide independent modules for separate instances of the same class; `UnLuaNovaManager::Classes` is keyed by UClass.
 

@@ -165,7 +165,7 @@
     "backend": "Lua",
     "carrier": "Editor",
     "engine": "unknown",
-    "commit": "f1a86f3da4190bdcfb8c50a52b6953fbf495f226",
+    "commit": "4a87d2147539c103da9fec4f67bec454d68b065b",
     "source": "Saved/ReleaseTests/test/lua/editor/lua",
     "historical": false
   },
@@ -175,7 +175,7 @@
     "backend": "Lua",
     "carrier": "Game",
     "engine": "unknown",
-    "commit": "f1a86f3da4190bdcfb8c50a52b6953fbf495f226",
+    "commit": "4a87d2147539c103da9fec4f67bec454d68b065b",
     "source": "Saved/ReleaseTests/test/lua/game",
     "historical": false
   },
@@ -185,7 +185,7 @@
     "backend": "Luau",
     "carrier": "Editor",
     "engine": "unknown",
-    "commit": "f1a86f3da4190bdcfb8c50a52b6953fbf495f226",
+    "commit": "4a87d2147539c103da9fec4f67bec454d68b065b",
     "source": "Saved/ReleaseTests/test/luau/editor/luau",
     "historical": false
   },
@@ -195,7 +195,7 @@
     "backend": "Luau",
     "carrier": "Game",
     "engine": "unknown",
-    "commit": "f1a86f3da4190bdcfb8c50a52b6953fbf495f226",
+    "commit": "4a87d2147539c103da9fec4f67bec454d68b065b",
     "source": "Saved/ReleaseTests/test/luau/game",
     "historical": false
   }

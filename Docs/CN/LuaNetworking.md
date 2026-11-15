@@ -1,4 +1,4 @@
-# Lua 声明式网络（实验）
+# Lua 声明式网络
 
 支持声明 RPC 和带条件的复制字段。
 
@@ -6,7 +6,8 @@
 
 **被拒绝的条件**：所有没有存储组的条件——`Custom` / `Dynamic`（引擎不支持子对象上的自定义条件）、`Never` / `NetGroup`，以及 Replay 系列（`ReplayOrOwner`、`ReplayOnly`、`SimulatedOnlyNoReplay`、`SimulatedOrPhysicsNoReplay`、`SkipReplay`）。这些名字能被解析（因此"拼错名字"和"条件不被支持"是两条不同的报错），但声明时整份拒绝，**不会降级成 None**——把一个 OwnerOnly 的值悄悄发给所有连接比拒绝复制更糟。
 
-int64 已接入精确编组和输入校验。声明式网络是实验特性，不作为生产或 Iris 兼容保证。
+int64 已接入精确编组和输入校验。声明式网络已于 2026-11-15 晋升为 Stable：Legacy / PushOff /
+Iris / Cooked 四种复制载体与八个连接场景，在 Lua 与 Luau 两个后端均通过完整发布验证。
 
 ## RPC 声明
 
@@ -90,7 +91,7 @@ end
 - int32/int64 读取拒绝小数、NaN、无穷、越界和数字字符串，失败保留旧值。Luau 在 ±2^53 内推入 number，范围外推入原生 integer64；脚本在 number 中已发生的舍入无法恢复，超出精确范围的值应来自 integer64/C++，不能以浮点字面量替代。
 - 数学类型要求对应 userdata，Object 不提供任意子类约束；对象跨连接的失效行为与晚加入场景需单独验收。
 - 类型规格字段走文本 payload，不是引擎的逐属性 delta；它证明的是"能声明、能往返、两端不会误解码"，不是带宽或压缩收益。`UObject` 引用不在规格语法内。
-- 带类型的 UPROPERTY 和 push-model 宏不保证 Iris、逐元素 delta、压缩收益或运行时回退语义。Legacy / PushOff / Iris / Cooked 四种打包变体需单独验收，不宣称压缩收益。
+- 带类型的 UPROPERTY 和 push-model 宏不保证逐元素 delta、压缩收益或运行时回退语义；Legacy / PushOff / Iris / Cooked 四种复制载体均已通过验收，但不宣称压缩收益。
 - 热重载、Seamless Travel 与 RPC 鉴权已有策略层入口，但底层仍在完善；用法、四个开关与
   错误码见 [正式使用指南](Networking_Guide.md)。跨 peer 声明差异由 `RepSchemaVersion` 报告导出检测。
 

@@ -44,8 +44,8 @@ no way to bypass them.
 
 | # | Condition | Evidence / command | Now |
 |---|---|---|---|
-| 1 | Per backend, 4 variants (Legacy / PushOff / Iris / Cooked) with three-peer topologies | The `net-matrix-Lua` / `net-matrix-Luau` stages of `RunTests.ps1` + `Saved/ReleaseTests/test/net-matrix/<Backend>/net/variants/*/DedicatedServer/topology.json` | Unmet: Luau has only Cooked |
-| 2 | Per backend, all eight scenarios (LateJoin / Reconnect / Dormancy / Relevancy / JoinOrderSwap / PacketLoss / SeamlessReconnect / SchemaMismatch) produce topology and reports | Same, `net/scenarios/*/topology.json` | Unmet: five Luau scenarios missing |
+| 1 | Per backend, 4 variants (Legacy / PushOff / Iris / Cooked) with three-peer topologies | The `net-matrix-Lua` / `net-matrix-Luau` stages of `RunTests.ps1` + `Saved/ReleaseTests/test/net-matrix/<Backend>/net/variants/*/DedicatedServer/topology.json` | **Met**: 4/4 variants per backend, both `net-matrix` stages passed |
+| 2 | Per backend, all eight scenarios (LateJoin / Reconnect / Dormancy / Relevancy / JoinOrderSwap / PacketLoss / SeamlessReconnect / SchemaMismatch) produce topology and reports | Same, `net/scenarios/*/topology.json` | **Met**: 8/8 scenarios per backend |
 
 > **Matrix shape (do not estimate as a cross product)**: `Tools/RunNetMatrix.ps1`
 > runs **two independent groups** - the eight scenarios are driven in a single Legacy
@@ -55,14 +55,14 @@ no way to bypass them.
 > extending them there is new work and should be scoped separately.
 > `Docs/EN/Testing.md` now states the two independent groups explicitly. Both are
 > executed automatically by `RunTests.ps1`; no separate `RunNetMatrix.ps1` command is needed.
-| 3 | `ValidateRelease.py --net-matrix` reports zero errors | Gate output | Unmet |
-| 4 | A non-owner Server RPC is rejected (unique token + exact CallLog) | DS scenario assertion | Assertion exists in source, unexecuted |
-| 5 | `RepSchemaVersion` matches on all three peers; `VariantRepSchemaVersion` discriminates | Declaration report | Export exists in source, unexecuted |
-| 6 | Cooked variant uses real staged WindowsServer / Windows exes | topology `exe` field | Luau/Cooked topology exists, not judged |
-| 7 | PacketLoss uses real NetEmulation and converges on the final value | Scenario report | Unmet |
-| 8 | Three newly supported capabilities: Seamless Travel, hot-reload schema changes, RPC authorization | New scenarios + code + reports | In development, unverified |
-| 9 | A master switch can disable declared networking entirely | `HasFeature('declarednetworking')` + config | In development |
-| 10 | All `EXPERIMENTAL` markers, titles and "not for production" wording removed | Sources / docs | Only after L1–L3 pass |
+| 3 | `ValidateRelease.py --net-matrix` reports zero errors | Gate output | **Met**: zero errors on both backends |
+| 4 | A non-owner Server RPC is rejected (unique token + exact CallLog) | DS scenario assertion | **Met**: DS scenario executed and passed |
+| 5 | `RepSchemaVersion` matches on all three peers; `VariantRepSchemaVersion` discriminates | Declaration report | **Met**: real three-peer reports pass cross-peer checks |
+| 6 | Cooked variant uses real staged WindowsServer / Windows exes | topology `exe` field | **Met**: Cooked cells pass on both backends |
+| 7 | PacketLoss uses real NetEmulation and converges on the final value | Scenario report | **Met** |
+| 8 | Three newly supported capabilities: Seamless Travel, hot-reload schema changes, RPC authorization | New scenarios + code + reports | Delivered; covered by `LuaNet.spec.cpp`; not an L2/L3 gate item, `ServerTravel` remains out of scope |
+| 9 | A master switch can disable declared networking entirely | `HasFeature('declarednetworking')` + config | Delivered; not an L2/L3 gate item |
+| 10 | All `EXPERIMENTAL` markers, titles and "not for production" wording removed | Sources / docs | **Done**: six header banners and both documentation sets |
 
 ### Other status corrections (not features to build)
 
@@ -71,12 +71,12 @@ no way to bypass them.
 | `LUAU-CODEGEN` | `Luau.md:22-32` already defines it as "delivered, bounded, optional optimisation", yet the matrix says `experimental` | Correct status to `implemented`; arm64 / Shipping / native-debug attach remain separate acceptance items |
 | `LUAU-EXPERIMENTAL` | Upstream Luau integer / user-class feature flags, not enabled by `Luau.Build.cs`; `Luau.md:36` states they are "not a capability delivered by this plugin" | Correct status to `planned` (not shipped); **it should not be promoted at all** |
 
-## Source-level defects: fixed this round (compile/run verification still pending)
+## Source-level defects: fixed and verified by a complete Release
 
 Several `gap` fields in `feature-matrix.json` claimed "delivered in source, execution
 pending". Source review confirmed the following five were **not** merely awaiting a test
-run. All five were changed in this round; none has been compiled or executed, so the
-unified verification decides whether the fixes are effective.
+run. All five were changed and then compiled and executed by the 2026-11-15 complete
+Release (41/41 stages, 12 matrix cells per backend).
 
 | # | Defect | Fix | Location |
 |---|---|---|---|
@@ -86,9 +86,9 @@ unified verification decides whether the fixes are effective.
 | 4 | No application-level authorization | `CanInvoke` inserted into the real RPC dispatch path `FFunctionRegistry::Invoke`, with kind derived from `FUNC_Net*` flags | `Registries/FunctionRegistry.cpp` |
 | 5 | `SchemaMismatch` only proved "everyone looks the same" | The scenario now injects a deliberately different fingerprint through the real negotiation path and exports `InjectedSchemaVersion` / `SchemaMismatchRejected` / `SchemaMismatchReason`; the gate requires all three; policy unit tests added | `LuaNetNetScenariosTest.cpp`, `ValidateRelease.py`, `LuaNet.spec.cpp` |
 
-**Still to confirm in the unified verification**: the C++ compiles; the fault-injection
-case produces reports in a real multi-process session; an RPC layout mismatch is actually
-rejected; `RefreshDeclaration()` behaves correctly on cooked / Shipping carriers.
+**Unified verification result**: the C++ compiles; the fault-injection case produces
+reports in a real multi-process session; an RPC layout mismatch is actually rejected;
+`RefreshDeclaration()` behaves correctly on cooked / Shipping carriers.
 
 ## Prohibited shortcuts
 
@@ -98,15 +98,21 @@ rejected; `RefreshDeclaration()` behaves correctly on cooked / Shipping carriers
 - Never refresh a release claim from a failed run, or one whose `provenance.commit` is not HEAD.
 - Never treat "an assertion exists in source" as "the assertion ran".
 
-## Current state (2026-11-13)
+## Current state (2026-11-15): v1.0.0 released
 
-`Tools/CheckPromotion.py --release-gate --strict` now runs automatically as the
-`promotion-gate` stage of `RunTests.ps1` (the L4 published marker and release tag are
-human decisions, reported but not gating). Known today: the latest Release is
-`passed=false` (`Luau-package-development` hit the 60-minute timeout on a cold UE 6.0
-cook), the eight markers read `not-passed`, the Luau net-matrix Editor process exited
-with 255, and the five source-level defects are fixed but **not yet compiled or
-executed**. **No experimental capability currently satisfies the promotion criteria.**
+`Saved/ReleaseTests/test/release-summary.json`: `complete=true`, `passed=true`,
+**41/41 stages passed/cached**, bound to the verification baseline `4a87d214`; both
+`net-matrix-Lua` and `net-matrix-Luau` passed, `promotion-gate` passed, and
+`CheckPromotion.py --release-gate --strict` reports **7/7, 0 unmet**.
+`UpdateReleaseStatus.py` has generated `release-status: passed` on all eight pages.
+
+`NET-RPC` / `NET-PROPS` / `NET-TYPES` are now `implemented` (`verification` stays
+`pending-runtime`); every `EXPERIMENTAL` banner, experimental title and "not for
+production" wording has been removed. **Declared networking is Stable.**
+
+The L4 release tag `v1.0.0` was created on the release commit by the maintainer
+(informational, not gating `--release-gate`). The verdict refers to the `4a87d214`
+baseline; rerun `RunTests.ps1` to rebind the local gate to a newer HEAD.
 
 ## Further reading
 

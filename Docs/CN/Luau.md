@@ -23,7 +23,7 @@
 
 | 项 | 契约 |
 |---|---|
-| 后端 / 架构 | 仅 Luau 后端；运行期由上游 `luau_codegen_supported()` 判定（x64 / arm64）。其他目标 `UNLUANOVA_HAS_NATIVE_CODEGEN=0`，开关被忽略并打印告警，不会静默变成别的执行路径。已做运行验收的平台是 UE 5.8.3 / Win64 x64；arm64 仅编译期支持，未在本仓库做运行验收 |
+| 后端 / 架构 | 仅 Luau 后端；运行期由上游 `luau_codegen_supported()` 判定（x64 / arm64）。其他目标 `UNLUANOVA_HAS_NATIVE_CODEGEN=0`，开关被忽略并打印告警，不会静默变成别的执行路径。已做运行验收的平台是 UE 6.0 / Win64 x64（v1.0.0）与 UE 5.8.3 / Win64 x64（baseline）；arm64 仅编译期支持，未在本仓库做运行验收 |
 | 生效范围 | 只影响开关之后加载的 chunk；`lua.codegen.modules` 可按模块名子串收窄；`lua.codegen on/off` 与 CVar 是同一个状态 |
 | 可执行内存 | 上游 Luau 自行申请可执行代码页。宿主不接管 W^X / 代码页回收策略，也不保证在启用 CodeGen 时可附加原生调试器或单步进入已编译函数 |
 | 失败语义 | 上游 `luau_codegen_compile()` 返回 void，没有逐 chunk 成功信号；无法编译的 chunk 继续解释执行。`lua.codegen` 输出的计数是**请求数**（`GetNativeCodeGenRequestCount()`），不是成功编译的函数数；旧 getter 保留为文档化别名 |

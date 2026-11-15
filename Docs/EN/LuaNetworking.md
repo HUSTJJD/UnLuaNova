@@ -1,4 +1,4 @@
-# Lua-declared Networking (Experimental)
+# Lua-declared Networking
 
 RPC and typed replicated fields are available, including per-field replication conditions.
 
@@ -6,7 +6,7 @@ RPC and typed replicated fields are available, including per-field replication c
 
 **Rejected conditions**: every condition with no storage group - `Custom` / `Dynamic` (the engine refuses custom conditions on subobjects), `Never` / `NetGroup`, and the Replay* family (`ReplayOrOwner`, `ReplayOnly`, `SimulatedOnlyNoReplay`, `SimulatedOrPhysicsNoReplay`, `SkipReplay`). Their names parse, so "typo" and "condition not supported" are two distinct errors, but the whole declaration fails with an Error and is **not downgraded to None** - silently sending an owner-only value to every connection would be worse than refusing it.
 
-Exact int64 conversion and validation run on both backends. Lua-declared networking is experimental and is not a release guarantee.
+Exact int64 conversion and validation run on both backends. Lua-declared networking was promoted to Stable on 2026-11-15: the Legacy / PushOff / Iris / Cooked carriers and all eight connected scenarios pass a complete Release on both the Lua and Luau backends.
 
 ```lua
 local M = UnLuaNova.Class()
@@ -52,16 +52,16 @@ Dynamic RPCs must be registered before either NetDriver first caches the class. 
 +PreBindClasses=/Script/MyGame.MyNetworkActor
 ```
 
-Configured classes bind when Lua activates and are checked again after engine initialization, including native classes registered by Default-phase modules. This resolves loaded classes only; Blueprint network classes must be loaded and bound before connecting. Both peers need identical declarations, and RPC layouts must remain unchanged during a network session. The demo config includes `UnLuaNovaTestNetActor`.
+Configured classes bind when Lua activates and are checked again after engine initialization, including native classes registered by Default-phase modules (the configured class path is loaded on demand so the owning module does not have to be up yet). Blueprint network classes must be loaded and bound before connecting. Both peers need identical declarations, and RPC layouts must remain unchanged during a network session. The demo config includes `UnLuaNovaTestNetActor`.
 
 ## Limits
 
-- Lua-declared networking is **experimental**: its API and behaviour may change. Engine-level seamless travel (`ServerTravel`) is out of scope - reconnection uses a `UNetConnection` close plus an in-process reopen.
+- Engine-level seamless travel (`ServerTravel`) is out of scope - reconnection uses a `UNetConnection` close plus an in-process reopen.
 - The component-wide `Condition` property is obsolete: a non-`None` value logs a warning and is ignored. Declare conditions per field in `GetLifetimeReplicatedProps`.
 - A conditional group is dirtied as a whole because it is one UPROPERTY; unconditional fields keep per-type dirty tracking.
 - int32 / int64 reject fractions, NaN, infinities, overflow and numeric strings, preserving the old value. Luau emits numbers within +/-2^53 and native integer64 outside it.
 - Type-spec fields use a canonical text payload rather than the engine's per-property deltas; `UObject` references are outside the spec grammar.
-- Iris / push-model compatibility and runtime fallback are not claimed. Schema changes require a full network / environment restart.
+- Iris and push-model-off carriers are verified; per-element delta, compression gains and runtime fallback are not claimed. Schema changes require a full network / environment restart.
 - Hot reload and authorization checks are not part of the declarative networking surface.
 
 ## See also

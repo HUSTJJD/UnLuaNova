@@ -9,7 +9,7 @@
 
 - [Programming guide](UnLuaNova_Programming_Guide.md), [API](API.md), [C++ API](CxxApi.md)
 - [Luau backend](Luau.md), [Standard library](StdLib.md), [Settings](Settings.md)
-- [Lua-driven objects](LuaDrivenObjects.md), [Experimental networking](LuaNetworking.md)
+- [Lua-driven objects](LuaDrivenObjects.md), [Declared networking](LuaNetworking.md)
 - [Architecture](Architecture.md), [Static exports](StaticExportBinding.md), [Overriding](How_To_Implement_Overriding.md)
 - [Debugging](Debugging.md), [Console commands](ConsoleCommand.md), [IntelliSense](IntelliSense.md)
 - [Testing](Testing.md), [Examples](Showcase.md)

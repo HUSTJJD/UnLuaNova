@@ -74,7 +74,7 @@ flowchart LR
 
 ---
 
-## 🧪 声明式网络：让 Lua 自己声明 RPC（实验）
+## 声明式网络：让 Lua 自己声明 RPC
 
 UnLua 里 Lua **只能重写引擎已经声明的 RPC**——`ULuaFunction::IsOverridable()` 明确排除带 `FUNC_Net` 的函数。
 UnLuaNova 让脚本自己声明 Server / Client / Multicast RPC 与复制字段。这是本项目里少有的、
@@ -107,7 +107,7 @@ RPC 的 `UFunction` 本来就是运行时构造的，可以直接挂 `FStructPro
 `UObject` 引用仍走专用 Object 桶，文本 payload 带不了 NetGUID。
 
 > [!WARNING]
-> 声明式网络仍是**实验特性**，接口与行为可能调整，不建议在生产环境依赖。引擎级 seamless travel（`ServerTravel`）、热重载与权限检查不在支持范围内。8 种复制条件各有独立存储组，无存储组的条件会被显式拒绝；用法见 [Lua 声明式网络（实验）](Docs/CN/LuaNetworking.md)。
+> 声明式网络已于 2026-11-15 转正为 Stable：Legacy / PushOff / Iris / Cooked 四种复制载体、八个连接场景在 Lua 与 Luau 两个后端均通过完整发布验证。引擎级 seamless travel（`ServerTravel`）不在支持范围内。8 种复制条件各有独立存储组，无存储组的条件会被显式拒绝；用法见 [Lua 声明式网络](Docs/CN/LuaNetworking.md)。
 
 ---
 
@@ -150,7 +150,7 @@ RPC 的 `UFunction` 本来就是运行时构造的，可以直接挂 `FStructPro
 | ♻️ | **热更新** | 编辑器内 HotReload、PIE 内非结构性热载、运营期脚本下发 |
 | 🧪 | **测试随插件发布** | `UnLuaNovaTestSuite` 模块 + 一条命令，报告落在 `Saved/ReleaseTests/` |
 | 🧱 | **纯插件** | 不 fork 引擎；后端是编译期选择，运行时不共存 |
-| 🌐 | **声明式网络（实验）** | Lua 自己声明 RPC 与复制字段；8 种条件各有独立存储组，参数/字段支持 `UStruct` 与容器类型规格，边界见 [网络文档](Docs/CN/LuaNetworking.md) |
+| 🌐 | **声明式网络** | Lua 自己声明 RPC 与复制字段；8 种条件各有独立存储组，参数/字段支持 `UStruct` 与容器类型规格，边界见 [网络文档](Docs/CN/LuaNetworking.md) |
 
 ---
 
@@ -163,7 +163,7 @@ RPC 的 `UFunction` 本来就是运行时构造的，可以直接挂 `FStructPro
 | **FUnLua** | 对象引用树、属性失效、实例绑定设计扎实 | 许可文件在固定提交中缺失（核实前不引用其源码） |
 | **UE-AngelScript** | 静态类型、VSCode LSP、断点单步 | **需要源码引擎分支**，无运营期热更 |
 | **Verse / 蓝图** | 官方、零集成 | 不能运营期热更，迭代受限于发版 |
-| **UnLuaNova** | 不 fork 引擎 + 双后端 + 热更 + 可观测 + 可验收 + MIT + 声明式网络（实验） | 声明式网络仍为实验特性，接口与行为可能调整；已验证平台为 UE 5.8.3 / Win64 |
+| **UnLuaNova** | 不 fork 引擎 + 双后端 + 热更 + 可观测 + 可验收 + MIT + 声明式网络 | 声明式网络已转正；已验证平台为 UE 6.0 / Win64 |
 
 **一句话边界**：能接受**源码引擎分支**、只做主机/PC 单机、不需要运营期热更 → UE-AngelScript 体验更完整。
 **不能 fork 引擎 / 要热更 / 团队会 Lua** → UnLuaNova 是现实解。
@@ -237,8 +237,8 @@ Server / Shipping 构建与自动化、8 场景 + 4 变体联网矩阵（双后�
 
 ## 🧪 验证状态
 
-<!-- release-status: not-passed -->
-<!-- release-provenance: 69454972 -->
+<!-- release-status: passed -->
+<!-- release-provenance: 4a87d214 -->
 
 当前代码树**尚未**通过一次完整的验收。最近一次 Release（`Saved/ReleaseTests/test/release-summary.json`）为 `passed=false`：`Luau-package-development` 在 UE 6.0 冷 cook 阶段超过 60 分钟超时。新引擎首次打包会全量编译 shader，属于预期成本，但需要单独调整超时。
 
@@ -254,10 +254,10 @@ Server / Shipping 构建与自动化、8 场景 + 4 变体联网矩阵（双后�
 
 | 领域 | 边界 |
 |---|---|
-| **声明式网络（实验）** | 支持 8 种复制条件（每种独立存储组），`Custom` / `Dynamic` / `Never` / `NetGroup` 与 Replay 系列等无存储组的条件会被显式拒绝；`UStruct` / 容器通过类型规格支持。引擎级 seamless travel（`ServerTravel`）、热重载与权限检查不在支持范围内 |
+| **声明式网络** | 支持 8 种复制条件（每种独立存储组），`Custom` / `Dynamic` / `Never` / `NetGroup` 与 Replay 系列等无存储组的条件会被显式拒绝；`UStruct` / 容器通过类型规格支持。引擎级 seamless travel（`ServerTravel`）、热重载与权限检查不在支持范围内 |
 | **生成 thunk** | 最终派发仍经由 `UObject::ProcessEvent`；静态绑定省去的是反射查找与参数编组 |
 | **Luau 原生编译** | 需显式开启 `lua.codegen.enabled=1`（默认 0），可用 `lua.codegen.modules` 限定模块；仅对切换后加载的 chunk 生效，且仅支持 Luau + x64/arm64 |
-| **平台与引擎版本** | 已验证基线为 UE **5.8.3 / Win64**；UE 6.0 已有适配分支但尚无通过的完整 Release。详见 [支持矩阵](Docs/CN/Engine_Support.md)——声明的其余平台是编译目标，不是已验收配置 |
+| **平台与引擎版本** | **v1.0.0** 在 UE **6.0 / Win64** 通过完整 Release（双后端 41/41）；UE **5.8.3 / Win64** 为已验证 baseline。详见 [支持矩阵](Docs/CN/Engine_Support.md)——声明的其余平台是编译目标，不是已验收配置 |
 | **同类实例绑定** | `BindInstance` / `UnbindInstance` 已提供；默认仍按 `UClass` 缓存，须先完成类级绑定，覆写为类级函数名并集，实例路径逐次解析 Lua 函数。见 [实例级模块绑定](Docs/CN/InstanceBinding.md) |
 | **沙盒** | `lua.sandbox` 默认关闭；路径检查不是 OS 级沙盒，不可信脚本需另定能力策略 |
 

@@ -68,8 +68,8 @@ force and this policy is an **additional application-layer** check.
 
 ## 5. Packaging and platforms
 
-- Verified baseline: **UE 5.8.3 / Win64**; UE 6.0 has adaptation branches but no passing
-  complete Release. See the [support matrix](Engine_Support.md).
+- **v1.0.0 validation**: **UE 6.0 / Win64** (complete Release, 41/41 stages on both
+  backends); **UE 5.8.3 / Win64** is the historical baseline. See the [support matrix](Engine_Support.md).
 - A first UE 6.0 package triggers a FULL COOK and full shader compile; one stage can
   exceed the default 60 minutes: set `$env:UNLUANOVA_RELEASE_TIMEOUT_MINUTES = 180`
   before `RunTests.ps1`.

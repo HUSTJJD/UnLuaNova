@@ -383,7 +383,7 @@
       "id": "NET-RPC",
       "area": "Networking",
       "title": "Declared server/client/multicast RPC",
-      "status": "experimental",
+      "status": "implemented",
       "priority": "P0",
       "source": [
         "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaNet.cpp"
@@ -408,7 +408,7 @@
       "id": "NET-PROPS",
       "area": "Networking",
       "title": "Property conditions and schemas",
-      "status": "experimental",
+      "status": "implemented",
       "priority": "P0",
       "source": [
         "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaReplicationComponent.cpp",
@@ -434,7 +434,7 @@
       "id": "NET-TYPES",
       "area": "Networking",
       "title": "Replication types, UStruct/containers and Iris/push model",
-      "status": "experimental",
+      "status": "implemented",
       "priority": "P0",
       "source": [
         "Plugins/UnLuaNova/Source/UnLuaNova/Private/UnLuaNovaReplicationComponent.cpp",

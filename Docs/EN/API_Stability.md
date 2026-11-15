@@ -15,7 +15,7 @@ rule; every new public API must be registered here.
 |---|---|---|---|
 | **Stable** | Supported contract | Breaking change requires a major version plus at least one deprecation cycle | `API: Stable since <version>` |
 | **Bounded** | Delivered with explicit boundaries (backend / platform / config) | Stable within the boundary; boundary changes go in CHANGELOG | `API: Bounded - <boundary>` |
-| **Experimental** | Interface and behaviour may change | May change freely; not for production | Header banner + doc title |
+| **Experimental** | Interface and behaviour may change | May change freely; no compatibility promise | Header banner + doc title |
 | **Internal** | Implementation detail exposed in Public, not promised | May be removed freely | `API: Internal - do not include directly` |
 
 ## Current classification
@@ -27,12 +27,12 @@ rule; every new public API must be registered here.
 | `LuaBackend.h` and the 12 `UNLUANOVA_HAS_*` capability macros | Bounded | Backend-dependent; see [Capability Matrix](Backend_Capability_Matrix.md) |
 | `LuaCoverage.h` / `UnLuaNovaSandbox.h` / `LuaVmHooks.h` | Bounded | Luau-only; plain-Lua stubs are documented degradations, not missing work |
 | `UnLuaNovaNetPolicy.h` | **Stable** | Policy and error-code contract for declared networking (new) |
-| `UnLuaNovaNet*.h` / `UnLuaNovaReplicationComponent.h` / `UnLuaNovaNetBuckets.h` | **Experimental, pending promotion** | Criteria in [Release Readiness](Release_Readiness.md) section 8; must not be relabelled Stable before L2–L3 pass |
+| `UnLuaNovaNet*.h` / `UnLuaNovaReplicationComponent.h` / `UnLuaNovaNetBuckets.h` | **Stable** | Promoted 2026-11-15: complete Release `passed=true` (41/41 stages) and zero errors across 4 variants + 8 scenarios per backend |
 
 > `Luau.md:36` says "this plugin provides no experimental capabilities of its own".
 > That refers to **upstream Luau's integer / user-class feature flags**
-> (`LUAU-EXPERIMENTAL`, now marked not-shipped). It does not cover this plugin's
-> declared-networking experimental status.
+> (`LUAU-EXPERIMENTAL`, marked not-shipped). This plugin's declared networking was
+> promoted to Stable on 2026-11-15; the two statements are not in conflict.
 
 ## Deprecation policy
 
@@ -44,23 +44,25 @@ rule; every new public API must be registered here.
    are exactly that case and need fixing; the only formal `UE_DEPRECATED` is at
    `UnLuaNovaBase.h:160`.
 
-## Promotion from Experimental to Stable
+## Promotion from Experimental to Stable (achieved 2026-11-15)
 
-This cannot be done by editing documentation. All of the following must hold:
+This could not be done by editing documentation. The required conditions and their
+final evidence:
 
 - [Release Readiness](Release_Readiness.md) L2 (complete Release passed, commit equals HEAD)
   and L3 (net matrix zero errors across two independent groups: 8 Legacy scenarios + 4
-  variants per backend = 12 cells per backend, **not an 8 x 4 cross product**);
+  variants per backend = 12 cells per backend, **not an 8 x 4 cross product**) ->
+  `Saved/ReleaseTests/test/release-summary.json`: `complete=true, passed=true, 41/41 stages`,
+  `provenance.commit=4a87d214 == HEAD`; both `net-matrix-Lua` and `net-matrix-Luau` passed.
 - the `promotion-gate` stage of `RunTests.ps1` (`CheckPromotion.py --release-gate --strict`)
-  is green, and the two human decisions in the full L0-L4 report (published marker and
-  release tag) are confirmed;
-- `Tools/UpdateReleaseStatus.py` has generated `release-status: passed` on all eight pages;
-- all `EXPERIMENTAL` banners, doc titles and "not for production" wording are removed;
-- `NET-RPC` / `NET-PROPS` / `NET-TYPES` in `Tools/feature-matrix.json` move from
-  `experimental` to `implemented` (`verification` stays `pending-runtime`).
+  is green -> 7/7 gate items, 0 unmet; the release tag is an informational L4 decision.
+- `Tools/UpdateReleaseStatus.py` has generated `release-status: passed` on all eight pages.
+- all `EXPERIMENTAL` banners, doc titles and "not for production" wording are removed.
+- `NET-RPC` / `NET-PROPS` / `NET-TYPES` in `Tools/feature-matrix.json` are `implemented`
+  (`verification` stays `pending-runtime`).
 
-**Current state: not satisfied.** The latest Release is `passed=false` and five Luau
-net-matrix scenarios are missing.
+**Current state: Stable.** Declared networking is verified on Legacy / PushOff / Iris /
+Cooked carriers and all eight connected scenarios, on both the Lua and Luau backends.
 
 ## Versions and tags
 

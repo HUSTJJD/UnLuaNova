@@ -388,8 +388,8 @@ function Get-ReleaseDeclarationDigest([string] $Root) {
         return (([BitConverter]::ToString($Sha.Hash)).Replace('-', '').ToLowerInvariant() + " files=$($Files.Count)")
     } finally { $Sha.Dispose() }
 }
-function Build-Target([string] $Target, [string] $Label) {
-    Run $BuildBat @($Target, 'Win64', 'Development', "-Project=$ProjectPath", '-WaitMutex') $Label
+function Build-Target([string] $Target, [string] $Label, [string] $Configuration = 'Development') {
+    Run $BuildBat @($Target, 'Win64', $Configuration, "-Project=$ProjectPath", '-WaitMutex') $Label
 }
 function Record-Binary([string] $Exe, [string] $Name) {
     $File = Get-Item -LiteralPath $Exe
@@ -403,8 +403,14 @@ function Record-Binary([string] $Exe, [string] $Name) {
         ConvertTo-Json | Set-Content -LiteralPath $Destination -Encoding UTF8
 }
 function Package-Game([string] $Configuration, [string] $Label, [string] $StageDir, [string] $CookDir) {
+    # BuildCookRun's own -build path invokes UBT with -remoteini/-skipdeploy and a UBA
+    # executor; on some Windows setups every cl.exe/ispc.exe action in that invocation
+    # exits 1 without diagnostics, while the same target builds cleanly through Build.bat
+    # (that is the path editor-build and server-build already use). Compile the exact same
+    # target here first, then let UAT cook/stage/package without rebuilding it.
+    Build-Target $script:ReleaseGameTarget "$Label-build" $Configuration
     $UatArgs = @('BuildCookRun', "-project=$ProjectPath", '-noP4', '-unattended',
-        '-platform=Win64', "-clientconfig=$Configuration", "-target=$script:ReleaseGameTarget", '-build',
+        '-platform=Win64', "-clientconfig=$Configuration", "-target=$script:ReleaseGameTarget",
         '-skipbuildeditor', '-cook', '-stage', '-pak', '-iostore', '-package')
     # UAT calls CleanStagingDirectory on every -stage, so two backends cannot share one
     # staging directory: the second package would delete the first one's .exe. Isolated
@@ -768,9 +774,12 @@ try {
         Invoke-Stage "$B-server-build" { Build-Target $ServerTarget "$B-server-build" } -Needs @("$B-static-bindings") `
             -CacheKey "$B-server-build" -Fingerprint $BuildFingerprint -Artifacts @($ServerExe)
         Invoke-Stage "$B-package-server" {
+            # The server target was already compiled by the $B-server-build stage above
+            # (Build.bat). Do not ask UAT to rebuild it: its UBT invocation uses a UBA
+            # executor whose cl.exe/ispc.exe actions can fail without diagnostics here.
             $UatServerArgs = @('BuildCookRun', "-project=$ProjectPath", '-noP4', '-unattended',
                 '-server', '-noclient', '-serverplatform=Win64', '-serverconfig=Development',
-                "-target=$script:ReleaseServerTarget", '-build', '-skipbuildeditor', '-cook', '-stage', '-pak', '-iostore', '-package')
+                "-target=$script:ReleaseServerTarget", '-skipbuildeditor', '-cook', '-stage', '-pak', '-iostore', '-package')
             if ($ServerStageArg) { $UatServerArgs += "-stagingdirectory=$ServerStageArg" }
             $UatServerArgs += "-CookOutputDir=$ServerCookDir"
             Run $Uat $UatServerArgs "$B-package-server"

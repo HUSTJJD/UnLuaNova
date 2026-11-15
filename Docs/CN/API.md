@@ -5,7 +5,7 @@ description: "UnLuaNova 的 C++ API、Lua API 与构建期宏定义速查"
 
 # UnLuaNova API
 
-本页列出接口用法；接口存在不代表后端语义等价或目标平台已验收。相关边界见 [Luau](Luau.md) 和 [实验性网络](LuaNetworking.md)。
+本页列出接口用法；接口存在不代表后端语义等价或目标平台已验收。相关边界见 [Luau](Luau.md) 和 [声明式网络](LuaNetworking.md)。
 
 ## C++ API
 

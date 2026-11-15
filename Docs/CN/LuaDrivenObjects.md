@@ -109,7 +109,7 @@ if (Call.IsValid())
 
 ## 网络与实例绑定边界
 
-声明式 RPC 和复制属性已有实验实现，见 [网络 API](LuaNetworking.md)。普通覆写和声明 RPC 是不同路径，不能只从 IsOverridable 的一个分支推导全部网络能力。声明式网络仍是实验特性，真实联机与打包场景需单独验收。
+声明式 RPC 和复制属性已转正为 Stable，见 [网络 API](LuaNetworking.md)。普通覆写和声明 RPC 是不同路径，不能只从 IsOverridable 的一个分支推导全部网络能力。四种复制载体与八个连接场景均已完成真实联机验收。
 
 可以绑定非蓝图对象不等于同一个 UClass 的不同实例可以独立绑定不同模块；实例级绑定是单独的 opt-in 能力，见 [实例级模块绑定](InstanceBinding.md)。
 

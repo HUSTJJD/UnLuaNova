@@ -336,7 +336,7 @@ python Tools/ValidateCoverage.py --report Saved/Coverage/coverage-Luau.json `
 | 项 | 契约 |
 |---|---|
 | 后端 / 架构 | 仅 Luau；由上游 `luau_codegen_supported()` 运行期判定（x64 / arm64）。其他目标忽略开关并告警 |
-| 已验收范围 | UE 5.8.3 / Win64 x64；arm64、打包 Shipping、原生调试附加未做运行验收 |
+| 已验收范围 | UE 6.0 / Win64 x64（v1.0.0）与 UE 5.8.3 / Win64 x64（baseline）；arm64、Shipping 运行时、原生调试附加未做运行验收 |
 | 可执行内存 | 上游自行申请可执行代码页；宿主不接管 W^X / 代码页回收策略 |
 | 失败语义 | `luau_codegen_compile()` 返回 void，无逐 chunk 成功信号；无法编译时继续解释执行 |
 | 计数 | `lua.codegen` 输出的是**请求数**（`GetNativeCodeGenRequestCount()`），不是成功编译数 |

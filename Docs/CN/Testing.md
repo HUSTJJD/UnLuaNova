@@ -5,8 +5,8 @@ description: "单入口 release 验证与失败判定"
 
 # 测试与自动化
 
-<!-- release-status: not-passed -->
-<!-- release-provenance: 69454972 -->
+<!-- release-status: passed -->
+<!-- release-provenance: 4a87d214 -->
 
 维护者只需在仓库根目录运行：
 
