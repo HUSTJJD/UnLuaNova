@@ -949,6 +949,13 @@ try {
             # generator commandlets. PATH still points at whichever backend the last
             # editor build activated (Luau), so a Lua cell loaded Luau DLLs and its
             # LuaProtobuf/LuaSocket plugins failed to load. Switch it per backend.
+            #
+            # PATH alone only fixes DLL import resolution. UE's FModuleManager discovers
+            # plugin modules from *.modules manifests, and the isolated build leaves both
+            # backends' manifests as *.modules.disabled. Without activating the matching
+            # backend here, every peer exits with "Plugin 'LuaProtobuf' failed to load
+            # because module 'LuaProtobuf' could not be found" and produces no topology.
+            Run-Script 'SwitchBackend.ps1' @('-Backend', $B) "net-matrix-$B-backend"
             Set-ReleaseBackendDllPath $B $RepoRoot
             # ReleaseManaged must reach every connected cell: without it each peer run
             # tries to take the very RunTests.lock this pipeline already owns, and all
