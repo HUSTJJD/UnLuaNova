@@ -214,7 +214,7 @@ class AuditRepositoryTests(unittest.TestCase):
     def test_archived_run_commit_is_accepted(self):
         """A run archived when the next Release starts is still a known run."""
         baseline = self._make_release_history(declared=False)
-        self._write_summary(".archive/20260101-abc/release-summary.json",
+        self._write_summary(".archive/20260101-abc",
                             {"provenance": {"commit": baseline}, "passed": False})
         self._write_release_pages(commit=baseline[:8])
         self.assertEqual(audit.archived_run_commits(self.root), {baseline[:8]})
@@ -224,7 +224,7 @@ class AuditRepositoryTests(unittest.TestCase):
     def test_archived_orphan_commit_is_rejected(self):
         """An archived hash that is not a real ancestor is still drift."""
         self._make_release_history(declared=False)
-        self._write_summary(".archive/20260101-abc/release-summary.json",
+        self._write_summary(".archive/20260101-abc",
                             {"provenance": {"commit": "f" * 40}, "passed": True})
         self._write_release_pages(commit="f" * 8)
         self.assertEqual(audit.archived_run_commits(self.root), set())
