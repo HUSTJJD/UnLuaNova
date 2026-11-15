@@ -262,6 +262,18 @@ namespace UnLuaNovaTestSuite
                 // components, so neither Lua-declared fields nor RPCs reach the clients.
                 // The engine's own message recommends exactly this setting.
                 Args += TEXT("-UseIrisReplication=1 -ini:Engine:[SystemSettings]:net.SubObjects.DefaultUseSubObjectReplicationList=1 ");
+                // FNetBlobManager silently returns false from SendRPC when this cvar is off,
+                // and UNetDriver then refuses to fall back to legacy replication. The driver
+                // process has its own command line, so every peer must enable it explicitly.
+                Args += TEXT("-ini:Engine:[SystemSettings]:net.Iris.EnableRPCs=1 ");
+                // Opt-in diagnostics: LogIrisRpc reports rejected RPCs and LogIris reports
+                // "Unable to create RPC for function ...". Verbose is off in release runs.
+                if (!FPlatformMisc::GetEnvironmentVariable(TEXT("UNLUANOVA_TEST_IRIS_DIAG")).IsEmpty())
+                {
+                    Args += TEXT("-ini:Engine:[Core.Log]:LogIrisRpc=Verbose ");
+                    Args += TEXT("-ini:Engine:[Core.Log]:LogIris=Verbose ");
+                    Args += TEXT("-ini:Engine:[Core.Log]:LogNet=Verbose ");
+                }
             else if (DeliveryVariant == TEXT("PushOff"))
                 Args += TEXT("-ini:Engine:[ConsoleVariables]:Net.IsPushModelEnabled=0 ");
         }

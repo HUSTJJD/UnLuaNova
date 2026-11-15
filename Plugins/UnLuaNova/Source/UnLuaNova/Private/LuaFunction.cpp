@@ -229,8 +229,18 @@ void ULuaFunction::Restore()
 
 UClass* ULuaFunction::GetOverriddenUClass() const
 {
+    // A Lua-declared RPC is parented to the owning UClass so GetOwnerClass() resolves to
+    // it (Iris checks Object->IsA(Function->GetOwnerClass()) before executing a received
+    // RPC). Keep the explicit owner here because its Outer is no longer the overrides class.
+    if (DeclaredOwnerClass.Get())
+        return DeclaredOwnerClass.Get();
     const auto OverridesClass = Cast<ULuaOverridesClass>(GetOuter());
     return OverridesClass ? OverridesClass->GetOwner() : nullptr;
+}
+
+void ULuaFunction::SetDeclaredOwnerClass(UClass* InOwnerClass)
+{
+    DeclaredOwnerClass = InOwnerClass;
 }
 
 void ULuaFunction::SetActive(const bool bActive)
@@ -260,6 +270,8 @@ void ULuaFunction::SetActive(const bool bActive)
             if (DeclaredRpcTemplate)
             {
                 // The engine sends root RPCs using NetFields, not the function lookup map.
+                // This helper can rebuild (and clear) NetFields when the class flag is reset,
+                // so DeclareRPCs() republishes the complete declaration set once at the end.
                 Class->SetUpRuntimeReplicationData();
                 Class->NetFields.AddUnique(this);
                 Class->NetFields.Sort([](const UField& A, const UField& B)

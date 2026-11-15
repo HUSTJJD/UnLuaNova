@@ -434,25 +434,6 @@ namespace UnLuaNova
         if (!L || !Class)
             return;
 
-        // Legacy replication resolves a net UFunction through FuncMap at call time, which
-        // is why a UFunction installed by Lua at runtime works there. Iris instead builds
-        // FNetRPC descriptors from UClass::NetFields when it first creates a class's
-        // replication protocol; a runtime function is invisible to that scan, so every
-        // declared RPC - and every Lua field update carried by an RPC - is silently
-        // dropped. Publish the runtime functions into NetFields only when Iris is active,
-        // leaving the legacy field-cache layout completely untouched. Module binding
-        // happens before any actor of this class is replicated, so the Iris protocol is
-        // still free to pick them up.
-        int32 IrisRequested = 0;
-        FParse::Value(FCommandLine::Get(), TEXT("-UseIrisReplication="), IrisRequested);
-        const bool bPublishForIris = IrisRequested > 0;
-        if (bPublishForIris)
-        {
-            // Idempotent (CLASS_ReplicationDataIsSetUp). Calling it first guarantees a
-            // later SetUpRuntimeReplicationData() cannot clear the entries we add below.
-            Class->SetUpRuntimeReplicationData();
-        }
-
         // Stable-feature gate: never construct a dynamic UFunction when the project
         // disabled declared networking, during a seamless travel, or when RPC
         // authorization is required but no policy has been installed.
@@ -535,16 +516,8 @@ namespace UnLuaNova
                         if (auto* Added = Cast<ULuaFunction>(Class->FindFunctionByName(Decl.Name, EIncludeSuperFlag::ExcludeSuper)))
                         {
                             EnsureRpcId(Class, Added);
-                            if (bPublishForIris)
-                            {
-                                bool bPublished = false;
-                                for (UField* Field : Class->NetFields)
-                                {
-                                    if (Field == Added) { bPublished = true; break; }
-                                }
-                                if (!bPublished)
-                                    Class->NetFields.Add(Added);
-                            }
+                            // ULuaFunction::SetActive published this function into NetFields
+                            // (and sorted it) when it installed the override.
                         }
                         else
                             UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Failed to register Lua RPC '%s' on '%s'."),
@@ -557,6 +530,22 @@ namespace UnLuaNova
 
             lua_pop(L, 1); // the kind table
         }
+
+        // ULuaFunction::SetActive() calls SetUpRuntimeReplicationData() once per declared
+        // RPC. That helper can rebuild (and therefore clear) UClass::NetFields, so without
+        // this pass only the alphabetically LAST declaration survives in the class'
+        // replication protocol. Iris builds its FNetRPC table from NetFields (legacy
+        // replication resolves through FuncMap and is unaffected), so republish the whole
+        // declaration set after every override has been installed.
+        for (const FLuaRpcDecl& Decl : Collected)
+        {
+            if (UFunction* Registered = Class->FindFunctionByName(Decl.Name, EIncludeSuperFlag::ExcludeSuper))
+                Class->NetFields.AddUnique(Registered);
+        }
+        Class->NetFields.Sort([](const UField& A, const UField& B)
+        {
+            return A.GetFName().LexicalLess(B.GetFName());
+        });
 
         // Always overwrite, including with an empty list: after a hot reload the old
         // RPC layout must not survive as a stale fingerprint.

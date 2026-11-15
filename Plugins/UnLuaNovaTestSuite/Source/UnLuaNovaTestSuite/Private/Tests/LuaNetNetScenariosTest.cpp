@@ -131,13 +131,29 @@ namespace UnLuaNovaTestSuite
 
         void HandleConnectionLevelReconnect(UWorld* World)
         {
-            UNetDriver* Driver = World->GetNetDriver();
-            const bool bOpen = Driver && Driver->ServerConnection
-                && Driver->ServerConnection->GetConnectionState() == USOCK_Open;
-            if (bOpen || bReopenRequested || ReconnectUrl.IsEmpty() || !GEngine)
+            UNetDriver* Driver = World ? World->GetNetDriver() : nullptr;
+            if (!Driver || bReopenRequested || ReconnectUrl.IsEmpty() || !GEngine)
+                return;
+            // Close THIS client's connection instead of letting the server close "the first
+            // open one": with both clients connecting in one batch, the first connection is
+            // not necessarily Client1's, so the old code disconnected Client2 (which never
+            // reopened) and left Client1 with nothing to recover from.
+            double SpawnClients = 0.0;
+            if (!ReadMarker(TEXT("Spawn"), SpawnClients))
+                return;
+            if (PhaseAt == 0.0)
+            {
+                PhaseAt = FPlatformTime::Seconds();
+                return;
+            }
+            if (FPlatformTime::Seconds() - PhaseAt < 4.0)
+                return;
+            if (!Driver->ServerConnection ||
+                Driver->ServerConnection->GetConnectionState() != USOCK_Open)
                 return;
             bReopenRequested = true;
             ++ConnectionLevelReconnectCount;
+            Driver->ServerConnection->Close();
             GEngine->Exec(World, *FString::Printf(TEXT("open %s"), *ReconnectUrl));
         }
 
@@ -289,36 +305,70 @@ namespace UnLuaNovaTestSuite
             }
             else if (Scenario == TEXT("Reconnect"))
             {
-                // A real process replacement drops and then restores one connection.
-                if (ConnectionDrops == 0 || Clients < 2)
+                // FNetSession::RestartPeer rewrites topology.json with Client1's replacement
+                // PID and launch_count == 2. Reading that file is a real observation of the
+                // process-level reconnect. With the completion barrier in place Client2 keeps
+                // its connection, so a transient dip in the open-connection count is no longer
+                // a dependable drop signal on every machine.
+                bool bReplaced = false;
+                TSharedPtr<FJsonObject> Topology;
+                if (ReadNetReport(GetNetSessionName(), TEXT("topology"), Topology) && Topology.IsValid())
+                {
+                    const TArray<TSharedPtr<FJsonValue>>* Peers = nullptr;
+                    if (Topology->TryGetArrayField(TEXT("peers"), Peers) && Peers)
+                    {
+                        for (const TSharedPtr<FJsonValue>& Entry : *Peers)
+                        {
+                            const TSharedPtr<FJsonObject>* Peer = nullptr;
+                            if (!Entry.IsValid() || !Entry->TryGetObject(Peer) || !Peer || !(*Peer).IsValid())
+                                continue;
+                            if ((*Peer)->GetStringField(TEXT("label")) != TEXT("Client1"))
+                                continue;
+                            bReplaced = (*Peer)->GetNumberField(TEXT("launch_count")) >= 2.0;
+                            break;
+                        }
+                    }
+                }
+                if (bReplaced && !bReplacementObserved)
+                {
+                    bReplacementObserved = true;
+                    ++ConnectionDrops;
+                }
+                if (!bReplaced || Clients < 2)
                     return false;
                 ClientsFinal = Clients;
             }
             else if (Scenario == TEXT("SeamlessReconnect"))
             {
-                // Connection-level reconnect: the process is NOT replaced. The server closes
-                // one UNetConnection and the same process reopens the URL. A gate checks
-                // launch_count == 1, first_pid == pid and a non-zero reconnect count, so this
-                // cannot be satisfied by the process-level RestartPeer scenario.
-                if (!bClosedConnection)
+                // Connection-level reconnect: the process is NOT replaced. Client1 closes its
+                // own UNetConnection and reopens the URL in-process (see
+                // HandleConnectionLevelReconnect). The server only observes the real set of
+                // open connections; it must not close one itself, because with a batched
+                // launch the first open connection is not necessarily Client1's.
+                TArray<FString> NowAddresses;
+                for (UNetConnection* Connection : Driver->ClientConnections)
                 {
-                    for (UNetConnection* Connection : Driver->ClientConnections)
-                    {
-                        if (!Connection || Connection->GetConnectionState() != USOCK_Open)
-                            continue;
-                        ClosedConnectionAddress = Connection->LowLevelGetRemoteAddress(true);
-                        Connection->Close();
-                        bClosedConnection = true;
-                        break;
-                    }
-                    if (!bClosedConnection)
-                        return false;
-                    PhaseAt = FPlatformTime::Seconds();
+                    if (!Connection || Connection->GetConnectionState() != USOCK_Open)
+                        continue;
+                    NowAddresses.Add(Connection->LowLevelGetRemoteAddress(true));
+                }
+                if (ObservedConnectionAddresses.Num() == 0 && NowAddresses.Num() >= 2)
+                {
+                    ObservedConnectionAddresses = NowAddresses;
                     return false;
                 }
-                if (FPlatformTime::Seconds() - PhaseAt < 3.0)
-                    return false;
-                if (ConnectionDrops == 0 || Clients < 2)
+                for (const FString& Address : ObservedConnectionAddresses)
+                {
+                    if (NowAddresses.Contains(Address))
+                        continue;
+                    if (ClosedConnectionAddress.IsEmpty())
+                    {
+                        ClosedConnectionAddress = Address;
+                        ++ConnectionDrops;
+                    }
+                    break;
+                }
+                if (ClosedConnectionAddress.IsEmpty() || Clients < 2)
                     return false;
                 ClientsFinal = Clients;
             }
@@ -549,6 +599,7 @@ namespace UnLuaNovaTestSuite
         bool bPhaseInitialised = false;
         bool bClosedConnection = false;
         bool bReopenRequested = false;
+        bool bReplacementObserved = false;
         double StartedAt = 0.0;
         double PhaseAt = 0.0;
         int32 Seed = 0;
@@ -567,6 +618,7 @@ namespace UnLuaNovaTestSuite
         int32 ConnectionLevelReconnectCount = 0;
         FString ReconnectUrl;
         FString ClosedConnectionAddress;
+        TArray<FString> ObservedConnectionAddresses;
         TArray<int32> VisibleActorIds;
         TArray<TWeakObjectPtr<AUnLuaNovaTestNetActor>> Actors;
     };

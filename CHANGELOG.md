@@ -1,7 +1,7 @@
 # Changelog
 
 <!-- release-status: not-passed -->
-<!-- release-provenance: f1a86f3d -->
+<!-- release-provenance: 69454972 -->
 
 本文件记录面向使用者的版本变更。开发过程中的验证记录与实现细节保留在 Git 历史中。
 

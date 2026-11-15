@@ -5,7 +5,7 @@
 [中文文档](CN/index.md) · [English](EN/index.md) · [GitHub](https://github.com/HUSTJJD/UnLuaNova)
 
 <!-- release-status: not-passed -->
-<!-- release-provenance: f1a86f3d -->
+<!-- release-provenance: 69454972 -->
 
 ## 文档导航
 

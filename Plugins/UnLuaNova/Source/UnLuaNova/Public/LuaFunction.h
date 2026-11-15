@@ -89,6 +89,14 @@ public:
 
     UClass* GetOverriddenUClass() const;
 
+    /**
+     * Lua-declared RPCs are installed directly under the owning UClass instead of under
+     * ULuaOverridesClass. Iris validates a received RPC with
+     * Object->IsA(Function->GetOwnerClass()), and GetOwnerClass() follows the Outer chain:
+     * an overrides-class Outer makes every declared RPC fail that check on the peer.
+     */
+    void SetDeclaredOwnerClass(UClass* InOwnerClass);
+
     UFunction* GetOverridden() const;
 
     bool IsLuaDeclaredRpc() const { return DeclaredRpcTemplate != nullptr; }
@@ -101,6 +109,10 @@ public:
 
 private:
     TWeakObjectPtr<UFunction> From;
+
+    /** Owner UClass of a Lua-declared RPC whose Outer was reparented (see setter). */
+    UPROPERTY()
+    TObjectPtr<UClass> DeclaredOwnerClass;
 
     UPROPERTY()
     TObjectPtr<UFunction> DeclaredRpcTemplate;

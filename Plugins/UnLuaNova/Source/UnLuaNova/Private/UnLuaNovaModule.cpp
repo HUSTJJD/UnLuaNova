@@ -217,7 +217,11 @@ namespace UnLuaNova
             {
                 for (const FSoftClassPath& Path : Paths)
                 {
-                    if (!Path.ResolveClass())
+                    // ResolveClass() only finds already-loaded objects; a class owned by a
+                    // Default-phase module is not loaded yet at OnPostEngineInit, so the
+                    // entry was silently ineffective and Iris cached a protocol without
+                    // any Lua-declared RPC. TryLoadClass() loads the owning module first.
+                    if (!Path.TryLoadClass<UObject>())
                     {
                         UNLUANOVA_LOGF(LogUnLuaNova, Warning,
                             TEXT("PreBindClasses entry '%s' did not resolve. Lua-declared RPCs on that class will NOT be registered before the NetDriver caches it; load the class before connecting."),
@@ -232,7 +236,7 @@ namespace UnLuaNova
                     continue;
                 for (const FSoftClassPath& Path : Paths)
                 {
-                    UClass* Target = Path.ResolveClass();
+                    UClass* Target = Path.TryLoadClass<UObject>();
                     if (Target && Class->IsChildOf(Target))
                     {
                         if (FLuaEnv* Env = EnvLocator->Locate(Class))

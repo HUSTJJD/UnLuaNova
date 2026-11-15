@@ -87,7 +87,19 @@ namespace UnLuaNova
         const auto OriginalFunctionFlags = Function->FunctionFlags;
         Function->FunctionFlags &= (~EFunctionFlags::FUNC_Native);
 
-        FObjectDuplicationParameters DuplicationParams(Function, OverridesClass);
+        // A Lua-declared RPC (a UFunction template built at runtime, not owned by a UClass)
+        // must be parented to the ACTOR class, not to ULuaOverridesClass. Iris rejects a
+        // received RPC when Object->IsA(Function->GetOwnerClass()) is false, and
+        // GetOwnerClass() walks the Outer chain - an overrides-class Outer therefore made
+        // every declared RPC fail on the receiving peer. Legacy replication resolves net
+        // functions through FuncMap and was unaffected, which is why only the Iris carrier
+        // lost all Lua RPCs. The function still stays on the overrides class' Children chain
+        // so Suspend/Resume/Restore keep working.
+        const bool bDeclaredRpc = bAddNew && Function->HasAnyFunctionFlags(FUNC_Net)
+            && !Function->GetOuter()->IsA<UClass>();
+        UObject* DestOuter = bDeclaredRpc ? static_cast<UObject*>(Class)
+                                          : static_cast<UObject*>(OverridesClass);
+        FObjectDuplicationParameters DuplicationParams(Function, DestOuter);
         DuplicationParams.InternalFlagMask &= ~EInternalObjectFlags::Native;
         DuplicationParams.DestName = NewName;
         DuplicationParams.DestClass = ULuaFunction::StaticClass();
@@ -95,6 +107,8 @@ namespace UnLuaNova
 
         Function->FunctionFlags = OriginalFunctionFlags;
         LuaFunction->FunctionFlags = OriginalFunctionFlags;
+        if (bDeclaredRpc)
+            LuaFunction->SetDeclaredOwnerClass(Class);
 
         LuaFunction->Next = OverridesClass->Children;
         OverridesClass->Children = LuaFunction;

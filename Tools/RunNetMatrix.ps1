@@ -50,7 +50,14 @@ param(
     [switch] $DryRun,
     # Set by ReleasePipeline.ps1: the parent pipeline already owns RunTests.lock, so
     # every cell must verify the release token instead of trying to take the lock again.
-    [switch] $ReleaseManaged
+    [switch] $ReleaseManaged,
+    # Debug-only: run a subset of cells (variant names such as "Iris", or "scenarios"),
+    # optionally with -Diagnostic to turn on the engine's Iris RPC logging. A partial run
+    # skips ValidateRelease.py and is never a release verdict; it exists so one cell can
+    # be investigated in minutes instead of re-running a two-hour Release.
+    [string[]] $OnlyCells = @(),
+    [switch] $SkipGate,
+    [switch] $Diagnostic
 )
 
 $ErrorActionPreference = 'Stop'
@@ -63,6 +70,18 @@ $Scenarios = @('LateJoin', 'Reconnect', 'Dormancy', 'Relevancy',
     'JoinOrderSwap', 'PacketLoss', 'SeamlessReconnect', 'SchemaMismatch')
 $Backends = if ($Backend -eq 'Both') { @('Lua', 'Luau') } else { @($Backend) }
 $RunToken = [DateTime]::UtcNow.ToString('yyyyMMddHHmmss')
+
+function Test-CellSelected([string] $Label, [string] $ShortName, [string] $BackendName) {
+    if ($OnlyCells.Count -eq 0) { return $true }
+    foreach ($Wanted in $OnlyCells) {
+        if ($Wanted -eq $ShortName -or $Wanted -eq $Label -or
+            $Wanted -eq "variant/$BackendName/$ShortName" -or
+            ($ShortName -eq 'scenarios' -and $Wanted -eq "scenarios/$BackendName")) {
+            return $true
+        }
+    }
+    return $false
+}
 
 function Copy-Tree([string] $Source, [string] $Destination) {
     if (-not (Test-Path -LiteralPath $Source)) {
@@ -171,12 +190,26 @@ foreach ($B in $Backends) {
     $CellErrors = [Collections.Generic.List[string]]::new()
 
     foreach ($Variant in $Variants) {
+        if (-not (Test-CellSelected "variant/$B/$Variant" $Variant $B)) { continue }
         try {
+            # UE 6.0 Iris requires registered subobject lists; the engine raises an ensure
+            # otherwise and never assigns NetRefHandles to replicated components.
+            $IrisFlags = @('-UseIrisReplication=1',
+                '-ini:Engine:[SystemSettings]:net.SubObjects.DefaultUseSubObjectReplicationList=1',
+                # FNetBlobManager::SendRPC returns false silently when this cvar is off or
+                # the RPC handler was not created; UNetDriver then refuses to fall back to
+                # legacy replication, so every Lua-declared RPC disappears without a log.
+                '-ini:Engine:[SystemSettings]:net.Iris.EnableRPCs=1')
+            if ($Diagnostic) {
+                # Verbose engine logging is diagnostic-only: LogIrisRpc reports rejected
+                # RPCs and LogIris reports "Unable to create RPC for function ...".
+                $IrisFlags += @('-ini:Engine:[Core.Log]:LogIrisRpc=Verbose',
+                    '-ini:Engine:[Core.Log]:LogIris=Verbose',
+                    '-ini:Engine:[Core.Log]:LogNet=Verbose',
+                    '-ini:Engine:[ConsoleVariables]:net.Iris.ThrottleRPCWarnings=0')
+            }
             $Flags = switch ($Variant) {
-                # UE 6.0 Iris requires registered subobject lists; the engine raises an ensure
-                # otherwise and never assigns NetRefHandles to replicated components.
-                'Iris' { @('-UseIrisReplication=1',
-                    '-ini:Engine:[SystemSettings]:net.SubObjects.DefaultUseSubObjectReplicationList=1') }
+                'Iris' { $IrisFlags }
                 'PushOff' { @('-ini:Engine:[ConsoleVariables]:Net.IsPushModelEnabled=0') }
                 default { @() }
             }
@@ -224,33 +257,45 @@ foreach ($B in $Backends) {
 
     # Forwarded to every peer by FNetSession; only the PacketLoss scenario's peer command
     # actually issues the NetEmulation.* console commands.
-    try {
-        $ScenarioArgs = "-UnLuaNovaNetScenarios -UnLuaNovaNetVariant=Legacy -UnLuaNovaNetPktLoss=25"
-        $Scratch = Join-Path $RunDir 'scratch/scenarios'
-        Invoke-Cell "scenarios/$B" $B $ScenarioFilter $ScenarioArgs 'Legacy' $Scratch
-    } catch {
-        $CellErrors.Add("scenarios/$B : $($_.Exception.Message)")
-        Write-Warning "NetMatrix cell 'scenarios/$B' failed: $($_.Exception.Message)"
+    $RunScenarios = Test-CellSelected "scenarios/$B" 'scenarios' $B
+    if ($RunScenarios) {
+        try {
+            $ScenarioArgs = "-UnLuaNovaNetScenarios -UnLuaNovaNetVariant=Legacy -UnLuaNovaNetPktLoss=25"
+            $Scratch = Join-Path $RunDir 'scratch/scenarios'
+            Invoke-Cell "scenarios/$B" $B $ScenarioFilter $ScenarioArgs 'Legacy' $Scratch
+        } catch {
+            $CellErrors.Add("scenarios/$B : $($_.Exception.Message)")
+            Write-Warning "NetMatrix cell 'scenarios/$B' failed: $($_.Exception.Message)"
+        }
     }
-    if (-not $DryRun) {
+    if (-not $DryRun -and $RunScenarios) {
         # Copy each scenario independently: one missing topology is a gate error, not a
-        # reason to discard the seven other scenarios the driver did produce.
+        # reason to discard the seven other scenarios the driver did produce. In a partial
+        # debug run the other scenarios were never requested, so their absence is expected.
+        $PartialRun = ($OnlyCells.Count -gt 0) -or $SkipGate
         foreach ($Scenario in $Scenarios) {
             try {
                 Copy-Tree (Join-Path $script:CellNetRoot $Scenario) (Join-Path $RunDir "net/scenarios/$Scenario")
             } catch {
+                if ($PartialRun) { continue }
                 $CellErrors.Add("scenarios/$B/$Scenario : $($_.Exception.Message)")
                 Write-Warning "NetMatrix scenario '$Scenario' has no evidence: $($_.Exception.Message)"
             }
         }
     }
     if ($DryRun) { continue }
-    $Manifest = Join-Path $RunDir 'metadata/net-variants.json'
-    [IO.File]::WriteAllText($Manifest, (@{ variants = $Variants } | ConvertTo-Json -Compress))
-    $Python = if ($env:UNLUANOVA_PYTHON) { $env:UNLUANOVA_PYTHON } else { 'python' }
-    & $Python (Join-Path $PSScriptRoot 'ValidateRelease.py') --net-matrix `
-        --run $RunDir --backend $B --carrier game
-    $GateExit = $LASTEXITCODE
+    $Partial = ($OnlyCells.Count -gt 0) -or $SkipGate
+    $GateExit = 0
+    if ($Partial) {
+        Write-Host 'Partial matrix: skipping ValidateRelease.py --net-matrix (not a release verdict).' -ForegroundColor Yellow
+    } else {
+        $Manifest = Join-Path $RunDir 'metadata/net-variants.json'
+        [IO.File]::WriteAllText($Manifest, (@{ variants = $Variants } | ConvertTo-Json -Compress))
+        $Python = if ($env:UNLUANOVA_PYTHON) { $env:UNLUANOVA_PYTHON } else { 'python' }
+        & $Python (Join-Path $PSScriptRoot 'ValidateRelease.py') --net-matrix `
+            --run $RunDir --backend $B --carrier game
+        $GateExit = $LASTEXITCODE
+    }
     if ($CellErrors.Count -gt 0) {
         foreach ($Line in $CellErrors) { Write-Host "CELL FAILURE: $Line" -ForegroundColor Red }
         throw "Network matrix for backend $B had $($CellErrors.Count) failed cell(s); the gate above lists the missing evidence."

@@ -6,7 +6,7 @@ description: "单入口 release 验证与失败判定"
 # 测试与自动化
 
 <!-- release-status: not-passed -->
-<!-- release-provenance: f1a86f3d -->
+<!-- release-provenance: 69454972 -->
 
 维护者只需在仓库根目录运行：
 
