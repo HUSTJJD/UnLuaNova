@@ -505,6 +505,35 @@ NET_VARIANTS = {
 }
 
 
+def relevancy_errors(server, reports):
+    """Owner-only relevance, judged from the runtime owner assignment.
+
+    Which client owns the restricted actor depends on connection order, so the
+    actor id and the owner label are both facts from the peer reports. A gate
+    that hard-codes "actor 2 belongs to Client2" fails whenever the two clients
+    connect in the opposite order, even when relevance worked correctly.
+    """
+    errors = []
+    restricted = server.get("RelevancyRestrictedActor")
+    if not isinstance(restricted, (int, float)) or restricted <= 0:
+        return ["Relevancy: no owner-only actor was declared by the server"]
+    owner_labels = []
+    for label in ("Client1", "Client2"):
+        data = reports[label]
+        visible = data.get("VisibleActorIds", [])
+        if data.get("OwnedActorId") == restricted:
+            owner_labels.append(label)
+            if restricted not in visible:
+                errors.append(
+                    f"Relevancy: owner {label} cannot see the owner-only actor")
+        elif restricted in visible:
+            errors.append(
+                f"Relevancy: non-owner {label} still sees the owner-only actor")
+    if len(owner_labels) != 1:
+        errors.append("Relevancy: owner-only actor is not owned by exactly one client")
+    return errors
+
+
 def validate_net_scenario(run, name, backend):
     directory = run / "net/scenarios" / name
     labels = ("Server", "Client1", "Client2")
@@ -591,12 +620,7 @@ def validate_net_scenario(run, name, backend):
             if data.get("DormancyAfterValue") != server.get("FlushedValue"):
                 errors.append(f"Dormancy: {label} never received the flushed value")
     elif name == "Relevancy":
-        if server.get("RelevancyRestrictedActor") != 2:
-            errors.append("Relevancy: no owner-only actor was declared by the server")
-        if 2 in reports["Client1"].get("VisibleActorIds", []):
-            errors.append("Relevancy: non-owner still sees the owner-only actor")
-        if 2 not in reports["Client2"].get("VisibleActorIds", []):
-            errors.append("Relevancy: owner cannot see the owner-only actor")
+        errors.extend(relevancy_errors(server, reports))
     elif name == "JoinOrderSwap":
         if server.get("ClientsAtSpawn") != 1 or server.get("ClientsFinal") != 2:
             errors.append("JoinOrderSwap: staggered spawn was not exercised")

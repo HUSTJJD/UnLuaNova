@@ -532,6 +532,8 @@ class ReleaseValidationTests(unittest.TestCase):
                                 if name == "SeamlessReconnect" and label == "Client1" else 0,
                             ClosedConnectionAddress="127.0.0.1:5555"
                                 if name == "SeamlessReconnect" and label == "Server" else "",
+                            OwnedActorId=(2 if label == "Client2" else 1)
+                                if name == "Relevancy" and label != "Server" else 0,
                             VisibleActorIds=[1] if name == "Relevancy" and label == "Client1" else [1, 2])
                 if name == "SchemaMismatch":
                     # B5: three identical fingerprints only prove agreement. The gate now
