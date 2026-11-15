@@ -102,6 +102,7 @@ namespace UnLuaNovaTestSuite
             UWorld* World = GetRunWorld();
             if (!World || !World->GetNetDriver())
                 return false;
+            ObserveWorldFacts(World);
             if (!bPhaseInitialised)
             {
                 bPhaseInitialised = true;
@@ -410,9 +411,24 @@ namespace UnLuaNovaTestSuite
                 return Fail(FString::Printf(TEXT("unknown network scenario '%s'"), *Scenario));
             }
 
+            // Publish a completion barrier BEFORE the report. A client that finishes as soon
+            // as it sees its own marker used to quit immediately: the server then never held
+            // two open connections for LateJoin / JoinOrderSwap, and could not observe the
+            // drop-and-recovery of Reconnect / SeamlessReconnect. Clients now stay connected
+            // until the server has observed every peer, and the server stays alive until both
+            // clients have published their reports.
+            WriteMarker(TEXT("ServerComplete"), 1.0);
             if (!bReportWritten)
                 bReportWritten = WriteNetReport(Role, Report(true));
-            return bReportWritten;
+            if (!bReportWritten)
+                return Fail(TEXT("server scenario report write failed"));
+            for (const TCHAR* Label : {TEXT("Client1"), TEXT("Client2")})
+            {
+                TSharedPtr<FJsonObject> Client;
+                if (!ReadNetReport(GetNetSessionName(), Label, Client))
+                    return false;
+            }
+            return true;
         }
 
         bool UpdateClient(UWorld* World)
@@ -506,6 +522,13 @@ namespace UnLuaNovaTestSuite
                 if (!ReadMarker(TEXT("Spawn"), SpawnClients))
                     return false;
             }
+
+            // Keep this connection open until the server has finished. Leaving as soon as
+            // the client's own observations are ready tears down the session before a late
+            // join or a reconnect can be observed from the server side.
+            double ServerDone = 0.0;
+            if (!ReadMarker(TEXT("ServerComplete"), ServerDone))
+                return false;
 
             if (!bReportWritten)
                 bReportWritten = WriteNetReport(Role, Report(true));

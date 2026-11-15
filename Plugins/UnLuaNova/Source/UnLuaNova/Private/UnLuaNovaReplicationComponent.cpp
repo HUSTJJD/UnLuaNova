@@ -13,6 +13,7 @@
 #include "UnLuaNovaReplicationComponent.h"
 #include "UnLuaNovaCompatibility.h"
 
+#include "GameFramework/Actor.h"
 #include "LuaCore.h"
 #include "Net/UnrealNetwork.h"
 #include "Net/Core/PushModel/PushModel.h"
@@ -430,6 +431,17 @@ void UUnLuaNovaReplicationComponent::BeginPlay()
             TEXT("Lua replication on '%s': component-wide Condition is obsolete and ignored; ")
             TEXT("declare Condition per field in GetLifetimeReplicatedProps instead."),
             *GetNameSafe(Owner));
+    }
+
+    // UE 6.0 / Iris only replicates subobjects that the owning actor explicitly registers.
+    // The component carries every Lua-declared field and RPC, so without this registration
+    // Iris creates no NetRefHandle for it: clients receive the actor but never the Lua
+    // state, and server RPCs have no target. Legacy replication (bReplicateUsingRegistered-
+    // SubObjectList=false) uses ReplicateSubObjects() instead and must NOT register here -
+    // AActor::AddReplicatedSubObject() raises an ensure in that mode.
+    if (Owner->IsUsingRegisteredSubObjectList())
+    {
+        Owner->AddReplicatedSubObject(this);
     }
 
     RefreshDeclaration();

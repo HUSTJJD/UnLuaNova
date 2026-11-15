@@ -91,6 +91,16 @@ namespace UnLuaNovaTestSuite
         bool bHeadless = false;
 
         FString ExtraArgs;
+
+        /**
+         * Unique -SessionId for this peer. UE's automation controller discovers workers over a
+         * machine-wide message bus: without a distinct session per process, four simultaneous
+         * UnrealEditor-Cmd peers answer each other's FindWorkers and a peer's filtered test is
+         * executed in a *different* process (which has no -UnLuaNovaNetRole and therefore
+         * returns success immediately). The peer then quits, the connection drops, and the
+         * driver times out. FApp::GetSessionId() is read by both sides of that discovery.
+         */
+        FString AutomationSessionId;
     };
 
     struct FNetPeerRun
@@ -211,6 +221,15 @@ namespace UnLuaNovaTestSuite
 
     /** The Lua-declared net surface as *this* process sees it: RPC name -> id, plus fields. */
     TSharedRef<FJsonObject> BuildNetDeclarationReport();
+
+    /**
+     * Samples the real UNetConnection counters into a per-process high-water mark. Connections
+     * can be torn down before a peer writes its report (a client may finish first), and reading
+     * ClientConnections only at report time would then legitimately see zero bytes. Called
+     * every latent-command tick while the connection is alive so the published numbers remain
+     * measured, not synthesised.
+     */
+    void ObserveWorldFacts(UWorld* World);
 
     /** Net mode and connection count of World, appended to Report for cross-peer assertions. */
     void AppendWorldFacts(UWorld* World, FJsonObject& Report);

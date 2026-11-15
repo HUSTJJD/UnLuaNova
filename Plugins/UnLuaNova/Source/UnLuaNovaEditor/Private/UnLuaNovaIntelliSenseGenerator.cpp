@@ -93,7 +93,14 @@ void FUnLuaNovaIntelliSenseGenerator::UpdateAll()
     TotalCount++;
 
     FScopedSlowTask SlowTask(TotalCount, LOCTEXT("GeneratingBlueprintsIntelliSense", "Generating Blueprints InstelliSense"));
-    SlowTask.MakeDialog();
+    // IntelliSense also runs as -run=UnLuaNovaIntelliSense -BP=1 -unattended inside the
+    // Release pipeline. A commandlet has no Slate window, and MakeDialog() creates a modal
+    // progress dialog that never receives input there: UpdateAll() then hangs forever right
+    // after the first blueprint is loaded. Keep the progress UI for interactive editor use.
+    if (!IsRunningCommandlet())
+    {
+        SlowTask.MakeDialog();
+    }
 
     for (int32 i = 0; i < BlueprintAssets.Num(); i++)
     {

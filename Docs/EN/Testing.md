@@ -6,7 +6,7 @@ description: "One release command with mandatory evidence and failure reporting"
 # Testing and Automation
 
 <!-- release-status: not-passed -->
-<!-- release-provenance: d8905e1c -->
+<!-- release-provenance: f1a86f3d -->
 
 Run from the repository root:
 

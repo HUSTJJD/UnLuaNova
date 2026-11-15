@@ -112,6 +112,7 @@ namespace UnLuaNovaTestSuite
                 return Fail(FString::Printf(TEXT("connected session timed out: role=%s phase=%d actors=%d fault=%s"),
                     *GetNetRole(), Phase, Actors.Num(), *Fault));
             if (!World || !World->GetNetDriver()) return false;
+            ObserveWorldFacts(World);
             UNetDriver* Driver = World->GetNetDriver();
             if (bServer)
             {

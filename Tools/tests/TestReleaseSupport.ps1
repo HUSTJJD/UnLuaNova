@@ -293,6 +293,21 @@ try {
     $PipelineText2 = [IO.File]::ReadAllText((Join-Path $Tools 'ReleasePipeline.ps1'))
     Assert ($PipelineText2.Contains('Sync-ReleasePerfBaseline $B $EditorDir')) `
         'The editor evidence gate stopped rebuilding stale performance baselines'
+    # Every UE process in a connected cell needs its own automation SessionId: without it
+    # FAutomationControllerManager's FindWorkers reaches another peer's worker, the filtered
+    # test runs in a process with no role and the peer quits before it joins. The token list
+    # must stay an explicit array; a scalar on the left of '+' silently concatenates args.
+    $NetText = [IO.File]::ReadAllText((Join-Path $Tools 'RunNetMatrix.ps1'))
+    Assert ($NetText.Contains('$DriverTokens = @()') -and
+        $NetText.Contains('"-SessionId=$DriverSessionId"')) `
+        'Per-cell automation session isolation regressed'
+    $NetCpp = [IO.File]::ReadAllText((Join-Path (Split-Path -Parent $Tools) `
+        'Plugins/UnLuaNovaTestSuite/Source/UnLuaNovaTestSuite/Private/NetSession.cpp'))
+    Assert ($NetCpp.Contains('Spec.AutomationSessionId')) 'Per-peer automation session ids disappeared'
+    # One failed Release leaves tens of thousands of reports. Deleting them one by one took
+    # over 2.5 h here; the fixed output directory must be archived with an atomic move.
+    Assert ($PipelineText2.Contains('[IO.Directory]::Move($OutputDir, $Archive)')) `
+        'Release output cleanup lost its atomic archive'
     Write-Host 'Release support tests passed.'
 } finally {
     $Resolved = [IO.Path]::GetFullPath($Temporary)

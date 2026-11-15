@@ -22,7 +22,9 @@
 #include "UnLuaNovaNetPayload.h"
 #include "UnLuaNovaNetTypeSpec.h"
 #include "UObject/UnrealType.h"
+#include "Misc/CommandLine.h"
 #include "Misc/Crc.h"
+#include "Misc/Parse.h"
 #include <initializer_list>
 
 namespace UnLuaNova
@@ -432,6 +434,25 @@ namespace UnLuaNova
         if (!L || !Class)
             return;
 
+        // Legacy replication resolves a net UFunction through FuncMap at call time, which
+        // is why a UFunction installed by Lua at runtime works there. Iris instead builds
+        // FNetRPC descriptors from UClass::NetFields when it first creates a class's
+        // replication protocol; a runtime function is invisible to that scan, so every
+        // declared RPC - and every Lua field update carried by an RPC - is silently
+        // dropped. Publish the runtime functions into NetFields only when Iris is active,
+        // leaving the legacy field-cache layout completely untouched. Module binding
+        // happens before any actor of this class is replicated, so the Iris protocol is
+        // still free to pick them up.
+        int32 IrisRequested = 0;
+        FParse::Value(FCommandLine::Get(), TEXT("-UseIrisReplication="), IrisRequested);
+        const bool bPublishForIris = IrisRequested > 0;
+        if (bPublishForIris)
+        {
+            // Idempotent (CLASS_ReplicationDataIsSetUp). Calling it first guarantees a
+            // later SetUpRuntimeReplicationData() cannot clear the entries we add below.
+            Class->SetUpRuntimeReplicationData();
+        }
+
         // Stable-feature gate: never construct a dynamic UFunction when the project
         // disabled declared networking, during a seamless travel, or when RPC
         // authorization is required but no policy has been installed.
@@ -512,7 +533,19 @@ namespace UnLuaNova
                         ULuaFunction::Override(Template, Class, Decl.Name);
 
                         if (auto* Added = Cast<ULuaFunction>(Class->FindFunctionByName(Decl.Name, EIncludeSuperFlag::ExcludeSuper)))
+                        {
                             EnsureRpcId(Class, Added);
+                            if (bPublishForIris)
+                            {
+                                bool bPublished = false;
+                                for (UField* Field : Class->NetFields)
+                                {
+                                    if (Field == Added) { bPublished = true; break; }
+                                }
+                                if (!bPublished)
+                                    Class->NetFields.Add(Added);
+                            }
+                        }
                         else
                             UNLUANOVA_LOGF(LogUnLuaNova, Warning, TEXT("Failed to register Lua RPC '%s' on '%s'."),
                                 *Decl.Name.ToString(), *Class->GetName());

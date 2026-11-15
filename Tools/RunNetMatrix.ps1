@@ -96,6 +96,20 @@ function Invoke-Cell([string] $Label, [string] $BackendName, [string] $Filter, [
     $Names = @('UNLUANOVA_TEST_NET_VARIANT', 'UNLUANOVA_TEST_NET_ROOT',
         'UNLUANOVA_TEST_PEER_EXE', 'UNLUANOVA_TEST_SERVER_EXE',
         'UNLUANOVA_TEST_NET_REPORT_TIMEOUT')
+    # The driver is another UE process on the same automation message bus. Give it its own
+    # session id too: otherwise a peer's worker can answer the driver's FindWorkers and the
+    # driver's filtered test executes in the wrong process. Peer ids are generated in
+    # FNetSession::AddPeer so topology.json and the launched command line always agree.
+    $DriverSessionId = [Guid]::NewGuid().ToString()
+    # Build the token list explicitly. A pipeline result on the left of '+' can collapse to
+    # a scalar string, in which case PowerShell concatenates instead of appending to the
+    # array and -join never inserts the separator: the driver used to receive
+    # "-UnLuaNovaNetVariant=Legacy-SessionId=<guid>" as ONE malformed argument.
+    $DriverTokens = @()
+    $TrimmedExtra = "$ExtraArgs".Trim()
+    if ($TrimmedExtra) { $DriverTokens += $TrimmedExtra }
+    $DriverTokens += "-SessionId=$DriverSessionId"
+    $DriverArgs = $DriverTokens -join ' '
     $Saved = @{}
     foreach ($Name in $Names) { $Saved[$Name] = [Environment]::GetEnvironmentVariable($Name, 'Process') }
     try {
@@ -129,7 +143,7 @@ function Invoke-Cell([string] $Label, [string] $BackendName, [string] $Filter, [
         # per-cell IntelliSense/typecheck pass do not apply to a filtered connected run;
         # the UE process exit code and the fail-closed Copy-Tree/gate below still do.
         & $RunDevTests -Backend $BackendName -Carrier $Carrier -Tier All -Filter $Filter `
-            -OutputDir $Scratch -ExtraArgs $ExtraArgs -SkipBuild:$SkipBuild `
+            -OutputDir $Scratch -ExtraArgs $DriverArgs -SkipBuild:$SkipBuild `
             -TimeoutMinutes $TimeoutMinutes -EnginePath $EnginePath -ProjectPath $ProjectPath -NoReport `
             -ReleaseManaged:$ReleaseManaged
         if ($LASTEXITCODE -ne 0) { throw "NetMatrix cell failed: $Label ($LASTEXITCODE)" }
@@ -159,17 +173,20 @@ foreach ($B in $Backends) {
     foreach ($Variant in $Variants) {
         try {
             $Flags = switch ($Variant) {
-                'Iris' { '-UseIrisReplication=1' }
-                'PushOff' { '-ini:Engine:[ConsoleVariables]:Net.IsPushModelEnabled=0' }
-                default { '' }
+                # UE 6.0 Iris requires registered subobject lists; the engine raises an ensure
+                # otherwise and never assigns NetRefHandles to replicated components.
+                'Iris' { @('-UseIrisReplication=1',
+                    '-ini:Engine:[SystemSettings]:net.SubObjects.DefaultUseSubObjectReplicationList=1') }
+                'PushOff' { @('-ini:Engine:[ConsoleVariables]:Net.IsPushModelEnabled=0') }
+                default { @() }
             }
-            # The Cooked cell drives real packaged binaries. Without an explicit cooked
-            # map the game falls back to a default startup map, finds no cooked content in
-            # the isolated staging tree and exits with "No COOKED content was found".
-            # ReleasePipeline's $B-game-tests uses the same empty test map successfully.
-            $CookedMap = if ($Variant -eq 'Cooked') { '/UnLuaNovaTestSuite/Tests/Misc/Empty' } else { '' }
-            $CellArgs = (@($CookedMap | Where-Object { $_ }) +
-                @("-UnLuaNovaNetVariant=$Variant") + @($Flags | Where-Object { $_ })) -join ' '
+            # The Cooked cell's driver is an Editor process; its three *peers* are the staged
+            # Development Game/Server binaries selected below. Driving the cell from a -game
+            # binary under Binaries/Win64 aborted with "No COOKED content was found" before
+            # any peer started, because only the staged tree contains cooked content. The
+            # gate reads WITH_EDITOR from the peer reports, so an Editor driver does not
+            # weaken the "this really is a packaged peer" assertion.
+            $CellArgs = (@("-UnLuaNovaNetVariant=$Variant") + @($Flags | Where-Object { $_ })) -join ' '
             $PeerExe = ''
             $ServerExe = ''
             if ($Variant -eq 'Cooked' -and -not $DryRun) {
@@ -188,12 +205,11 @@ foreach ($B in $Backends) {
                 $ServerExe = Resolve-StagedExe $ServerStage "$ServerTarget.exe"
             }
             $Scratch = Join-Path $RunDir "scratch/variant-$Variant"
-            # Cooked is the only cell whose peers are real packaged binaries. It drives them
-            # from the Development Game target; the other three variants and every scenario
-            # use the Editor build, which is what WITH_EDITOR=1 (Cooked=false) in the gate's
-            # peer reports means. Passing the staged exes is what makes this cell genuinely
-            # packaged rather than a renamed Editor run.
-            $CellCarrier = if ($Variant -eq 'Cooked') { 'Game' } else { 'Editor' }
+            # Every cell is driven from the Editor build. Only the Cooked cell's three peers
+            # are packaged binaries; passing the staged exes is what makes it a genuinely
+            # packaged cell instead of a renamed Editor run. WITH_EDITOR=0 in those peer
+            # reports is what ValidateRelease.py reads as Cooked=true.
+            $CellCarrier = 'Editor'
             Invoke-Cell "variant/$B/$Variant" $B $ConnectedFilter $CellArgs $Variant $Scratch `
                 $PeerExe $ServerExe -Carrier $CellCarrier
             if (-not $DryRun) {

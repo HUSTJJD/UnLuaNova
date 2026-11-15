@@ -121,15 +121,30 @@ if (-not $OutputDir) {
     # A fixed directory has to be emptied: leftover files from the previous run would be
     # published as this run's evidence, and a stale summary is worse than none.
     if (Test-Path -LiteralPath $OutputDir) {
-        # Delete through the .NET API rather than Remove-Item: some PowerShell hosts wrap
-        # Remove-Item in a recycle-bin hook that refuses tool-owned generated files and
-        # throws through -ErrorAction SilentlyContinue, which would abort the run before
-        # its first stage. A leftover that cannot be removed is caught by the check below.
-        foreach ($Entry in (Get-ChildItem -LiteralPath $OutputDir -Force)) {
-            try {
-                if ($Entry.PSIsContainer) { [IO.Directory]::Delete($Entry.FullName, $true) }
-                else { [IO.File]::Delete($Entry.FullName) }
-            } catch { }
+        # One Release writes tens of thousands of generated report files. Deleting them one
+        # by one through a Windows filesystem filter (AV / search indexer) was measured at
+        # ~1200 files in 10 minutes - over 2.5 h for a full tree, longer than the Release
+        # timeout itself, and it blocked the run before its first stage. Move the whole tree
+        # aside atomically instead. Do not delete it in the background while UE is running:
+        # an asynchronous rmdir over that many files competes with the asset registry / DDC
+        # and once left the IntelliSense commandlet stuck inside WaitForCompletion(). The
+        # archive is outside the fresh output directory, so it can never be published as
+        # this run's evidence; maintenance prunes Saved/ReleaseTests/.archive between runs.
+        $ArchiveRoot = Join-Path $ReleaseRoot '.archive'
+        $Archive = Join-Path $ArchiveRoot (
+            [DateTime]::UtcNow.ToString('yyyyMMddHHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+        try {
+            New-Item -ItemType Directory -Path $ArchiveRoot -Force | Out-Null
+            [IO.Directory]::Move($OutputDir, $Archive)
+        } catch {
+            # Fallback for a filesystem that refuses the atomic move: delete in place through
+            # the .NET API (Remove-Item can be wrapped in a recycle-bin hook by the host).
+            foreach ($Entry in (Get-ChildItem -LiteralPath $OutputDir -Force)) {
+                try {
+                    if ($Entry.PSIsContainer) { [IO.Directory]::Delete($Entry.FullName, $true) }
+                    else { [IO.File]::Delete($Entry.FullName) }
+                } catch { }
+            }
         }
     }
 }

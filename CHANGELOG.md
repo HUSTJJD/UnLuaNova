@@ -1,9 +1,51 @@
 # Changelog
 
 <!-- release-status: not-passed -->
-<!-- release-provenance: d8905e1c -->
+<!-- release-provenance: f1a86f3d -->
 
 本文件记录面向使用者的版本变更。开发过程中的验证记录与实现细节保留在 Git 历史中。
+
+## 2026-11-14（第十一轮：联网矩阵进程隔离、Cooked 载体与发布基建）
+
+**已修复，并经真实 UE 6.0 多进程运行验证**
+
+- 自动化会话串扰（8 场景原先 4 个超时、Server 报告 `Clients=0`）：四个同时运行的
+  UE 进程默认共享 `FApp::SessionId`，`FAutomationControllerManager` 的 FindWorkers
+  跨进程应答，peer 的过滤测试被派到没有 `-UnLuaNovaNetRole` 的进程里"秒过"并立即
+  Quit。`FNetSession::AddPeer` 现在为每个 peer 生成稳定唯一的 `-SessionId`，driver
+  由 `RunNetMatrix.ps1` 注入独立 SessionId，进程替换时重新生成。
+- `RunNetMatrix.ps1` 的参数拼接：PowerShell 管道标量参与 `+` 时 `-join` 退化为字符串
+  连接，`-SessionId=<guid>` 曾直接粘在前一个参数后面。改为显式 token 数组。
+- Cooked 变体：driver 改用 Editor carrier，三个 peer 仍是 staged Development
+  Windows/WindowsServer 二进制。此前用未 staged 的 `-game` exe 在启动阶段即报
+  `No COOKED content was found`；gate 从 peer 报告的 `WITH_EDITOR` 判定 Cooked，
+  Editor driver 不削弱该判定。
+- 连接字节计数：`AppendWorldFacts` 过去只在写报告瞬间读 `ClientConnections`，客户端
+  先退出时记为 0。新增 `ObserveWorldFacts` 每帧记录真实计数高水位，报告取观测峰值。
+- 八场景完成屏障：客户端一看到自己的 marker 就退出，服务器从未同时持有两个连接。
+  服务端先写 `ServerComplete` 再等两个客户端报告，客户端等到该 marker 才完成。
+  LateJoin / JoinOrderSwap / Dormancy / PacketLoss / Relevancy / SchemaMismatch 全部通过。
+- UE 6.0 Iris 配置：`[SystemSettings] net.SubObjects.DefaultUseSubObjectReplicationList=1`
+  消除 `Iris requires replicated actors to use registered subobjectslists` ensure；
+  组件在 owner 启用 registered list 时 `AddReplicatedSubObject`；动态 Lua RPC 也发布到
+  `UClass::NetFields`（Iris 构建 FNetRPC 描述符的输入）。
+- 声明生成器挂起：`FScopedSlowTask::MakeDialog()` 在
+  `-run=UnLuaNovaIntelliSense -BP=1 -unattended` commandlet 里创建永不接收输入的模态
+  进度框。commandlet 下不再创建，`Lua-declarations` / `Luau-declarations` 恢复约 142s 通过。
+- Release 输出清理：逐文件删除上一轮 2 万余份报告实测 10 分钟仅删 1200 个（>2.5h），
+  改为 `[IO.Directory]::Move` 原子归档；且不在 UE 运行期间后台删除，避免与
+  AssetRegistry / DDC 竞争。
+- 发布标记在外部提交推进 HEAD 后由 `UpdateReleaseStatus.py` 自愈。
+
+**仍未通过（按 `Docs/CN/Release_Readiness.md` 的 DoD，未把实验能力转正、未刷绿）**
+
+- `variant/*/Iris`：Iris 的 RPC 描述符来自 `UClass::NetFields` 的静态扫描并在类首次
+  复制时缓存，而声明式 RPC 是 Lua 运行时构造的 UFunction。把函数发布进 NetFields 后
+  三端仍是 `HP=100 / CallCount=0`。需要引擎级方案（运行时使
+  `FReplicationStateDescriptorRegistry` 失效，或为动态 RPC 建立 Iris 通道），不是配置
+  或脚本能解决的。
+- `scenarios/*/Reconnect` 与 `SeamlessReconnect`：加入完成屏障后其余六场景全绿，但
+  这两个重连场景仍三 peer 超时（进程替换与 UNetConnection 级重开的恢复路径）。
 
 ## 2026-11-14（第十轮：联网矩阵锁与 unity 增量编译）
 

@@ -80,6 +80,12 @@ namespace UnLuaNovaTestSuite
         {
             Spec.Port = DefaultNetPort + Peers.Num();
         }
+        if (Spec.AutomationSessionId.IsEmpty())
+        {
+            // Stable for the lifetime of the peer (topology.json records the very same
+            // command line that was launched), but unique across processes on this host.
+            Spec.AutomationSessionId = FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens);
+        }
 
         FNetPeerRun Run;
         Run.Spec = MoveTemp(Spec);
@@ -221,6 +227,13 @@ namespace UnLuaNovaTestSuite
         // Quoted: the value is one argument holding spaces and a semicolon, and UE reads
         // -ExecCmds straight off the command line.
         Args += FString::Printf(TEXT("-ExecCmds=\"Automation RunTests %s; Quit\" "), *Spec.ReportTestName);
+        // Isolate this process's automation controller/worker pair from every other UE
+        // process on the machine. Without it, FAutomationControllerManager publishes
+        // FindWorkers on the network bus and another peer's worker answers; the filtered
+        // test then runs there (with no role), reports success in milliseconds and quits
+        // the local peer before it ever joins the session.
+        if (!Spec.AutomationSessionId.IsEmpty())
+            Args += FString::Printf(TEXT("-SessionId=%s "), *Spec.AutomationSessionId);
         Args += FString::Printf(TEXT("-UnLuaNovaNetRole=%s -UnLuaNovaNetSession=%s "), *Spec.Label, *Name);
         if (!Scenario.IsEmpty())
             Args += FString::Printf(TEXT("-UnLuaNovaNetScenario=%s "), *Scenario);
@@ -244,7 +257,11 @@ namespace UnLuaNovaTestSuite
             // The delivery flags are real engine switches, not labels: the peer report reads
             // back the resulting cvar state, so a variant cannot pass by renaming itself.
             if (DeliveryVariant == TEXT("Iris"))
-                Args += TEXT("-UseIrisReplication=1 ");
+                // UE 6.0's Iris bridge requires registered subobject lists; without this cvar
+                // it fires an ensure and never creates NetRefHandles for replicated actor
+                // components, so neither Lua-declared fields nor RPCs reach the clients.
+                // The engine's own message recommends exactly this setting.
+                Args += TEXT("-UseIrisReplication=1 -ini:Engine:[SystemSettings]:net.SubObjects.DefaultUseSubObjectReplicationList=1 ");
             else if (DeliveryVariant == TEXT("PushOff"))
                 Args += TEXT("-ini:Engine:[ConsoleVariables]:Net.IsPushModelEnabled=0 ");
         }
@@ -345,6 +362,10 @@ namespace UnLuaNovaTestSuite
         Found->Handle = FProcHandle();
         Found->bLaunched = false;
         Found->Pid = 0;
+        // A replacement process must not share an automation session with the process that
+        // is being terminated: a late FindWorkers reply from the old worker could otherwise
+        // still be accepted by the new controller.
+        Found->Spec.AutomationSessionId = FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens);
         // A stale report from the first process would make AllReportsPresent() succeed
         // before the replacement has connected: the reconnect has to be observable.
         DeleteReport(Label);
@@ -567,6 +588,60 @@ namespace UnLuaNovaTestSuite
         return Root;
     }
 
+    struct FNetStatsHighWater
+    {
+        double OutTotalBytes = 0.0;
+        double InTotalBytes = 0.0;
+        double LostPackets = 0.0;
+        int32 MaxClients = 0;
+        bool bEverConnected = false;
+    };
+    static FNetStatsHighWater GNetStatsHighWater;
+
+    static void SumConnections(UNetDriver* Driver, double& OutTotalBytes, double& InTotalBytes,
+        double& LostPackets, int32& Clients, bool& bClientConnected)
+    {
+        auto Accumulate = [&](const UNetConnection* Connection)
+        {
+            if (!Connection)
+                return;
+            OutTotalBytes += Connection->OutTotalBytes;
+            InTotalBytes += Connection->InTotalBytes;
+            LostPackets += Connection->InPacketsLost + Connection->OutPacketsLost;
+        };
+        if (Driver->IsServer())
+        {
+            for (const UNetConnection* Connection : Driver->ClientConnections)
+            {
+                Accumulate(Connection);
+                if (Connection && Connection->GetConnectionState() == USOCK_Open && Connection->PlayerController)
+                    ++Clients;
+            }
+        }
+        else
+        {
+            Accumulate(Driver->ServerConnection);
+            bClientConnected = Driver->ServerConnection
+                && Driver->ServerConnection->GetConnectionState() == USOCK_Open;
+        }
+    }
+
+    void ObserveWorldFacts(UWorld* World)
+    {
+        UNetDriver* Driver = World ? World->GetNetDriver() : nullptr;
+        if (!Driver)
+            return;
+        double Out = 0.0, In = 0.0, Lost = 0.0;
+        int32 Clients = 0;
+        bool bClientConnected = false;
+        SumConnections(Driver, Out, In, Lost, Clients, bClientConnected);
+        GNetStatsHighWater.OutTotalBytes = FMath::Max(GNetStatsHighWater.OutTotalBytes, Out);
+        GNetStatsHighWater.InTotalBytes = FMath::Max(GNetStatsHighWater.InTotalBytes, In);
+        GNetStatsHighWater.LostPackets = FMath::Max(GNetStatsHighWater.LostPackets, Lost);
+        GNetStatsHighWater.MaxClients = FMath::Max(GNetStatsHighWater.MaxClients, Clients);
+        GNetStatsHighWater.bEverConnected |= (Clients > 0 || bClientConnected);
+    }
+
     void AppendWorldFacts(UWorld* World, FJsonObject& Report)
     {
         // Provenance for the delivery matrix: the gate reads these from every peer report,
@@ -607,52 +682,41 @@ namespace UnLuaNovaTestSuite
 
         const ENetMode Mode = World->GetNetMode();
         Report.SetNumberField(TEXT("NetMode"), (double)Mode);
-        Report.SetBoolField(TEXT("Connected"), false);
         Report.SetStringField(TEXT("WorldPackage"), World->GetOutermost()->GetName());
 
-        int32 Clients = 0;
+        // Start from what was actually observed while the connections were alive. A client can
+        // finish and close its connection before the server publishes its report; reading
+        // ClientConnections only at that instant would otherwise report a real session as
+        // zero bytes and zero clients. Every number below still comes from UNetConnection.
+        double OutTotalBytes = GNetStatsHighWater.OutTotalBytes;
+        double InTotalBytes = GNetStatsHighWater.InTotalBytes;
+        double LostPackets = GNetStatsHighWater.LostPackets;
+        int32 Clients = GNetStatsHighWater.MaxClients;
+        bool bConnected = GNetStatsHighWater.bEverConnected;
         if (UNetDriver* Driver = World->GetNetDriver())
         {
-            // Real per-connection counters, not a synthetic "delta cost". The Iris / push-model
-            // comparison is a measurement over these totals; a gate can require them to be
-            // present and non-zero, but it cannot assert a compression win that was never run.
-            double OutTotalBytes = 0.0, InTotalBytes = 0.0, LostPackets = 0.0;
-            auto Accumulate = [&](const UNetConnection* Connection)
-            {
-                if (!Connection)
-                    return;
-                OutTotalBytes += Connection->OutTotalBytes;
-                InTotalBytes += Connection->InTotalBytes;
-                LostPackets += Connection->InPacketsLost + Connection->OutPacketsLost;
-            };
-            if (Driver->IsServer())
-                for (const UNetConnection* Connection : Driver->ClientConnections)
-                    Accumulate(Connection);
-            else
-                Accumulate(Driver->ServerConnection);
-            TSharedRef<FJsonObject> Stats = MakeShared<FJsonObject>();
-            Stats->SetNumberField(TEXT("OutTotalBytes"), OutTotalBytes);
-            Stats->SetNumberField(TEXT("InTotalBytes"), InTotalBytes);
-            Stats->SetNumberField(TEXT("LostPackets"), LostPackets);
-            Report.SetObjectField(TEXT("NetStats"), Stats);
-
-            // ClientConnections only exists on the server side of a driver; on a client the
-            // single ServerConnection is what is open, and counting *clients* there is 0.
-            if (Driver->IsServer())
-            {
-                for (const UNetConnection* Connection : Driver->ClientConnections)
-                {
-                    if (Connection && Connection->GetConnectionState() == USOCK_Open && Connection->PlayerController)
-                        ++Clients;
-                }
-                Report.SetBoolField(TEXT("Connected"), Clients > 0);
-            }
-            else if (Driver->ServerConnection)
-            {
-                Report.SetBoolField(TEXT("Connected"), Driver->ServerConnection->GetConnectionState() == USOCK_Open);
-                Report.SetStringField(TEXT("ServerAddress"), Driver->ServerConnection->LowLevelGetRemoteAddress(true));
-            }
+            double Out = 0.0, In = 0.0, Lost = 0.0;
+            int32 NowClients = 0;
+            bool bNowClientConnected = false;
+            SumConnections(Driver, Out, In, Lost, NowClients, bNowClientConnected);
+            // Counters are cumulative on a live connection, so the larger of "last observed"
+            // and "now" is the correct total; a connection replaced mid-session must not
+            // discard the bytes already measured on the earlier one.
+            OutTotalBytes = FMath::Max(OutTotalBytes, Out);
+            InTotalBytes = FMath::Max(InTotalBytes, In);
+            LostPackets = FMath::Max(LostPackets, Lost);
+            Clients = FMath::Max(Clients, NowClients);
+            bConnected |= (NowClients > 0 || bNowClientConnected);
+            if (!Driver->IsServer() && Driver->ServerConnection)
+                Report.SetStringField(TEXT("ServerAddress"),
+                    Driver->ServerConnection->LowLevelGetRemoteAddress(true));
         }
+        TSharedRef<FJsonObject> Stats = MakeShared<FJsonObject>();
+        Stats->SetNumberField(TEXT("OutTotalBytes"), OutTotalBytes);
+        Stats->SetNumberField(TEXT("InTotalBytes"), InTotalBytes);
+        Stats->SetNumberField(TEXT("LostPackets"), LostPackets);
+        Report.SetObjectField(TEXT("NetStats"), Stats);
+        Report.SetBoolField(TEXT("Connected"), bConnected);
         Report.SetNumberField(TEXT("Clients"), (double)Clients);
     }
 
