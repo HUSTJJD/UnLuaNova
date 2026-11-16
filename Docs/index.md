@@ -1,6 +1,6 @@
 # UnLuaNova
 
-Lua / Luau scripting for Unreal Engine, forked from Tencent/UnLua - no engine fork,
+Lua / Luau scripting for Unreal Engine, built on Tencent/UnLua - no engine fork,
 runtime hot updates, measurable performance.
 
 [English documentation](EN/index.md) · [中文文档](CN/index.md) · [GitHub](https://github.com/HUSTJJD/UnLuaNova)

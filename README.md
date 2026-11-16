@@ -312,7 +312,7 @@ See [license and provenance](Docs/EN/License.md), and [CONTRIBUTING.md](CONTRIBU
 
 ## 🙏 Credits and compliance
 
-- Forked from [Tencent/UnLua](https://github.com/Tencent/UnLua) (MIT); inherits its reflection, override, container and delegate integration.
+- Based on [Tencent/UnLua](https://github.com/Tencent/UnLua) (MIT); inherits its reflection, override, container and delegate integration.
 - [slua-unreal](https://github.com/Tencent/sluaunreal) (BSD-3-Clause) and [FUnLua](https://github.com/fcscript/FUnLua) are **design references only**: design ideas are recorded with attribution and no implementation was copied. Neither project's authors endorse this one, and neither grants permission to copy their source.
 - [Luau](https://luau.org) (MIT), open-sourced by Roblox, is pinned as an optional backend.
 - `Unreal®` is a trademark of Epic Games, Inc. This is an independent community project — **not an Epic product and not endorsed by Epic**.

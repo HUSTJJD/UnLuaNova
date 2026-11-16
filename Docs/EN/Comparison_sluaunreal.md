@@ -35,7 +35,7 @@ The FUnLua source includes manual FGCObject references, so ownership handling va
 ## Compatibility and licensing
 
 The goal is to cover the workflows and provide migration notes, not byte-for-byte compatibility
-of API names or memory layouts. Existing interfaces inherited from the UnLua fork stay
+of API names or memory layouts. Existing interfaces inherited from UnLua stay
 compatible; migrating slua / FUnLua scripts needs separate adaptation.
 
 slua-unreal is BSD-3-Clause - do not misstate it as MIT. FUnLua's README links `LICENSE.TXT`,

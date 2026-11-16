@@ -293,7 +293,7 @@ Server / Shipping 构建与自动化、8 场景 + 4 变体联网矩阵（双后�
 
 ## 🙏 致谢与合规
 
-- 本项目 fork 自 [Tencent/UnLua](https://github.com/Tencent/UnLua)（MIT），继承其反射、覆写、容器与委托集成。
+- 本项目基于 [Tencent/UnLua](https://github.com/Tencent/UnLua)（MIT），继承其反射、覆写、容器与委托集成。
 - [slua-unreal](https://github.com/Tencent/sluaunreal)（BSD-3-Clause）与 [FUnLua](https://github.com/fcscript/FUnLua) 是**设计对照来源**：仅借鉴设计并记录来源，未复制其实现；不代表其作者为本项目背书，也不自动授权复制其实现。
 - [Luau](https://luau.org)（MIT）由 Roblox 开源，作为可选后端以固定提交引入。
 - `Unreal®` 是 Epic Games, Inc. 的商标。本项目为社区独立项目，**非 Epic 官方产品，未获 Epic 认可**。

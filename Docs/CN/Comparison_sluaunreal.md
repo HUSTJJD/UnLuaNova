@@ -34,6 +34,6 @@ FUnLua 的“无需手动释放”和“不增加 GC 计数”不能脱离源码
 
 ## 兼容与许可
 
-目标是覆盖工作流并提供迁移说明，不要求 API 名称或内存布局逐字兼容。UnLua fork 的既有接口保持兼容；slua/FUnLua 脚本迁移需单独适配。
+目标是覆盖工作流并提供迁移说明，不要求 API 名称或内存布局逐字兼容。继承自 UnLua 的既有接口保持兼容；slua/FUnLua 脚本迁移需单独适配。
 
 slua-unreal 为 BSD-3-Clause，不能误写为 MIT。FUnLua README 链接 `LICENSE.TXT`，但该文件未在其源码树中找到；本项目只借鉴设计，不复制其实现。完整规则见 [许可现状](License.md)。

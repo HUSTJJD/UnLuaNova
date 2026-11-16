@@ -21,7 +21,7 @@
 因此只向本仓库贡献时，无需阅读或签署父仓库的 CLA；**若要向父仓库贡献，请另行阅读其 `CLA.md`**
 以及与之配套的贡献指引。
 
-第三方与继承组件的许可边界：本项目 fork 自 Tencent/UnLua（MIT），并引入 Lua、Luau、LuaSocket、
+第三方与继承组件的许可边界：本项目基于 Tencent/UnLua（MIT），并引入 Lua、Luau、LuaSocket、
 lua-protobuf、lua-rapidjson，以及 `Tools/` 下的 LuaLS、luau-lsp 等组件；它们仍按各自许可由
 各自版权人授予，本仓库的 MIT 不覆盖、也不重新授权它们，完整清单与 notice 见
 [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md)。Unreal Engine 本身受 Epic 的独立条款约束，

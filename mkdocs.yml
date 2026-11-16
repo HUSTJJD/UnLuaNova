@@ -1,5 +1,5 @@
 site_name: UnLuaNova
-site_description: Lua / Luau scripting for Unreal Engine - the community continuation of Tencent/UnLua
+site_description: Lua / Luau scripting for Unreal Engine - reflection interop, hot reload and declarative networking
 site_url: https://hustjjd.github.io/UnLuaNova/
 repo_url: https://github.com/HUSTJJD/UnLuaNova
 repo_name: HUSTJJD/UnLuaNova
@@ -57,7 +57,7 @@ extra:
       name: GitHub
     - icon: material/book-open-variant
       link: https://github.com/Tencent/UnLua
-      name: Upstream Tencent/UnLua
+      name: Tencent/UnLua
 
 nav:
   - Home: index.md

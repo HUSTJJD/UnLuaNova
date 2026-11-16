@@ -24,7 +24,7 @@ description: UnLuaNova 已验证 / 已适配 / 未验收的引擎版本、Lua �
 | UE 5.8.3 | `UE_5_8_OR_LATER` / `UE_VERSION_OLDER_THAN(5,8,0)` | ✓ | ✓ | Win64 | 已验证（历史 baseline，2026-11-03，`347bb8c5`） |
 | UE 6.0 | `!UE_VERSION_OLDER_THAN(6,0,0)` 与 UE 6.0 移除 API 的替换 | ✓ | ✓ | Win64 | 已验证（当前验证基线；2026-11-15 v1.0.0 Release，验证基线 `4a87d214`，双后端 41/41 阶段） |
 | UE 5.1 – 5.7 | `UE_VERSION_NEWER_THAN` / `OLDER_THAN` 分支 | — | — | Win64 | 已适配，未验收 |
-| UE 4.x | `UnLuaNovaCompatibility.h` 继承的兼容层 | — | — | — | 不承诺；仅为 fork 遗留 |
+| UE 4.x | `UnLuaNovaCompatibility.h` 继承的兼容层 | — | — | — | 不承诺；仅为继承遗留 |
 | Mac / Linux / iOS / Android / 主机 | `.uplugin` 的 `PlatformAllowList` 声明为可编译目标 | — | — | 非 Win64 | 未验收 |
 
 > `PlatformAllowList` 的含义是「允许作为编译目标」，不是「已通过验收」。

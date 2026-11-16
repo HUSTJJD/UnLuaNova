@@ -5,7 +5,7 @@
     "FriendlyName": "UnLuaNovaTestSuite",
     "Description": "Automation test suite shipped with UnLuaNova. Disabled by default; the demo project enables it explicitly.",
     "Category": "Testing",
-    "CreatedBy": "UnLuaNova contributors (forked from Tencent/UnLua)",
+    "CreatedBy": "UnLuaNova contributors",
     "CreatedByURL": "https://github.com/HUSTJJD/UnLuaNova",
     "DocsURL": "https://hustjjd.github.io/UnLuaNova/CN/Testing/",
     "MarketplaceURL": "",
