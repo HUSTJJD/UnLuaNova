@@ -322,3 +322,38 @@ See [license and provenance](Docs/EN/License.md), and [CONTRIBUTING.md](CONTRIBU
 <div align="center">
 If this is useful to you, leave a ⭐ so more people find it.
 </div>
+
+## 📦 Standalone plugin releases
+
+This repository is a **sample project**; the distributable plugins live under `Plugins/`.
+The release archive flattens them into a drop-in layout:
+
+```
+UnLuaNova/                          main plugin
+UnLuaNovaExtensions/LuaProtobuf/
+UnLuaNovaExtensions/LuaRapidjson/
+UnLuaNovaExtensions/LuaSocket/
+LICENSE  LICENSE-THIRD-PARTY.md  README.md  CHANGELOG.md
+```
+
+```bash
+python Tools/package_plugin.py                    # dist/UnLuaNova-<VersionName>-src.zip + .sha256
+python Tools/package_plugin.py --verify-only dist/UnLuaNova-1.0.0-src.zip
+```
+
+Unzip into any project's `Plugins/` directory. The archive is **source-only**: it carries the
+vendored Lua and Luau sources (they are compile-time requirements) as real files, preserves
+their `.ubtignore` markers, and excludes the sample project, `Tools/` analyzers,
+`UnLuaNovaTestSuite`, binaries and machine-generated `IntelliSense/`. No `EngineVersion`
+is pinned, so the same archive can be rebuilt against any compatible engine.
+
+`Plugins/UnLuaNova/Config/FilterPlugin.ini` declares the extra files for UAT `BuildPlugin`.
+Pushing a `v*` tag triggers `.github/workflows/release.yml`, which runs the same script
+with `submodules: recursive` and uploads the zip plus its checksum to a GitHub Release.
+The full engine-backed release matrix still runs locally through `Tools/RunTests.ps1` —
+the workflow only produces the source artifact and performs no engine compilation.
+
+| Engine | Status |
+|---|---|
+| UE 6.0 (source build, host project Ann) | Compiled and verified (`AnnEditor Win64 Development`, Luau backend) |
+| UE 5.8.3 | Historical release baseline; source archive can be rebuilt there |

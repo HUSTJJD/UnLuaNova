@@ -33,5 +33,6 @@
             "LoadingPhase": "Default",
             "PlatformAllowList": [ "Win64", "Mac" ]
         }
-    ]
+    ],
+    "SupportedTargetPlatforms": ["Win64", "Mac", "Linux", "Android", "IOS"]
 }

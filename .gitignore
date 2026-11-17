@@ -56,3 +56,7 @@ site
 # 默认落在插件自己的模块目录 Generated/Backends/<后端>/ —— 只有落在模块目录里才会被
 # UBT 编译；按后端分目录后，两个后端的产物可以同时存在，互不覆盖。
 Plugins/UnLuaNova/Source/UnLuaNova/Generated/
+
+# Plugin release archives (Tools/package_plugin.py)
+dist/
+*.zip.sha256
